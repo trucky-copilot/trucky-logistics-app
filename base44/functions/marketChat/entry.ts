@@ -1,14 +1,11 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-const ANTHROPIC_API_KEY = Deno.env.get("ANTHROPIC_API_KEY");
-
-const SYSTEM_PROMPT = `Eres TruckyAI, el asistente de inteligencia de mercado para Larcofer USA, una empresa de drayage intermodal basada en Miami, FL.
+const BASE_CONTEXT = `Eres TruckyAI, el asistente de inteligencia de mercado para Larcofer USA, una empresa de drayage intermodal basada en Miami, FL.
 
 CONTEXTO DE LA EMPRESA:
 - Empresa: Larcofer USA, Miami FL
 - Tipo: Drayage intermodal
 - Puertos: Miami (PortMiami), Port Everglades (Fort Lauderdale)
-- MC Number: 4 años activo
 - Rutas principales: Tampa, Naples/Fort Myers, West Palm Beach, Fort Pierce, Pompano Beach, Boca Raton, Orlando
 
 CONTEXTO DEL MERCADO ACTUAL:
@@ -26,25 +23,17 @@ TARIFAS DE REFERENCIA POR RUTA (desde Miami/Port Everglades):
 - Miami → Orlando: ~235 millas | tarifa mercado: $2.85 - $3.30/milla | mínimo: $670 - $775
 - Miami → Jacksonville: ~340 millas | tarifa mercado: $2.75 - $3.20/milla | mínimo: $935 - $1088
 - Miami → Pompano Beach: ~35 millas | tarifa mercado: $3.50 - $5.00/milla | mínimo: $122 - $175
-- Pompano Beach → Fort Myers: ~115 millas | tarifa mercado: $2.90 - $3.50/milla | mínimo: $334 - $403
 - Port Everglades → cualquier destino: sumar $50 de recargo de puerto
 
-REGLAS DE RESPUESTA:
-1. Siempre responde en ESPAÑOL, con términos del mercado estadounidense de camiones.
-2. Cuando el usuario mencione una ruta, calcula:
-   - Tarifa mínima (break-even basado en configuración de costos del usuario si disponible)
-   - Tarifa de mercado (rango bajo-alto)
-   - Tarifa recomendada (objetivo de rentabilidad)
-   - Veredicto de rentabilidad: 🟢 RENTABLE / 🟡 BREAK-EVEN / 🔴 PÉRDIDA
-3. Siempre menciona el recargo de combustible si el diésel está sobre $5.00.
+REGLAS:
+1. Siempre responde en ESPAÑOL con términos del mercado estadounidense de camiones.
+2. Cuando el usuario mencione una ruta, calcula tarifa mínima, de mercado, recomendada y veredicto.
+3. Siempre menciona recargo de combustible si el diésel está sobre $5.00.
 4. Da consejos concretos: "Negocia por encima de X" o "Rechaza si ofrecen menos de Y".
 5. Sé conciso pero completo. Usa formato claro con emojis relevantes.
-6. Si el usuario pregunta sobre cláusulas abusivas o contratos, dirige al módulo de Verificador de Documentos.
-7. Considera que operamos contenedores intermodales (chassis fees, port congestion, etc.).
+6. Considera chassis fees, port congestion y otros costos de drayage intermodal.
 
-Si el usuario proporciona su costo por milla personalizado, úsalo para el cálculo de break-even en lugar del estimado general.
-
-Formato de respuesta para consultas de tarifa:
+Formato para consultas de tarifa:
 📍 **Ruta:** [origen] → [destino] (~X millas)
 💰 **Tarifa de mercado:** $X.XX - $X.XX/milla
 📊 **Mínimo recomendado:** $X,XXX total
@@ -62,43 +51,29 @@ Deno.serve(async (req) => {
 
     const { messages, costConfig } = await req.json();
 
-    let systemPrompt = SYSTEM_PROMPT;
+    let systemContext = BASE_CONTEXT;
     if (costConfig && costConfig.costo_por_milla) {
-      systemPrompt += `\n\nCONFIGURACIÓN DE COSTOS DEL USUARIO:
+      systemContext += `\n\nCONFIGURACIÓN DE COSTOS DEL USUARIO:
 - Precio diésel actual: $${costConfig.diesel_precio}/galón
 - MPG del camión: ${costConfig.mpg}
 - Costo por milla calculado: $${costConfig.costo_por_milla.toFixed(2)}/milla
 - Tarifa break-even: $${costConfig.tarifa_break_even ? costConfig.tarifa_break_even.toFixed(2) : 'no calculada'}/milla
 - Tarifa objetivo del usuario: $${costConfig.tarifa_objetivo}/milla
-
 USA estos valores personalizados para todos los cálculos de rentabilidad.`;
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: messages
-      })
+    // Build conversation history as prompt
+    const conversationHistory = messages.map(m => 
+      `${m.role === 'user' ? 'Usuario' : 'TruckyAI'}: ${m.content}`
+    ).join('\n\n');
+
+    const fullPrompt = `${systemContext}\n\n=== CONVERSACIÓN ===\n${conversationHistory}\n\nTruckyAI:`;
+
+    const response = await base44.integrations.Core.InvokeLLM({
+      prompt: fullPrompt
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      return Response.json({ error: error.error?.message || 'Error de API' }, { status: 500 });
-    }
-
-    const data = await response.json();
-    return Response.json({ 
-      content: data.content[0].text,
-      usage: data.usage
-    });
+    return Response.json({ content: response });
 
   } catch (error) {
     return Response.json({ error: error.message }, { status: 500 });
