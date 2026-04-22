@@ -46,6 +46,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Texto del documento vacío o muy corto' }, { status: 400 });
     }
 
+    // First, quickly check if this is a valid document type
+    const typeCheck = await base44.integrations.Core.InvokeLLM({
+      prompt: `Does this text appear to be a trucking Rate Confirmation, Delivery Order, or related freight/transport document? Answer ONLY "yes" or "no".\n\n${documentText.slice(0, 500)}`,
+    });
+
+    if (typeof typeCheck === 'string' && typeCheck.toLowerCase().includes('no')) {
+      return Response.json({
+        error: 'Solo verifico Rate Confirmations y Delivery Orders. Por seguridad, no proceso información bancaria ni documentos sensibles.'
+      }, { status: 400 });
+    }
+
     const result = await base44.integrations.Core.InvokeLLM({
       prompt: `${SYSTEM_PROMPT}\n\nAnaliza el siguiente rate confirmation y devuelve el análisis en JSON:\n\n---\n${documentText}\n---`,
       response_json_schema: {

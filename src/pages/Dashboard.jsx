@@ -40,11 +40,9 @@ export default function Dashboard() {
   const avgRatePerMile = thisWeek.length > 0
     ? thisWeek.reduce((s, l) => s + (l.revenue_por_milla || 0), 0) / thisWeek.filter(l => l.revenue_por_milla).length
     : 0;
-  const quickloadLoads = thisWeek.filter(l => l.tipo_cliente === 'quickload').length;
-  const quickloadPct = thisWeek.length > 0 ? (quickloadLoads / thisWeek.length * 100).toFixed(0) : 0;
-
   // Expiring documents
   const today = new Date();
+  const sevenDays = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
   const thirtyDays = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000);
   const expiringDocs = drivers.flatMap(d => {
     const alerts = [];
@@ -57,7 +55,8 @@ export default function Dashboard() {
       if (d[key]) {
         const exp = new Date(d[key]);
         if (exp <= thirtyDays) {
-          alerts.push({ driver: `${d.nombre} ${d.apellido || ''}`.trim(), doc: label, date: d[key], expired: exp < today });
+          const urgent = exp <= sevenDays;
+          alerts.push({ driver: `${d.nombre} ${d.apellido || ''}`.trim(), doc: label, date: d[key], expired: exp < today, urgent });
         }
       }
     });
@@ -104,11 +103,11 @@ export default function Dashboard() {
           color={avgRatePerMile >= 3 ? 'green' : avgRatePerMile >= 2.6 ? 'yellow' : 'red'}
         />
         <KpiCard
-          titulo="Quickload %"
-          valor={`${quickloadPct}%`}
-          subtitulo="del total esta semana"
+          titulo="Viajes Esta Semana"
+          valor={thisWeek.length}
+          subtitulo={`${loads.filter(l => l.estado === 'en_transito').length} en tránsito ahora`}
           icon={Truck}
-          color={Number(quickloadPct) < 30 ? 'green' : Number(quickloadPct) < 60 ? 'yellow' : 'red'}
+          color="cyan"
         />
       </div>
 
@@ -137,9 +136,11 @@ export default function Dashboard() {
         </div>
 
         {/* Document Alerts */}
-        <div className="bg-card border border-border rounded-xl p-4">
+        <div className={`rounded-xl p-4 border ${expiringDocs.some(a => a.urgent || a.expired) ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-foreground">Alertas de Documentos</h2>
+            <h2 className={`text-sm font-semibold ${expiringDocs.some(a => a.urgent || a.expired) ? 'text-red-400' : 'text-foreground'}`}>
+              {expiringDocs.some(a => a.urgent || a.expired) ? '🔴 Alertas de Documentos' : 'Alertas de Documentos'}
+            </h2>
             <span className="text-xs text-muted-foreground">próx. 30 días</span>
           </div>
           {expiringDocs.length === 0 ? (
@@ -150,11 +151,16 @@ export default function Dashboard() {
           ) : (
             <div className="space-y-2">
               {expiringDocs.map((alert, i) => (
-                <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${alert.expired ? 'bg-red-400/5 border-red-400/20' : 'bg-yellow-400/5 border-yellow-400/20'}`}>
-                  {alert.expired ? <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" /> : <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />}
+                <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${alert.expired || alert.urgent ? 'bg-red-400/10 border-red-400/30' : 'bg-yellow-400/5 border-yellow-400/20'}`}>
+                  {alert.expired
+                    ? <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                    : alert.urgent
+                    ? <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
+                    : <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
+                  }
                   <div>
-                    <p className="text-xs font-medium text-foreground">{alert.driver}</p>
-                    <p className="text-xs text-muted-foreground">{alert.doc} — {alert.expired ? 'VENCIDO' : `vence: ${alert.date}`}</p>
+                    <p className="text-xs font-semibold text-foreground">{alert.driver}</p>
+                    <p className="text-xs text-muted-foreground">{alert.doc} — {alert.expired ? '🔴 VENCIDO' : alert.urgent ? `🔴 Vence: ${alert.date}` : `⚠ Vence: ${alert.date}`}</p>
                   </div>
                 </div>
               ))}

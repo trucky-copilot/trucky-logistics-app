@@ -1,38 +1,83 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Plus, Loader2, Zap } from 'lucide-react';
+import { Send, Bot, User, Plus, Loader2, Zap, History, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { marketChat } from '@/functions/marketChat';
 import ReactMarkdown from 'react-markdown';
 
 const QUICK_PROMPTS = [
-  "¿Cuánto cobro por una carga de Miami a Tampa?",
-  "¿Qué tarifa pido de Port Everglades a Naples?",
-  "¿Vale la pena Quickload a $2.20/milla?",
-  "¿Cuánto debería cobrar Miami a West Palm Beach?",
-  "¿Qué tasa mínima necesito para no perder dinero?",
+  "¿Cuánto cobro Miami a Tampa?",
+  "Port Everglades a Naples, ¿cuánto pido?",
+  "¿Vale Quickload a $2.20?",
+  "Miami a WPB, ¿cuánto mínimo?",
+  "¿Qué es detention y cuánto cobro?",
 ];
+
+const SESSION_KEY = 'trucky_chat_session';
 
 export default function MarketChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [costConfig, setCostConfig] = useState(null);
-  const [sessionId] = useState(() => `session_${Date.now()}`);
+  const [sessionId, setSessionId] = useState(null);
+  const [sessionDbId, setSessionDbId] = useState(null); // DB record id for upsert
+  const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const loadConfig = async () => {
+    const init = async () => {
       const user = await base44.auth.me();
+
+      // Load cost config
       const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
       if (configs.length > 0) setCostConfig(configs[0]);
+
+      // Load existing session for this user (1 session per user)
+      const sessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 1);
+      if (sessions.length > 0) {
+        const session = sessions[0];
+        setSessionId(session.session_id);
+        setSessionDbId(session.id);
+        setMessages(session.messages || []);
+      } else {
+        // Create a new session ID but don't save to DB until first message
+        const newId = `session_${user.email}_${Date.now()}`;
+        setSessionId(newId);
+      }
     };
-    loadConfig();
+    init();
   }, []);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const saveSession = async (updatedMessages, currentSessionId, currentSessionDbId) => {
+    const user = await base44.auth.me();
+    const firstUserMsg = updatedMessages.find(m => m.role === 'user');
+    const titulo = firstUserMsg
+      ? (firstUserMsg.content.length > 50 ? firstUserMsg.content.slice(0, 50) + '...' : firstUserMsg.content)
+      : 'Consulta';
+
+    if (currentSessionDbId) {
+      // Update existing record
+      await base44.entities.ChatHistory.update(currentSessionDbId, {
+        messages: updatedMessages,
+        titulo,
+      });
+    } else {
+      // Create new record
+      const created = await base44.entities.ChatHistory.create({
+        session_id: currentSessionId,
+        usuario: user.email,
+        messages: updatedMessages,
+        titulo,
+      });
+      setSessionDbId(created.id);
+    }
+  };
 
   const sendMessage = async (text) => {
     const userMessage = text || input.trim();
@@ -44,22 +89,12 @@ export default function MarketChat() {
     setLoading(true);
 
     const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
-
     const res = await marketChat({ messages: apiMessages, costConfig });
-    
+
     if (res.data?.content) {
       const updatedMessages = [...newMessages, { role: 'assistant', content: res.data.content, timestamp: new Date().toISOString() }];
       setMessages(updatedMessages);
-
-      // Save to history
-      const user = await base44.auth.me();
-      const title = userMessage.length > 50 ? userMessage.slice(0, 50) + '...' : userMessage;
-      await base44.entities.ChatHistory.create({
-        session_id: sessionId,
-        usuario: user.email,
-        messages: updatedMessages,
-        titulo: title,
-      });
+      await saveSession(updatedMessages, sessionId, sessionDbId);
     }
     setLoading(false);
   };
@@ -71,14 +106,66 @@ export default function MarketChat() {
     }
   };
 
-  const startNew = () => {
+  const startNew = async () => {
+    const user = await base44.auth.me();
+    const newId = `session_${user.email}_${Date.now()}`;
+    setSessionId(newId);
+    setSessionDbId(null);
     setMessages([]);
     setInput('');
+    setShowHistory(false);
     inputRef.current?.focus();
   };
 
+  const loadHistoryItem = (item) => {
+    setSessionId(item.session_id);
+    setSessionDbId(item.id);
+    setMessages(item.messages || []);
+    setShowHistory(false);
+  };
+
+  const openHistory = async () => {
+    const user = await base44.auth.me();
+    const sessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 20);
+    setHistory(sessions);
+    setShowHistory(true);
+  };
+
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full relative">
+      {/* History Panel */}
+      {showHistory && (
+        <div className="absolute inset-0 z-20 bg-background flex flex-col">
+          <div className="flex items-center justify-between px-4 py-4 border-b border-border">
+            <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <History className="w-4 h-4 text-primary" />
+              Historial de Consultas
+            </h2>
+            <button onClick={() => setShowHistory(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-2">
+            {history.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No hay conversaciones guardadas</p>
+            ) : (
+              history.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => loadHistoryItem(item)}
+                  className="w-full text-left p-3 rounded-xl border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
+                >
+                  <div className="text-sm font-medium text-foreground truncate">{item.titulo || 'Consulta'}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    {item.messages?.length || 0} mensajes · {new Date(item.updated_date).toLocaleDateString('es-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border flex-shrink-0">
         <div>
@@ -86,15 +173,24 @@ export default function MarketChat() {
             <Zap className="w-5 h-5 text-primary" />
             Chat de Mercado
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Consulta tarifas, rutas y estrategia de precios</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Tarifas, rutas y estrategia — respuestas directas</p>
         </div>
-        <button
-          onClick={startNew}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Nueva consulta
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={openHistory}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Historial</span>
+          </button>
+          <button
+            onClick={startNew}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Nueva consulta</span>
+          </button>
+        </div>
       </div>
 
       {/* Cost config banner */}
@@ -113,7 +209,7 @@ export default function MarketChat() {
               <Bot className="w-7 h-7 text-primary" />
             </div>
             <h2 className="text-base font-semibold text-foreground mb-1">TruckyAI — Asesor de Mercado</h2>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm">Pregunta sobre tarifas por ruta, estrategia de precios o rentabilidad. Conozco el mercado de Florida.</p>
+            <p className="text-sm text-muted-foreground mb-6 max-w-sm">Respuestas directas. Sin relleno. Solo lo que necesitas saber para decidir.</p>
             <div className="grid gap-2 w-full max-w-md">
               {QUICK_PROMPTS.map((prompt, i) => (
                 <button
@@ -133,14 +229,14 @@ export default function MarketChat() {
             <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center ${
               msg.role === 'user' ? 'bg-primary/20' : 'bg-muted'
             }`}>
-              {msg.role === 'user' 
+              {msg.role === 'user'
                 ? <User className="w-4 h-4 text-primary" />
                 : <Bot className="w-4 h-4 text-muted-foreground" />
               }
             </div>
             <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
-              msg.role === 'user' 
-                ? 'bg-primary text-primary-foreground ml-auto' 
+              msg.role === 'user'
+                ? 'bg-primary text-primary-foreground ml-auto'
                 : 'bg-card border border-border text-foreground'
             }`}>
               {msg.role === 'assistant' ? (
@@ -161,7 +257,7 @@ export default function MarketChat() {
             </div>
             <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-2">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
-              <span className="text-sm text-muted-foreground">Analizando mercado...</span>
+              <span className="text-sm text-muted-foreground">Calculando...</span>
             </div>
           </div>
         )}
@@ -177,7 +273,7 @@ export default function MarketChat() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Pregunta sobre tarifas, rutas, mercado..."
+              placeholder="Ej: Tampa a $800 solo ida, ¿conviene?"
               rows={1}
               className="w-full resize-none bg-muted border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors"
               style={{ minHeight: '44px', maxHeight: '120px' }}

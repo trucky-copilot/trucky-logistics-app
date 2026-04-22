@@ -1,5 +1,7 @@
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
+import { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
 import { queryClientInstance } from '@/lib/query-client'
 import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
@@ -17,9 +19,27 @@ import Drivers from '@/pages/Drivers';
 import Brokers from '@/pages/Brokers';
 import CostCalculator from '@/pages/CostCalculator';
 import Notifications from '@/pages/Notifications';
+import Onboarding from '@/pages/Onboarding';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecked, setOnboardingChecked] = useState(false);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      try {
+        const user = await base44.auth.me();
+        if (!user) return;
+        const profiles = await base44.entities.UserProfile.filter({ usuario: user.email });
+        if (profiles.length === 0) {
+          setShowOnboarding(true);
+        }
+      } catch {}
+      setOnboardingChecked(true);
+    };
+    checkOnboarding();
+  }, [isLoadingAuth]);
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
@@ -39,6 +59,10 @@ const AuthenticatedApp = () => {
       navigateToLogin();
       return null;
     }
+  }
+
+  if (showOnboarding && onboardingChecked) {
+    return <Onboarding onComplete={() => setShowOnboarding(false)} />;
   }
 
   return (
