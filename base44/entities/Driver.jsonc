@@ -1,0 +1,54 @@
+{
+  "name": "Driver",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string"
+    },
+    "apellido": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "licencia_numero": {
+      "type": "string"
+    },
+    "licencia_vencimiento": {
+      "type": "string",
+      "format": "date"
+    },
+    "medico_vencimiento": {
+      "type": "string",
+      "format": "date"
+    },
+    "twic_vencimiento": {
+      "type": "string",
+      "format": "date"
+    },
+    "hazmat_vencimiento": {
+      "type": "string",
+      "format": "date"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "inactivo",
+        "vacaciones",
+        "suspension"
+      ],
+      "default": "activo"
+    },
+    "truck_asignado": {
+      "type": "string",
+      "description": "Placa del cami\u00f3n asignado"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "nombre"
+  ]
+}

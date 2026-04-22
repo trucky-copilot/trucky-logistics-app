@@ -1,0 +1,49 @@
+{
+  "name": "Truck",
+  "type": "object",
+  "properties": {
+    "placa": {
+      "type": "string",
+      "description": "N\u00famero de placa del cami\u00f3n"
+    },
+    "modelo": {
+      "type": "string",
+      "description": "Modelo del cami\u00f3n"
+    },
+    "a\u00f1o": {
+      "type": "number",
+      "description": "A\u00f1o del cami\u00f3n"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "disponible",
+        "en_ruta",
+        "en_yarda",
+        "mantenimiento"
+      ],
+      "default": "disponible"
+    },
+    "conductor_asignado": {
+      "type": "string",
+      "description": "ID del conductor asignado"
+    },
+    "conductor_nombre": {
+      "type": "string",
+      "description": "Nombre del conductor"
+    },
+    "chasis_disponible": {
+      "type": "boolean",
+      "default": true
+    },
+    "chasis_numero": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "placa"
+  ]
+}

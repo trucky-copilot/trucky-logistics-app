@@ -1,0 +1,58 @@
+{
+  "name": "Broker",
+  "type": "object",
+  "properties": {
+    "nombre": {
+      "type": "string"
+    },
+    "mc_number": {
+      "type": "string"
+    },
+    "contacto": {
+      "type": "string"
+    },
+    "telefono": {
+      "type": "string"
+    },
+    "email": {
+      "type": "string"
+    },
+    "cargas_realizadas": {
+      "type": "number",
+      "default": 0
+    },
+    "tarifa_promedio": {
+      "type": "number"
+    },
+    "dias_pago": {
+      "type": "number",
+      "description": "D\u00edas promedio de pago"
+    },
+    "puntaje_confiabilidad": {
+      "type": "number",
+      "description": "1-10"
+    },
+    "puntaje_pago": {
+      "type": "number",
+      "description": "1-10"
+    },
+    "clausulas_frecuentes": {
+      "type": "string"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "activo",
+        "precaucion",
+        "bloqueado"
+      ],
+      "default": "activo"
+    }
+  },
+  "required": [
+    "nombre"
+  ]
+}

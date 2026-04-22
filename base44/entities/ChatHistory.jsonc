@@ -1,0 +1,36 @@
+{
+  "name": "ChatHistory",
+  "type": "object",
+  "properties": {
+    "session_id": {
+      "type": "string"
+    },
+    "usuario": {
+      "type": "string"
+    },
+    "messages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "titulo": {
+      "type": "string",
+      "description": "Resumen corto de la conversaci\u00f3n"
+    }
+  },
+  "required": [
+    "session_id"
+  ]
+}

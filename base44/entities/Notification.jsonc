@@ -1,0 +1,50 @@
+{
+  "name": "Notification",
+  "type": "object",
+  "properties": {
+    "tipo": {
+      "type": "string",
+      "enum": [
+        "cambio_asignacion",
+        "retraso_ruta",
+        "mensaje_despacho",
+        "documento_vencido",
+        "alerta_tarifa",
+        "general"
+      ],
+      "default": "general"
+    },
+    "titulo": {
+      "type": "string"
+    },
+    "mensaje": {
+      "type": "string"
+    },
+    "leido": {
+      "type": "boolean",
+      "default": false
+    },
+    "destinatario": {
+      "type": "string"
+    },
+    "prioridad": {
+      "type": "string",
+      "enum": [
+        "alta",
+        "media",
+        "baja"
+      ],
+      "default": "media"
+    },
+    "referencia_id": {
+      "type": "string"
+    },
+    "referencia_tipo": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "titulo",
+    "mensaje"
+  ]
+}

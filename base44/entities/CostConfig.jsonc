@@ -1,0 +1,52 @@
+{
+  "name": "CostConfig",
+  "type": "object",
+  "properties": {
+    "usuario": {
+      "type": "string",
+      "description": "Email del usuario"
+    },
+    "diesel_precio": {
+      "type": "number",
+      "default": 5.5
+    },
+    "mpg": {
+      "type": "number",
+      "default": 6.5,
+      "description": "Millas por gal\u00f3n"
+    },
+    "seguro_semanal": {
+      "type": "number",
+      "default": 800
+    },
+    "lease_semanal": {
+      "type": "number",
+      "default": 1200
+    },
+    "pago_conductor_porcentaje": {
+      "type": "number",
+      "default": 25
+    },
+    "otros_gastos_semanales": {
+      "type": "number",
+      "default": 300
+    },
+    "millas_semana_promedio": {
+      "type": "number",
+      "default": 2500
+    },
+    "costo_por_milla": {
+      "type": "number"
+    },
+    "tarifa_break_even": {
+      "type": "number"
+    },
+    "tarifa_objetivo": {
+      "type": "number",
+      "default": 3.0
+    }
+  },
+  "required": [
+    "usuario"
+  ]
+}

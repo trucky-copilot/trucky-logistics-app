@@ -1,0 +1,91 @@
+{
+  "name": "Load",
+  "type": "object",
+  "properties": {
+    "broker_nombre": {
+      "type": "string"
+    },
+    "broker_id": {
+      "type": "string"
+    },
+    "tipo_cliente": {
+      "type": "string",
+      "enum": [
+        "quickload",
+        "broker_directo",
+        "cliente_directo"
+      ],
+      "default": "broker_directo"
+    },
+    "origen": {
+      "type": "string"
+    },
+    "destino": {
+      "type": "string"
+    },
+    "millas": {
+      "type": "number"
+    },
+    "tarifa_ofrecida": {
+      "type": "number"
+    },
+    "tarifa_negociada": {
+      "type": "number"
+    },
+    "diesel_precio_dia": {
+      "type": "number"
+    },
+    "costo_estimado": {
+      "type": "number"
+    },
+    "ganancia_estimada": {
+      "type": "number"
+    },
+    "revenue_por_milla": {
+      "type": "number"
+    },
+    "fecha_carga": {
+      "type": "string",
+      "format": "date"
+    },
+    "fecha_entrega": {
+      "type": "string",
+      "format": "date"
+    },
+    "truck_placa": {
+      "type": "string"
+    },
+    "conductor_nombre": {
+      "type": "string"
+    },
+    "estado": {
+      "type": "string",
+      "enum": [
+        "pendiente",
+        "en_transito",
+        "entregado",
+        "cancelado"
+      ],
+      "default": "pendiente"
+    },
+    "resultado": {
+      "type": "string",
+      "enum": [
+        "ganancia",
+        "break_even",
+        "perdida"
+      ],
+      "default": "ganancia"
+    },
+    "notas": {
+      "type": "string"
+    },
+    "numero_referencia": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "origen",
+    "destino"
+  ]
+}
