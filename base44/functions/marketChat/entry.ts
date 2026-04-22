@@ -82,7 +82,7 @@ USA estos valores personalizados para todos los cálculos de rentabilidad.`;
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-5',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 1024,
         system: systemPrompt,
         messages: messages
