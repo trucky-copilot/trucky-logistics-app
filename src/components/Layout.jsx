@@ -2,8 +2,7 @@ import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import { 
   LayoutDashboard, MessageSquare, FileSearch, Calculator, 
-  Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
-  Zap
+  Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
