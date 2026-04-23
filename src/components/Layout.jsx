@@ -50,8 +50,8 @@ export default function Layout() {
         {/* Logo */}
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <Zap className="w-4 h-4 text-primary-foreground" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
+              <img src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png" alt="Larcofer Logo" className="w-full h-full object-cover" />
             </div>
             <div>
               <div className="text-sm font-bold text-foreground tracking-wide">TRUCKY</div>
