@@ -79,7 +79,7 @@ export default function Onboarding({ onComplete }) {
             <div
               key={i}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === step ? 'w-8 bg-primary' : i < step ? 'w-4 bg-primary/50' : 'w-4 bg-muted'
+                i === step ? 'w-8 bg-white' : i < step ? 'w-4 bg-white/50' : 'w-4 bg-white/20'
               }`}
             />
           ))}
