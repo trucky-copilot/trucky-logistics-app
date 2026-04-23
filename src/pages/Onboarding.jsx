@@ -64,8 +64,8 @@ export default function Onboarding({ onComplete }) {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2.5 mb-8">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-            <Zap className="w-5 h-5 text-primary-foreground" />
+          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
+            <img src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png" alt="Larcofer Logo" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="text-lg font-bold text-foreground tracking-wide">TRUCKY</div>
