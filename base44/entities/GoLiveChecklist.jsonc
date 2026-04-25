@@ -1,0 +1,77 @@
+{
+  "name": "GoLiveChecklist",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organizaci\u00f3n evaluada"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email del usuario evaluado"
+    },
+    "role_selected": {
+      "type": "boolean",
+      "default": false,
+      "description": "El usuario ha elegido su rol (carrier / dispatcher / ambos)"
+    },
+    "onboarding_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "El flujo de onboarding fue completado"
+    },
+    "carrier_profile_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "CarrierProfile con company_name y mc_number completos"
+    },
+    "dispatcher_profile_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "DispatcherProfile creado y vinculado al usuario"
+    },
+    "cost_config_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "CostConfig con valores v\u00e1lidos de diesel y MPG"
+    },
+    "organization_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "La organizaci\u00f3n existe y est\u00e1 activa"
+    },
+    "production_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "La organizaci\u00f3n fue marcada manualmente como production_ready"
+    },
+    "overall_status": {
+      "type": "string",
+      "enum": [
+        "not_ready",
+        "partially_ready",
+        "ready_for_production"
+      ],
+      "default": "not_ready",
+      "description": "Estado global de activaci\u00f3n del workspace"
+    },
+    "missing_items": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Lista de claves de los \u00edtems faltantes"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas internas sobre el estado de activaci\u00f3n"
+    },
+    "evaluated_at": {
+      "type": "string",
+      "description": "Timestamp de la \u00faltima evaluaci\u00f3n"
+    }
+  },
+  "required": [
+    "user_email"
+  ]
+}

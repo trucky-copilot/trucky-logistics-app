@@ -3,8 +3,9 @@ import { base44 } from '@/api/base44Client';
 import { Truck, Users, Loader2 } from 'lucide-react';
 import OnboardingCarrier from '@/components/onboarding/OnboardingCarrier';
 import OnboardingDispatcher from '@/components/onboarding/OnboardingDispatcher';
+import GoLiveChecklistPanel from '@/components/GoLiveChecklistPanel';
 
-export default function Onboarding({ onComplete }) {
+export default function Onboarding({ onComplete, setupDetails }) {
   const [rol, setRol] = useState(null);   // 'carrier' | 'dispatcher'
   const [loading, setLoading] = useState(false);
 
@@ -132,6 +133,13 @@ export default function Onboarding({ onComplete }) {
             <div className="text-xs text-muted-foreground font-medium">LARCOFER USA</div>
           </div>
         </div>
+
+        {/* Checklist de activación — visible mientras el workspace no esté listo */}
+        {setupDetails && (
+          <div className="mb-4">
+            <GoLiveChecklistPanel setupDetails={setupDetails} />
+          </div>
+        )}
 
         <div className="bg-card border border-border rounded-2xl p-6">
           {/* Paso inicial: elegir rol */}

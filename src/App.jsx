@@ -35,7 +35,7 @@ function AppLoading() {
 // ─── Core app (reads AppStateContext) ─────────────────────────────────────────
 function AppContent() {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
-  const { appState, resolveState } = useAppState();
+  const { appState, resolveState, setupDetails } = useAppState();
 
   // Platform-level loading / errors
   if (isLoadingPublicSettings || isLoadingAuth || appState === 'loading') return <AppLoading />;
@@ -49,7 +49,8 @@ function AppContent() {
   if (appState === 'setup') {
     return (
       <Onboarding
-        onComplete={resolveState}   // re-evaluate state after onboarding finishes
+        onComplete={resolveState}
+        setupDetails={setupDetails}
       />
     );
   }
