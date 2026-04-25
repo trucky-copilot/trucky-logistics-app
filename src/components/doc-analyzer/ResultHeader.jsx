@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertTriangle, XCircle, FileText, FileCheck } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, FileText, FileCheck, History } from 'lucide-react';
 
 const VEREDICTO_CONFIG = {
   'Aceptar':                   { color: 'text-green-400',  bg: 'bg-green-400/10',  border: 'border-green-400/30',  icon: CheckCircle2, label: 'ACEPTAR',                   riesgo: 'Bajo' },
@@ -26,7 +26,7 @@ const DOC_LABEL = {
   otro: 'Documento',
 };
 
-export default function ResultHeader({ analysis, onLinkToLoad }) {
+export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
   const v = VEREDICTO_CONFIG[analysis.veredicto] || VEREDICTO_CONFIG['Negociar'];
   const Icon = v.icon;
   const docLabel = DOC_LABEL[analysis.datos_extraidos?.tipo_documento] || analysis.datos_extraidos?.tipo_documento || 'Documento';
@@ -38,6 +38,11 @@ export default function ResultHeader({ analysis, onLinkToLoad }) {
       <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-black/10">
         <FileCheck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className="text-xs text-muted-foreground font-medium">{docLabel}</span>
+        {cached && (
+          <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full border border-primary/20">
+            <History className="w-2.5 h-2.5" /> Resultado anterior
+          </span>
+        )}
         {analysis.confidence_score != null && (
           <>
             <span className="text-border mx-1">·</span>

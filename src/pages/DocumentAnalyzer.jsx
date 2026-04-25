@@ -74,7 +74,7 @@ export default function DocumentAnalyzer() {
     clearTimeout(t2);
 
     if (res.data?.analysis) {
-      setAnalysis(res.data.analysis);
+      setAnalysis({ ...res.data.analysis, cached: res.data.cached || false });
     } else if (res.data?.error) {
       setError(res.data.error);
     }
@@ -224,7 +224,7 @@ Equipment: 20ft Dry...`}
       {/* Resultados */}
       {analysis && (
         <div className="space-y-3">
-          <ResultHeader analysis={analysis} onLinkToLoad={handleLinkToLoad} />
+          <ResultHeader analysis={analysis} onLinkToLoad={handleLinkToLoad} cached={analysis.cached} />
           <KeyFindings categorias={analysis.categorias} />
           <CategoryGrid categorias={analysis.categorias} />
           <ActionBlock veredicto={analysis.veredicto} puntos_negociar={analysis.puntos_negociar} />
