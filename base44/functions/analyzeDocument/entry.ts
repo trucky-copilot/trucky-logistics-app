@@ -749,11 +749,21 @@ function calcularVeredicto(categorias, userRole) {
 // UTILIDADES
 // ═══════════════════════════════════════════════════════════════════════════════
 
+// Versión del motor de reglas — incrementar manualmente cuando cambien las reglas de validación
+const RULES_VERSION = '2.0.0';
+
 async function hashText(text) {
   const encoder = new TextEncoder();
   const data = encoder.encode(text.slice(0, 1000));
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+
+// Genera un fingerprint corto (8 chars) para comparar versiones de configuración
+async function fingerprintObject(obj) {
+  if (!obj) return 'none';
+  const str = JSON.stringify(obj);
+  return (await hashText(str)).slice(0, 8);
 }
 
 function calcularConfidence(datos) {
@@ -807,14 +817,41 @@ Deno.serve(async (req) => {
 
     const [profiles, costConfigs, trucks, brokers, carrierProfiles, dispatcherProfiles, brokerProfiles] = contextData;
 
-    // Buscar resultado previo por hash (mismo usuario, mismo documento)
+    // ── PASO 3: Resolver contexto del usuario ─────────────────────────────────
+    const userProfile = profiles[0] || null;
+    const costConfig = costConfigs[0] || null;
+    const userRole = userProfile?.rol || 'dispatcher';
+    const dispatcherProfile = dispatcherProfiles[0] || null;
+
+    let carrierProfile = null;
+    if (selectedCarrierId) carrierProfile = carrierProfiles.find(c => c.id === selectedCarrierId) || null;
+    if (!carrierProfile && dispatcherProfile?.default_carrier) carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || null;
+    if (!carrierProfile) carrierProfile = carrierProfiles[0] || null;
+
+    // ── PASO 3b: Calcular fingerprints de versión de configuración ────────────
+    const [costVer, carrierVer, brokerVer] = await Promise.all([
+      fingerprintObject(costConfig),
+      fingerprintObject(carrierProfile),
+      fingerprintObject(brokerProfiles),
+    ]);
+
+    // ── PASO 3c: Buscar resultado previo por hash + versiones ─────────────────
+    // Solo reusar si doc + usuario + reglas + configuraciones coinciden exactamente
     const previos = await base44.entities.DocumentVerification.filter({ document_hash: docHash, uploaded_by: user.email });
     if (previos.length > 0) {
       const prev = previos[0];
-      // Reconstruir respuesta desde el registro guardado
-      if (prev.verification_summary && prev.recommended_action) {
+      const cacheValido =
+        prev.verification_summary &&
+        prev.recommended_action &&
+        prev.rules_version === RULES_VERSION &&
+        prev.cost_config_version === costVer &&
+        prev.carrier_profile_version === carrierVer &&
+        prev.broker_profile_version === brokerVer;
+
+      if (cacheValido) {
         return Response.json({
           cached: true,
+          cache_reason: 'Documento ya procesado con la configuración actual',
           analysis: {
             resumen_ejecutivo: prev.verification_summary,
             semaforo_general: prev.overall_risk,
@@ -837,25 +874,17 @@ Deno.serve(async (req) => {
               load_number: prev.load_number_detected,
               tipo_documento: prev.document_type,
             },
-            user_role: profiles[0]?.rol || 'dispatcher',
+            user_role: userRole,
             confidence_score: prev.confidence_score,
-            carrier_profile_used: null,
-            foco_analisis: 'Resultado de verificación anterior (documento ya procesado)',
+            carrier_profile_used: carrierProfile?.company_name || null,
+            foco_analisis: `Resultado cacheado — analizado el ${new Date(prev.analyzed_at || prev.created_date).toLocaleDateString('es-US')}`,
+            analyzed_at: prev.analyzed_at || prev.created_date,
+            analysis_source: 'cache',
           }
         });
       }
+      // Si el caché existe pero está desactualizado, se ignora y se reprocesa
     }
-
-    // ── PASO 3: Resolver contexto del usuario ─────────────────────────────────
-    const userProfile = profiles[0] || null;
-    const costConfig = costConfigs[0] || null;
-    const userRole = userProfile?.rol || 'dispatcher';
-    const dispatcherProfile = dispatcherProfiles[0] || null;
-
-    let carrierProfile = null;
-    if (selectedCarrierId) carrierProfile = carrierProfiles.find(c => c.id === selectedCarrierId) || null;
-    if (!carrierProfile && dispatcherProfile?.default_carrier) carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || null;
-    if (!carrierProfile) carrierProfile = carrierProfiles[0] || null;
 
     // ── PASO 4: Si el texto es ambiguo, verificar con IA si es documento válido ─
     if (tipoDetectado === 'ambiguous') {
@@ -906,6 +935,12 @@ Deno.serve(async (req) => {
       document_type: datos.tipo_documento || 'rate_confirmation',
       document_hash: docHash,
       uploaded_by: user.email,
+      analysis_source: 'new',
+      rules_version: RULES_VERSION,
+      cost_config_version: costVer,
+      carrier_profile_version: carrierVer,
+      broker_profile_version: brokerVer,
+      analyzed_at: new Date().toISOString(),
       broker_name_detected: datos.broker_nombre || null,
       broker_mc_detected: datos.broker_mc || null,
       broker_dot_detected: datos.broker_dot || null,
@@ -945,6 +980,7 @@ Deno.serve(async (req) => {
       : `Enfoque: compatibilidad con ${carrierProfile?.company_name || 'carrier'}, completitud y riesgo documental`;
 
     return Response.json({
+      cached: false,
       analysis: {
         resumen_ejecutivo,
         semaforo_general,
@@ -958,6 +994,8 @@ Deno.serve(async (req) => {
         confidence_score,
         carrier_profile_used: carrierProfile?.company_name || null,
         foco_analisis,
+        analysis_source: 'new',
+        analyzed_at: new Date().toISOString(),
       }
     });
 
