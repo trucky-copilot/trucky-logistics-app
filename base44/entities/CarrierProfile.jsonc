@@ -2,6 +2,10 @@
   "name": "CarrierProfile",
   "type": "object",
   "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
+    },
     "company_name": {
       "type": "string",
       "description": "Nombre legal de la compa\u00f1\u00eda carrier"
@@ -23,14 +27,14 @@
       "items": {
         "type": "string"
       },
-      "description": "Puertos donde opera: PortMiami, Port Everglades, etc."
+      "description": "Puertos donde opera"
     },
     "equipment_types": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "Tipos de contenedor que maneja: 20ft, 40ft, 45ft, etc."
+      "description": "Tipos de contenedor que maneja"
     },
     "chassis_types": {
       "type": "array",
@@ -41,23 +45,19 @@
     },
     "hazmat_allowed": {
       "type": "boolean",
-      "default": false,
-      "description": "\u00bfPuede manejar carga peligrosa?"
+      "default": false
     },
     "overweight_allowed": {
       "type": "boolean",
-      "default": false,
-      "description": "\u00bfPuede manejar carga de sobrepeso?"
+      "default": false
     },
     "reefer_allowed": {
       "type": "boolean",
-      "default": false,
-      "description": "\u00bfPuede manejar refrigerado?"
+      "default": false
     },
     "power_only_allowed": {
       "type": "boolean",
-      "default": false,
-      "description": "\u00bfOpera power only?"
+      "default": false
     },
     "commodity_restrictions": {
       "type": "array",
@@ -68,13 +68,11 @@
     },
     "twic_required": {
       "type": "boolean",
-      "default": true,
-      "description": "\u00bfSe requiere TWIC card para operar en sus puertos?"
+      "default": true
     },
     "active": {
       "type": "boolean",
-      "default": true,
-      "description": "\u00bfCarrier activo en el sistema?"
+      "default": true
     }
   },
   "required": [

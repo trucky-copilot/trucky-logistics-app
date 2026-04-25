@@ -2,6 +2,10 @@
   "name": "Load",
   "type": "object",
   "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
+    },
     "broker_nombre": {
       "type": "string"
     },

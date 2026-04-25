@@ -2,6 +2,10 @@
   "name": "DispatcherProfile",
   "type": "object",
   "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
+    },
     "user_id": {
       "type": "string",
       "description": "Email o ID del usuario dispatcher"
@@ -12,12 +16,11 @@
         "single_carrier",
         "multi_carrier"
       ],
-      "default": "single_carrier",
-      "description": "\u00bfDespacha para un solo carrier o varios?"
+      "default": "single_carrier"
     },
     "default_carrier": {
       "type": "string",
-      "description": "ID del CarrierProfile por defecto para validaci\u00f3n"
+      "description": "ID del CarrierProfile por defecto"
     },
     "managed_carriers": {
       "type": "array",
@@ -31,14 +34,14 @@
       "items": {
         "type": "string"
       },
-      "description": "Rutas o lanes habituales: ej. PortMiami-Doral, PEV-Hialeah"
+      "description": "Rutas o lanes habituales"
     },
     "preferred_brokers": {
       "type": "array",
       "items": {
         "type": "string"
       },
-      "description": "IDs de BrokerProfiles preferidos o frecuentes"
+      "description": "IDs de BrokerProfiles preferidos"
     }
   },
   "required": [

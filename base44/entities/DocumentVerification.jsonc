@@ -2,6 +2,10 @@
   "name": "DocumentVerification",
   "type": "object",
   "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
+    },
     "document_type": {
       "type": "string",
       "enum": [
@@ -25,28 +29,22 @@
         "new",
         "cache"
       ],
-      "default": "new",
-      "description": "Indica si el resultado es nuevo o reutilizado de cach\u00e9"
+      "default": "new"
     },
     "rules_version": {
-      "type": "string",
-      "description": "Versi\u00f3n del motor de reglas de validaci\u00f3n"
+      "type": "string"
     },
     "cost_config_version": {
-      "type": "string",
-      "description": "Hash/fingerprint de la CostConfig del usuario en el momento del an\u00e1lisis"
+      "type": "string"
     },
     "carrier_profile_version": {
-      "type": "string",
-      "description": "Hash/fingerprint del CarrierProfile en el momento del an\u00e1lisis"
+      "type": "string"
     },
     "broker_profile_version": {
-      "type": "string",
-      "description": "Hash/fingerprint de los BrokerProfiles activos en el momento del an\u00e1lisis"
+      "type": "string"
     },
     "analyzed_at": {
-      "type": "string",
-      "description": "Timestamp ISO del momento en que se ejecut\u00f3 el an\u00e1lisis"
+      "type": "string"
     },
     "broker_name_detected": {
       "type": "string"
@@ -185,8 +183,7 @@
       "default": "amarillo"
     },
     "verification_summary": {
-      "type": "string",
-      "description": "Resumen ejecutivo del an\u00e1lisis"
+      "type": "string"
     },
     "recommended_action": {
       "type": "string",
@@ -198,8 +195,7 @@
       "default": "NEGOCIAR"
     },
     "confidence_score": {
-      "type": "number",
-      "description": "Confianza del an\u00e1lisis 0-100"
+      "type": "number"
     }
   },
   "required": [

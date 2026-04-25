@@ -23,27 +23,39 @@ async function evaluateWorkspace(user) {
   const email = user.email;
 
   // Cargar todo en paralelo
-  const [profiles, costConfigs, carrierProfiles, dispatcherProfiles] = await Promise.all([
+  const [profiles, members, costConfigs, carrierProfiles, dispatcherProfiles] = await Promise.all([
     base44.entities.UserProfile.filter({ usuario: email }),
+    base44.entities.OrganizationMember.filter({ user_email: email, active: true }),
     base44.entities.CostConfig.filter({ usuario: email }),
     base44.entities.CarrierProfile.filter({ active: true }),
     base44.entities.DispatcherProfile.filter({ user_id: email }),
   ]);
 
-  const profile         = profiles[0]         || null;
-  const costConfig      = costConfigs[0]       || null;
+  const profile         = profiles[0]          || null;
+  const membership      = members[0]           || null;
+  const costConfig      = costConfigs[0]        || null;
   const carrierProfile  = carrierProfiles[0]   || null;
   const dispProfile     = dispatcherProfiles[0] || null;
 
+  // Resolver organización activa
+  let organization = null;
+  if (membership?.organization_id) {
+    const orgs = await base44.entities.Organization.filter({ id: membership.organization_id });
+    organization = orgs[0] || null;
+  }
+
   const missing = [];
 
-  // 1. Rol definido
+  // 1. Organización activa
+  if (!organization?.active) missing.push('organization');
+
+  // 2. Rol definido
   if (!profile?.rol) missing.push('rol');
 
-  // 2. Onboarding completado
+  // 3. Onboarding completado
   if (!profile?.onboarding_completado) missing.push('onboarding');
 
-  // 3. Perfil de rol requerido
+  // 4. Perfil de rol requerido
   if (profile?.rol === 'carrier' || profile?.rol === 'ambos') {
     if (!carrierProfile?.company_name || !carrierProfile?.mc_number) {
       missing.push('carrier_profile');
@@ -55,15 +67,20 @@ async function evaluateWorkspace(user) {
     }
   }
 
-  // 4. CostConfig válida (requerida si es carrier o ambos)
+  // 5. CostConfig válida (requerida si es carrier o ambos)
   if (profile?.rol === 'carrier' || profile?.rol === 'ambos') {
     if (!costConfig || !costConfig.diesel_precio || !costConfig.mpg) {
       missing.push('cost_config');
     }
   }
 
+  // 6. Workspace marcado como production_ready en la organización
+  if (organization && !organization.production_ready) missing.push('production_ready');
+
   return {
     profile,
+    organization,
+    membership,
     carrierProfile,
     dispProfile,
     costConfig,
@@ -76,6 +93,7 @@ export function AppStateProvider({ children }) {
   const [appState, setAppState]           = useState('loading');
   const [userProfile, setUserProfile]     = useState(null);
   const [currentUser, setCurrentUser]     = useState(null);
+  const [organization, setOrganization]   = useState(null);
   const [setupDetails, setSetupDetails]   = useState(null); // { missing: [] }
 
   const resolveState = useCallback(async () => {
@@ -92,6 +110,7 @@ export function AppStateProvider({ children }) {
 
       const workspace = await evaluateWorkspace(user);
       setUserProfile(workspace.profile);
+      setOrganization(workspace.organization);
 
       // Demo interno explícito
       if (workspace.profile?.is_demo) {
@@ -121,7 +140,9 @@ export function AppStateProvider({ children }) {
       appState,
       userProfile,
       currentUser,
-      setupDetails,   // { missing: string[] } — disponible en setup para mostrar qué falta
+      organization,           // organización activa del usuario
+      organizationId: organization?.id || null,  // shortcut para filtrar queries
+      setupDetails,           // { missing: string[] } — disponible en setup para mostrar qué falta
       resolveState,
     }}>
       {children}
@@ -133,4 +154,10 @@ export function useAppState() {
   const ctx = useContext(AppStateContext);
   if (!ctx) throw new Error('useAppState must be used inside AppStateProvider');
   return ctx;
+}
+
+/** Shortcut hook — retorna el organization_id activo para filtrar queries */
+export function useOrganizationId() {
+  const { organizationId } = useAppState();
+  return organizationId;
 }

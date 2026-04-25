@@ -1,0 +1,53 @@
+{
+  "name": "Organization",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Nombre de la empresa u organizaci\u00f3n"
+    },
+    "account_type": {
+      "type": "string",
+      "enum": [
+        "carrier",
+        "dispatcher",
+        "ambos"
+      ],
+      "description": "Tipo de cuenta de la organizaci\u00f3n"
+    },
+    "workspace_status": {
+      "type": "string",
+      "enum": [
+        "setup",
+        "production",
+        "demo",
+        "suspended"
+      ],
+      "default": "setup",
+      "description": "Estado actual del workspace"
+    },
+    "onboarding_completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si la organizaci\u00f3n complet\u00f3 el proceso de onboarding"
+    },
+    "production_ready": {
+      "type": "boolean",
+      "default": false,
+      "description": "Si el workspace est\u00e1 listo para operar con datos reales"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Si la organizaci\u00f3n est\u00e1 activa"
+    },
+    "created_by_user": {
+      "type": "string",
+      "description": "Email del usuario que cre\u00f3 la organizaci\u00f3n"
+    }
+  },
+  "required": [
+    "name",
+    "created_by_user"
+  ]
+}
