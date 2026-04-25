@@ -2,12 +2,15 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileSearch, Upload, XCircle, Loader2, Image,
-  FileText, AlertTriangle, ChevronDown, ChevronUp, Truck, Users
+  Truck, Users
 } from 'lucide-react';
 import { analyzeDocument } from '@/functions/analyzeDocument';
 import { base44 } from '@/api/base44Client';
-import CategoryCard from '@/components/doc-analyzer/CategoryCard';
-import VeredictoCard from '@/components/doc-analyzer/VeredictoCard';
+import ResultHeader from '@/components/doc-analyzer/ResultHeader';
+import CategoryGrid from '@/components/doc-analyzer/CategoryGrid';
+import KeyFindings from '@/components/doc-analyzer/KeyFindings';
+import ActionBlock from '@/components/doc-analyzer/ActionBlock';
+import LoadMatch from '@/components/doc-analyzer/LoadMatch';
 import CarrierSelector from '@/components/doc-analyzer/CarrierSelector';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
@@ -19,8 +22,6 @@ export default function DocumentAnalyzer() {
   const [loadingMsg, setLoadingMsg] = useState('');
   const [analysis, setAnalysis] = useState(null);
   const [error, setError] = useState(null);
-  const [showPuntos, setShowPuntos] = useState(false);
-
   // Contexto del usuario
   const [userRole, setUserRole] = useState(null);        // 'carrier' | 'dispatcher'
   const [dispatchMode, setDispatchMode] = useState(null); // 'single_carrier' | 'multi_carrier'
@@ -223,59 +224,11 @@ Equipment: 20ft Dry...`}
       {/* Resultados */}
       {analysis && (
         <div className="space-y-3">
-          <VeredictoCard analysis={analysis} onLinkToLoad={handleLinkToLoad} />
-
-          {analysis.alertas_criticas?.length > 0 && (
-            <div className="bg-red-400/5 border border-red-400/20 rounded-xl p-4">
-              <p className="text-xs font-bold text-red-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5" />
-                Alertas Críticas
-              </p>
-              <ul className="space-y-1">
-                {analysis.alertas_criticas.map((a, i) => (
-                  <li key={i} className="text-xs text-foreground flex gap-2">
-                    <span className="text-red-400 flex-shrink-0 font-bold">!</span>
-                    {a}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          <div className="space-y-2">
-            <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide px-1">Análisis por Categoría</p>
-            {analysis.categorias?.map((cat, i) => (
-              <CategoryCard key={i} cat={cat} defaultExpanded={cat.semaforo === 'rojo'} />
-            ))}
-          </div>
-
-          {analysis.puntos_negociar?.length > 0 && (
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
-              <button
-                className="w-full flex items-center justify-between px-4 py-3"
-                onClick={() => setShowPuntos(!showPuntos)}
-              >
-                <p className="text-xs font-bold text-foreground uppercase tracking-wide flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-primary" />
-                  Puntos a Negociar ({analysis.puntos_negociar.length})
-                </p>
-                {showPuntos
-                  ? <ChevronUp className="w-4 h-4 text-muted-foreground" />
-                  : <ChevronDown className="w-4 h-4 text-muted-foreground" />
-                }
-              </button>
-              {showPuntos && (
-                <div className="px-4 pb-4 space-y-1.5 border-t border-border pt-3">
-                  {analysis.puntos_negociar.map((p, i) => (
-                    <div key={i} className="text-xs text-foreground flex gap-2">
-                      <span className="text-primary flex-shrink-0 font-bold">{i + 1}.</span>
-                      <span>{p}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+          <ResultHeader analysis={analysis} onLinkToLoad={handleLinkToLoad} />
+          <KeyFindings categorias={analysis.categorias} />
+          <CategoryGrid categorias={analysis.categorias} />
+          <ActionBlock veredicto={analysis.veredicto} puntos_negociar={analysis.puntos_negociar} />
+          <LoadMatch datos_extraidos={analysis.datos_extraidos} />
         </div>
       )}
     </div>
