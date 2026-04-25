@@ -1,0 +1,37 @@
+{
+  "name": "LoadReferenceLink",
+  "type": "object",
+  "properties": {
+    "document_verification_id": {
+      "type": "string",
+      "description": "ID del DocumentVerification relacionado"
+    },
+    "load_id": {
+      "type": "string",
+      "description": "ID del Load en la entidad Load"
+    },
+    "match_type": {
+      "type": "string",
+      "enum": [
+        "load_number",
+        "reference_number",
+        "delivery_order",
+        "manual"
+      ],
+      "description": "Tipo de coincidencia que gener\u00f3 el v\u00ednculo"
+    },
+    "matched_reference": {
+      "type": "string",
+      "description": "Valor del campo que coincidi\u00f3"
+    },
+    "match_confidence": {
+      "type": "number",
+      "description": "Confianza del match 0-100"
+    }
+  },
+  "required": [
+    "document_verification_id",
+    "load_id",
+    "match_type"
+  ]
+}

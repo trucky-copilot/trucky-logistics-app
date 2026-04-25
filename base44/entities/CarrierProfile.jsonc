@@ -1,0 +1,84 @@
+{
+  "name": "CarrierProfile",
+  "type": "object",
+  "properties": {
+    "company_name": {
+      "type": "string",
+      "description": "Nombre legal de la compa\u00f1\u00eda carrier"
+    },
+    "trade_name": {
+      "type": "string",
+      "description": "Nombre comercial o DBA"
+    },
+    "mc_number": {
+      "type": "string",
+      "description": "Motor Carrier number (FMCSA)"
+    },
+    "dot_number": {
+      "type": "string",
+      "description": "DOT number (FMCSA)"
+    },
+    "ports_operated": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Puertos donde opera: PortMiami, Port Everglades, etc."
+    },
+    "equipment_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tipos de contenedor que maneja: 20ft, 40ft, 45ft, etc."
+    },
+    "chassis_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tipos de chasis disponibles"
+    },
+    "hazmat_allowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u00bfPuede manejar carga peligrosa?"
+    },
+    "overweight_allowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u00bfPuede manejar carga de sobrepeso?"
+    },
+    "reefer_allowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u00bfPuede manejar refrigerado?"
+    },
+    "power_only_allowed": {
+      "type": "boolean",
+      "default": false,
+      "description": "\u00bfOpera power only?"
+    },
+    "commodity_restrictions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Commodities que NO puede transportar"
+    },
+    "twic_required": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u00bfSe requiere TWIC card para operar en sus puertos?"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u00bfCarrier activo en el sistema?"
+    }
+  },
+  "required": [
+    "company_name",
+    "mc_number"
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "name": "BrokerProfile",
+  "type": "object",
+  "properties": {
+    "legal_name": {
+      "type": "string",
+      "description": "Nombre legal del broker"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Nombre comercial o alias usado en documentos"
+    },
+    "mc_number": {
+      "type": "string",
+      "description": "MC Number del broker (FMCSA)"
+    },
+    "dot_number": {
+      "type": "string",
+      "description": "DOT Number del broker"
+    },
+    "payment_terms_default": {
+      "type": "string",
+      "description": "T\u00e9rminos de pago habituales: Net 30, Quick Pay, etc."
+    },
+    "reliability_score": {
+      "type": "number",
+      "description": "Puntaje de confiabilidad 1-10"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Notas internas sobre este broker"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u00bfBroker activo para operaci\u00f3n?"
+    }
+  },
+  "required": [
+    "legal_name",
+    "mc_number"
+  ]
+}

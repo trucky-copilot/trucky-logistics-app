@@ -1,0 +1,180 @@
+{
+  "name": "DocumentVerification",
+  "type": "object",
+  "properties": {
+    "document_type": {
+      "type": "string",
+      "enum": [
+        "rate_confirmation",
+        "delivery_order",
+        "otro"
+      ],
+      "description": "Tipo de documento analizado"
+    },
+    "document_hash": {
+      "type": "string",
+      "description": "Hash del texto para evitar duplicados"
+    },
+    "uploaded_by": {
+      "type": "string",
+      "description": "Email del usuario que subi\u00f3 el documento"
+    },
+    "broker_name_detected": {
+      "type": "string"
+    },
+    "broker_mc_detected": {
+      "type": "string"
+    },
+    "broker_dot_detected": {
+      "type": "string"
+    },
+    "carrier_name_detected": {
+      "type": "string"
+    },
+    "carrier_mc_detected": {
+      "type": "string"
+    },
+    "carrier_dot_detected": {
+      "type": "string"
+    },
+    "commodity_detected": {
+      "type": "string"
+    },
+    "equipment_detected": {
+      "type": "string"
+    },
+    "chassis_detected": {
+      "type": "string"
+    },
+    "rate_total_detected": {
+      "type": "number"
+    },
+    "detention_detected": {
+      "type": "string"
+    },
+    "tonu_detected": {
+      "type": "string"
+    },
+    "payment_terms_detected": {
+      "type": "string"
+    },
+    "pickup_detected": {
+      "type": "string"
+    },
+    "delivery_detected": {
+      "type": "string"
+    },
+    "reference_number_detected": {
+      "type": "string"
+    },
+    "load_number_detected": {
+      "type": "string"
+    },
+    "operation_type_detected": {
+      "type": "string"
+    },
+    "identity_match_status": {
+      "type": "string",
+      "enum": [
+        "matched",
+        "mismatch",
+        "not_found",
+        "pending"
+      ],
+      "default": "pending"
+    },
+    "rate_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "commodity_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "equipment_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "broker_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "carrier_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "date_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "clause_check_status": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "overall_risk": {
+      "type": "string",
+      "enum": [
+        "verde",
+        "amarillo",
+        "rojo"
+      ],
+      "default": "amarillo"
+    },
+    "verification_summary": {
+      "type": "string",
+      "description": "Resumen ejecutivo del an\u00e1lisis"
+    },
+    "recommended_action": {
+      "type": "string",
+      "enum": [
+        "FIRMAR",
+        "NEGOCIAR",
+        "RECHAZAR"
+      ],
+      "default": "NEGOCIAR"
+    },
+    "confidence_score": {
+      "type": "number",
+      "description": "Confianza del an\u00e1lisis 0-100"
+    }
+  },
+  "required": [
+    "uploaded_by",
+    "document_type"
+  ]
+}

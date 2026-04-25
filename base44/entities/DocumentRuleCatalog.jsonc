@@ -1,0 +1,52 @@
+{
+  "name": "DocumentRuleCatalog",
+  "type": "object",
+  "properties": {
+    "rule_name": {
+      "type": "string",
+      "description": "Nombre \u00fanico de la regla"
+    },
+    "rule_category": {
+      "type": "string",
+      "enum": [
+        "rate",
+        "commodity",
+        "equipment",
+        "broker",
+        "carrier",
+        "dates",
+        "clauses"
+      ],
+      "description": "Categor\u00eda a la que pertenece la regla"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "rojo",
+        "amarillo",
+        "verde"
+      ],
+      "default": "amarillo",
+      "description": "Severidad si la regla se dispara"
+    },
+    "condition_description": {
+      "type": "string",
+      "description": "Descripci\u00f3n de cu\u00e1ndo aplica esta regla"
+    },
+    "output_message": {
+      "type": "string",
+      "description": "Mensaje a mostrar cuando la regla se dispara"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "\u00bfRegla activa en el sistema?"
+    }
+  },
+  "required": [
+    "rule_name",
+    "rule_category",
+    "condition_description",
+    "output_message"
+  ]
+}

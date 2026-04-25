@@ -280,30 +280,54 @@ function validarBroker(datos, brokers) {
   };
 }
 
-function validarCarrier(datos, userProfile) {
+function validarCarrier(datos, carrierProfile) {
   const hallazgos = [];
   let semaforo = 'verde';
+  let identity_match = 'not_found';
 
   if (!datos.carrier_nombre) {
     hallazgos.push('Nombre del carrier no encontrado en el documento');
     semaforo = 'amarillo';
+  } else if (carrierProfile) {
+    const docLower = datos.carrier_nombre.toLowerCase();
+    const cpLower = (carrierProfile.company_name || '').toLowerCase();
+    const tradeLower = (carrierProfile.trade_name || '').toLowerCase();
+
+    const nameMatch = docLower.includes(cpLower) || cpLower.includes(docLower)
+      || (tradeLower && (docLower.includes(tradeLower) || tradeLower.includes(docLower)));
+    const mcMatch = datos.carrier_mc && carrierProfile.mc_number
+      && datos.carrier_mc.replace(/\D/g, '') === carrierProfile.mc_number.replace(/\D/g, '');
+
+    if (nameMatch && (mcMatch || !datos.carrier_mc)) {
+      hallazgos.push(`Carrier verificado: ${carrierProfile.company_name}`);
+      if (mcMatch) hallazgos.push(`MC coincide: ${datos.carrier_mc}`);
+      identity_match = 'matched';
+    } else if (nameMatch && !mcMatch && datos.carrier_mc) {
+      hallazgos.push(`Nombre coincide pero MC no: doc=${datos.carrier_mc} vs perfil=${carrierProfile.mc_number}`);
+      semaforo = 'rojo';
+      identity_match = 'mismatch';
+    } else {
+      hallazgos.push(`Carrier en documento: "${datos.carrier_nombre}" no coincide con perfil registrado: "${carrierProfile.company_name}"`);
+      semaforo = 'rojo';
+      identity_match = 'mismatch';
+    }
   } else {
     const carrierLower = datos.carrier_nombre.toLowerCase();
     if (!carrierLower.includes(CARRIER_NOMBRE)) {
-      hallazgos.push(`Carrier en documento: "${datos.carrier_nombre}" — verificar que corresponde a esta operación`);
+      hallazgos.push(`Carrier "${datos.carrier_nombre}" — sin perfil registrado para comparar`);
       semaforo = 'amarillo';
     } else {
-      hallazgos.push(`Carrier correcto: ${datos.carrier_nombre}`);
+      hallazgos.push(`Carrier encontrado: ${datos.carrier_nombre}`);
     }
+    identity_match = 'pending';
   }
 
-  if (!datos.carrier_mc) {
-    hallazgos.push('MC Number del carrier no especificado en documento');
-  }
+  if (!datos.carrier_mc) hallazgos.push('MC Number del carrier no especificado en documento');
 
   return {
     categoria: 'Carrier / Larcofer',
     semaforo,
+    identity_match,
     hallazgos,
     datos_extraidos: {
       nombre: datos.carrier_nombre || 'No encontrado',
@@ -311,10 +335,10 @@ function validarCarrier(datos, userProfile) {
       dot: datos.carrier_dot || 'No encontrado',
     },
     recomendacion: semaforo === 'rojo'
-      ? 'Datos del carrier incorrectos. No firmar sin corregir.'
+      ? 'Discrepancia en identidad del carrier. NO firmar sin corrección.'
       : semaforo === 'amarillo'
-      ? 'Confirmar que el carrier listado corresponde a esta operación.'
-      : 'Datos del carrier verificados correctamente.'
+      ? 'Registrar CarrierProfile para validación automática.'
+      : 'Identidad del carrier verificada correctamente.'
   };
 }
 
@@ -479,6 +503,16 @@ function calcularVeredicto(categorias, userRole) {
   return { veredicto, semaforo_general, resumen_ejecutivo: resumen, alertas_criticas: alertas, puntos_negociar };
 }
 
+// ── Utilidad: hash simple del texto ─────────────────────────────────────────
+
+async function hashText(text) {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(text.slice(0, 1000));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 32);
+}
+
 // ── Handler principal ────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -492,17 +526,29 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Texto del documento vacío o muy corto' }, { status: 400 });
     }
 
-    // Cargar datos del usuario en paralelo
-    const [profiles, costConfigs, trucks, brokers] = await Promise.all([
+    // Cargar datos del usuario en paralelo (incluyendo nuevas entidades)
+    const [profiles, costConfigs, trucks, brokers, carrierProfiles, dispatcherProfiles, brokerProfiles] = await Promise.all([
       base44.entities.UserProfile.filter({ usuario: user.email }),
       base44.entities.CostConfig.filter({ usuario: user.email }),
       base44.entities.Truck.list(),
       base44.entities.Broker.list(),
+      base44.entities.CarrierProfile.filter({ active: true }),
+      base44.entities.DispatcherProfile.filter({ user_id: user.email }),
+      base44.entities.BrokerProfile.filter({ active: true }),
     ]);
 
     const userProfile = profiles[0] || null;
     const costConfig = costConfigs[0] || null;
     const userRole = userProfile?.rol || 'dispatcher';
+    const dispatcherProfile = dispatcherProfiles[0] || null;
+
+    // Resolver CarrierProfile: si dispatcher tiene default_carrier, usarlo; sino tomar el primero activo
+    let carrierProfile = null;
+    if (dispatcherProfile?.default_carrier) {
+      carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || carrierProfiles[0] || null;
+    } else {
+      carrierProfile = carrierProfiles[0] || null;
+    }
 
     // Verificar tipo de documento
     const typeCheck = await base44.integrations.Core.InvokeLLM({
@@ -517,19 +563,96 @@ Deno.serve(async (req) => {
     // Extracción estructurada de datos
     const datos = await extractDocumentData(base44, documentText);
 
+    // Merge brokers: Broker (legacy) + BrokerProfile (nuevo)
+    const allBrokers = [
+      ...brokers,
+      ...brokerProfiles.map(bp => ({
+        nombre: bp.display_name || bp.legal_name,
+        mc_number: bp.mc_number,
+        dias_pago: bp.payment_terms_default ? null : null,
+        puntaje_confiabilidad: bp.reliability_score,
+        estado: bp.active ? 'activo' : 'bloqueado',
+        cargas_realizadas: 0,
+        _source: 'broker_profile',
+      }))
+    ];
+
     // Validaciones por reglas
     const categorias = [
       validarRate(datos, costConfig, userRole),
       validarCommodity(datos),
       validarEquipo(datos, trucks),
-      validarBroker(datos, brokers),
-      validarCarrier(datos, userProfile),
+      validarBroker(datos, allBrokers),
+      validarCarrier(datos, carrierProfile),
       validarFechasOperacion(datos),
       validarClausulas(datos),
     ];
 
     // Veredicto
     const { veredicto, semaforo_general, resumen_ejecutivo, alertas_criticas, puntos_negociar } = calcularVeredicto(categorias, userRole);
+
+    // Calcular confidence score (0-100): basado en campos detectados
+    const camposDetectados = [
+      datos.tarifa_total, datos.terminos_pago, datos.commodity, datos.tipo_equipo,
+      datos.broker_nombre, datos.broker_mc, datos.carrier_nombre,
+      datos.pickup_fecha, datos.delivery_fecha,
+      datos.load_number || datos.reference_number || datos.delivery_order_number,
+    ].filter(Boolean).length;
+    const confidence_score = Math.round((camposDetectados / 10) * 100);
+
+    // Guardar en DocumentVerification
+    const docHash = await hashText(documentText);
+    const catMap = {};
+    categorias.forEach(c => {
+      const key = c.categoria.toLowerCase().includes('rate') ? 'rate'
+        : c.categoria.toLowerCase().includes('commodity') ? 'commodity'
+        : c.categoria.toLowerCase().includes('equipo') ? 'equipment'
+        : c.categoria.toLowerCase().includes('broker') ? 'broker'
+        : c.categoria.toLowerCase().includes('carrier') ? 'carrier'
+        : c.categoria.toLowerCase().includes('fecha') ? 'date'
+        : 'clause';
+      catMap[key] = c.semaforo;
+    });
+
+    const identityResult = categorias.find(c => c.categoria.includes('Carrier'));
+
+    const verificationRecord = {
+      document_type: datos.tipo_documento || 'rate_confirmation',
+      document_hash: docHash,
+      uploaded_by: user.email,
+      broker_name_detected: datos.broker_nombre || null,
+      broker_mc_detected: datos.broker_mc || null,
+      broker_dot_detected: datos.broker_dot || null,
+      carrier_name_detected: datos.carrier_nombre || null,
+      carrier_mc_detected: datos.carrier_mc || null,
+      carrier_dot_detected: datos.carrier_dot || null,
+      commodity_detected: datos.commodity || null,
+      equipment_detected: datos.tipo_equipo || null,
+      chassis_detected: datos.chasis_provisto_por || null,
+      rate_total_detected: datos.tarifa_total || null,
+      detention_detected: datos.detention_rate || null,
+      tonu_detected: datos.tonu_rate || null,
+      payment_terms_detected: datos.terminos_pago || null,
+      pickup_detected: datos.pickup_fecha || null,
+      delivery_detected: datos.delivery_fecha || null,
+      reference_number_detected: datos.reference_number || null,
+      load_number_detected: datos.load_number || null,
+      operation_type_detected: datos.delivery_order_number ? 'delivery_order' : 'rate_confirmation',
+      identity_match_status: identityResult?.identity_match || 'pending',
+      rate_check_status: catMap.rate || 'amarillo',
+      commodity_check_status: catMap.commodity || 'amarillo',
+      equipment_check_status: catMap.equipment || 'amarillo',
+      broker_check_status: catMap.broker || 'amarillo',
+      carrier_check_status: catMap.carrier || 'amarillo',
+      date_check_status: catMap.date || 'amarillo',
+      clause_check_status: catMap.clause || 'amarillo',
+      overall_risk: semaforo_general,
+      verification_summary: resumen_ejecutivo,
+      recommended_action: veredicto,
+      confidence_score,
+    };
+
+    const savedVerification = await base44.entities.DocumentVerification.create(verificationRecord);
 
     return Response.json({
       analysis: {
@@ -541,6 +664,9 @@ Deno.serve(async (req) => {
         categorias,
         datos_extraidos: datos,
         user_role: userRole,
+        confidence_score,
+        verification_id: savedVerification.id,
+        carrier_profile_used: carrierProfile?.company_name || null,
       }
     });
 

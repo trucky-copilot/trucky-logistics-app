@@ -37,13 +37,20 @@ export default function VeredictoCard({ analysis, onLinkToLoad }) {
             {rojos > 0 && <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">{rojos} crítico{rojos > 1 ? 's' : ''}</span>}
             {amarillos > 0 && <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">{amarillos} revisar</span>}
           </div>
-          <button
-            onClick={onLinkToLoad}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
-          >
-            <Package className="w-3 h-3" />
-            Registrar carga
-          </button>
+          <div className="flex flex-col items-end gap-1.5">
+            {analysis.confidence_score != null && (
+              <div className="text-[10px] text-muted-foreground">
+                Confianza: <span className="font-bold text-foreground">{analysis.confidence_score}%</span>
+              </div>
+            )}
+            <button
+              onClick={onLinkToLoad}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+            >
+              <Package className="w-3 h-3" />
+              Registrar carga
+            </button>
+          </div>
         </div>
       </div>
 
