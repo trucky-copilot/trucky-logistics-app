@@ -28,6 +28,11 @@
     "onboarding_completado": {
       "type": "boolean",
       "default": false
+    },
+    "is_demo": {
+      "type": "boolean",
+      "default": false,
+      "description": "Marca este workspace como demo interno. Solo para uso expl\u00edcito del equipo \u2014 nunca se activa autom\u00e1ticamente en cuentas reales."
     }
   },
   "required": [

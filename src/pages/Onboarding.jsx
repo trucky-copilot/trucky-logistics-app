@@ -50,7 +50,7 @@ export default function Onboarding({ onComplete }) {
       preferred_brokers: [],
     });
 
-    onComplete({ rol: 'carrier', goToCosts: data.configurar_costos });
+    onComplete();
   };
 
   const handleDispatcherComplete = async (data) => {
@@ -101,7 +101,7 @@ export default function Onboarding({ onComplete }) {
         : [],
     });
 
-    onComplete({ rol: 'dispatcher' });
+    onComplete();
   };
 
   if (loading) {
