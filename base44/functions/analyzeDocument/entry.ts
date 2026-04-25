@@ -708,14 +708,15 @@ function validarClausulas(datos) {
 function calcularVeredicto(categorias, userRole) {
   const rojos = categorias.filter(c => c.semaforo === 'rojo').length;
   const amarillos = categorias.filter(c => c.semaforo === 'amarillo').length;
-  const perspectiva = userRole === 'carrier' ? 'rentabilidad y viabilidad operativa' : 'completitud y asignación';
 
   let veredicto, semaforo_general, resumen;
 
   if (rojos >= 2) {
     veredicto = 'No aceptar hasta corregir';
     semaforo_general = 'rojo';
-    resumen = `${rojos} categorías críticas. El documento tiene riesgos inaceptables desde la perspectiva de ${perspectiva}.`;
+    resumen = userRole === 'carrier'
+      ? `${rojos} alertas críticas de rentabilidad u operación. No aceptar esta carga.`
+      : `${rojos} alertas críticas. El documento no está listo para asignar a operación.`;
   } else if (rojos === 1) {
     veredicto = 'No aceptar hasta corregir';
     semaforo_general = 'rojo';
@@ -723,15 +724,21 @@ function calcularVeredicto(categorias, userRole) {
   } else if (amarillos >= 3) {
     veredicto = 'Negociar';
     semaforo_general = 'amarillo';
-    resumen = `${amarillos} puntos de atención. Varias condiciones requieren negociación antes de aceptar.`;
+    resumen = userRole === 'carrier'
+      ? `${amarillos} condiciones a negociar antes de aceptar la carga.`
+      : `${amarillos} puntos a confirmar. Coordinar con broker antes de asignar.`;
   } else if (amarillos >= 1) {
     veredicto = 'Revisar antes de aceptar';
     semaforo_general = 'amarillo';
-    resumen = `${amarillos} punto(s) a confirmar. Revisar con broker antes de firmar.`;
+    resumen = userRole === 'carrier'
+      ? `${amarillos} punto(s) a revisar. Confirmar condiciones antes de firmar.`
+      : `${amarillos} punto(s) a confirmar. Verificar con broker antes de asignar al carrier.`;
   } else {
     veredicto = 'Aceptar';
     semaforo_general = 'verde';
-    resumen = `Documento completo y dentro de parámetros operativos. Puede proceder.`;
+    resumen = userRole === 'carrier'
+      ? 'Carga rentable y compatible con tu operación. Puede proceder.'
+      : 'Documento completo y compatible con el carrier asignado. Listo para operación.';
   }
 
   const alertas_criticas = categorias
@@ -902,15 +909,31 @@ Deno.serve(async (req) => {
     const datos = await extractDocumentData(base44, documentText);
 
     // ── PASO 6: Validar con reglas puras — sin IA adicional ───────────────────
-    const categorias = [
-      validarRate(datos, costConfig),
-      validarCommodity(datos, carrierProfile),
-      validarEquipo(datos, trucks, carrierProfile),
-      validarBroker(datos, brokers, brokerProfiles),
-      validarCarrier(datos, carrierProfile),
-      validarFechasOperacion(datos),
-      validarClausulas(datos),
-    ];
+    // El orden y peso de categorías cambia según el rol del usuario
+    let categorias;
+    if (userRole === 'carrier') {
+      // Carrier: prioridad en rentabilidad, compatibilidad operativa y cláusulas
+      categorias = [
+        validarRate(datos, costConfig),          // ← más crítico: ¿es rentable?
+        validarCarrier(datos, carrierProfile),   // ← ¿está correcto mi nombre/MC?
+        validarEquipo(datos, trucks, carrierProfile), // ← ¿tengo el equipo?
+        validarCommodity(datos, carrierProfile), // ← ¿puedo mover esta carga?
+        validarClausulas(datos),                 // ← ¿qué riesgos contractuales hay?
+        validarFechasOperacion(datos),           // ← ¿son viables los tiempos?
+        validarBroker(datos, brokers, brokerProfiles), // ← info del broker
+      ];
+    } else {
+      // Dispatcher: prioridad en completitud, broker correcto, carrier asignado y readiness
+      categorias = [
+        validarBroker(datos, brokers, brokerProfiles), // ← ¿broker verificado?
+        validarCarrier(datos, carrierProfile),         // ← ¿carrier correcto asignado?
+        validarFechasOperacion(datos),                 // ← ¿está completo para operar?
+        validarEquipo(datos, trucks, carrierProfile),  // ← ¿compatible con el carrier?
+        validarCommodity(datos, carrierProfile),       // ← ¿commodity OK para el carrier?
+        validarClausulas(datos),                       // ← ¿cláusulas aceptables?
+        validarRate(datos, costConfig),                // ← info de tarifa (menos crítico)
+      ];
+    }
 
     // ── PASO 7: Veredicto por reglas ──────────────────────────────────────────
     const { veredicto, semaforo_general, resumen_ejecutivo, alertas_criticas, puntos_negociar } = calcularVeredicto(categorias, userRole);
@@ -974,10 +997,10 @@ Deno.serve(async (req) => {
     });
 
     const foco_analisis = userRole === 'carrier'
-      ? 'Enfoque: rentabilidad, cumplimiento operativo y compatibilidad de flota'
+      ? `Modo Carrier — rentabilidad, compatibilidad operativa y riesgo contractual`
       : dispatcherProfile?.dispatch_mode === 'multi_carrier'
-      ? `Enfoque: completitud del documento, broker, carrier asignado (${carrierProfile?.company_name || 'no seleccionado'})`
-      : `Enfoque: compatibilidad con ${carrierProfile?.company_name || 'carrier'}, completitud y riesgo documental`;
+      ? `Modo Dispatcher (multi-carrier) — completitud, broker correcto y asignación a ${carrierProfile?.company_name || 'carrier seleccionado'}`
+      : `Modo Dispatcher — completitud del documento y compatibilidad con ${carrierProfile?.company_name || 'carrier asignado'}`;
 
     return Response.json({
       cached: false,

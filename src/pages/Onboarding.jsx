@@ -21,7 +21,7 @@ export default function Onboarding({ onComplete }) {
     });
 
     // Guardar CarrierProfile
-    await base44.entities.CarrierProfile.create({
+    const carrierProfile = await base44.entities.CarrierProfile.create({
       company_name: data.company_name,
       trade_name: data.trade_name || null,
       mc_number: data.mc_number || null,
@@ -38,6 +38,16 @@ export default function Onboarding({ onComplete }) {
         : [],
       twic_required: data.twic_required,
       active: true,
+    });
+
+    // Guardar DispatcherProfile vinculado al carrier (para resolución en el analizador)
+    await base44.entities.DispatcherProfile.create({
+      user_id: user.email,
+      dispatch_mode: 'single_carrier',
+      default_carrier: carrierProfile.id,
+      managed_carriers: [carrierProfile.id],
+      service_lanes: data.lanes || [],
+      preferred_brokers: [],
     });
 
     onComplete({ rol: 'carrier', goToCosts: data.configurar_costos });

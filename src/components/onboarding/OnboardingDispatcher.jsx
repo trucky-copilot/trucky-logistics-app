@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronRight, ChevronLeft, Plus, Trash2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 
 const PUERTOS = ['PortMiami', 'Port Everglades', 'Port of Palm Beach', 'Port of Jacksonville', 'Port Tampa Bay'];
 const EQUIPMENT_OPTS = ['20ft Dry', '40ft Dry', '40ft HC', '45ft', '20ft Reefer', '40ft Reefer', 'Chassis Only'];
@@ -30,6 +30,23 @@ function MultiSelect({ options, selected, onChange }) {
   );
 }
 
+function Toggle({ label, value, onChange }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all text-xs font-medium ${
+        value ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-muted border-border text-muted-foreground'
+      }`}
+    >
+      {label}
+      <div className={`w-8 h-4 rounded-full transition-all flex items-center px-0.5 ml-2 flex-shrink-0 ${value ? 'bg-primary' : 'bg-border'}`}>
+        <div className={`w-3 h-3 rounded-full bg-white transition-all ${value ? 'translate-x-4' : 'translate-x-0'}`} />
+      </div>
+    </button>
+  );
+}
+
 const EMPTY_CARRIER = {
   company_name: '',
   mc_number: '',
@@ -57,6 +74,7 @@ export default function OnboardingDispatcher({ onComplete, onBack }) {
   const [editingCarrier, setEditingCarrier] = useState(0);
   const [lanes, setLanes] = useState([]);
   const [brokers_frecuentes, setBrokers] = useState('');
+  const [showCapacidades, setShowCapacidades] = useState(false);
 
   const updateCarrier = (idx, key, val) => {
     setCarriers(prev => prev.map((c, i) => i === idx ? { ...c, [key]: val } : c));
@@ -183,6 +201,37 @@ export default function OnboardingDispatcher({ onComplete, onBack }) {
             <div>
               <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">Chasis</label>
               <MultiSelect options={CHASSIS_OPTS} selected={carrier.chassis_types} onChange={v => updateCarrier(editingCarrier, 'chassis_types', v)} />
+            </div>
+
+            {/* Capacidades especiales — colapsable */}
+            <div className="border border-border rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setShowCapacidades(!showCapacidades)}
+                className="w-full flex items-center justify-between px-3 py-2.5 bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Capacidades especiales
+                {showCapacidades ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              {showCapacidades && (
+                <div className="p-3 space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Toggle label="HAZMAT" value={carrier.hazmat_allowed} onChange={v => updateCarrier(editingCarrier, 'hazmat_allowed', v)} />
+                    <Toggle label="Overweight" value={carrier.overweight_allowed} onChange={v => updateCarrier(editingCarrier, 'overweight_allowed', v)} />
+                    <Toggle label="Reefer" value={carrier.reefer_allowed} onChange={v => updateCarrier(editingCarrier, 'reefer_allowed', v)} />
+                    <Toggle label="Power Only" value={carrier.power_only_allowed} onChange={v => updateCarrier(editingCarrier, 'power_only_allowed', v)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Restricciones de commodity</label>
+                    <input
+                      value={carrier.commodity_restrictions || ''}
+                      onChange={e => updateCarrier(editingCarrier, 'commodity_restrictions', e.target.value)}
+                      placeholder="Ej: alcohol, tobacco"
+                      className="mt-1 w-full bg-muted border border-border rounded-xl px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
