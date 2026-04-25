@@ -804,7 +804,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'No autorizado' }, { status: 401 });
 
-    const { documentText } = await req.json();
+    const { documentText, selectedCarrierId } = await req.json();
     if (!documentText || documentText.trim().length < 20) {
       return Response.json({ error: 'Texto del documento vacío o muy corto' }, { status: 400 });
     }
@@ -825,11 +825,19 @@ Deno.serve(async (req) => {
     const userRole = userProfile?.rol || 'dispatcher';
     const dispatcherProfile = dispatcherProfiles[0] || null;
 
-    // Resolver CarrierProfile activo
+    // Resolver CarrierProfile:
+    // 1. Si el frontend envió un carrierId explícito (dispatcher multi-carrier seleccionó uno)
+    // 2. Si el dispatcher tiene un default_carrier configurado
+    // 3. Si el usuario es carrier, usar el primer CarrierProfile activo suyo
+    // 4. Fallback: primer CarrierProfile activo
     let carrierProfile = null;
-    if (dispatcherProfile?.default_carrier) {
-      carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || carrierProfiles[0] || null;
-    } else {
+    if (selectedCarrierId) {
+      carrierProfile = carrierProfiles.find(c => c.id === selectedCarrierId) || null;
+    }
+    if (!carrierProfile && dispatcherProfile?.default_carrier) {
+      carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || null;
+    }
+    if (!carrierProfile) {
       carrierProfile = carrierProfiles[0] || null;
     }
 
@@ -921,6 +929,13 @@ Deno.serve(async (req) => {
       confidence_score,
     });
 
+    // Mensaje de foco según rol
+    const foco_analisis = userRole === 'carrier'
+      ? 'Enfoque: rentabilidad, cumplimiento operativo y compatibilidad de flota'
+      : dispatcherProfile?.dispatch_mode === 'multi_carrier'
+      ? `Enfoque: completitud del documento, broker, carrier asignado (${carrierProfile?.company_name || 'no seleccionado'})`
+      : `Enfoque: compatibilidad con ${carrierProfile?.company_name || 'carrier'}, completitud y riesgo documental`;
+
     return Response.json({
       analysis: {
         resumen_ejecutivo,
@@ -931,8 +946,10 @@ Deno.serve(async (req) => {
         categorias,
         datos_extraidos: datos,
         user_role: userRole,
+        dispatch_mode: dispatcherProfile?.dispatch_mode || null,
         confidence_score,
         carrier_profile_used: carrierProfile?.company_name || null,
+        foco_analisis,
       }
     });
 

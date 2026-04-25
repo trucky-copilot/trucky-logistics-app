@@ -1,71 +1,121 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Zap, Truck, Users, LayoutDashboard, ChevronRight, Check } from 'lucide-react';
-
-const STEPS = [
-  {
-    id: 'rol',
-    pregunta: '¿Cuál es tu rol en la operación?',
-    opciones: [
-      { value: 'carrier', label: 'Carrier', desc: 'Tengo mi propio camión y lo manejo yo', icon: Truck },
-      { value: 'dispatcher', label: 'Dispatcher', desc: 'Gestiono camiones de otros operadores', icon: Users },
-      { value: 'ambos', label: 'Ambos', desc: 'Tengo camiones propios y también gestiono otros', icon: LayoutDashboard },
-    ],
-  },
-  {
-    id: 'cantidad_camiones',
-    pregunta: '¿Cuántos camiones gestionas actualmente?',
-    opciones: [
-      { value: '1', label: '1 camión', desc: 'Operación individual' },
-      { value: '2-5', label: '2 – 5 camiones', desc: 'Flota pequeña' },
-      { value: '6-10', label: '6 – 10 camiones', desc: 'Flota mediana' },
-      { value: '10+', label: '10+ camiones', desc: 'Flota grande' },
-    ],
-  },
-  {
-    id: 'costos',
-    pregunta: '¿Ya tienes datos de costos para configurar la calculadora?',
-    opciones: [
-      { value: 'ahora', label: 'Configurar ahora', desc: 'Quiero ingresar mis costos de operación' },
-      { value: 'despues', label: 'Lo hago después', desc: 'Entrar al dashboard primero' },
-    ],
-  },
-];
+import { Truck, Users, Loader2 } from 'lucide-react';
+import OnboardingCarrier from '@/components/onboarding/OnboardingCarrier';
+import OnboardingDispatcher from '@/components/onboarding/OnboardingDispatcher';
 
 export default function Onboarding({ onComplete }) {
-  const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState({});
+  const [rol, setRol] = useState(null);   // 'carrier' | 'dispatcher'
   const [loading, setLoading] = useState(false);
 
-  const currentStep = STEPS[step];
+  const handleCarrierComplete = async (data) => {
+    setLoading(true);
+    const user = await base44.auth.me();
 
-  const handleSelect = async (value) => {
-    const newAnswers = { ...answers, [currentStep.id]: value };
-    setAnswers(newAnswers);
+    // Guardar UserProfile
+    await base44.entities.UserProfile.create({
+      usuario: user.email,
+      rol: 'carrier',
+      cantidad_camiones: '1',
+      onboarding_completado: true,
+    });
 
-    if (step < STEPS.length - 1) {
-      setStep(step + 1);
-    } else {
-      // Final step — save profile
-      setLoading(true);
-      const user = await base44.auth.me();
-      await base44.entities.UserProfile.create({
-        usuario: user.email,
-        rol: newAnswers.rol,
-        cantidad_camiones: newAnswers.cantidad_camiones,
-        onboarding_completado: true,
-      });
-      onComplete(newAnswers);
-    }
+    // Guardar CarrierProfile
+    await base44.entities.CarrierProfile.create({
+      company_name: data.company_name,
+      trade_name: data.trade_name || null,
+      mc_number: data.mc_number || null,
+      dot_number: data.dot_number || null,
+      ports_operated: data.ports_operated || [],
+      equipment_types: data.equipment_types || [],
+      chassis_types: data.chassis_types || [],
+      hazmat_allowed: data.hazmat_allowed,
+      overweight_allowed: data.overweight_allowed,
+      reefer_allowed: data.reefer_allowed,
+      power_only_allowed: data.power_only_allowed,
+      commodity_restrictions: data.commodity_restrictions
+        ? data.commodity_restrictions.split(',').map(s => s.trim()).filter(Boolean)
+        : [],
+      twic_required: data.twic_required,
+      active: true,
+    });
+
+    onComplete({ rol: 'carrier', goToCosts: data.configurar_costos });
   };
 
+  const handleDispatcherComplete = async (data) => {
+    setLoading(true);
+    const user = await base44.auth.me();
+
+    // Guardar UserProfile
+    await base44.entities.UserProfile.create({
+      usuario: user.email,
+      rol: 'dispatcher',
+      cantidad_camiones: data.carriers?.length > 1 ? `${data.carriers.length}+` : '1',
+      onboarding_completado: true,
+    });
+
+    // Guardar CarrierProfiles gestionados
+    const carrierIds = [];
+    for (const c of (data.carriers || [])) {
+      if (!c.company_name?.trim()) continue;
+      const created = await base44.entities.CarrierProfile.create({
+        company_name: c.company_name,
+        mc_number: c.mc_number || null,
+        dot_number: c.dot_number || null,
+        equipment_types: c.equipment_types || [],
+        chassis_types: c.chassis_types || [],
+        ports_operated: c.ports_operated || [],
+        hazmat_allowed: c.hazmat_allowed || false,
+        overweight_allowed: c.overweight_allowed || false,
+        reefer_allowed: c.reefer_allowed || false,
+        power_only_allowed: c.power_only_allowed || false,
+        commodity_restrictions: c.commodity_restrictions
+          ? c.commodity_restrictions.split(',').map(s => s.trim()).filter(Boolean)
+          : [],
+        twic_required: true,
+        active: true,
+      });
+      carrierIds.push(created.id);
+    }
+
+    // Guardar DispatcherProfile
+    await base44.entities.DispatcherProfile.create({
+      user_id: user.email,
+      dispatch_mode: data.dispatch_mode || 'single_carrier',
+      default_carrier: carrierIds[0] || null,
+      managed_carriers: carrierIds,
+      service_lanes: data.lanes || [],
+      preferred_brokers: data.brokers_frecuentes
+        ? data.brokers_frecuentes.split(',').map(s => s.trim()).filter(Boolean)
+        : [],
+    });
+
+    onComplete({ rol: 'dispatcher' });
+  };
+
+  if (loading) {
+    return (
+      <div className="fixed inset-0 bg-background flex items-center justify-center z-50">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-muted-foreground">Configurando tu espacio de trabajo...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="fixed inset-0 bg-background flex items-center justify-center p-4 z-50">
-      <div className="w-full max-w-md">
+    <div className="fixed inset-0 bg-background flex items-center justify-center p-4 z-50 overflow-y-auto">
+      <div className="w-full max-w-md my-8">
         {/* Logo */}
         <div className="flex items-center justify-center gap-2.5 mb-8">
           <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-            <img src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png" alt="Larcofer Logo" className="w-full h-full object-cover" />
+            <img
+              src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png"
+              alt="Larcofer Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <div className="text-lg font-bold text-foreground tracking-wide">TRUCKY</div>
@@ -73,59 +123,64 @@ export default function Onboarding({ onComplete }) {
           </div>
         </div>
 
-        {/* Progress dots */}
-        <div className="flex justify-center gap-2 mb-8">
-          {STEPS.map((_, i) => (
-            <div
-              key={i}
-              className={`h-1.5 rounded-full transition-all duration-300 ${
-                i === step ? 'w-8 bg-white' : i < step ? 'w-4 bg-white/50' : 'w-4 bg-white/20'
-              }`}
-            />
-          ))}
-        </div>
+        <div className="bg-card border border-border rounded-2xl p-6">
+          {/* Paso inicial: elegir rol */}
+          {!rol && (
+            <div className="space-y-5">
+              <div>
+                <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">Bienvenido</p>
+                <h2 className="text-lg font-bold text-foreground">¿Cuál es tu rol en la operación?</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Esto personaliza el verificador de documentos y las herramientas de análisis.
+                </p>
+              </div>
 
-        {/* Question */}
-        <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
-          <div>
-            <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">
-              Paso {step + 1} de {STEPS.length}
-            </p>
-            <h2 className="text-lg font-bold text-foreground">{currentStep.pregunta}</h2>
-          </div>
-
-          <div className="space-y-2.5">
-            {currentStep.opciones.map((opcion) => {
-              const Icon = opcion.icon;
-              return (
+              <div className="space-y-3">
                 <button
-                  key={opcion.value}
-                  onClick={() => handleSelect(opcion.value)}
-                  disabled={loading}
-                  className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group disabled:opacity-50"
+                  onClick={() => setRol('carrier')}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
                 >
-                  {Icon && (
-                    <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
-                      <Icon className="w-4.5 h-4.5 text-muted-foreground group-hover:text-primary transition-colors" />
-                    </div>
-                  )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-foreground">{opcion.label}</div>
-                    <div className="text-xs text-muted-foreground">{opcion.desc}</div>
+                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
+                    <Truck className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
                   </div>
-                  <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-foreground">Carrier</div>
+                    <div className="text-xs text-muted-foreground">Opero mi propio camión o flota. El análisis se enfoca en rentabilidad y viabilidad operativa.</div>
+                  </div>
                 </button>
-              );
-            })}
-          </div>
-        </div>
 
-        {loading && (
-          <div className="flex items-center justify-center gap-2 mt-6 text-sm text-muted-foreground">
-            <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            Configurando tu espacio de trabajo...
-          </div>
-        )}
+                <button
+                  onClick={() => setRol('dispatcher')}
+                  className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
+                >
+                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
+                    <Users className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-bold text-foreground">Dispatcher</div>
+                    <div className="text-xs text-muted-foreground">Despacho para uno o varios carriers. El análisis verifica compatibilidad del documento con el carrier asignado.</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Flujo Carrier */}
+          {rol === 'carrier' && (
+            <OnboardingCarrier
+              onComplete={handleCarrierComplete}
+              onBack={() => setRol(null)}
+            />
+          )}
+
+          {/* Flujo Dispatcher */}
+          {rol === 'dispatcher' && (
+            <OnboardingDispatcher
+              onComplete={handleDispatcherComplete}
+              onBack={() => setRol(null)}
+            />
+          )}
+        </div>
       </div>
     </div>
   );

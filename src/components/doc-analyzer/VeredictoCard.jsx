@@ -61,6 +61,17 @@ export default function VeredictoCard({ analysis, onLinkToLoad }) {
       </div>
 
       <p className="text-sm text-foreground leading-relaxed">{analysis.resumen_ejecutivo}</p>
+
+      {analysis.foco_analisis && (
+        <p className="text-xs text-muted-foreground mt-2 border-t border-white/10 pt-2">{analysis.foco_analisis}</p>
+      )}
+
+      {analysis.carrier_profile_used && (
+        <div className="mt-2 flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block" />
+          Carrier verificado: <span className="font-medium text-foreground">{analysis.carrier_profile_used}</span>
+        </div>
+      )}
     </div>
   );
 }
