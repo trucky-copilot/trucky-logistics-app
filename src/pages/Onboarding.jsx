@@ -9,9 +9,38 @@ export default function Onboarding({ onComplete, setupDetails }) {
   const [rol, setRol] = useState(null);   // 'carrier' | 'dispatcher'
   const [loading, setLoading] = useState(false);
 
+  const createOrganization = async (user, companyName) => {
+    // Verificar si ya pertenece a una organización
+    const existingMembers = await base44.entities.OrganizationMember.filter({ user_email: user.email, active: true });
+    if (existingMembers.length > 0) {
+      const orgs = await base44.entities.Organization.filter({ id: existingMembers[0].organization_id });
+      return orgs[0] || null;
+    }
+    // Crear organización nueva
+    const org = await base44.entities.Organization.create({
+      name: companyName || `${user.full_name || user.email}'s Organization`,
+      created_by_user: user.email,
+      workspace_status: 'setup',
+      onboarding_completed: false,
+      production_ready: false,
+      active: true,
+    });
+    // Crear membresía owner
+    await base44.entities.OrganizationMember.create({
+      organization_id: org.id,
+      user_email: user.email,
+      role: 'owner',
+      active: true,
+    });
+    return org;
+  };
+
   const handleCarrierComplete = async (data) => {
     setLoading(true);
     const user = await base44.auth.me();
+
+    // Crear organización si no existe
+    const org = await createOrganization(user, data.company_name);
 
     // Guardar UserProfile
     await base44.entities.UserProfile.create({
@@ -23,6 +52,7 @@ export default function Onboarding({ onComplete, setupDetails }) {
 
     // Guardar CarrierProfile
     const carrierProfile = await base44.entities.CarrierProfile.create({
+      organization_id: org?.id || null,
       company_name: data.company_name,
       trade_name: data.trade_name || null,
       mc_number: data.mc_number || null,
@@ -58,6 +88,10 @@ export default function Onboarding({ onComplete, setupDetails }) {
     setLoading(true);
     const user = await base44.auth.me();
 
+    // Crear organización si no existe
+    const firstCarrierName = data.carriers?.[0]?.company_name;
+    const org = await createOrganization(user, firstCarrierName);
+
     // Guardar UserProfile
     await base44.entities.UserProfile.create({
       usuario: user.email,
@@ -71,6 +105,7 @@ export default function Onboarding({ onComplete, setupDetails }) {
     for (const c of (data.carriers || [])) {
       if (!c.company_name?.trim()) continue;
       const created = await base44.entities.CarrierProfile.create({
+        organization_id: org?.id || null,
         company_name: c.company_name,
         mc_number: c.mc_number || null,
         dot_number: c.dot_number || null,

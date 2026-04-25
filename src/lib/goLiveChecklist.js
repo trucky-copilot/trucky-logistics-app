@@ -15,7 +15,6 @@ export const CHECKLIST_LABELS = {
   carrier_profile:      'Completar perfil del carrier (nombre legal + MC Number)',
   dispatcher_profile:   'Crear perfil de dispatcher',
   cost_config:          'Configurar costos de operación (diesel, MPG)',
-  production_ready:     'Marcar el workspace como listo para producción',
 };
 
 /**
@@ -25,9 +24,6 @@ export const CHECKLIST_LABELS = {
  */
 function calcOverallStatus(missing) {
   if (missing.length === 0) return 'ready_for_production';
-  // Si solo falta production_ready pero todo lo demás está OK → parcialmente listo
-  if (missing.length === 1 && missing[0] === 'production_ready') return 'partially_ready';
-  // Si falta solo cosas opcionales según el rol → parcialmente listo
   const criticals = ['organization', 'rol', 'onboarding'];
   const hasCritical = missing.some(m => criticals.includes(m));
   return hasCritical ? 'not_ready' : 'partially_ready';
@@ -86,6 +82,8 @@ export async function evaluateAndPersistChecklist(user) {
   const production_ready_flag = !!(organization?.production_ready);
 
   // ── Construir lista de faltantes ─────────────────────────────────────────────
+  // production_ready ya NO es requisito bloqueante para cuentas reales —
+  // la app entra en producción en cuanto completan el onboarding.
   const missing = [];
   if (!organization_ready)        missing.push('organization');
   if (!role_selected)             missing.push('rol');
@@ -93,7 +91,6 @@ export async function evaluateAndPersistChecklist(user) {
   if (needsCarrier    && !carrier_profile_ready)    missing.push('carrier_profile');
   if (needsDispatcher && !dispatcher_profile_ready) missing.push('dispatcher_profile');
   if (needsCarrier    && !cost_config_ready)        missing.push('cost_config');
-  if (!production_ready_flag)     missing.push('production_ready');
 
   const overall_status = calcOverallStatus(missing);
   const ready          = overall_status === 'ready_for_production';
@@ -108,7 +105,7 @@ export async function evaluateAndPersistChecklist(user) {
     dispatcher_profile_ready,
     cost_config_ready,
     organization_ready,
-    production_ready:         production_ready_flag,
+    production_ready:         production_ready_flag, // solo informativo, no bloquea
     overall_status,
     missing_items:            missing,
     evaluated_at:             new Date().toISOString(),

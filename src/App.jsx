@@ -9,6 +9,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Layout from '@/components/Layout';
 
 // Page imports
+import Welcome         from '@/pages/Welcome';
 import Dashboard       from '@/pages/Dashboard';
 import MarketChat      from '@/pages/MarketChat';
 import DocumentAnalyzer from '@/pages/DocumentAnalyzer';
@@ -42,7 +43,7 @@ function AppContent() {
 
   if (authError) {
     if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
-    if (authError.type === 'auth_required') { navigateToLogin(); return null; }
+    if (authError.type === 'auth_required') return <Welcome />;
   }
 
   // ── SETUP: user needs to complete onboarding ───────────────────────────────
