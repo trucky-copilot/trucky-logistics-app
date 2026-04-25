@@ -50,6 +50,11 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
             <History className="w-2.5 h-2.5" /> Desde caché
           </span>
         )}
+        {isCache && (
+          <span className="text-[10px] text-muted-foreground hidden sm:inline">
+            Mismo documento · mismo usuario · misma configuración · mismas reglas
+          </span>
+        )}
         {analysis.confidence_score != null && (
           <>
             <span className="text-border mx-1">·</span>
