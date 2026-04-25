@@ -1,9 +1,15 @@
 import { CheckCircle2, AlertTriangle, XCircle, Package } from 'lucide-react';
 
 const VEREDICTO_CONFIG = {
-  FIRMAR:   { color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/30',  icon: CheckCircle2,  label: 'PUEDE FIRMAR',    sublabel: 'Documento dentro de parámetros' },
-  NEGOCIAR: { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR ANTES',  sublabel: 'Revisar puntos antes de aceptar' },
-  RECHAZAR: { color: 'text-red-400',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'RECHAZAR',        sublabel: 'Riesgos inaceptables detectados' },
+  // Nuevos verbos estructurados
+  'Aceptar':                  { color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/30',   icon: CheckCircle2,  label: 'ACEPTAR',                   sublabel: 'Documento dentro de parámetros' },
+  'Revisar antes de aceptar': { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'REVISAR ANTES DE ACEPTAR',   sublabel: 'Confirmar condiciones con broker' },
+  'Negociar':                 { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR',                   sublabel: 'Varias condiciones requieren ajuste' },
+  'No aceptar hasta corregir':{ color: 'text-red-400',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'NO ACEPTAR HASTA CORREGIR', sublabel: 'Riesgos críticos detectados' },
+  // Legado (por compatibilidad)
+  'FIRMAR':   { color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/30',   icon: CheckCircle2,  label: 'ACEPTAR',     sublabel: 'Documento dentro de parámetros' },
+  'NEGOCIAR': { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR',    sublabel: 'Revisar puntos antes de aceptar' },
+  'RECHAZAR': { color: 'text-red-400',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'NO ACEPTAR',  sublabel: 'Riesgos inaceptables detectados' },
 };
 
 const ROL_LABEL = {
@@ -13,7 +19,7 @@ const ROL_LABEL = {
 };
 
 export default function VeredictoCard({ analysis, onLinkToLoad }) {
-  const v = VEREDICTO_CONFIG[analysis.veredicto] || VEREDICTO_CONFIG.NEGOCIAR;
+  const v = VEREDICTO_CONFIG[analysis.veredicto] || VEREDICTO_CONFIG['Negociar'];
   const Icon = v.icon;
   const rojos = analysis.categorias?.filter(c => c.semaforo === 'rojo').length || 0;
   const amarillos = analysis.categorias?.filter(c => c.semaforo === 'amarillo').length || 0;
