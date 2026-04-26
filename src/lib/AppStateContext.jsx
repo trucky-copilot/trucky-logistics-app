@@ -17,11 +17,12 @@ import { evaluateAndPersistChecklist } from '@/lib/goLiveChecklist';
 const AppStateContext = createContext(null);
 
 export function AppStateProvider({ children }) {
-  const [appState, setAppState]           = useState('loading');
-  const [userProfile, setUserProfile]     = useState(null);
-  const [currentUser, setCurrentUser]     = useState(null);
-  const [organization, setOrganization]   = useState(null);
-  const [setupDetails, setSetupDetails]   = useState(null); // { missing: [] }
+  const [appState, setAppState]                         = useState('loading');
+  const [userProfile, setUserProfile]                   = useState(null);
+  const [currentUser, setCurrentUser]                   = useState(null);
+  const [organization, setOrganization]                 = useState(null);
+  const [setupDetails, setSetupDetails]                 = useState(null);
+  const [operationalReadiness, setOperationalReadiness] = useState(null); // { level: 'basic'|'partial'|'ready', missing: [] }
 
   const resolveState = useCallback(async () => {
     setAppState('loading');
@@ -48,11 +49,17 @@ export function AppStateProvider({ children }) {
 
       if (!result.ready) {
         setSetupDetails({ missing: result.missing, overall_status: result.overall_status, checklist: result.checklist });
+        setOperationalReadiness(null);
         setAppState('setup');
         return;
       }
 
       setSetupDetails(null);
+      // Capa 2: operational readiness (no bloqueante, solo avisos)
+      setOperationalReadiness({
+        level:   result.operational_readiness,   // 'basic' | 'partial' | 'ready'
+        missing: result.missing_optional,        // ítems faltantes para avisos
+      });
       setAppState('production');
     } catch {
       setAppState('unauthenticated');
@@ -68,9 +75,10 @@ export function AppStateProvider({ children }) {
       appState,
       userProfile,
       currentUser,
-      organization,           // organización activa del usuario
-      organizationId: organization?.id || null,  // shortcut para filtrar queries
-      setupDetails,           // { missing: string[] } — disponible en setup para mostrar qué falta
+      organization,
+      organizationId: organization?.id || null,
+      setupDetails,
+      operationalReadiness,   // { level: 'basic'|'partial'|'ready', missing: string[] }
       resolveState,
     }}>
       {children}

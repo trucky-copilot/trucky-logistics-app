@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
+import OperationalReadinessBanner from './OperationalReadinessBanner';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -119,6 +120,9 @@ export default function Layout() {
             <NotificationBell />
           </div>
         </header>
+
+        {/* Operational readiness banner (no bloqueante) */}
+        <OperationalReadinessBanner />
 
         {/* Page content */}
         <main className="flex-1 overflow-y-auto">

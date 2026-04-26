@@ -1,13 +1,21 @@
 /**
  * Go-Live Checklist Engine
  * ────────────────────────
- * Evalúa el estado de activación de un workspace y persiste el resultado
- * en la entidad GoLiveChecklist. Es la fuente de verdad para AppStateContext.
+ * Dos capas de validación:
+ *
+ * 1. production_access  → ¿puede el usuario entrar a la app?
+ *    Requisitos: organization + rol + onboarding completado.
+ *    Si falta alguno → appState = 'setup' (bloquea la app).
+ *
+ * 2. operational_readiness → ¿tiene todo para usar Trucky con datos reales?
+ *    Estados: 'basic' | 'partial' | 'ready'
+ *    No bloquea la app, pero genera avisos en el UI.
+ *    Revisa: CarrierProfile completo, DispatcherProfile, CostConfig.
  */
 
 import { base44 } from '@/api/base44Client';
 
-/** Etiquetas legibles para cada ítem faltante */
+/** Etiquetas legibles para cada ítem del checklist */
 export const CHECKLIST_LABELS = {
   organization:         'Crear y activar la organización',
   rol:                  'Elegir rol (carrier / dispatcher)',
@@ -17,22 +25,36 @@ export const CHECKLIST_LABELS = {
   cost_config:          'Configurar costos de operación (diesel, MPG)',
 };
 
+/** Mensajes de aviso para cada ítem de operational readiness faltante */
+export const READINESS_MESSAGES = {
+  carrier_profile:    'Falta completar el perfil operativo del carrier (nombre legal + MC Number).',
+  dispatcher_profile: 'Falta crear el perfil de dispatcher.',
+  cost_config:        'Completa tu configuración de costos para recomendaciones más precisas.',
+};
+
 /**
- * Calcula overall_status a partir de los ítems faltantes.
- * @param {string[]} missing
- * @returns {'not_ready' | 'partially_ready' | 'ready_for_production'}
+ * Calcula el production_access: ¿puede el usuario entrar a la app?
+ * Solo depende de los 3 requisitos bloqueantes.
  */
-function calcOverallStatus(missing) {
-  if (missing.length === 0) return 'ready_for_production';
-  const criticals = ['organization', 'rol', 'onboarding'];
-  const hasCritical = missing.some(m => criticals.includes(m));
-  return hasCritical ? 'not_ready' : 'partially_ready';
+function calcProductionAccess(missing_blocking) {
+  return missing_blocking.length === 0;
+}
+
+/**
+ * Calcula operational_readiness a partir de los ítems opcionales faltantes.
+ * @param {string[]} missing_optional  — ítems de readiness que faltan
+ * @returns {'basic' | 'partial' | 'ready'}
+ */
+function calcOperationalReadiness(missing_optional) {
+  if (missing_optional.length === 0) return 'ready';
+  if (missing_optional.length === 1) return 'partial';
+  return 'basic';
 }
 
 /**
  * Evalúa el workspace del usuario, persiste el checklist y devuelve el resultado.
  * @param {object} user  — objeto de base44.auth.me()
- * @returns {object}     — { ready, missing, checklist, organization, profile, ... }
+ * @returns {object}
  */
 export async function evaluateAndPersistChecklist(user) {
   const email = user.email;
@@ -46,10 +68,10 @@ export async function evaluateAndPersistChecklist(user) {
     base44.entities.DispatcherProfile.filter({ user_id: email }),
   ]);
 
-  const profile        = profiles[0]          || null;
-  const membership     = members[0]           || null;
-  const costConfig     = costConfigs[0]       || null;
-  const carrierProfile = carrierProfiles[0]   || null;
+  const profile        = profiles[0]           || null;
+  const membership     = members[0]            || null;
+  const costConfig     = costConfigs[0]        || null;
+  const carrierProfile = carrierProfiles[0]    || null;
   const dispProfile    = dispatcherProfiles[0] || null;
 
   // Resolver organización activa
@@ -59,41 +81,46 @@ export async function evaluateAndPersistChecklist(user) {
     organization = orgs[0] || null;
   }
 
-  // ── Evaluar cada ítem ────────────────────────────────────────────────────────
-  const organization_ready   = !!(organization?.active);
-  const role_selected        = !!(profile?.rol);
-  const onboarding_ready     = !!(profile?.onboarding_completado);
+  // ── Capa 1: production_access (bloqueante) ───────────────────────────────────
+  const organization_ready = !!(organization?.active);
+  const role_selected      = !!(profile?.rol);
+  const onboarding_ready   = !!(profile?.onboarding_completado);
 
+  const missing_blocking = [];
+  if (!organization_ready) missing_blocking.push('organization');
+  if (!role_selected)      missing_blocking.push('rol');
+  if (!onboarding_ready)   missing_blocking.push('onboarding');
+
+  const production_access = calcProductionAccess(missing_blocking);
+
+  // ── Capa 2: operational_readiness (no bloqueante) ────────────────────────────
   const needsCarrier    = profile?.rol === 'carrier'    || profile?.rol === 'ambos';
   const needsDispatcher = profile?.rol === 'dispatcher' || profile?.rol === 'ambos';
 
   const carrier_profile_ready    = needsCarrier
     ? !!(carrierProfile?.company_name && carrierProfile?.mc_number)
-    : true; // no aplica → no bloquea
+    : true;
 
   const dispatcher_profile_ready = needsDispatcher
     ? !!(dispProfile?.user_id)
-    : true; // no aplica → no bloquea
+    : true;
 
   const cost_config_ready = needsCarrier
     ? !!(costConfig?.diesel_precio && costConfig?.mpg)
-    : true; // no aplica → no bloquea
+    : true;
 
-  const production_ready_flag = !!(organization?.production_ready);
+  const missing_optional = [];
+  if (needsCarrier    && !carrier_profile_ready)    missing_optional.push('carrier_profile');
+  if (needsDispatcher && !dispatcher_profile_ready) missing_optional.push('dispatcher_profile');
+  if (needsCarrier    && !cost_config_ready)        missing_optional.push('cost_config');
 
-  // ── Construir lista de faltantes ─────────────────────────────────────────────
-  // production_ready ya NO es requisito bloqueante para cuentas reales —
-  // la app entra en producción en cuanto completan el onboarding.
-  const missing = [];
-  if (!organization_ready)        missing.push('organization');
-  if (!role_selected)             missing.push('rol');
-  if (!onboarding_ready)          missing.push('onboarding');
-  if (needsCarrier    && !carrier_profile_ready)    missing.push('carrier_profile');
-  if (needsDispatcher && !dispatcher_profile_ready) missing.push('dispatcher_profile');
-  if (needsCarrier    && !cost_config_ready)        missing.push('cost_config');
+  const operational_readiness = calcOperationalReadiness(missing_optional);
 
-  const overall_status = calcOverallStatus(missing);
-  const ready          = overall_status === 'ready_for_production';
+  // ── missing total (para GoLiveChecklist en DB) ───────────────────────────────
+  const missing_all = [...missing_blocking, ...missing_optional];
+  const overall_status = production_access
+    ? (operational_readiness === 'ready' ? 'ready_for_production' : 'partially_ready')
+    : 'not_ready';
 
   // ── Persistir en GoLiveChecklist (upsert por user_email) ────────────────────
   const checklistData = {
@@ -105,13 +132,12 @@ export async function evaluateAndPersistChecklist(user) {
     dispatcher_profile_ready,
     cost_config_ready,
     organization_ready,
-    production_ready:         production_ready_flag, // solo informativo, no bloquea
+    production_ready:         production_access,
     overall_status,
-    missing_items:            missing,
+    missing_items:            missing_all,
     evaluated_at:             new Date().toISOString(),
   };
 
-  // Buscar registro existente para hacer update en lugar de crear duplicado
   const existing = await base44.entities.GoLiveChecklist.filter({ user_email: email });
   if (existing.length > 0) {
     await base44.entities.GoLiveChecklist.update(existing[0].id, checklistData);
@@ -120,9 +146,14 @@ export async function evaluateAndPersistChecklist(user) {
   }
 
   return {
-    ready,
-    missing,
+    // Capa 1
+    ready: production_access,          // ← controla setup vs production en AppState
+    missing: missing_blocking,         // ← solo los bloqueantes para la pantalla de setup
     overall_status,
+    // Capa 2
+    operational_readiness,             // 'basic' | 'partial' | 'ready'
+    missing_optional,                  // ítems de readiness faltantes (para avisos)
+    // Raw data
     checklist: checklistData,
     organization,
     profile,
