@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { DollarSign, Truck, Package, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
 import KpiCard from '@/components/KpiCard';
 import StatusBadge from '@/components/StatusBadge';
+import OperationalStatusCard from '@/components/OperationalStatusCard';
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
@@ -78,6 +79,9 @@ export default function Dashboard() {
         <h1 className="text-xl font-bold text-foreground">Dashboard Operacional</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Larcofer USA — Miami, FL</p>
       </div>
+
+      {/* Estado operativo (solo visible si la config está incompleta) */}
+      <OperationalStatusCard />
 
       {/* KPI Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
