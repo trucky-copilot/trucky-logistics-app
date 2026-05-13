@@ -47,10 +47,24 @@
     },
     "tarifa_objetivo": {
       "type": "number",
-      "default": 3.0
+      "default": 3
     }
   },
   "required": [
     "usuario"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "data.usuario": "{{user.email}}"
+    },
+    "read": {
+      "data.usuario": "{{user.email}}"
+    },
+    "update": {
+      "data.usuario": "{{user.email}}"
+    },
+    "delete": {
+      "data.usuario": "{{user.email}}"
+    }
+  }
 }
