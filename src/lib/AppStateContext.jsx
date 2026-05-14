@@ -1,18 +1,19 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
-import { evaluateChecklist } from '@/lib/goLiveChecklist';
 
 /**
- * App State Architecture  v2
- * ──────────────────────────
- * loading         → resolviendo estado
- * unauthenticated → no hay usuario autenticado
- * setup           → usuario autenticado, UserProfile.onboarding_completado === false
- * production      → onboarding completado — acceso total
- * demo            → workspace marcado explícitamente como demo (is_demo: true)
+ * AppStateContext — v3 (simplificado)
+ * ─────────────────────────────────────
+ * Estados:
+ *   loading         → resolviendo
+ *   unauthenticated → sin usuario (manejado por AuthContext, pero por si acaso)
+ *   setup           → usuario sin UserProfile.onboarding_completado === true
+ *   production      → acceso total
  *
- * Decisión de bloqueo: SOLO UserProfile.onboarding_completado.
- * CarrierProfile / CostConfig → avisos no bloqueantes (operationalReadiness).
+ * Regla de acceso: UNA sola query — UserProfile por email.
+ * Si onboarding_completado === true → production.
+ * Si no existe o es false → setup.
+ * Sin queries a CarrierProfile, Organization ni GoLiveChecklist en esta capa.
  */
 
 const AppStateContext = createContext(null);
@@ -22,54 +23,49 @@ export function AppStateProvider({ children }) {
   const [userProfile, setUserProfile]                   = useState(null);
   const [currentUser, setCurrentUser]                   = useState(null);
   const [organization, setOrganization]                 = useState(null);
-  const [setupDetails, setSetupDetails]                 = useState(null);
   const [operationalReadiness, setOperationalReadiness] = useState(null);
 
   const resolveState = useCallback(async () => {
     setAppState('loading');
     try {
       const user = await base44.auth.me();
-
-      if (!user) {
-        setAppState('unauthenticated');
-        return;
-      }
-
+      if (!user) { setAppState('unauthenticated'); return; }
       setCurrentUser(user);
 
-      const result = await evaluateChecklist(user);
-      setUserProfile(result.profile);
-      setOrganization(result.organization);
+      // Una sola query — la única fuente de verdad para el acceso
+      const profiles = await base44.entities.UserProfile.filter({ usuario: user.email });
+      const profile  = profiles[0] || null;
+      setUserProfile(profile);
 
-      // Demo interno explícito — nunca se activa automáticamente
-      if (result.profile?.is_demo) {
-        setAppState('demo');
-        return;
-      }
+      // Demo explícito
+      if (profile?.is_demo) { setAppState('demo'); return; }
 
-      if (!result.ready) {
-        // Usuario nuevo o sin onboarding — mostrar pantalla de setup
-        setSetupDetails({ missing: ['onboarding'] });
-        setOperationalReadiness(null);
+      // Acceso: solo necesita onboarding_completado === true
+      if (!profile?.onboarding_completado) {
         setAppState('setup');
         return;
       }
 
-      // Acceso concedido — avisos no bloqueantes
-      setSetupDetails(null);
-      setOperationalReadiness({
-        level:   result.operationalReadiness,
-        missing: result.missingOptional,
-      });
+      // Producción: cargar organización para filtros downstream (best-effort)
+      base44.entities.OrganizationMember
+        .filter({ user_email: user.email, active: true })
+        .then(async (members) => {
+          if (!members[0]?.organization_id) return;
+          const orgs = await base44.entities.Organization.filter({ id: members[0].organization_id });
+          setOrganization(orgs[0] || null);
+        })
+        .catch(() => {});
+
+      // Operational readiness: no bloqueante, carga asíncrona
+      loadOperationalReadiness(user.email, profile).then(setOperationalReadiness).catch(() => {});
+
       setAppState('production');
     } catch {
       setAppState('unauthenticated');
     }
   }, []);
 
-  useEffect(() => {
-    resolveState();
-  }, [resolveState]);
+  useEffect(() => { resolveState(); }, [resolveState]);
 
   return (
     <AppStateContext.Provider value={{
@@ -78,7 +74,7 @@ export function AppStateProvider({ children }) {
       currentUser,
       organization,
       organizationId: organization?.id || null,
-      setupDetails,
+      setupDetails:   null,   // ya no se usa — se eliminó GoLiveChecklistPanel del onboarding
       operationalReadiness,
       resolveState,
     }}>
@@ -87,14 +83,33 @@ export function AppStateProvider({ children }) {
   );
 }
 
+/** Carga asíncrona de avisos no bloqueantes — nunca bloquea el acceso */
+async function loadOperationalReadiness(email, profile) {
+  const rol = profile?.rol;
+  const needsCarrier    = rol === 'carrier'    || rol === 'ambos';
+  const needsDispatcher = rol === 'dispatcher' || rol === 'ambos';
+
+  const [costConfigs, dispProfiles] = await Promise.all([
+    needsCarrier    ? base44.entities.CostConfig.filter({ usuario: email }) : Promise.resolve([]),
+    needsDispatcher ? base44.entities.DispatcherProfile.filter({ user_id: email }) : Promise.resolve([]),
+  ]);
+
+  const missing = [];
+  if (needsCarrier    && !(costConfigs[0]?.diesel_precio && costConfigs[0]?.mpg)) missing.push('cost_config');
+  if (needsDispatcher && !dispProfiles[0]?.user_id) missing.push('dispatcher_profile');
+
+  return {
+    level:   missing.length === 0 ? 'ready' : missing.length === 1 ? 'partial' : 'basic',
+    missing,
+  };
+}
+
 export function useAppState() {
   const ctx = useContext(AppStateContext);
   if (!ctx) throw new Error('useAppState must be used inside AppStateProvider');
   return ctx;
 }
 
-/** Shortcut hook — retorna el organization_id activo para filtrar queries */
 export function useOrganizationId() {
-  const { organizationId } = useAppState();
-  return organizationId;
+  return useAppState().organizationId;
 }

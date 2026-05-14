@@ -48,12 +48,7 @@ function AppContent() {
 
   // ── SETUP: user needs to complete onboarding ───────────────────────────────
   if (appState === 'setup') {
-    return (
-      <Onboarding
-        onComplete={resolveState}
-        setupDetails={setupDetails}
-      />
-    );
+    return <Onboarding onComplete={resolveState} />;
   }
 
   // ── PRODUCTION (and edge-case DEMO internal) ───────────────────────────────
