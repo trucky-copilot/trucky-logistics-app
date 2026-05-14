@@ -12,5 +12,17 @@
     "scope": "both",
     "instructions": null
   },
+  "context_files": [
+    {
+      "asset_id": "6a05120a28f5062b33b34a0e",
+      "file_name": "Glosario_Logistico_Larcofer_v2.xlsx",
+      "file_url": "https://media.base44.com/files/public/69e8214a181314e517a283d5/35a5625c3_Glosario_Logistico_Larcofer_v2.xlsx",
+      "file_type": "xlsx"
+    }
+  ],
+  "app_user_connector_configs": [],
+  "whatsapp_greeting": "",
+  "telegram_greeting": "",
+  "line_greeting": "",
   "name": "freight_dispatcher"
 }
