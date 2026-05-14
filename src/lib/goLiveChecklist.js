@@ -1,28 +1,32 @@
 /**
- * Go-Live Checklist Engine
- * ────────────────────────
+ * Go-Live Checklist Engine  v2
+ * ─────────────────────────────
  * Dos capas de validación:
  *
  * 1. production_access  → ¿puede el usuario entrar a la app?
- *    Requisitos: organization + rol + onboarding completado.
- *    Si falta alguno → appState = 'setup' (bloquea la app).
+ *    Requisito único: UserProfile con onboarding_completado === true.
+ *    Si no existe o es false → appState = 'setup'.
  *
- * 2. operational_readiness → ¿tiene todo para usar Trucky con datos reales?
+ * 2. operational_readiness → avisos no bloqueantes en el UI.
  *    Estados: 'basic' | 'partial' | 'ready'
- *    No bloquea la app, pero genera avisos en el UI.
- *    Revisa: CarrierProfile completo, DispatcherProfile, CostConfig.
+ *
+ * CAMBIOS v2:
+ * - La decisión de bloqueo es SOLO UserProfile.onboarding_completado.
+ * - CarrierProfile se filtra por organization_id (nunca global).
+ * - No se hace upsert en GoLiveChecklist en cada carga — solo cuando
+ *   se llama explícitamente desde el onboarding.
  */
 
 import { base44 } from '@/api/base44Client';
 
 /** Etiquetas legibles para cada ítem del checklist */
 export const CHECKLIST_LABELS = {
-  organization:         'Crear y activar la organización',
-  rol:                  'Elegir rol (carrier / dispatcher)',
-  onboarding:           'Completar el proceso de onboarding',
-  carrier_profile:      'Completar perfil del carrier (nombre legal + MC Number)',
-  dispatcher_profile:   'Crear perfil de dispatcher',
-  cost_config:          'Configurar costos de operación (diesel, MPG)',
+  organization:       'Crear y activar la organización',
+  rol:                'Elegir rol (carrier / dispatcher)',
+  onboarding:         'Completar el proceso de onboarding',
+  carrier_profile:    'Completar perfil del carrier (nombre legal + MC Number)',
+  dispatcher_profile: 'Crear perfil de dispatcher',
+  cost_config:        'Configurar costos de operación (diesel, MPG)',
 };
 
 /** Mensajes de aviso para cada ítem de operational readiness faltante */
@@ -33,108 +37,103 @@ export const READINESS_MESSAGES = {
 };
 
 /**
- * Calcula el production_access: ¿puede el usuario entrar a la app?
- * Solo depende de los 3 requisitos bloqueantes.
- */
-function calcProductionAccess(missing_blocking) {
-  return missing_blocking.length === 0;
-}
-
-/**
- * Calcula operational_readiness a partir de los ítems opcionales faltantes.
- * @param {string[]} missing_optional  — ítems de readiness que faltan
- * @returns {'basic' | 'partial' | 'ready'}
- */
-function calcOperationalReadiness(missing_optional) {
-  if (missing_optional.length === 0) return 'ready';
-  if (missing_optional.length === 1) return 'partial';
-  return 'basic';
-}
-
-/**
- * Evalúa el workspace del usuario, persiste el checklist y devuelve el resultado.
+ * Evalúa el workspace del usuario y devuelve el resultado.
+ * NO persiste en GoLiveChecklist — eso solo lo hace persistChecklist().
+ *
  * @param {object} user  — objeto de base44.auth.me()
- * @returns {object}
+ * @returns {object}  { ready, profile, organization, operationalReadiness, missingOptional }
  */
-export async function evaluateAndPersistChecklist(user) {
+export async function evaluateChecklist(user) {
   const email = user.email;
 
-  // Cargar todo en paralelo
-  const [profiles, members, costConfigs, carrierProfiles, dispatcherProfiles] = await Promise.all([
+  // 1. Cargar UserProfile + membresía en paralelo
+  const [profiles, members] = await Promise.all([
     base44.entities.UserProfile.filter({ usuario: email }),
     base44.entities.OrganizationMember.filter({ user_email: email, active: true }),
-    base44.entities.CostConfig.filter({ usuario: email }),
-    base44.entities.CarrierProfile.filter({ active: true }),
-    base44.entities.DispatcherProfile.filter({ user_id: email }),
   ]);
 
-  const profile        = profiles[0]           || null;
-  const membership     = members[0]            || null;
-  const costConfig     = costConfigs[0]        || null;
-  const carrierProfile = carrierProfiles[0]    || null;
-  const dispProfile    = dispatcherProfiles[0] || null;
+  const profile    = profiles[0] || null;
+  const membership = members[0]  || null;
 
-  // Resolver organización activa
+  // 2. Resolver organización activa
   let organization = null;
   if (membership?.organization_id) {
     const orgs = await base44.entities.Organization.filter({ id: membership.organization_id });
     organization = orgs[0] || null;
   }
 
-  // ── Capa 1: production_access (bloqueante) ───────────────────────────────────
-  const organization_ready = !!(organization?.active);
-  const role_selected      = !!(profile?.rol);
-  const onboarding_ready   = !!(profile?.onboarding_completado);
+  // ── Capa 1: production_access ─────────────────────────────────────────────
+  // Único requisito: haber completado el onboarding.
+  const ready = !!(profile?.onboarding_completado);
 
-  const missing_blocking = [];
-  if (!organization_ready) missing_blocking.push('organization');
-  if (!role_selected)      missing_blocking.push('rol');
-  if (!onboarding_ready)   missing_blocking.push('onboarding');
+  if (!ready) {
+    return { ready, profile, organization, membership, operationalReadiness: 'basic', missingOptional: [] };
+  }
 
-  const production_access = calcProductionAccess(missing_blocking);
+  // ── Capa 2: operational_readiness (solo si ya está en producción) ──────────
+  const rol = profile?.rol;
+  const needsCarrier    = rol === 'carrier'    || rol === 'ambos';
+  const needsDispatcher = rol === 'dispatcher' || rol === 'ambos';
+  const orgId = organization?.id || null;
 
-  // ── Capa 2: operational_readiness (no bloqueante) ────────────────────────────
-  const needsCarrier    = profile?.rol === 'carrier'    || profile?.rol === 'ambos';
-  const needsDispatcher = profile?.rol === 'dispatcher' || profile?.rol === 'ambos';
+  // Cargar solo lo necesario para readiness, filtrando por organización
+  const [costConfigs, carrierProfiles, dispatcherProfiles] = await Promise.all([
+    needsCarrier    ? base44.entities.CostConfig.filter({ usuario: email })                          : Promise.resolve([]),
+    needsCarrier    ? base44.entities.CarrierProfile.filter({ organization_id: orgId, active: true }) : Promise.resolve([]),
+    needsDispatcher ? base44.entities.DispatcherProfile.filter({ user_id: email })                   : Promise.resolve([]),
+  ]);
 
-  const carrier_profile_ready    = needsCarrier
-    ? !!(carrierProfile?.company_name && carrierProfile?.mc_number)
-    : true;
+  const costConfig     = costConfigs[0]     || null;
+  const carrierProfile = carrierProfiles[0] || null;
+  const dispProfile    = dispatcherProfiles[0] || null;
 
-  const dispatcher_profile_ready = needsDispatcher
-    ? !!(dispProfile?.user_id)
-    : true;
+  const missingOptional = [];
+  if (needsCarrier    && !(carrierProfile?.company_name && carrierProfile?.mc_number)) missingOptional.push('carrier_profile');
+  if (needsDispatcher && !dispProfile?.user_id)                                        missingOptional.push('dispatcher_profile');
+  if (needsCarrier    && !(costConfig?.diesel_precio && costConfig?.mpg))               missingOptional.push('cost_config');
 
-  const cost_config_ready = needsCarrier
-    ? !!(costConfig?.diesel_precio && costConfig?.mpg)
-    : true;
+  const operationalReadiness = missingOptional.length === 0 ? 'ready'
+    : missingOptional.length === 1 ? 'partial'
+    : 'basic';
 
-  const missing_optional = [];
-  if (needsCarrier    && !carrier_profile_ready)    missing_optional.push('carrier_profile');
-  if (needsDispatcher && !dispatcher_profile_ready) missing_optional.push('dispatcher_profile');
-  if (needsCarrier    && !cost_config_ready)        missing_optional.push('cost_config');
+  return {
+    ready,
+    profile,
+    organization,
+    membership,
+    operationalReadiness,
+    missingOptional,
+    // raw — para quien lo necesite
+    carrierProfile,
+    dispProfile,
+    costConfig,
+  };
+}
 
-  const operational_readiness = calcOperationalReadiness(missing_optional);
+/**
+ * Persiste el resultado en GoLiveChecklist (upsert).
+ * Llamar SOLO desde el onboarding, no en cada carga de app.
+ */
+export async function persistChecklist(user, evalResult) {
+  const email = user.email;
+  const { profile, organization, operationalReadiness, missingOptional, ready } = evalResult;
 
-  // ── missing total (para GoLiveChecklist en DB) ───────────────────────────────
-  const missing_all = [...missing_blocking, ...missing_optional];
-  const overall_status = production_access
-    ? (operational_readiness === 'ready' ? 'ready_for_production' : 'partially_ready')
+  const overall_status = ready
+    ? (operationalReadiness === 'ready' ? 'ready_for_production' : 'partially_ready')
     : 'not_ready';
 
-  // ── Persistir en GoLiveChecklist (upsert por user_email) ────────────────────
   const checklistData = {
     organization_id:          organization?.id || null,
     user_email:               email,
-    role_selected,
-    onboarding_ready,
-    carrier_profile_ready,
-    dispatcher_profile_ready,
-    cost_config_ready,
-    organization_ready,
-    production_ready:         production_access,
+    role_selected:            !!(profile?.rol),
+    onboarding_ready:         !!(profile?.onboarding_completado),
+    carrier_profile_ready:    !missingOptional.includes('carrier_profile'),
+    dispatcher_profile_ready: !missingOptional.includes('dispatcher_profile'),
+    cost_config_ready:        !missingOptional.includes('cost_config'),
+    organization_ready:       !!(organization?.active),
+    production_ready:         ready,
     overall_status,
-    missing_items:            missing_all,
+    missing_items:            missingOptional,
     evaluated_at:             new Date().toISOString(),
   };
 
@@ -144,22 +143,27 @@ export async function evaluateAndPersistChecklist(user) {
   } else {
     await base44.entities.GoLiveChecklist.create(checklistData);
   }
+}
 
+// Mantener compatibilidad con código existente que llame evaluateAndPersistChecklist
+export async function evaluateAndPersistChecklist(user) {
+  const result = await evaluateChecklist(user);
+  // Solo persiste si ya completó onboarding (evita writes innecesarios en usuarios nuevos)
+  if (result.ready) {
+    await persistChecklist(user, result).catch(() => {});
+  }
   return {
-    // Capa 1
-    ready: production_access,          // ← controla setup vs production en AppState
-    missing: missing_blocking,         // ← solo los bloqueantes para la pantalla de setup
-    overall_status,
-    // Capa 2
-    operational_readiness,             // 'basic' | 'partial' | 'ready'
-    missing_optional,                  // ítems de readiness faltantes (para avisos)
-    // Raw data
-    checklist: checklistData,
-    organization,
-    profile,
-    membership,
-    carrierProfile,
-    dispProfile,
-    costConfig,
+    ready:                result.ready,
+    missing:              result.ready ? [] : ['onboarding'],
+    overall_status:       result.operationalReadiness,
+    operational_readiness: result.operationalReadiness,
+    missing_optional:     result.missingOptional,
+    checklist:            null,
+    organization:         result.organization,
+    profile:              result.profile,
+    membership:           result.membership,
+    carrierProfile:       result.carrierProfile || null,
+    dispProfile:          result.dispProfile || null,
+    costConfig:           result.costConfig || null,
   };
 }

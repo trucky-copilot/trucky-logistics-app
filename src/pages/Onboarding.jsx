@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Truck, Users, Loader2 } from 'lucide-react';
+import { evaluateChecklist, persistChecklist } from '@/lib/goLiveChecklist';
+import { Truck, Users } from 'lucide-react';
 import OnboardingCarrier from '@/components/onboarding/OnboardingCarrier';
 import OnboardingDispatcher from '@/components/onboarding/OnboardingDispatcher';
 import GoLiveChecklistPanel from '@/components/GoLiveChecklistPanel';
@@ -81,6 +82,10 @@ export default function Onboarding({ onComplete, setupDetails }) {
       preferred_brokers: [],
     });
 
+    // Persistir checklist en DB (solo aquí, no en cada carga)
+    const evalResult = await evaluateChecklist(user);
+    await persistChecklist(user, evalResult).catch(() => {});
+
     onComplete();
   };
 
@@ -136,6 +141,10 @@ export default function Onboarding({ onComplete, setupDetails }) {
         ? data.brokers_frecuentes.split(',').map(s => s.trim()).filter(Boolean)
         : [],
     });
+
+    // Persistir checklist en DB (solo aquí, no en cada carga)
+    const evalResult = await evaluateChecklist(user);
+    await persistChecklist(user, evalResult).catch(() => {});
 
     onComplete();
   };

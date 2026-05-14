@@ -1,17 +1,18 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { base44 } from '@/api/base44Client';
-import { evaluateAndPersistChecklist } from '@/lib/goLiveChecklist';
+import { evaluateChecklist } from '@/lib/goLiveChecklist';
 
 /**
- * App State Architecture
- * ─────────────────────
- * unauthenticated → No hay usuario autenticado
- * setup           → Usuario autenticado pero workspace incompleto (overall_status != ready_for_production)
- * production      → overall_status === ready_for_production
- * demo            → Workspace marcado explícitamente como demo (is_demo: true)
+ * App State Architecture  v2
+ * ──────────────────────────
+ * loading         → resolviendo estado
+ * unauthenticated → no hay usuario autenticado
+ * setup           → usuario autenticado, UserProfile.onboarding_completado === false
+ * production      → onboarding completado — acceso total
+ * demo            → workspace marcado explícitamente como demo (is_demo: true)
  *
- * Regla crítica: Esta app nunca carga seed data.
- * Los datos demo viven en una app de Base44 completamente separada.
+ * Decisión de bloqueo: SOLO UserProfile.onboarding_completado.
+ * CarrierProfile / CostConfig → avisos no bloqueantes (operationalReadiness).
  */
 
 const AppStateContext = createContext(null);
@@ -22,7 +23,7 @@ export function AppStateProvider({ children }) {
   const [currentUser, setCurrentUser]                   = useState(null);
   const [organization, setOrganization]                 = useState(null);
   const [setupDetails, setSetupDetails]                 = useState(null);
-  const [operationalReadiness, setOperationalReadiness] = useState(null); // { level: 'basic'|'partial'|'ready', missing: [] }
+  const [operationalReadiness, setOperationalReadiness] = useState(null);
 
   const resolveState = useCallback(async () => {
     setAppState('loading');
@@ -36,29 +37,29 @@ export function AppStateProvider({ children }) {
 
       setCurrentUser(user);
 
-      // GoLiveChecklist es la fuente de verdad para el estado del workspace
-      const result = await evaluateAndPersistChecklist(user);
+      const result = await evaluateChecklist(user);
       setUserProfile(result.profile);
       setOrganization(result.organization);
 
-      // Demo interno explícito
+      // Demo interno explícito — nunca se activa automáticamente
       if (result.profile?.is_demo) {
         setAppState('demo');
         return;
       }
 
       if (!result.ready) {
-        setSetupDetails({ missing: result.missing, overall_status: result.overall_status, checklist: result.checklist });
+        // Usuario nuevo o sin onboarding — mostrar pantalla de setup
+        setSetupDetails({ missing: ['onboarding'] });
         setOperationalReadiness(null);
         setAppState('setup');
         return;
       }
 
+      // Acceso concedido — avisos no bloqueantes
       setSetupDetails(null);
-      // Capa 2: operational readiness (no bloqueante, solo avisos)
       setOperationalReadiness({
-        level:   result.operational_readiness,   // 'basic' | 'partial' | 'ready'
-        missing: result.missing_optional,        // ítems faltantes para avisos
+        level:   result.operationalReadiness,
+        missing: result.missingOptional,
       });
       setAppState('production');
     } catch {
@@ -78,7 +79,7 @@ export function AppStateProvider({ children }) {
       organization,
       organizationId: organization?.id || null,
       setupDetails,
-      operationalReadiness,   // { level: 'basic'|'partial'|'ready', missing: string[] }
+      operationalReadiness,
       resolveState,
     }}>
       {children}
