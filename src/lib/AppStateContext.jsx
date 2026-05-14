@@ -28,25 +28,25 @@ export function AppStateProvider({ children }) {
   const resolveState = useCallback(async () => {
     setAppState('loading');
     try {
+      // 1. Obtener usuario
       const user = await base44.auth.me();
+      // 2. Sin usuario → unauthenticated
       if (!user) { setAppState('unauthenticated'); return; }
       setCurrentUser(user);
 
-      // Una sola query — la única fuente de verdad para el acceso
+      // 3. Buscar UserProfile
       const profiles = await base44.entities.UserProfile.filter({ usuario: user.email });
       const profile  = profiles[0] || null;
       setUserProfile(profile);
 
-      // Demo explícito
-      if (profile?.is_demo) { setAppState('demo'); return; }
-
-      // Acceso: solo necesita onboarding_completado === true
-      if (!profile?.onboarding_completado) {
+      // 4. Sin perfil o sin onboarding → setup
+      if (!profile || profile.onboarding_completado !== true) {
         setAppState('setup');
         return;
       }
 
-      // Producción: cargar organización para filtros downstream (best-effort)
+      // 5. Onboarding completado → production
+      // Cargar organización de forma no bloqueante
       base44.entities.OrganizationMember
         .filter({ user_email: user.email, active: true })
         .then(async (members) => {
@@ -56,7 +56,7 @@ export function AppStateProvider({ children }) {
         })
         .catch(() => {});
 
-      // Operational readiness: no bloqueante, carga asíncrona
+      // Operational readiness: no bloqueante
       loadOperationalReadiness(user.email, profile).then(setOperationalReadiness).catch(() => {});
 
       setAppState('production');

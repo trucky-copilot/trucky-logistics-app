@@ -1,151 +1,132 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Truck, Users } from 'lucide-react';
-import OnboardingCarrier from '@/components/onboarding/OnboardingCarrier';
-import OnboardingDispatcher from '@/components/onboarding/OnboardingDispatcher';
+import { Truck, Users, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 
 /**
- * Onboarding — v3 (simplificado)
- * ────────────────────────────────
- * Flujo lineal: elegir rol → completar datos → llamar onComplete().
- * No depende de goLiveChecklist ni GoLiveChecklistPanel.
- * Al terminar, AppStateContext.resolveState() re-evalúa y entra a producción.
+ * Onboarding — v4
+ * 4 pasos: Rol → Datos de negocio → Costos → Confirmación
  */
+
+const DEFAULT_COSTS = { diesel: 5.40, mpg: 6.5, conductor: 25 };
+
+function calcBreakEven(diesel, mpg, conductorPct) {
+  const fuelCpm = parseFloat(diesel) / parseFloat(mpg);
+  const fixedCpm = 0.45; // seguro + lease estimado por milla
+  const baseCpm = fuelCpm + fixedCpm;
+  const total = baseCpm / (1 - parseFloat(conductorPct) / 100);
+  return isNaN(total) ? 0 : total.toFixed(2);
+}
+
 export default function Onboarding({ onComplete }) {
-  const [rol, setRol]       = useState(null);
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [error, setError]   = useState(null);
+
+  // Paso 1
+  const [rol, setRol] = useState(null);
+
+  // Paso 2
+  const [nombre, setNombre] = useState('');
+  const [empresa, setEmpresa] = useState('');
+  const [mc, setMc] = useState('');
+
+  // Paso 3
+  const [diesel, setDiesel] = useState(DEFAULT_COSTS.diesel);
+  const [mpg, setMpg] = useState(DEFAULT_COSTS.mpg);
+  const [conductor, setConductor] = useState(DEFAULT_COSTS.conductor);
+
+  const breakEven = calcBreakEven(diesel, mpg, conductor);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
-  const getOrCreateOrg = async (user, companyName) => {
-    const members = await base44.entities.OrganizationMember.filter({ user_email: user.email, active: true });
-    if (members.length > 0) {
-      const orgs = await base44.entities.Organization.filter({ id: members[0].organization_id });
-      return orgs[0] || null;
-    }
-    const org = await base44.entities.Organization.create({
-      name:                 companyName || user.full_name || user.email,
-      created_by_user:      user.email,
-      workspace_status:     'production',
-      onboarding_completed: true,
-      production_ready:     true,
-      active:               true,
-    });
-    await base44.entities.OrganizationMember.create({
-      organization_id: org.id,
-      user_email:      user.email,
-      role:            'owner',
-      active:          true,
-    });
-    return org;
-  };
-
-  // ── Carrier ───────────────────────────────────────────────────────────────────
-
-  const handleCarrierComplete = async (data) => {
+  const handleComplete = async () => {
     setLoading(true);
-    setError(null);
     const user = await base44.auth.me();
-    const org  = await getOrCreateOrg(user, data.company_name);
 
-    // UserProfile — marca el onboarding como completado
-    await base44.entities.UserProfile.create({
-      usuario:               user.email,
-      rol:                   'carrier',
-      cantidad_camiones:     '1',
-      onboarding_completado: true,
-    });
-
-    // CarrierProfile
-    const carrierProfile = await base44.entities.CarrierProfile.create({
-      organization_id:        org?.id || null,
-      company_name:           data.company_name,
-      trade_name:             data.trade_name            || null,
-      mc_number:              data.mc_number             || null,
-      dot_number:             data.dot_number            || null,
-      ports_operated:         data.ports_operated        || [],
-      equipment_types:        data.equipment_types       || [],
-      chassis_types:          data.chassis_types         || [],
-      hazmat_allowed:         !!data.hazmat_allowed,
-      overweight_allowed:     !!data.overweight_allowed,
-      reefer_allowed:         !!data.reefer_allowed,
-      power_only_allowed:     !!data.power_only_allowed,
-      commodity_restrictions: data.commodity_restrictions
-        ? data.commodity_restrictions.split(',').map(s => s.trim()).filter(Boolean)
-        : [],
-      twic_required:          data.twic_required !== false,
-      active:                 true,
-    });
-
-    // DispatcherProfile (para resolución en el analizador)
-    await base44.entities.DispatcherProfile.create({
-      user_id:         user.email,
-      dispatch_mode:   'single_carrier',
-      default_carrier: carrierProfile.id,
-      managed_carriers:[carrierProfile.id],
-      service_lanes:   data.lanes || [],
-      preferred_brokers: [],
-    });
-
-    onComplete();
-  };
-
-  // ── Dispatcher ────────────────────────────────────────────────────────────────
-
-  const handleDispatcherComplete = async (data) => {
-    setLoading(true);
-    setError(null);
-    const user = await base44.auth.me();
-    const org  = await getOrCreateOrg(user, data.carriers?.[0]?.company_name);
-
-    await base44.entities.UserProfile.create({
-      usuario:               user.email,
-      rol:                   'dispatcher',
-      cantidad_camiones:     data.carriers?.length > 1 ? `${data.carriers.length}+` : '1',
-      onboarding_completado: true,
-    });
-
-    const carrierIds = [];
-    for (const c of (data.carriers || [])) {
-      if (!c.company_name?.trim()) continue;
-      const created = await base44.entities.CarrierProfile.create({
-        organization_id:        org?.id || null,
-        company_name:           c.company_name,
-        mc_number:              c.mc_number             || null,
-        dot_number:             c.dot_number            || null,
-        equipment_types:        c.equipment_types       || [],
-        chassis_types:          c.chassis_types         || [],
-        ports_operated:         c.ports_operated        || [],
-        hazmat_allowed:         !!c.hazmat_allowed,
-        overweight_allowed:     !!c.overweight_allowed,
-        reefer_allowed:         !!c.reefer_allowed,
-        power_only_allowed:     !!c.power_only_allowed,
-        commodity_restrictions: c.commodity_restrictions
-          ? c.commodity_restrictions.split(',').map(s => s.trim()).filter(Boolean)
-          : [],
-        twic_required: true,
-        active:        true,
+    // 1. Organización
+    let org = null;
+    const existingOrgs = await base44.entities.Organization.filter({ created_by_user: user.email });
+    if (existingOrgs.length > 0) {
+      org = existingOrgs[0];
+    } else {
+      org = await base44.entities.Organization.create({
+        name:                 empresa || user.full_name || user.email,
+        created_by_user:      user.email,
+        workspace_status:     'production',
+        onboarding_completed: true,
+        production_ready:     true,
+        active:               true,
       });
-      carrierIds.push(created.id);
     }
 
-    await base44.entities.DispatcherProfile.create({
-      user_id:          user.email,
-      dispatch_mode:    data.dispatch_mode    || 'single_carrier',
-      default_carrier:  carrierIds[0]         || null,
-      managed_carriers: carrierIds,
-      service_lanes:    data.lanes            || [],
-      preferred_brokers: data.brokers_frecuentes
-        ? data.brokers_frecuentes.split(',').map(s => s.trim()).filter(Boolean)
-        : [],
-    });
+    // 2. OrganizationMember
+    const existingMembers = await base44.entities.OrganizationMember.filter({ organization_id: org.id, user_email: user.email });
+    if (existingMembers.length === 0) {
+      await base44.entities.OrganizationMember.create({
+        organization_id: org.id,
+        user_email:      user.email,
+        role:            'owner',
+        active:          true,
+      });
+    }
+
+    // 3. UserProfile
+    const existingProfiles = await base44.entities.UserProfile.filter({ usuario: user.email });
+    const profileData = { usuario: user.email, rol, onboarding_completado: true };
+    if (existingProfiles.length > 0) {
+      await base44.entities.UserProfile.update(existingProfiles[0].id, profileData);
+    } else {
+      await base44.entities.UserProfile.create(profileData);
+    }
+
+    // 4. CarrierProfile
+    if (rol === 'carrier') {
+      const existingCarriers = await base44.entities.CarrierProfile.filter({ organization_id: org.id });
+      const carrierData = {
+        organization_id: org.id,
+        company_name:    empresa || user.full_name || 'Mi Empresa',
+        mc_number:       mc || null,
+        active:          true,
+      };
+      if (existingCarriers.length > 0) {
+        await base44.entities.CarrierProfile.update(existingCarriers[0].id, carrierData);
+      } else {
+        await base44.entities.CarrierProfile.create(carrierData);
+      }
+    }
+
+    // 5. DispatcherProfile
+    if (rol === 'dispatcher') {
+      const existingDisp = await base44.entities.DispatcherProfile.filter({ user_id: user.email });
+      const dispData = {
+        user_id:       user.email,
+        dispatch_mode: 'single_carrier',
+      };
+      if (existingDisp.length > 0) {
+        await base44.entities.DispatcherProfile.update(existingDisp[0].id, dispData);
+      } else {
+        await base44.entities.DispatcherProfile.create(dispData);
+      }
+    }
+
+    // 6. CostConfig
+    const existingCosts = await base44.entities.CostConfig.filter({ usuario: user.email });
+    const costData = {
+      usuario:       user.email,
+      organization_id: org.id,
+      diesel_precio: parseFloat(diesel),
+      mpg:           parseFloat(mpg),
+      pago_conductor_porcentaje: parseFloat(conductor),
+    };
+    if (existingCosts.length > 0) {
+      await base44.entities.CostConfig.update(existingCosts[0].id, costData);
+    } else {
+      await base44.entities.CostConfig.create(costData);
+    }
 
     onComplete();
   };
 
-  // ── Render ────────────────────────────────────────────────────────────────────
-
+  // ── Loading ───────────────────────────────────────────────────────────────────
   if (loading) {
     return (
       <div className="fixed inset-0 bg-background flex items-center justify-center z-50">
@@ -157,6 +138,7 @@ export default function Onboarding({ onComplete }) {
     );
   }
 
+  // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="fixed inset-0 bg-background flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="w-full max-w-md my-8">
@@ -176,69 +158,259 @@ export default function Onboarding({ onComplete }) {
           </div>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6">
+        <div className="bg-card border border-border rounded-2xl p-6 space-y-6">
 
-          {/* Error */}
-          {error && (
-            <div className="mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/30 text-xs text-destructive">
-              {error}
-            </div>
-          )}
+          {/* Indicador de pasos */}
+          <div className="flex items-center gap-2">
+            {[1, 2, 3, 4].map(n => (
+              <div key={n} className="flex items-center flex-1">
+                <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
+                  n < step ? 'bg-primary text-primary-foreground' :
+                  n === step ? 'bg-primary/20 border border-primary text-primary' :
+                  'bg-muted text-muted-foreground'
+                }`}>
+                  {n < step ? '✓' : n}
+                </div>
+                {n < 4 && <div className={`flex-1 h-0.5 mx-1 transition-all ${n < step ? 'bg-primary' : 'bg-border'}`} />}
+              </div>
+            ))}
+          </div>
 
-          {/* Paso 1: elegir rol */}
-          {!rol && (
-            <div className="space-y-5">
+          {/* ── PASO 1: Rol ──────────────────────────────────────────────── */}
+          {step === 1 && (
+            <div className="space-y-4">
               <div>
-                <p className="text-xs text-primary font-semibold uppercase tracking-wider mb-1">Bienvenido</p>
-                <h2 className="text-lg font-bold text-foreground">¿Cuál es tu rol en la operación?</h2>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Esto personaliza el verificador de documentos y las herramientas de análisis.
-                </p>
+                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 1 de 4</p>
+                <h2 className="text-lg font-bold text-foreground mt-1">¿Cuál es tu rol?</h2>
+                <p className="text-sm text-muted-foreground mt-1">Esto personaliza el verificador de documentos y las herramientas de análisis.</p>
               </div>
               <div className="space-y-3">
-                <button
-                  onClick={() => setRol('carrier')}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
-                >
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
-                    <Truck className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-foreground">Carrier</div>
-                    <div className="text-xs text-muted-foreground">Opero mi propio camión o flota. El análisis se enfoca en rentabilidad y viabilidad operativa.</div>
-                  </div>
-                </button>
+                {[
+                  {
+                    value: 'carrier',
+                    icon: Truck,
+                    title: 'Carrier',
+                    desc: 'Opero mi propio camión o flota. El análisis se enfoca en rentabilidad y viabilidad operativa.',
+                  },
+                  {
+                    value: 'dispatcher',
+                    icon: Users,
+                    title: 'Dispatcher',
+                    desc: 'Despacho para uno o varios carriers. El análisis verifica compatibilidad del documento con el carrier asignado.',
+                  },
+                ].map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => { setRol(opt.value); setStep(2); }}
+                    className="w-full flex items-center gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
+                  >
+                    <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
+                      <opt.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-bold text-foreground">{opt.title}</div>
+                      <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{opt.desc}</div>
+                    </div>
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
+          {/* ── PASO 2: Datos de negocio ─────────────────────────────────── */}
+          {step === 2 && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 2 de 4</p>
+                <h2 className="text-lg font-bold text-foreground mt-1">Datos de tu negocio</h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {rol === 'carrier' ? 'Información de tu empresa carrier.' : 'Información de tu operación como dispatcher.'}
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                {rol === 'carrier' ? (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Nombre legal de la empresa *</label>
+                      <input
+                        value={empresa}
+                        onChange={e => setEmpresa(e.target.value)}
+                        placeholder="ABC Trucking LLC"
+                        className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">MC Number (opcional)</label>
+                      <input
+                        value={mc}
+                        onChange={e => setMc(e.target.value)}
+                        placeholder="MC-123456"
+                        className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Tu nombre completo *</label>
+                      <input
+                        value={nombre}
+                        onChange={e => setNombre(e.target.value)}
+                        placeholder="Juan Pérez"
+                        className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Empresa con la que trabajas (opcional)</label>
+                      <input
+                        value={empresa}
+                        onChange={e => setEmpresa(e.target.value)}
+                        placeholder="ABC Trucking LLC"
+                        className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setStep(1)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                  <ChevronLeft className="w-4 h-4" /> Atrás
+                </button>
                 <button
-                  onClick={() => setRol('dispatcher')}
-                  className="w-full flex items-center gap-3 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
+                  onClick={() => setStep(3)}
+                  disabled={rol === 'carrier' ? !empresa.trim() : !nombre.trim()}
+                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
                 >
-                  <div className="w-10 h-10 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
-                    <Users className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-bold text-foreground">Dispatcher</div>
-                    <div className="text-xs text-muted-foreground">Despacho para uno o varios carriers. El análisis verifica compatibilidad del documento con el carrier asignado.</div>
-                  </div>
+                  Continuar <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
             </div>
           )}
 
-          {/* Flujo Carrier */}
-          {rol === 'carrier' && (
-            <OnboardingCarrier
-              onComplete={handleCarrierComplete}
-              onBack={() => setRol(null)}
-            />
+          {/* ── PASO 3: Costos operativos ────────────────────────────────── */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 3 de 4</p>
+                <h2 className="text-lg font-bold text-foreground mt-1">Costos operativos</h2>
+                <p className="text-sm text-muted-foreground mt-1">Usados para calcular tu break-even y evaluar rentabilidad de cargas.</p>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Precio del diésel ($/gal)</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={diesel}
+                    onChange={e => setDiesel(e.target.value)}
+                    className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">MPG del camión</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={mpg}
+                    onChange={e => setMpg(e.target.value)}
+                    className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">% de pago al conductor</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="100"
+                    value={conductor}
+                    onChange={e => setConductor(e.target.value)}
+                    className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  />
+                </div>
+
+                {/* Break-even en tiempo real */}
+                <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5">
+                  <p className="text-xs text-muted-foreground">Break-even estimado</p>
+                  <p className="text-2xl font-bold text-primary font-mono mt-0.5">${breakEven}<span className="text-sm font-normal text-muted-foreground">/mi</span></p>
+                  <p className="text-xs text-muted-foreground mt-1">Necesitas cobrar al menos esta tarifa por milla para cubrir costos.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setStep(2)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                  <ChevronLeft className="w-4 h-4" /> Atrás
+                </button>
+                <button
+                  onClick={() => setStep(4)}
+                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+                >
+                  Continuar <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
           )}
 
-          {/* Flujo Dispatcher */}
-          {rol === 'dispatcher' && (
-            <OnboardingDispatcher
-              onComplete={handleDispatcherComplete}
-              onBack={() => setRol(null)}
-            />
+          {/* ── PASO 4: Confirmación ─────────────────────────────────────── */}
+          {step === 4 && (
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 4 de 4</p>
+                <h2 className="text-lg font-bold text-foreground mt-1">¡Listo para operar!</h2>
+                <p className="text-sm text-muted-foreground mt-1">Revisa tu configuración antes de entrar.</p>
+              </div>
+
+              <div className="bg-muted/50 rounded-xl divide-y divide-border/50 overflow-hidden">
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-muted-foreground">Rol</span>
+                  <span className="text-xs font-semibold text-foreground capitalize">{rol}</span>
+                </div>
+                {(empresa || nombre) && (
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-xs text-muted-foreground">{rol === 'carrier' ? 'Empresa' : 'Nombre'}</span>
+                    <span className="text-xs font-semibold text-foreground">{rol === 'carrier' ? empresa : nombre}</span>
+                  </div>
+                )}
+                {mc && (
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-xs text-muted-foreground">MC Number</span>
+                    <span className="text-xs font-semibold text-foreground">{mc}</span>
+                  </div>
+                )}
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-muted-foreground">Diésel</span>
+                  <span className="text-xs font-semibold text-foreground">${diesel}/gal</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-muted-foreground">MPG</span>
+                  <span className="text-xs font-semibold text-foreground">{mpg} mi/gal</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3">
+                  <span className="text-xs text-muted-foreground">% Conductor</span>
+                  <span className="text-xs font-semibold text-foreground">{conductor}%</span>
+                </div>
+                <div className="flex items-center justify-between px-4 py-3 bg-primary/5">
+                  <span className="text-xs text-primary font-medium">Break-even</span>
+                  <span className="text-xs font-bold text-primary font-mono">${breakEven}/mi</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setStep(3)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all">
+                  <ChevronLeft className="w-4 h-4" /> Atrás
+                </button>
+                <button
+                  onClick={handleComplete}
+                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+                >
+                  <CheckCircle2 className="w-4 h-4" /> Entrar a Trucky
+                </button>
+              </div>
+            </div>
           )}
 
         </div>

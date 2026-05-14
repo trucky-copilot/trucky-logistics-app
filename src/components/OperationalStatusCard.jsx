@@ -74,7 +74,7 @@ export default function OperationalStatusCard() {
   const meta    = LEVEL_META[operationalReadiness.level] || LEVEL_META.partial;
   const missing = operationalReadiness.missing || [];
 
-  // Construir lista de ítems para mostrar
+  // Máximo 4 ítems fijos
   const items = [
     {
       key:   'account',
@@ -92,30 +92,12 @@ export default function OperationalStatusCard() {
       done:  !!(userProfile?.rol),
     },
     {
-      key:   'carrier_profile',
-      label: 'Perfil operativo del carrier completo',
-      done:  !missing.includes('carrier_profile'),
-      route: ITEM_ROUTE.carrier_profile,
-    },
-    {
-      key:   'dispatcher_profile',
-      label: 'Perfil de dispatcher creado',
-      done:  !missing.includes('dispatcher_profile'),
-      route: ITEM_ROUTE.dispatcher_profile,
-    },
-    {
       key:   'cost_config',
-      label: 'Costos operativos configurados',
+      label: 'Costos configurados',
       done:  !missing.includes('cost_config'),
       route: ITEM_ROUTE.cost_config,
     },
-  ].filter(item => {
-    // Ocultar ítems que no aplican al rol
-    if (item.key === 'carrier_profile' && userProfile?.rol === 'dispatcher') return false;
-    if (item.key === 'dispatcher_profile' && userProfile?.rol === 'carrier') return false;
-    if (item.key === 'cost_config' && userProfile?.rol === 'dispatcher') return false;
-    return true;
-  });
+  ];
 
   const doneCount  = items.filter(i => i.done).length;
   const totalCount = items.length;

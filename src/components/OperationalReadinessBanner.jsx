@@ -62,12 +62,12 @@ export default function OperationalReadinessBanner() {
           <div className="flex-1 min-w-0">
             <p className={`text-xs font-medium ${cfg.color}`}>{cfg.headline}</p>
 
-            {/* Detalle expandible */}
+            {/* Detalle expandible — máximo 1 ítem en modo colapsado */}
             {missing.length > 0 && (
               <>
                 {expanded && (
                   <ul className="mt-2 space-y-1">
-                    {missing.map(key => (
+                    {missing.slice(0, 1).map(key => (
                       <li key={key} className="flex items-center gap-2">
                         <span className="w-1 h-1 rounded-full bg-muted-foreground flex-shrink-0" />
                         <span className="text-xs text-muted-foreground flex-1">
@@ -90,7 +90,7 @@ export default function OperationalReadinessBanner() {
                   onClick={() => setExpanded(v => !v)}
                   className={`flex items-center gap-1 mt-1 text-xs ${cfg.color} hover:underline`}
                 >
-                  {expanded ? 'Ocultar detalles' : `Ver ${missing.length} ítem${missing.length > 1 ? 's' : ''} pendiente${missing.length > 1 ? 's' : ''}`}
+                  {expanded ? 'Ocultar' : 'Ver pendiente'}
                   {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 </button>
               </>
