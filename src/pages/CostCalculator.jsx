@@ -18,13 +18,18 @@ export default function CostCalculator() {
 
   useEffect(() => {
     const load = async () => {
-      const user = await base44.auth.me();
-      const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
-      if (configs.length > 0) {
-        setConfig(configs[0]);
-        setConfigId(configs[0].id);
+      try {
+        const user = await base44.auth.me();
+        const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
+        if (configs.length > 0) {
+          setConfig(configs[0]);
+          setConfigId(configs[0].id);
+        }
+      } catch (e) {
+        // mantener valores por defecto si falla la carga
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
     load();
   }, []);
