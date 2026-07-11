@@ -8,8 +8,12 @@ export default function NotificationBell() {
 
   useEffect(() => {
     const loadUnread = async () => {
-      const notifs = await base44.entities.Notification.filter({ leido: false });
-      setUnreadCount(notifs.length);
+      try {
+        const notifs = await base44.entities.Notification.filter({ leido: false });
+        setUnreadCount(notifs.length);
+      } catch (e) {
+        // keep last count on network/timeout errors
+      }
     };
     loadUnread();
     const interval = setInterval(loadUnread, 30000);
