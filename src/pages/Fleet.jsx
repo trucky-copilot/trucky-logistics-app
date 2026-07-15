@@ -119,7 +119,7 @@ export default function Fleet() {
       <div className="grid grid-cols-4 gap-2">
         {[
           { key: 'disponible', label: 'Disponibles', color: 'text-green-400' },
-          { key: 'en_ruta', label: 'En Ruta', color: 'text-cyan-400' },
+          { key: 'en_ruta', label: 'En Ruta', color: 'text-violet-400' },
           { key: 'en_yarda', label: 'En Yarda', color: 'text-yellow-400' },
           { key: 'mantenimiento', label: 'Mant.', color: 'text-red-400' },
         ].map(s => (

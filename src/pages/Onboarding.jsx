@@ -145,16 +145,12 @@ export default function Onboarding({ onComplete }) {
 
         {/* Logo */}
         <div className="flex items-center justify-center gap-2.5 mb-8">
-          <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
-            <img
-              src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png"
-              alt="Larcofer Logo"
-              className="w-full h-full object-cover"
-            />
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-500 to-indigo-700 shadow-lg shadow-violet-500/30">
+            <span className="text-white font-black text-2xl leading-none">t</span>
           </div>
-          <div>
-            <div className="text-lg font-bold text-foreground tracking-wide">TRUCKY</div>
-            <div className="text-xs text-muted-foreground font-medium">LARCOFER USA</div>
+          <div className="leading-tight">
+            <div className="text-xl font-bold text-foreground tracking-tight lowercase">trucky</div>
+            <div className="text-xs text-violet-300/80 font-medium">Your road co-pilot</div>
           </div>
         </div>
 

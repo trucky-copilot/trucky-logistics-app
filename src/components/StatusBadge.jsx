@@ -1,12 +1,12 @@
 const STATUS_CONFIG = {
   // Trucks
   disponible: { label: 'Disponible', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
-  en_ruta: { label: 'En Ruta', class: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20' },
+  en_ruta: { label: 'En Ruta', class: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
   en_yarda: { label: 'En Yarda', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
   mantenimiento: { label: 'Mantenimiento', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
   // Loads
   pendiente: { label: 'Pendiente', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
-  en_transito: { label: 'En Tránsito', class: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20' },
+  en_transito: { label: 'En Tránsito', class: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
   entregado: { label: 'Entregado', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
   cancelado: { label: 'Cancelado', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
   // Results
@@ -23,7 +23,7 @@ const STATUS_CONFIG = {
   bloqueado: { label: 'Bloqueado', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
   // Tipo cliente
   quickload: { label: 'Quickload', class: 'text-muted-foreground bg-muted/50 border-border' },
-  broker_directo: { label: 'Broker Directo', class: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20' },
+  broker_directo: { label: 'Broker Directo', class: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
   cliente_directo: { label: 'Cliente Directo', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
 };
 

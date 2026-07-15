@@ -6,7 +6,8 @@ module.exports = {
       "text-green-400", "text-yellow-400", "text-red-400",
       "bg-green-400/10", "bg-yellow-400/10", "bg-red-400/10",
       "border-green-400/30", "border-yellow-400/30", "border-red-400/30",
-      "text-cyan-400", "bg-cyan-400/10", "border-cyan-400/30",
+      "text-violet-400", "bg-violet-400/10", "border-violet-400/20", "border-violet-400/25", "bg-violet-400/8",
+      "text-cyan-400", "bg-cyan-400/10", "border-cyan-400/30", "bg-cyan-400/8",
     ],
   theme: {
     extend: {

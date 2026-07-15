@@ -6,31 +6,32 @@
 
 @layer base {
   :root {
-    --background: 222 47% 6%;
-    --foreground: 210 40% 96%;
-    --card: 222 47% 9%;
-    --card-foreground: 210 40% 96%;
-    --popover: 222 47% 9%;
-    --popover-foreground: 210 40% 96%;
-    --primary: 191 97% 44%;
-    --primary-foreground: 222 47% 6%;
-    --secondary: 222 47% 14%;
-    --secondary-foreground: 210 40% 96%;
-    --muted: 222 47% 12%;
-    --muted-foreground: 215 20% 55%;
-    --accent: 191 97% 44%;
-    --accent-foreground: 222 47% 6%;
+    /* ── Trucky brand: deep violet / purple ───────────────────────────── */
+    --background: 268 45% 5%;
+    --foreground: 260 30% 96%;
+    --card: 257 45% 10%;
+    --card-foreground: 260 30% 96%;
+    --popover: 257 45% 10%;
+    --popover-foreground: 260 30% 96%;
+    --primary: 258 90% 66%;
+    --primary-foreground: 268 45% 5%;
+    --secondary: 257 40% 16%;
+    --secondary-foreground: 260 30% 96%;
+    --muted: 257 40% 14%;
+    --muted-foreground: 255 25% 62%;
+    --accent: 270 86% 42%;
+    --accent-foreground: 260 30% 96%;
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 98%;
-    --border: 222 47% 16%;
-    --input: 222 47% 14%;
-    --ring: 191 97% 44%;
+    --border: 257 40% 19%;
+    --input: 257 40% 14%;
+    --ring: 258 90% 66%;
     --radius: 0.625rem;
     --success: 142 71% 45%;
     --warning: 38 92% 50%;
-    --navy: 222 47% 6%;
-    --navy-light: 222 47% 9%;
-    --cyan: 191 97% 44%;
+    --navy: 268 45% 5%;
+    --navy-light: 257 45% 10%;
+    --cyan: 270 86% 42%;
   }
 }
 
@@ -41,6 +42,8 @@
 
   body {
     @apply bg-background text-foreground font-inter;
+    background-image: radial-gradient(circle at 50% 40%, hsl(257 45% 11%) 0%, hsl(268 45% 5%) 70%);
+    background-attachment: fixed;
     font-feature-settings: "kern" 1, "liga" 1;
   }
 

@@ -120,7 +120,7 @@ export default function DocumentAnalyzer() {
 
   // Badge de modo de análisis
   const roleBadge = userRole === 'carrier'
-    ? { label: 'Modo Carrier — rentabilidad y operación', icon: Truck, color: 'text-cyan-400 bg-cyan-400/10 border-cyan-400/20' }
+    ? { label: 'Modo Carrier — rentabilidad y operación', icon: Truck, color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' }
     : { label: 'Modo Dispatcher — completitud y asignación', icon: Users, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
 
   return (

@@ -24,9 +24,9 @@ const LEVEL_CONFIG = {
   },
   partial: {
     icon:    Info,
-    color:   'text-cyan-400',
-    bg:      'bg-cyan-400/8',
-    border:  'border-cyan-400/25',
+    color:   'text-violet-400',
+    bg:      'bg-violet-400/8',
+    border:  'border-violet-400/25',
     headline: 'Casi listo — completa la configuración pendiente para resultados más confiables.',
   },
 };

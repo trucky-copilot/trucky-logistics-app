@@ -15,16 +15,12 @@ export default function Welcome() {
     <div className="fixed inset-0 bg-background flex flex-col items-center justify-center p-6">
       {/* Logo */}
       <div className="flex items-center gap-3 mb-8">
-        <div className="w-12 h-12 rounded-2xl overflow-hidden flex-shrink-0">
-          <img
-            src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png"
-            alt="Larcofer Logo"
-            className="w-full h-full object-cover"
-          />
+        <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-500 to-indigo-700 shadow-xl shadow-violet-500/30">
+          <span className="text-white font-black text-3xl leading-none">t</span>
         </div>
-        <div>
-          <div className="text-2xl font-black text-foreground tracking-wide">TRUCKY</div>
-          <div className="text-xs text-muted-foreground font-medium">LARCOFER USA</div>
+        <div className="leading-tight">
+          <div className="text-3xl font-black text-foreground tracking-tight lowercase">trucky</div>
+          <div className="text-sm text-violet-300/80 font-medium">Your road co-pilot</div>
         </div>
       </div>
 

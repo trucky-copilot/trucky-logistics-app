@@ -74,7 +74,7 @@ export default function CostCalculator() {
   const barSegments = [
     { label: 'Q-Load\n$2.20', rate: QUICKLOAD_RATE, color: quickloadStatus === 'ganancia' ? '#4ade80' : '#f87171' },
     { label: 'Break-Even', rate: breakEvenRate, color: '#facc15' },
-    { label: 'Objetivo', rate: Number(config.tarifa_objetivo), color: '#22d3ee' },
+    { label: 'Objetivo', rate: Number(config.tarifa_objetivo), color: '#8b5cf6' },
     { label: 'Mercado\nFlorida', rate: 3.10, color: '#a78bfa' },
   ];
   const maxRate = Math.max(...barSegments.map(s => s.rate), 4);
@@ -162,9 +162,9 @@ export default function CostCalculator() {
             <p className="text-xl font-bold font-mono text-yellow-400 mt-1">${breakEvenRate.toFixed(2)}</p>
             <p className="text-xs text-muted-foreground">tarifa mínima</p>
           </div>
-          <div className="bg-cyan-400/10 border border-cyan-400/20 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
-            <p className="text-xs text-cyan-400">Tarifa objetivo</p>
-            <p className="text-xl font-bold font-mono text-cyan-400 mt-1">${Number(config.tarifa_objetivo).toFixed(2)}</p>
+          <div className="bg-violet-400/10 border border-violet-400/20 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
+            <p className="text-xs text-violet-400">Tarifa objetivo</p>
+            <p className="text-xl font-bold font-mono text-violet-400 mt-1">${Number(config.tarifa_objetivo).toFixed(2)}</p>
             <p className="text-xs text-muted-foreground">+${targetProfit.toFixed(2)}/mi ganancia</p>
           </div>
         </div>

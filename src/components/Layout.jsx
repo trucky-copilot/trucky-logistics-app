@@ -50,12 +50,12 @@ export default function Layout() {
         {/* Logo */}
         <div className="flex items-center justify-between p-5 border-b border-border">
           <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
-              <img src="https://media.base44.com/images/public/69e8214a181314e517a283d5/ef839c541_LARCOFERLOGO.png" alt="Larcofer Logo" className="w-full h-full object-cover" />
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-500 to-indigo-700 shadow-lg shadow-violet-500/20">
+              <span className="text-white font-black text-lg leading-none">t</span>
             </div>
-            <div>
-              <div className="text-sm font-bold text-foreground tracking-wide">TRUCKY</div>
-              <div className="text-[10px] text-muted-foreground font-medium">LARCOFER USA</div>
+            <div className="leading-tight">
+              <div className="text-base font-bold text-foreground tracking-tight lowercase">trucky</div>
+              <div className="text-[10px] text-violet-300/70 font-medium">Your road co-pilot</div>
             </div>
           </div>
           <button 
@@ -92,12 +92,12 @@ export default function Layout() {
         {/* Footer */}
         <div className="p-4 border-t border-border">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center">
-              <span className="text-xs font-bold text-primary">L</span>
+            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-700 flex items-center justify-center">
+              <span className="text-xs font-bold text-white">t</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-foreground truncate">Larcofer USA</div>
-              <div className="text-[10px] text-muted-foreground">Miami, FL</div>
+              <div className="text-xs font-medium text-foreground truncate">trucky</div>
+              <div className="text-[10px] text-violet-300/70">Your road co-pilot</div>
             </div>
           </div>
         </div>
