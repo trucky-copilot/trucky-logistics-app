@@ -7,6 +7,7 @@ import {
 import { base44 } from '@/api/base44Client';
 import NotificationBell from './NotificationBell';
 import OperationalReadinessBanner from './OperationalReadinessBanner';
+import MarketTicker from './MarketTicker';
 
 const NAV_ITEMS = [
   { path: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -28,6 +29,8 @@ export default function Layout() {
     if (path === '/') return location.pathname === '/';
     return location.pathname.startsWith(path);
   };
+
+  const isChat = location.pathname.startsWith('/chat');
 
   return (
     <div className="flex h-screen bg-background overflow-hidden font-inter">
@@ -106,7 +109,7 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center justify-between px-4 py-3 border-b border-border bg-card/50 backdrop-blur-sm flex-shrink-0">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/50 backdrop-blur-sm flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
@@ -116,6 +119,7 @@ export default function Layout() {
           <div className="lg:hidden text-sm font-semibold text-foreground">
             {NAV_ITEMS.find(item => isActive(item.path))?.label || 'Trucky'}
           </div>
+          {!isChat && <MarketTicker />}
           <div className="ml-auto">
             <NotificationBell />
           </div>
