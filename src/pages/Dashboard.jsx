@@ -4,6 +4,7 @@ import { DollarSign, Truck, Package, TrendingUp, AlertTriangle, CheckCircle2, XC
 import KpiCard from '@/components/KpiCard';
 import StatusBadge from '@/components/StatusBadge';
 import OperationalStatusCard from '@/components/OperationalStatusCard';
+import LoadsMap from '@/components/dashboard/LoadsMap';
 import { Link } from 'react-router-dom';
 
 export default function Dashboard() {
@@ -111,9 +112,12 @@ export default function Dashboard() {
           valor={thisWeek.length}
           subtitulo={`${loads.filter(l => l.estado === 'en_transito').length} en tránsito ahora`}
           icon={Truck}
-          color="cyan"
+          color="violet"
         />
       </div>
+
+      {/* Mapa de rutas */}
+      <LoadsMap loads={loads.slice(0, 15)} />
 
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Fleet Status */}

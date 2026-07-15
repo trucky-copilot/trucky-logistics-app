@@ -46,7 +46,59 @@
     background-attachment: fixed;
     font-feature-settings: "kern" 1, "liga" 1;
   }
+}
 
+@layer components {
+  /* Subtle elevation for cards & panels */
+  .bg-card {
+    box-shadow: 0 1px 2px hsl(268 45% 2% / 0.35), 0 6px 18px hsl(268 45% 2% / 0.22);
+  }
+
+  /* Primary buttons get a soft glow */
+  button.bg-primary {
+    box-shadow: 0 2px 10px hsl(258 90% 66% / 0.28);
+    transition: box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+  }
+  button.bg-primary:hover:not(:disabled) {
+    transform: translateY(-1px);
+  }
+
+  /* Tables: clearer header + smoother row hover */
+  table thead {
+    background: hsl(var(--muted) / 0.35);
+  }
+  table thead th {
+    letter-spacing: 0.02em;
+  }
+  table tbody tr {
+    transition: background-color 0.15s ease;
+  }
+
+  /* Leaflet popups match the dark theme */
+  .leaflet-popup-content-wrapper,
+  .leaflet-popup-tip {
+    background: hsl(var(--card));
+    color: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+    box-shadow: 0 8px 24px hsl(268 45% 2% / 0.5);
+  }
+  .leaflet-popup-content {
+    margin: 10px 12px;
+    font-family: 'Inter', sans-serif;
+  }
+  .leaflet-container {
+    font-family: 'Inter', sans-serif;
+  }
+  .leaflet-control-attribution {
+    background: hsl(var(--background) / 0.6) !important;
+    color: hsl(var(--muted-foreground)) !important;
+  }
+  .leaflet-control-attribution a {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+}
+
+@layer base {
   ::-webkit-scrollbar {
     width: 4px;
     height: 4px;
