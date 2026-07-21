@@ -29,7 +29,7 @@ function LiveBadge() {
   return (
     <div className="flex items-center gap-1.5 px-3 flex-shrink-0">
       <span className="trucky-blink w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
-      <span className="text-[10px] font-mono uppercase tracking-wide text-cyan-400 font-semibold">Mercado en vivo</span>
+      <span className="text-[10px] font-mono uppercase tracking-wide text-cyan-400 font-semibold">Referencia — datos de ejemplo</span>
       <span className="text-muted-foreground/40 ml-1">·</span>
     </div>
   );

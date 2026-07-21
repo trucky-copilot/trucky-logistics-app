@@ -1,10 +1,13 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Plus, Package, Filter } from 'lucide-react';
+import { Plus, Package } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import LoadForm from '@/components/LoadForm';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { listByOrg, withOrg } from '@/lib/orgScope';
 
 export default function Loads() {
+  const orgId = useOrganizationId();
   const [loads, setLoads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -12,12 +15,12 @@ export default function Loads() {
   const [filter, setFilter] = useState('all');
 
   const loadData = async () => {
-    const data = await base44.entities.Load.list('-created_date', 100);
+    const data = await listByOrg(base44.entities.Load, orgId, '-created_date', 100);
     setLoads(data);
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [orgId]);
 
   const filtered = filter === 'all' ? loads : loads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
 
@@ -33,7 +36,7 @@ export default function Loads() {
     if (editLoad) {
       await base44.entities.Load.update(editLoad.id, payload);
     } else {
-      await base44.entities.Load.create(payload);
+      await base44.entities.Load.create(withOrg(orgId, payload));
     }
     setShowForm(false);
     setEditLoad(null);
