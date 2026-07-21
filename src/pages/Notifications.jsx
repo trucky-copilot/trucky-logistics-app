@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Bell, Plus, X, CheckCheck, AlertTriangle, Info, Zap, Truck, FileWarning } from 'lucide-react';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { listByOrg, withOrg } from '@/lib/orgScope';
 
 const TIPO_ICONS = {
   cambio_asignacion: Truck,
@@ -77,20 +79,21 @@ function NotifForm({ onSave, onClose }) {
 }
 
 export default function Notifications() {
+  const orgId = useOrganizationId();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState('all');
 
   const loadData = async () => {
-    const data = await base44.entities.Notification.list('-created_date', 100);
+    const data = await listByOrg(base44.entities.Notification, orgId, '-created_date', 100);
     setNotifications(data);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [orgId]);
 
   const handleSave = async (data) => {
-    await base44.entities.Notification.create(data);
+    await base44.entities.Notification.create(withOrg(orgId, data));
     setShowForm(false);
     loadData();
   };

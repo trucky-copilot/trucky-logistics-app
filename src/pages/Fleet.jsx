@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Truck, Plus, X, Pencil } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { listByOrg, withOrg } from '@/lib/orgScope';
 
 const ESTADOS = ['disponible', 'en_ruta', 'en_yarda', 'mantenimiento'];
 
@@ -82,21 +84,22 @@ function TruckForm({ truck, onSave, onClose }) {
 }
 
 export default function Fleet() {
+  const orgId = useOrganizationId();
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editTruck, setEditTruck] = useState(null);
 
   const loadData = async () => {
-    const data = await base44.entities.Truck.list();
+    const data = await listByOrg(base44.entities.Truck, orgId);
     setTrucks(data);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [orgId]);
 
   const handleSave = async (data) => {
     if (editTruck) await base44.entities.Truck.update(editTruck.id, data);
-    else await base44.entities.Truck.create(data);
+    else await base44.entities.Truck.create(withOrg(orgId, data));
     setShowForm(false); setEditTruck(null); loadData();
   };
 

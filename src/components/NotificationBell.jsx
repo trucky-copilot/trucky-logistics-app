@@ -2,14 +2,17 @@ import { useState, useEffect } from 'react';
 import { Bell } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { Link } from 'react-router-dom';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { filterByOrg } from '@/lib/orgScope';
 
 export default function NotificationBell() {
+  const orgId = useOrganizationId();
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     const loadUnread = async () => {
       try {
-        const notifs = await base44.entities.Notification.filter({ leido: false });
+        const notifs = await filterByOrg(base44.entities.Notification, orgId, { leido: false });
         setUnreadCount(notifs.length);
       } catch (e) {
         // keep last count on network/timeout errors
@@ -18,7 +21,7 @@ export default function NotificationBell() {
     loadUnread();
     const interval = setInterval(loadUnread, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [orgId]);
 
   return (
     <Link to="/notificaciones" className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">

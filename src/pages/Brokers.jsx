@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Building2, Plus, X, Pencil, Star } from 'lucide-react';
+import { Building2, Plus, X, Pencil } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { listByOrg, withOrg } from '@/lib/orgScope';
 
 function ScoreDots({ score, max = 10 }) {
   const filled = Math.round((score || 0));
@@ -108,21 +110,22 @@ function BrokerForm({ broker, onSave, onClose }) {
 }
 
 export default function Brokers() {
+  const orgId = useOrganizationId();
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editBroker, setEditBroker] = useState(null);
 
   const loadData = async () => {
-    const data = await base44.entities.Broker.list();
+    const data = await listByOrg(base44.entities.Broker, orgId);
     setBrokers(data);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [orgId]);
 
   const handleSave = async (data) => {
     if (editBroker) await base44.entities.Broker.update(editBroker.id, data);
-    else await base44.entities.Broker.create(data);
+    else await base44.entities.Broker.create(withOrg(orgId, data));
     setShowForm(false); setEditBroker(null); loadData();
   };
 

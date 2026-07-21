@@ -113,7 +113,7 @@ export default function OnboardingCarrier({ onComplete, onBack }) {
             <input
               value={data.company_name}
               onChange={e => set('company_name', e.target.value)}
-              placeholder="Larcofer USA LLC"
+              placeholder="Ej. ABC Trucking LLC"
               className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
             />
           </div>
@@ -122,7 +122,7 @@ export default function OnboardingCarrier({ onComplete, onBack }) {
             <input
               value={data.trade_name}
               onChange={e => set('trade_name', e.target.value)}
-              placeholder="Larcofer Transport"
+              placeholder="Ej. ABC Transport"
               className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
             />
           </div>
