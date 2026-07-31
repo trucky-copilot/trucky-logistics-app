@@ -1,0 +1,15 @@
+{
+  "name": "Trucky",
+  "short_name": "Trucky",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ]
+}

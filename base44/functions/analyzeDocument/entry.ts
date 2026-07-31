@@ -773,6 +773,14 @@ async function fingerprintObject(obj) {
   return (await hashText(str)).slice(0, 8);
 }
 
+// Resuelve la organización activa del usuario (fail-closed: null si no hay
+// membresía activa). Inline porque las funciones Base44 no comparten módulos
+// entre sí — este resolver es el equivalente backend de useOrganizationId().
+async function resolveOrgId(base44, email) {
+  const members = await base44.entities.OrganizationMember.filter({ user_email: email, active: true });
+  return members[0]?.organization_id ?? null;
+}
+
 function calcularConfidence(datos) {
   const campos = [
     datos.tarifa_total, datos.terminos_pago, datos.commodity, datos.tipo_equipo,
@@ -808,17 +816,21 @@ Deno.serve(async (req) => {
       }, { status: 400 });
     }
 
+    // Resolver organización activa del usuario — fail-closed para las lecturas
+    // org-scoped que siguen (Truck/Broker/CarrierProfile/BrokerProfile).
+    const orgId = await resolveOrgId(base44, user.email);
+
     // ── PASO 2: Hash del documento — si ya existe, devolver resultado cacheado ──
     const [docHash, contextData] = await Promise.all([
       hashText(documentText),
       Promise.all([
         base44.entities.UserProfile.filter({ usuario: user.email }),
         base44.entities.CostConfig.filter({ usuario: user.email }),
-        base44.entities.Truck.list(),
-        base44.entities.Broker.list(),
-        base44.entities.CarrierProfile.filter({ active: true }),
+        orgId ? base44.entities.Truck.filter({ organization_id: orgId }) : Promise.resolve([]),
+        orgId ? base44.entities.Broker.filter({ organization_id: orgId }) : Promise.resolve([]),
+        orgId ? base44.entities.CarrierProfile.filter({ organization_id: orgId, active: true }) : Promise.resolve([]),
         base44.entities.DispatcherProfile.filter({ user_id: user.email }),
-        base44.entities.BrokerProfile.filter({ active: true }),
+        orgId ? base44.entities.BrokerProfile.filter({ organization_id: orgId, active: true }) : Promise.resolve([]),
       ])
     ]);
 
@@ -831,9 +843,20 @@ Deno.serve(async (req) => {
     const dispatcherProfile = dispatcherProfiles[0] || null;
 
     let carrierProfile = null;
-    if (selectedCarrierId) carrierProfile = carrierProfiles.find(c => c.id === selectedCarrierId) || null;
-    if (!carrierProfile && dispatcherProfile?.default_carrier) carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || null;
-    if (!carrierProfile) carrierProfile = carrierProfiles[0] || null;
+    if (selectedCarrierId) {
+      carrierProfile = carrierProfiles.find(c => c.id === selectedCarrierId) || null;
+      if (!carrierProfile) {
+        // El carrier solicitado no pertenece al pool ya scopeado por organización.
+        return Response.json({ error: 'El carrier seleccionado no pertenece a tu organización.' }, { status: 400 });
+      }
+    }
+    if (!carrierProfile && dispatcherProfile?.default_carrier) {
+      carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || null;
+    }
+    // Sin fallback cross-tenant: si no hay match explícito (selectedCarrierId ni
+    // default_carrier), carrierProfile queda null. validarCarrier() ya maneja
+    // ese caso con un mensaje neutro ("sin perfil registrado para comparar"),
+    // sin nombre de carrier ajeno ni falso-crítico de identidad.
 
     // ── PASO 3b: Calcular fingerprints de versión de configuración ────────────
     const [costVer, carrierVer, brokerVer] = await Promise.all([
@@ -955,6 +978,7 @@ Deno.serve(async (req) => {
     const identityResult = categorias.find(c => c.categoria.includes('Carrier'));
 
     await base44.entities.DocumentVerification.create({
+      organization_id: orgId,
       document_type: datos.tipo_documento || 'rate_confirmation',
       document_hash: docHash,
       uploaded_by: user.email,

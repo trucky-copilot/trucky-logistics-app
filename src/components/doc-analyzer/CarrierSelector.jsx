@@ -1,14 +1,17 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { ChevronDown, Truck } from 'lucide-react';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { filterByOrg } from '@/lib/orgScope';
 
 export default function CarrierSelector({ selectedCarrierId, onChange }) {
+  const orgId = useOrganizationId();
   const [carriers, setCarriers] = useState([]);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
-    base44.entities.CarrierProfile.filter({ active: true }).then(setCarriers);
-  }, []);
+    filterByOrg(base44.entities.CarrierProfile, orgId, { active: true }).then(setCarriers);
+  }, [orgId]);
 
   if (carriers.length <= 1) return null;
 

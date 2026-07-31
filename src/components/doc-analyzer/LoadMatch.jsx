@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Link2, Package } from 'lucide-react';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { listByOrg } from '@/lib/orgScope';
 
 const CONFIDENCE_CONFIG = {
   high:   { label: 'Alta coincidencia',  color: 'text-green-400',  bg: 'bg-green-400/10',  border: 'border-green-400/20' },
@@ -9,6 +11,7 @@ const CONFIDENCE_CONFIG = {
 };
 
 export default function LoadMatch({ datos_extraidos }) {
+  const orgId = useOrganizationId();
   const [match, setMatch] = useState(null);
   const [checked, setChecked] = useState(false);
 
@@ -24,7 +27,7 @@ export default function LoadMatch({ datos_extraidos }) {
 
       if (refs.length === 0) { setChecked(true); return; }
 
-      const loads = await base44.entities.Load.list('-created_date', 100);
+      const loads = await listByOrg(base44.entities.Load, orgId, '-created_date', 100);
 
       for (const ref of refs) {
         const found = loads.find(l =>
@@ -41,7 +44,7 @@ export default function LoadMatch({ datos_extraidos }) {
       setChecked(true);
     };
     buscar();
-  }, [datos_extraidos]);
+  }, [datos_extraidos, orgId]);
 
   if (!checked || !match) return null;
 

@@ -20,7 +20,6 @@ import Brokers         from '@/pages/Brokers';
 import CostCalculator  from '@/pages/CostCalculator';
 import Notifications   from '@/pages/Notifications';
 import Onboarding      from '@/pages/Onboarding';
-import MigrationGuide  from '@/pages/MigrationGuide';
 
 // ─── Loading screen ───────────────────────────────────────────────────────────
 function AppLoading() {
@@ -65,7 +64,6 @@ function AppContent() {
         <Route path="/brokers"      element={<Brokers />} />
         <Route path="/calculadora"  element={<CostCalculator />} />
         <Route path="/notificaciones" element={<Notifications />} />
-        <Route path="/migracion" element={<MigrationGuide />} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

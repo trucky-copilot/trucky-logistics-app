@@ -1,33 +1,44 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { DollarSign, Truck, Package, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react';
+import { DollarSign, Truck, Package, TrendingUp, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import KpiCard from '@/components/KpiCard';
 import StatusBadge from '@/components/StatusBadge';
 import OperationalStatusCard from '@/components/OperationalStatusCard';
 import LoadsMap from '@/components/dashboard/LoadsMap';
 import { Link } from 'react-router-dom';
+import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
+import { listByOrg } from '@/lib/orgScope';
 
 export default function Dashboard() {
+  const orgId = useOrganizationId();
+  const { organization } = useAppState();
   const [trucks, setTrucks] = useState([]);
   const [loads, setLoads] = useState([]);
   const [brokers, setBrokers] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
+    setLoading(true);
+    setError(null);
     Promise.all([
-      base44.entities.Truck.list(),
-      base44.entities.Load.list('-created_date', 50),
-      base44.entities.Broker.list(),
-      base44.entities.Driver.list(),
+      listByOrg(base44.entities.Truck, orgId),
+      listByOrg(base44.entities.Load, orgId, '-created_date', 50),
+      listByOrg(base44.entities.Broker, orgId),
+      listByOrg(base44.entities.Driver, orgId),
     ]).then(([t, l, b, d]) => {
       setTrucks(t);
       setLoads(l);
       setBrokers(b);
       setDrivers(d);
+    }).catch((err) => {
+      console.error('Dashboard: error al cargar datos', err);
+      setError('No se pudieron cargar los datos del dashboard. Intenta recargar la página.');
+    }).finally(() => {
       setLoading(false);
     });
-  }, []);
+  }, [orgId]);
 
   // KPI calculations
   const thisWeek = loads.filter(l => {
@@ -73,12 +84,19 @@ export default function Dashboard() {
     </div>
   );
 
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center">
+      <AlertTriangle className="w-8 h-8 text-red-400" />
+      <p className="text-sm text-foreground font-medium">{error}</p>
+    </div>
+  );
+
   return (
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-xl font-bold text-foreground">Dashboard Operacional</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Larcofer USA — Miami, FL</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{organization?.name || 'Mi organización'}</p>
       </div>
 
       {/* Estado operativo (solo visible si la config está incompleta) */}

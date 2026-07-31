@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Plus, Loader2, Zap, History, X } from 'lucide-react';
+import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { marketChat } from '@/functions/marketChat';
 import ReactMarkdown from 'react-markdown';
@@ -18,6 +18,7 @@ export default function MarketChat() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
   const [costConfig, setCostConfig] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [sessionDbId, setSessionDbId] = useState(null); // DB record id for upsert
@@ -87,16 +88,27 @@ export default function MarketChat() {
     setMessages(newMessages);
     setInput('');
     setLoading(true);
+    setError(null);
 
-    const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
-    const res = await marketChat({ messages: apiMessages, costConfig });
+    try {
+      const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
+      const res = await marketChat({ messages: apiMessages, costConfig });
 
-    if (res.data?.content) {
-      const updatedMessages = [...newMessages, { role: 'assistant', content: res.data.content, timestamp: new Date().toISOString() }];
-      setMessages(updatedMessages);
-      await saveSession(updatedMessages, sessionId, sessionDbId);
+      if (res.data?.error) {
+        setError(res.data.error);
+      } else if (res.data?.content) {
+        const updatedMessages = [...newMessages, { role: 'assistant', content: res.data.content, timestamp: new Date().toISOString() }];
+        setMessages(updatedMessages);
+        await saveSession(updatedMessages, sessionId, sessionDbId);
+      } else {
+        setError('No se recibió respuesta del asesor. Intenta de nuevo.');
+      }
+    } catch (err) {
+      console.error('MarketChat: error al enviar mensaje', err);
+      setError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleKeyDown = (e) => {
@@ -258,6 +270,18 @@ export default function MarketChat() {
             <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-2">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
               <span className="text-sm text-muted-foreground">Calculando...</span>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex gap-3">
+            <div className="w-7 h-7 rounded-lg bg-red-400/10 flex items-center justify-center flex-shrink-0">
+              <AlertTriangle className="w-4 h-4 text-red-400" />
+            </div>
+            <div className="bg-red-400/5 border border-red-400/30 rounded-xl px-4 py-3 text-sm text-red-400 max-w-[85%]">
+              {error}
+              <div className="text-xs text-muted-foreground mt-1">Puedes intentar enviar tu mensaje de nuevo.</div>
             </div>
           </div>
         )}

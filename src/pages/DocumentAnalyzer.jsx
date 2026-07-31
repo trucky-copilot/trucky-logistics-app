@@ -12,10 +12,13 @@ import KeyFindings from '@/components/doc-analyzer/KeyFindings';
 import ActionBlock from '@/components/doc-analyzer/ActionBlock';
 import LoadMatch from '@/components/doc-analyzer/LoadMatch';
 import CarrierSelector from '@/components/doc-analyzer/CarrierSelector';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { filterByOrg } from '@/lib/orgScope';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
 
 export default function DocumentAnalyzer() {
+  const orgId = useOrganizationId();
   const [documentText, setDocumentText] = useState('');
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,7 +42,7 @@ export default function DocumentAnalyzer() {
       const [profiles, dispatcherProfiles, carrierProfiles] = await Promise.all([
         base44.entities.UserProfile.filter({ usuario: user.email }),
         base44.entities.DispatcherProfile.filter({ user_id: user.email }),
-        base44.entities.CarrierProfile.filter({ active: true }),
+        filterByOrg(base44.entities.CarrierProfile, orgId, { active: true }),
       ]);
 
       const profile = profiles[0];
@@ -49,15 +52,17 @@ export default function DocumentAnalyzer() {
 
       if (dispProfile) {
         setDispatchMode(dispProfile.dispatch_mode);
-        setSelectedCarrierId(dispProfile.default_carrier || carrierProfiles[0]?.id || null);
-      } else if (carrierProfiles.length > 0) {
-        setSelectedCarrierId(carrierProfiles[0].id);
+        // Sin fallback cross-tenant: solo el default explícito del dispatcher,
+        // o null si no hay carrier propio (sin auto-seleccionar carrierProfiles[0]).
+        setSelectedCarrierId(dispProfile.default_carrier || null);
+      } else {
+        setSelectedCarrierId(null);
       }
 
       setContextLoaded(true);
     };
     loadContext();
-  }, []);
+  }, [orgId]);
 
   const analyze = async () => {
     if (!documentText.trim() || loading) return;
@@ -178,7 +183,7 @@ export default function DocumentAnalyzer() {
 
 RATE CONFIRMATION
 Broker: XYZ Logistics LLC  MC: 123456
-Carrier: Larcofer USA
+Carrier: ABC Trucking Inc
 Route: PortMiami → Miami Yard
 Rate: $950 | Payment: Net 30
 Load #: RC-2024-001

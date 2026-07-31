@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Users, Plus, X, Pencil, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import { useOrganizationId } from '@/lib/AppStateContext';
+import { listByOrg, withOrg } from '@/lib/orgScope';
 
 function DocAlert({ label, date }) {
   if (!date) return null;
@@ -111,21 +113,22 @@ function DriverForm({ driver, onSave, onClose }) {
 }
 
 export default function Drivers() {
+  const orgId = useOrganizationId();
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editDriver, setEditDriver] = useState(null);
 
   const loadData = async () => {
-    const data = await base44.entities.Driver.list();
+    const data = await listByOrg(base44.entities.Driver, orgId);
     setDrivers(data);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [orgId]);
 
   const handleSave = async (data) => {
     if (editDriver) await base44.entities.Driver.update(editDriver.id, data);
-    else await base44.entities.Driver.create(data);
+    else await base44.entities.Driver.create(withOrg(orgId, data));
     setShowForm(false); setEditDriver(null); loadData();
   };
 

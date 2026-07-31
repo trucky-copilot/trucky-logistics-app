@@ -2,6 +2,10 @@
   "name": "BrokerProfile",
   "type": "object",
   "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organización a la que pertenece este registro"
+    },
     "legal_name": {
       "type": "string",
       "description": "Nombre legal del broker"
