@@ -24,7 +24,9 @@ import {
   buildGeneralMarkdown,
   buildMissingDataMarkdown,
   buildOutOfMarketMarkdown,
+  buildOffTopicMarkdown,
   detectarFueraDeMercado,
+  resolveIntent,
   safeFallbackContent,
   capHistory,
   isValidMessages,
@@ -101,7 +103,7 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
 const EXTRACTION_SCHEMA = {
   type: 'object',
   properties: {
-    intent: { type: 'string', enum: ['rate_check', 'general'] },
+    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic'] },
     origen: { type: 'string' },
     destino: { type: 'string' },
     millas_ida: { type: 'number' },
@@ -153,7 +155,12 @@ ${conversationHistory}
 
 === INSTRUCCIONES DE EXTRACCIÓN ===
 Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversación y extrae los datos según el schema. Reglas:
-- intent="rate_check" solo si el dispatcher pregunta por una tarifa/ruta específica; en cualquier otro caso usa "general".
+- intent="rate_check" solo si el dispatcher pregunta por una tarifa/ruta específica.
+- intent="off_topic" solo si el mensaje NO tiene relación con freight, dispatch u operación de carriers — por ejemplo: programación, clima, deportes, recetas, política, traducción, chistes, o aritmética sin referencia a freight, consejos personales, u otras industrias.
+- intent="general" en cualquier otro caso: freight, drayage, puertos, brokers, carriers, equipo, documentos (rate confirmation, BOL), costos (diésel, MPG, peajes), regulación (HOS, TWIC, DOT), cargos (detention, per diem, demurrage, TONU, chassis split), geografía del mercado — incluso frases genéricas como "¿cuánto está el diésel?", "¿qué es TWIC?" o "¿qué es un chasis?".
+- Ante la duda usa "general". Nunca uses "off_topic" si el mensaje menciona algún término de la KB.
+- Ejemplos de off_topic: "¿cómo escribo un for loop en Python?" · "¿cómo está el clima en Miami hoy?" · "¿quién ganó el partido de fútbol de ayer?" · "dame una receta de arroz con pollo" · "¿qué opinas de las elecciones?" · "¿cuánto es 15% de 2400?" · "traduce 'hello' al español" · "cuéntame un chiste".
+- Ejemplos que SÍ son general aunque suenen genéricos: "¿cuánto está el diésel?" · "¿qué es TWIC?" · "¿qué es un chasis?" · "¿cuánto es 15% de una carga de $2,400?" (tiene referente de freight).
 - origen/destino: nombres de ciudad tal como los menciona el dispatcher; usa null si no aparecen.
 - millas_ida: tu mejor estimación de millas de SOLO IDA (una dirección); null si no puedes estimarla.
 - es_redondo: true por defecto; usa false solo si el dispatcher dice explícitamente "solo ida" o "one way".
@@ -274,7 +281,13 @@ Deno.serve(async (req) => {
       return Response.json({ content: safeFallbackContent() });
     }
 
-    const intent = raw.intent === 'rate_check' ? 'rate_check' : 'general';
+    // Guardarraíl de tema (Decisión 1): decide el intent en código, no confía
+    // ciegamente en lo que devolvió el LLM. Va antes de cualquier cálculo.
+    const intent = resolveIntent(raw.intent, cappedMessages);
+
+    if (intent === 'off_topic') {
+      return Response.json({ content: buildOffTopicMarkdown() });
+    }
 
     if (intent === 'general') {
       return Response.json({ content: buildGeneralMarkdown(raw.respuesta_general) });

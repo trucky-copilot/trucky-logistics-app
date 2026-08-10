@@ -283,6 +283,71 @@ export function buildOutOfMarketMarkdown(origen: unknown, destino: unknown): str
   ].join('\n');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDARRAÍL DE TEMA — Decisión 1: backstop determinista de alcance de tema.
+//
+// El LLM ya recibe instrucciones de solo responder freight en el prompt, pero
+// eso no es determinista. Igual que detectarFueraDeMercado re-tokeniza el
+// origen/destino en vez de confiar en el LLM, esConsultaDeNegocio re-tokeniza
+// el último mensaje del dispatcher contra el vocabulario de la KB.
+//
+// Precedencia en resolveIntent: rate_check > allowlist de negocio > blocklist
+// (blocklist llega en la Fase 2). La allowlist va ANTES de cualquier blocklist
+// a propósito: negar una pregunta de freight real frente a un prospecto es peor
+// que responder una broma. "Ante la duda, dentro" — igual que FLORIDA_TOKENS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Vocabulario de negocio: equipos, cargos, documentos, geografía cubierta.
+// Reutiliza FLORIDA_TOKENS porque una mención de la zona que cubrimos también
+// es evidencia de que la pregunta es de negocio.
+const DOMAIN_TOKENS = [
+  'drayage', 'contenedor', 'container', 'chasis', 'chassis', 'per diem',
+  'demurrage', 'detention', 'tonu', 'twic', 'bol', 'rate confirmation',
+  'red confirmation', 'backhaul', 'void check', 'broker', 'carrier',
+  'dispatcher', 'diesel', 'mpg', 'milla', 'millas', 'tarifa', 'carga', 'load',
+  'puerto', 'terminal', 'hos', 'deadhead', 'reefer', 'flatbed', 'dry van',
+  'power only', 'step deck', 'pre-pull', 'prepull', 'storage', 'rpm',
+  ...FLORIDA_TOKENS,
+];
+
+/** true si el texto contiene vocabulario de negocio de la KB — la allowlist. */
+export function esConsultaDeNegocio(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  return contieneToken(normalizado, DOMAIN_TOKENS) !== null;
+}
+
+/** Contenido del último mensaje del dispatcher (role 'user'), o '' si no hay. */
+export function ultimoMensajeDelDispatcher(messages: ChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return messages[i].content;
+  }
+  return '';
+}
+
+/**
+ * Decide el intent final con precedencia determinista:
+ *   1. raw === 'rate_check'                 → 'rate_check'  (nunca se declina)
+ *   2. esConsultaDeNegocio(último mensaje)   → 'general'     (la allowlist rescata)
+ *   3. raw === 'off_topic'                   → 'off_topic'   (declarado por el LLM)
+ *   4. cualquier otro caso                   → 'general'     (comportamiento por defecto)
+ * La Fase 2 agrega el blocklist de demo como parte del paso 3.
+ */
+export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' {
+  if (raw === 'rate_check') return 'rate_check';
+  if (esConsultaDeNegocio(ultimoMensajeDelDispatcher(messages))) return 'general';
+  if (raw === 'off_topic') return 'off_topic';
+  return 'general';
+}
+
+/** Respuesta de rechazo cuando el mensaje no es de negocio. Sin cifras. */
+export function buildOffTopicMarkdown(): string {
+  return [
+    '🚚 Solo manejo temas de freight: tarifas, rutas y operación de drayage en el sur de Florida.',
+    'Pregúntame por tarifas, rutas u operación y te respondo al instante.',
+  ].join('\n');
+}
+
 // Resuelve millas RT: el catálogo gana sobre la estimación del LLM.
 // Sin match en catálogo y sin millas_ida → insufficient=true (pedir aclaración,
 // nunca inventar).

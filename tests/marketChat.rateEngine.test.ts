@@ -43,6 +43,10 @@ import {
   safeFallbackContent,
   capHistory,
   isValidMessages,
+  esConsultaDeNegocio,
+  ultimoMensajeDelDispatcher,
+  resolveIntent,
+  buildOffTopicMarkdown,
 } from '../base44/functions/marketChat/rateEngine.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -508,4 +512,60 @@ Deno.test('entrada: se rechaza cualquier forma inválida de mensajes', () => {
   assertEquals(isValidMessages([{ content: 'sin rol' }]), false);
   assertEquals(isValidMessages([{ role: 'user' }]), false);
   assertEquals(isValidMessages([{ role: 'user', content: 42 }]), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDARRAÍL DE TEMA — Decisión 1 (allowlist determinista de vocabulario KB).
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('tema: esConsultaDeNegocio reconoce vocabulario de negocio', () => {
+  assert(esConsultaDeNegocio('¿cuánto está el diésel hoy?'), 'diésel debería reconocerse');
+  assert(esConsultaDeNegocio('necesito saber qué es TWIC'), 'TWIC debería reconocerse');
+  assert(esConsultaDeNegocio('¿qué es un chasis?'), 'chasis debería reconocerse');
+});
+
+Deno.test('tema: un mensaje sin vocabulario de negocio no es consulta de negocio', () => {
+  assertEquals(esConsultaDeNegocio('cuéntame un chiste'), false);
+  assertEquals(esConsultaDeNegocio('¿cómo está el clima hoy?'), false);
+  assertEquals(esConsultaDeNegocio(''), false);
+  assertEquals(esConsultaDeNegocio(null), false);
+  assertEquals(esConsultaDeNegocio(undefined), false);
+});
+
+Deno.test('tema: ultimoMensajeDelDispatcher toma el último mensaje de role user', () => {
+  const msgs: Array<{ role: string; content: string }> = [
+    { role: 'user', content: 'primero' },
+    { role: 'assistant', content: 'respuesta' },
+    { role: 'user', content: 'último' },
+  ];
+  assertEquals(ultimoMensajeDelDispatcher(msgs), 'último');
+  assertEquals(ultimoMensajeDelDispatcher([]), '');
+  assertEquals(ultimoMensajeDelDispatcher([{ role: 'assistant', content: 'solo bot' }]), '');
+});
+
+Deno.test('tema: resolveIntent — rate_check explícito siempre gana', () => {
+  assertEquals(resolveIntent('rate_check', [{ role: 'user', content: 'cuéntame un chiste' }]), 'rate_check');
+});
+
+Deno.test('tema: resolveIntent — la allowlist de negocio rescata intent=off_topic', () => {
+  assertEquals(resolveIntent('off_topic', [{ role: 'user', content: '¿cuánto está el diésel?' }]), 'general');
+  assertEquals(resolveIntent('general', [{ role: 'user', content: '¿qué es TWIC?' }]), 'general');
+});
+
+Deno.test('tema: resolveIntent — off_topic explícito sin vocabulario de negocio se declina', () => {
+  assertEquals(resolveIntent('off_topic', [{ role: 'user', content: 'cuéntame un chiste' }]), 'off_topic');
+});
+
+Deno.test('tema: resolveIntent — cualquier otro caso cae en general', () => {
+  assertEquals(resolveIntent('general', [{ role: 'user', content: 'hola, ¿cómo estás?' }]), 'general');
+  assertEquals(resolveIntent(undefined, [{ role: 'user', content: 'hola' }]), 'general');
+});
+
+Deno.test('tema: buildOffTopicMarkdown declina en 2 líneas exactas, sin cifras', () => {
+  const out = buildOffTopicMarkdown();
+  const lineas = out.split('\n');
+  assertEquals(lineas.length, 2);
+  assertStringIncludes(out, 'freight');
+  assertStringIncludes(out, 'sur de Florida');
+  assertEquals(/\$\d/.test(out), false);
 });
