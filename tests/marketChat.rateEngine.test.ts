@@ -37,6 +37,8 @@ import {
   buildRateCheckMarkdown,
   buildGeneralMarkdown,
   buildMissingDataMarkdown,
+  buildOutOfMarketMarkdown,
+  detectarFueraDeMercado,
   safeFallbackContent,
   capHistory,
   isValidMessages,
@@ -243,6 +245,70 @@ Deno.test('rutas: dos extremos base no resuelven ninguna lane', () => {
   const r = findLane('Miami', 'Fort Lauderdale');
   assertEquals(r.lane, null);
   assertEquals(r.portEverglades, true);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ALCANCE DEL MERCADO — el guardarraíl de honestidad de F2-03.
+//
+// Las dos mitades importan igual: que se niegue a cotizar fuera del mercado, y
+// que NO se niegue dentro. Un guardarraíl que rechaza rutas legítimas de Florida
+// sería peor que el defecto que corrige.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('mercado: rechaza el caso que reportó la revisión (Georgia)', () => {
+  assertEquals(detectarFueraDeMercado('Savannah, Georgia', 'Atlanta'), 'georgia');
+  assert(detectarFueraDeMercado('puerto de Savannah', 'Atlanta'), 'debería detectar Savannah');
+  assert(detectarFueraDeMercado('Miami', 'Atlanta'), 'debería detectar Atlanta como plaza de fuera');
+});
+
+Deno.test('mercado: rechaza otros mercados nombrados por estado', () => {
+  assert(detectarFueraDeMercado('Miami', 'Houston, Texas'));
+  assert(detectarFueraDeMercado('Charleston, South Carolina', 'Miami'));
+  assert(detectarFueraDeMercado('Miami', 'Newark, New Jersey'));
+  assert(detectarFueraDeMercado('Los Angeles', 'Long Beach'));
+});
+
+Deno.test('mercado: NO rechaza las rutas del catálogo', () => {
+  assertEquals(detectarFueraDeMercado('Miami', 'Tampa'), null);
+  assertEquals(detectarFueraDeMercado('Miami', 'Orlando'), null);
+  assertEquals(detectarFueraDeMercado('PortMiami', 'Jacksonville'), null);
+  assertEquals(detectarFueraDeMercado('Port Everglades', 'Fort Myers'), null);
+  assertEquals(detectarFueraDeMercado('Miami', 'WPB'), null);
+});
+
+Deno.test('mercado: NO rechaza rutas legítimas de Florida fuera del catálogo', () => {
+  // Este es el caso que hace que el guardarraíl sea geográfico y no por catálogo.
+  assertEquals(detectarFueraDeMercado('South Palm Beach', 'Wellington'), null);
+  assertEquals(detectarFueraDeMercado('Doral', 'Homestead'), null);
+  assertEquals(detectarFueraDeMercado('Medley', 'Boca Raton'), null);
+});
+
+Deno.test('mercado: una ciudad de Florida gana sobre su homónima de otro estado', () => {
+  // "Hollywood" existe en Florida y en California; el marcador de Florida manda.
+  assertEquals(detectarFueraDeMercado('Miami', 'Hollywood FL'), null);
+  // Y Jacksonville es de Florida aunque haya otras en el país.
+  assertEquals(detectarFueraDeMercado('Jacksonville, Florida', 'Miami'), null);
+});
+
+Deno.test('mercado: sin evidencia de estar fuera, se asume dentro', () => {
+  // Preferimos cotizar una ruta local desconocida antes que negarnos a trabajar
+  // en nuestro propio mercado.
+  assertEquals(detectarFueraDeMercado('bodega del cliente', 'la terminal'), null);
+  assertEquals(detectarFueraDeMercado(null, null), null);
+  assertEquals(detectarFueraDeMercado('', ''), null);
+});
+
+Deno.test('mercado: los abreviados no coinciden dentro de otra palabra', () => {
+  // "fit" es una terminal, pero no debe activarse dentro de "outfit".
+  assertEquals(detectarFueraDeMercado('FIT terminal', 'Pompano'), null);
+});
+
+Deno.test('mercado: el mensaje de rechazo no entrega ninguna cifra de tarifa', () => {
+  const out = buildOutOfMarketMarkdown('Savannah, Georgia', 'Atlanta');
+  assertStringIncludes(out, 'No tengo tarifas de esa ruta');
+  assertStringIncludes(out, 'sur de Florida');
+  assertStringIncludes(out, 'Tampa');
+  assertEquals(/\$\d/.test(out), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -22,6 +22,8 @@ import {
   buildRateCheckMarkdown,
   buildGeneralMarkdown,
   buildMissingDataMarkdown,
+  buildOutOfMarketMarkdown,
+  detectarFueraDeMercado,
   safeFallbackContent,
   capHistory,
   isValidMessages,
@@ -278,6 +280,16 @@ Deno.serve(async (req) => {
     }
 
     // intent === 'rate_check'
+
+    // Guardarraíl de honestidad (F2-03): antes de calcular cualquier cifra, se
+    // descarta lo que está fuera del mercado cubierto. Va primero a propósito —
+    // si se calcula y después se descarta, cualquier cambio futuro puede dejar
+    // escapar el número.
+    const mercadoAjeno = detectarFueraDeMercado(raw.origen, raw.destino);
+    if (mercadoAjeno) {
+      return Response.json({ content: buildOutOfMarketMarkdown(raw.origen, raw.destino) });
+    }
+
     const resolved = resolveMiles(raw.origen, raw.destino, raw.millas_ida, raw.es_redondo);
 
     if (resolved.insufficient) {

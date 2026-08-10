@@ -183,6 +183,102 @@ export function findLane(origenRaw: unknown, destinoRaw: unknown): LaneMatch {
   return { lane, portEverglades };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ALCANCE DEL MERCADO — guardarraíl de honestidad (F2-03, versión acotada).
+//
+// El problema: resolveMiles cotiza igual cuando la ruta no está en el catálogo,
+// siempre que el LLM haya estimado unas millas. Y el LLM estima cualquier cosa,
+// así que el chat inventaba un piso para Savannah → Atlanta, donde no tenemos
+// ni una tarifa.
+//
+// Por qué el guardarraíl es GEOGRÁFICO y no "está en el catálogo": el catálogo
+// tiene 7 rutas y el mercado real ~210. Negarse a todo lo que no esté en las 7
+// haría que el chat tampoco sirva para rutas legítimas de Florida (South Palm
+// Beach → Wellington, por ejemplo). Se rechaza solo lo que está claramente
+// fuera del mercado que cubrimos.
+//
+// Cuando la tabla v4 esté cargada (F2-01), la regla estricta por catálogo pasa a
+// ser la correcta y esto queda como capa adicional, no como reemplazo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Marcadores de que el punto SÍ está en el mercado cubierto. Se evalúan primero
+// para que una ciudad de Florida nunca se confunda con su homónima de otro estado.
+const FLORIDA_TOKENS = [
+  'florida', 'miami', 'tampa', 'orlando', 'jacksonville', 'naples', 'fort myers',
+  'ft myers', 'west palm', 'wpb', 'pompano', 'fort pierce', 'ft pierce',
+  'everglades', 'lauderdale', 'hialeah', 'medley', 'doral', 'homestead',
+  'boca raton', 'wellington', 'palm beach', 'sarasota', 'petersburg',
+  'clearwater', 'ocala', 'gainesville', 'lakeland', 'kissimmee', 'canaveral',
+  'melbourne', 'daytona', 'tallahassee', 'pensacola', 'key west', 'stuart',
+  'vero beach', 'okeechobee', 'immokalee', 'plant city', 'winter haven',
+  'port st lucie', 'jupiter', 'deerfield', 'coral springs', 'hollywood fl',
+  'pomtoc', 'sfct', 'fit', 'pev', 'portmiami',
+];
+
+// Estados y plazas de fuera del mercado. Se listan las que aparecen de verdad en
+// conversación de freight; no pretende ser exhaustivo, pretende atrapar el caso
+// que avergüenza en una demo.
+const FUERA_DE_MERCADO_TOKENS = [
+  // estados
+  'alabama', 'alaska', 'arizona', 'arkansas', 'california', 'colorado',
+  'connecticut', 'delaware', 'georgia', 'hawaii', 'idaho', 'illinois',
+  'indiana', 'iowa', 'kansas', 'kentucky', 'louisiana', 'maine', 'maryland',
+  'massachusetts', 'michigan', 'minnesota', 'mississippi', 'missouri',
+  'montana', 'nebraska', 'nevada', 'new hampshire', 'new jersey', 'new mexico',
+  'new york', 'north carolina', 'north dakota', 'ohio', 'oklahoma', 'oregon',
+  'pennsylvania', 'rhode island', 'south carolina', 'south dakota', 'tennessee',
+  'texas', 'utah', 'vermont', 'virginia', 'washington', 'west virginia',
+  'wisconsin', 'wyoming',
+  // plazas habituales de fuera
+  'atlanta', 'savannah', 'charleston', 'charlotte', 'raleigh', 'nashville',
+  'memphis', 'birmingham', 'mobile', 'new orleans', 'houston', 'dallas',
+  'laredo', 'el paso', 'san antonio', 'austin', 'phoenix', 'los angeles',
+  'long beach', 'oakland', 'seattle', 'chicago', 'detroit', 'cleveland',
+  'columbus', 'indianapolis', 'kansas city', 'st louis', 'denver',
+  'salt lake city', 'las vegas', 'newark', 'baltimore', 'norfolk',
+  'philadelphia', 'boston', 'pittsburgh', 'cincinnati', 'louisville',
+];
+
+function contieneToken(texto: string, tokens: string[]): string | null {
+  for (const t of tokens) {
+    // Límite de palabra a ambos lados para que "fit" no coincida dentro de
+    // "outfit" ni "fl" dentro de "flagler".
+    const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`);
+    if (re.test(texto)) return t;
+  }
+  return null;
+}
+
+// Un extremo está fuera de mercado si nombra un estado o una plaza de fuera y no
+// trae ningún marcador de Florida. Ante la duda se considera dentro: es preferible
+// cotizar una ruta local desconocida que negarse a trabajar en el propio mercado.
+function extremoFueraDeMercado(raw: unknown): string | null {
+  const texto = normalizeText(raw);
+  if (!texto) return null;
+  if (contieneToken(texto, FLORIDA_TOKENS)) return null;
+  return contieneToken(texto, FUERA_DE_MERCADO_TOKENS);
+}
+
+/**
+ * Devuelve el nombre del mercado ajeno detectado, o null si la ruta está dentro
+ * del mercado cubierto (o no hay evidencia de que esté fuera).
+ */
+export function detectarFueraDeMercado(origen: unknown, destino: unknown): string | null {
+  return extremoFueraDeMercado(origen) || extremoFueraDeMercado(destino);
+}
+
+/** Respuesta honesta cuando la ruta pedida está fuera del mercado cubierto. */
+export function buildOutOfMarketMarkdown(origen: unknown, destino: unknown): string {
+  const ruta = [origen, destino].filter(Boolean).join(' → ');
+  const destinos = LANES.map(l => l.destino).join(', ');
+  return [
+    `📊 No tengo tarifas de esa ruta${ruta ? ` (${ruta})` : ''}.`,
+    'Mis datos cubren drayage del sur de Florida: PortMiami y Port Everglades.',
+    `Rutas con tarifa confirmada: ${destinos}.`,
+    'Si necesitas esa zona, dime las millas y te calculo con referencias de mercado, aclarando que no es una tarifa de tabla.',
+  ].join('\n');
+}
+
 // Resuelve millas RT: el catálogo gana sobre la estimación del LLM.
 // Sin match en catálogo y sin millas_ida → insufficient=true (pedir aclaración,
 // nunca inventar).
