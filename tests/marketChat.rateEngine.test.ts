@@ -47,6 +47,7 @@ import {
   ultimoMensajeDelDispatcher,
   resolveIntent,
   buildOffTopicMarkdown,
+  esFueraDeTema,
 } from '../base44/functions/marketChat/rateEngine.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -568,4 +569,39 @@ Deno.test('tema: buildOffTopicMarkdown declina en 2 líneas exactas, sin cifras'
   assertStringIncludes(out, 'freight');
   assertStringIncludes(out, 'sur de Florida');
   assertEquals(/\$\d/.test(out), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCKLIST DE DEMO — capa temporal detrás de la allowlist (Fase 2, #7784 item 1).
+// Remover después del 2026-08-18; ver comentario TEMPORARY junto a OFF_TOPIC_TOKENS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('tema-blocklist: esFueraDeTema detecta las 8 categorías de demo', () => {
+  assert(esFueraDeTema('escribe un script de python que ordene una lista'), 'programación');
+  assert(esFueraDeTema('¿cómo está el clima hoy?'), 'clima');
+  assert(esFueraDeTema('¿quién ganó el partido de fútbol de ayer?'), 'deportes');
+  assert(esFueraDeTema('dame una receta de arroz con pollo'), 'recetas');
+  assert(esFueraDeTema('¿qué opinas de las elecciones?'), 'política');
+  assert(esFueraDeTema('¿cuánto es 15% de 2400?'), 'aritmética pura');
+  assert(esFueraDeTema("traduce 'hello' al español"), 'traducción');
+  assert(esFueraDeTema('cuéntame un chiste'), 'chistes');
+});
+
+Deno.test('tema-blocklist: la allowlist de negocio siempre gana sobre el blocklist', () => {
+  assertEquals(esFueraDeTema('¿cuánto es 15% de una carga de $2,400?'), false);
+  assertEquals(esFueraDeTema('necesito un chiste sobre el TWIC'), false);
+});
+
+Deno.test('tema-blocklist: sin evidencia de las 8 categorías no bloquea', () => {
+  assertEquals(esFueraDeTema('hola, ¿cómo estás?'), false);
+  assertEquals(esFueraDeTema(''), false);
+  assertEquals(esFueraDeTema(null), false);
+});
+
+Deno.test('tema-blocklist: resolveIntent — rate_check gana incluso sobre el blocklist', () => {
+  assertEquals(resolveIntent('rate_check', [{ role: 'user', content: 'cuéntame un chiste' }]), 'rate_check');
+});
+
+Deno.test('tema-blocklist: resolveIntent — declina cuando ni el LLM ni la allowlist rescatan', () => {
+  assertEquals(resolveIntent('general', [{ role: 'user', content: 'cuéntame un chiste' }]), 'off_topic');
 });

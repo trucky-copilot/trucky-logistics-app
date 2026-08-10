@@ -325,18 +325,55 @@ export function ultimoMensajeDelDispatcher(messages: ChatMessage[]): string {
   return '';
 }
 
+// TEMPORARY: blocklist de demo, remover después del 2026-08-18 (#7784 item 1).
+// Fast-follow: quitar esta capa una vez el clasificador del LLM esté probado en
+// producción. Cubre 8 categorías, acotadas a lo que aparece de verdad en una
+// demo. Va DETRÁS de la allowlist a propósito: nunca puede ganarle a un término
+// de la KB, así que esFueraDeTema re-chequea la allowlist como defensa interna
+// además de la que ya hace resolveIntent.
+const OFF_TOPIC_TOKENS = [
+  // 1. programación
+  'python', 'javascript', 'codigo', 'programa', 'programar', 'algoritmo', 'script',
+  // 2. clima
+  'clima', 'pronostico del tiempo', 'va a llover',
+  // 3. deportes
+  'futbol', 'partido de futbol', 'campeonato',
+  // 4. recetas
+  'receta', 'cocinar', 'ingredientes de cocina',
+  // 5. política
+  'eleccion', 'elecciones', 'candidato presidencial',
+  // 6. traducción
+  'traduce', 'traducir', 'how do you say',
+  // 7. chistes
+  'chiste', 'cuentame una broma',
+];
+
+// 8va categoría: aritmética pura sin referente de freight ("15% de 2400" vs.
+// "15% de una carga de $2,400" — este último tiene "carga", que ya es un
+// término de la KB y lo rescata la allowlist antes de llegar acá).
+const PURE_ARITHMETIC_RE = /\d+\s*%\s*(de|of)\s*\$?\s*[\d,.]+/;
+
+/** true si el texto cae en una de las 8 categorías de demo Y no hay término de la KB. */
+export function esFueraDeTema(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  if (esConsultaDeNegocio(normalizado)) return false; // la allowlist siempre gana
+  if (contieneToken(normalizado, OFF_TOPIC_TOKENS) !== null) return true;
+  return PURE_ARITHMETIC_RE.test(normalizado);
+}
+
 /**
  * Decide el intent final con precedencia determinista:
- *   1. raw === 'rate_check'                 → 'rate_check'  (nunca se declina)
- *   2. esConsultaDeNegocio(último mensaje)   → 'general'     (la allowlist rescata)
- *   3. raw === 'off_topic'                   → 'off_topic'   (declarado por el LLM)
- *   4. cualquier otro caso                   → 'general'     (comportamiento por defecto)
- * La Fase 2 agrega el blocklist de demo como parte del paso 3.
+ *   1. raw === 'rate_check'                                  → 'rate_check'  (nunca se declina)
+ *   2. esConsultaDeNegocio(último mensaje)                    → 'general'     (la allowlist rescata)
+ *   3. raw === 'off_topic' || esFueraDeTema(último mensaje)   → 'off_topic'   (LLM o blocklist temporal)
+ *   4. cualquier otro caso                                    → 'general'     (comportamiento por defecto)
  */
 export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' {
   if (raw === 'rate_check') return 'rate_check';
-  if (esConsultaDeNegocio(ultimoMensajeDelDispatcher(messages))) return 'general';
-  if (raw === 'off_topic') return 'off_topic';
+  const ultimo = ultimoMensajeDelDispatcher(messages);
+  if (esConsultaDeNegocio(ultimo)) return 'general';
+  if (raw === 'off_topic' || esFueraDeTema(ultimo)) return 'off_topic';
   return 'general';
 }
 
