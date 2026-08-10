@@ -1,59 +1,31 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// ─────────────────────────────────────────────────────────────────────────────
-// FREIGHT DISPATCHER KNOWLEDGE — Constantes de datos (fuente de la verdad para
-// los cálculos de rate_check; el LLM NUNCA produce estos números).
-// EQUIPMENT_BENCHMARKS y FLAT_MINIMUMS:
-// copiado de src/lib/freight/freightKnowledgeBase.js v1.0.0 (2026-05-13) — mantener en sync manualmente
-// ─────────────────────────────────────────────────────────────────────────────
-const FREIGHT_KB_VERSION = '1.0.0';
-
-// 7 equipos — id usado también como valor del enum "equipo" en EXTRACTION_SCHEMA
-const EQUIPMENT_BENCHMARKS = [
-  { id: 'dry_van', label: "53' Dry Van", rpm_min: 2.00, rpm_target: 2.50 },
-  { id: 'reefer', label: 'Reefer', rpm_min: 2.30, rpm_target: 2.80 },
-  { id: 'flatbed', label: 'Flatbed', rpm_min: 2.50, rpm_target: 3.00 },
-  { id: 'step_deck', label: 'Step Deck', rpm_min: 2.75, rpm_target: 3.25 },
-  { id: 'drayage_20', label: "Drayage/Container 20'", rpm_min: 2.75, rpm_target: 3.50 },
-  { id: 'drayage_40', label: "Drayage/Container 40'", rpm_min: 2.50, rpm_target: 3.25 },
-  { id: 'power_only', label: 'Power Only', rpm_min: 1.50, rpm_target: 1.75 },
-];
-
-// Mínimos flat rate por rango de millas REDONDO; from/to son límites [from, to) para lookup en código
-const FLAT_MINIMUMS = [
-  { range: '<50 mi', from: 0, to: 50, min: 400, max: 500 },
-  { range: '50–100 mi', from: 50, to: 100, min: 500, max: 650 },
-  { range: '100–200 mi', from: 100, to: 200, min: 650, max: 900 },
-  { range: '200–400 mi', from: 200, to: 400, min: 900, max: 1400 },
-  { range: '400–600 mi', from: 400, to: 600, min: 1400, max: 1800 },
-  { range: '600–800 mi', from: 600, to: 800, min: 1800, max: 2400 },
-  { range: '800+ mi', from: 800, to: Infinity, min: 2400, max: null },
-];
-
-// LANES: catálogo Larcofer (millas REDONDO) — copiado del BASE_CONTEXT vigente, no de freightKnowledgeBase.js
-// (freightKnowledgeBase.js no tiene lanes específicas de Larcofer). El catálogo gana sobre la estimación del LLM.
-const LANES = [
-  { origen: 'Miami', destino: 'Tampa', rt_miles: 540 },
-  { origen: 'Miami', destino: 'Fort Myers/Naples', rt_miles: 240, destino_aliases: ['fort myers', 'ft myers', 'naples'] },
-  { origen: 'Miami', destino: 'West Palm Beach', rt_miles: 136, destino_aliases: ['wpb', 'west palm beach'] },
-  { origen: 'Miami', destino: 'Fort Pierce', rt_miles: 230, destino_aliases: ['ft pierce'] },
-  { origen: 'Miami', destino: 'Orlando', rt_miles: 470 },
-  { origen: 'Miami', destino: 'Jacksonville', rt_miles: 680, destino_aliases: ['jax'] },
-  { origen: 'Miami', destino: 'Pompano', rt_miles: 70, destino_aliases: ['pompano beach'] },
-];
-
-// Port Everglades es un MODIFICADOR (+$50 recargo de puerto), no una lane aparte.
-const PORT_EVERGLADES_SURCHARGE = 50;
-
-// DETENTION unificado — único valor válido en todo el prompt (resuelve las 3 cifras contradictorias previas)
-const DETENTION = { standard: 75, min: 50, max: 100, free_hours: 2 };
-
-const ACCESSORIALS = [
-  { label: 'TONU', min: 150, max: 300 },
-  { label: 'Pre-Pull', min: 100, max: 200 },
-  { label: 'Chassis split', min: 75, max: 75, unit: '/día' },
-  { label: 'Storage', min: 75, max: 150, unit: '/día' },
-];
+// El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto y armado
+// de la respuesta) vive en ./rateEngine.ts para poder cubrirlo con `deno test`.
+// Acá queda solo lo que necesita I/O: el prompt, la llamada al LLM, la lectura
+// de CostConfig y el handler HTTP.
+import {
+  FREIGHT_KB_VERSION,
+  EQUIPMENT_BENCHMARKS,
+  FLAT_MINIMUMS,
+  LANES,
+  PORT_EVERGLADES_SURCHARGE,
+  DETENTION,
+  ACCESSORIALS,
+  HISTORY_CAP,
+  MAX_REQUEST_CHARS,
+  resolveMiles,
+  normalizeEquipment,
+  getFlatBucket,
+  computeFloor,
+  computeTarget,
+  buildRateCheckMarkdown,
+  buildGeneralMarkdown,
+  buildMissingDataMarkdown,
+  safeFallbackContent,
+  capHistory,
+  isValidMessages,
+} from './rateEngine.ts';
 
 const EQUIPMENT_LINES = EQUIPMENT_BENCHMARKS
   .map(e => `- ${e.id} (${e.label}): Mín $${e.rpm_min.toFixed(2)} | Bueno $${e.rpm_target.toFixed(2)}/mi`)
@@ -147,8 +119,9 @@ async function extractIntent(base44, prompt) {
   });
 }
 
-// Una sola llamada InvokeLLM + un reintento único si falla o si el resultado no es un objeto parseable.
-// Si ambos intentos fallan, retorna null y el caller usa safeFallbackContent().
+// Una sola llamada InvokeLLM + un reintento único si falla o si el resultado no
+// es un objeto parseable. Si ambos intentos fallan, retorna null y el caller usa
+// safeFallbackContent().
 async function extractWithRetry(base44, prompt) {
   for (let intento = 0; intento < 2; intento++) {
     try {
@@ -162,173 +135,8 @@ async function extractWithRetry(base44, prompt) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FUNCIONES PURAS DE CÁLCULO — Sin IA, sin I/O. El piso/objetivo/veredicto de
-// rate_check SIEMPRE se calculan aquí (resuelve BUG-01); el LLM solo extrae
-// parámetros crudos.
-// ─────────────────────────────────────────────────────────────────────────────
-
-function normalizeText(value) {
-  return (value || '')
-    .toString()
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim();
-}
-
-function matchesAny(text, tokens) {
-  return tokens.some(t => t && text.includes(t));
-}
-
-const MIAMI_TOKENS = ['miami'];
-const PORT_EVERGLADES_TOKENS = ['port everglades', 'fort lauderdale', 'ft lauderdale'];
-const BASE_TOKENS = [...MIAMI_TOKENS, ...PORT_EVERGLADES_TOKENS];
-
-// Busca la lane catalogada cuyo destino coincide con el extremo no-Miami de la consulta.
-// Port Everglades cuenta como extremo "base" (zona de Miami) para efectos de matching de lane,
-// pero además activa el recargo de puerto.
-function findLane(origenRaw, destinoRaw) {
-  const a = normalizeText(origenRaw);
-  const b = normalizeText(destinoRaw);
-  const portEverglades = matchesAny(a, PORT_EVERGLADES_TOKENS) || matchesAny(b, PORT_EVERGLADES_TOKENS);
-  const aEsBase = matchesAny(a, BASE_TOKENS);
-  const bEsBase = matchesAny(b, BASE_TOKENS);
-
-  let cityText = '';
-  if (aEsBase && !bEsBase) cityText = b;
-  else if (bEsBase && !aEsBase) cityText = a;
-
-  if (!cityText) return { lane: null, portEverglades };
-
-  const lane = LANES.find(l => {
-    const tokens = [normalizeText(l.destino), ...(l.destino_aliases || [])];
-    return tokens.some(t => t && (cityText.includes(t) || t.includes(cityText)));
-  }) || null;
-
-  return { lane, portEverglades };
-}
-
-// Resuelve millas RT: catálogo Larcofer gana sobre la estimación del LLM.
-// Sin match en catálogo y sin millas_ida del LLM → insufficient=true (pedir aclaración, nunca inventar).
-function resolveMiles(origen, destino, millasIda, esRedondo) {
-  const { lane, portEverglades } = findLane(origen, destino);
-  const redondo = esRedondo !== false; // true por defecto
-
-  if (lane) {
-    const miles = redondo ? lane.rt_miles : Math.round(lane.rt_miles / 2);
-    return { miles, source: 'catalog', lane_label: `Miami ↔ ${lane.destino}`, low_confidence: false, portEverglades, insufficient: false };
-  }
-
-  if (typeof millasIda === 'number' && isFinite(millasIda) && millasIda > 0) {
-    const rt = redondo ? millasIda * 2 : millasIda;
-    const miles = Math.round(rt);
-    const low_confidence = miles < 10 || miles > 3000;
-    return { miles, source: 'llm', lane_label: null, low_confidence, portEverglades, insufficient: false };
-  }
-
-  return { miles: null, source: 'llm', lane_label: null, low_confidence: false, portEverglades, insufficient: true };
-}
-
-function normalizeEquipment(raw) {
-  const found = EQUIPMENT_BENCHMARKS.find(e => e.id === raw);
-  if (found) return { ...found, was_defaulted: false };
-  const fallback = EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van');
-  return { ...fallback, was_defaulted: true };
-}
-
-function getFlatBucket(miles) {
-  return FLAT_MINIMUMS.find(b => miles >= b.from && miles < b.to) || FLAT_MINIMUMS[FLAT_MINIMUMS.length - 1];
-}
-
-// Regla de oro (BUG-01): piso = MAYOR entre flat mínimo del tramo y RPM mínimo del equipo × millas RT.
-function computeFloor(miles, rpmMin, flatMin, surcharge = 0) {
-  return Math.max(flatMin, Math.round(rpmMin * miles)) + surcharge;
-}
-
-function computeTarget(miles, rpmTarget, flatMax, surcharge = 0) {
-  return Math.max(flatMax ?? 0, Math.round(rpmTarget * miles)) + surcharge;
-}
-
-function computeVerdict(tarifa, floor, target) {
-  if (tarifa == null) return { emoji: '📊', label: 'REFERENCIA', band: 'reference' };
-  if (tarifa < floor) return { emoji: '🔴', label: 'RECHAZAR', band: 'reject' };
-  if (tarifa < target) return { emoji: '🟡', label: 'NEGOCIAR', band: 'negotiate' };
-  return { emoji: '🟢', label: 'ACEPTAR', band: 'accept' };
-}
-
-function formatUSD(n) {
-  return `$${Math.round(n).toLocaleString('en-US')}`;
-}
-
-// Desglose numérico SIEMPRE presente (resuelve BUG-03): piso, objetivo, RPM ofrecida vs mínima, diferencia en $.
-function buildRateCheckMarkdown(ctx) {
-  const { origen, destino, miles, esRedondo, laneLabel, source, lowConfidence, equipment, floor, target, tarifaOfrecida, portEverglades } = ctx;
-
-  const rutaLabel = origen && destino ? `${origen} → ${destino}` : (laneLabel || 'Ruta solicitada');
-  // "millas estimadas" se muestra siempre que la milla venga del LLM (no del catálogo Larcofer);
-  // "confianza baja" es una señal adicional para estimaciones fuera del rango de sanidad (10–3000 mi).
-  const millasTag = `~${miles} mi ${esRedondo === false ? 'solo ida' : 'redondo'}${source === 'llm' ? ' · millas estimadas' : ''}${lowConfidence ? ' · confianza baja' : ''}`;
-  const equipoTag = `${equipment.label}${equipment.was_defaulted ? ' (asumido dry van)' : ''}`;
-  const puertoTag = portEverglades ? ` · +$${PORT_EVERGLADES_SURCHARGE} recargo Port Everglades incluido` : '';
-  const mercadoLine = `💰 Mercado: $${equipment.rpm_min.toFixed(2)}–$${equipment.rpm_target.toFixed(2)}/mi · Equipo: ${equipoTag}`;
-
-  if (tarifaOfrecida == null) {
-    return [
-      `📊 **REFERENCIA** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,
-      `📍 ${rutaLabel} (${millasTag}${puertoTag})`,
-      mercadoLine,
-      `💡 Confirma origen, destino, millas y equipo para afinar la cifra.`,
-      `¿Cuánto te ofrecen? Te digo si conviene.`,
-    ].join('\n');
-  }
-
-  const rpmOfrecida = miles > 0 ? tarifaOfrecida / miles : 0;
-  const verdict = computeVerdict(tarifaOfrecida, floor, target);
-  const diferencia = tarifaOfrecida - floor;
-  const posicion = tarifaOfrecida < floor ? 'bajo el piso' : (tarifaOfrecida < target ? 'entre piso y objetivo' : 'sobre objetivo');
-  const consejo = verdict.band === 'reject'
-    ? `Bajo el piso; contrarresta en ${formatUSD(floor)} mínimo.`
-    : verdict.band === 'negotiate'
-      ? `Negocia hacia ${formatUSD(target)}; hay margen.`
-      : 'Buena tarifa, confirma el RC rápido.';
-
-  return [
-    `${verdict.emoji} **${verdict.label}** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,
-    `📍 ${rutaLabel} (${millasTag}${puertoTag})`,
-    mercadoLine,
-    `🧮 Ofrecen ${formatUSD(tarifaOfrecida)} = $${rpmOfrecida.toFixed(2)}/mi (mín $${equipment.rpm_min.toFixed(2)}/mi) → ${posicion}, diferencia ${diferencia >= 0 ? '+' : ''}${formatUSD(diferencia)} vs piso`,
-    `💡 ${consejo}`,
-  ].join('\n');
-}
-
-function buildGeneralMarkdown(respuestaGeneral) {
-  if (typeof respuestaGeneral !== 'string' || !respuestaGeneral.trim()) {
-    return safeFallbackContent();
-  }
-  return respuestaGeneral.trim();
-}
-
-// Cuando no hay lane catalogada ni millas_ida del LLM: pedir aclaración en vez de inventar un piso.
-function buildMissingDataMarkdown() {
-  return [
-    '📊 Necesito más datos para calcular el piso y el objetivo.',
-    'Dime origen, destino y millas (o si es "solo ida") — con eso te doy el número exacto.',
-  ].join('\n');
-}
-
-function safeFallbackContent() {
-  return '⚠️ No pude procesar la consulta; reintenta. Para tarifas incluye origen, destino, millas y equipo.';
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
 // PROMPT BUILDER
 // ─────────────────────────────────────────────────────────────────────────────
-
-const HISTORY_CAP = 8;
-
-function capHistory(messages, n = HISTORY_CAP) {
-  return messages.slice(-n);
-}
 
 function buildExtractionPrompt(systemContext, cappedMessages) {
   const conversationHistory = cappedMessages
@@ -369,18 +177,6 @@ async function getCostConfig(base44, userEmail, clientCostConfig) {
     return clientCostConfig;
   }
   return COSTCONFIG_DEFAULTS;
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// VALIDACIÓN DE BODY — Sin esto, ninguna llamada a IA ni a la base de datos.
-// ─────────────────────────────────────────────────────────────────────────────
-
-const MAX_REQUEST_CHARS = 20000;
-
-function isValidMessages(messages) {
-  return Array.isArray(messages) && messages.length > 0 && messages.every(m =>
-    m && typeof m === 'object' && typeof m.role === 'string' && typeof m.content === 'string'
-  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

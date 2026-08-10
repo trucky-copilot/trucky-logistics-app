@@ -1,0 +1,385 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// Pruebas del motor de tarifas del Chat de Mercado.
+//
+// Cubren las funciones puras de base44/functions/marketChat/rateEngine.ts.
+// Viven FUERA del directorio de la función a propósito: Base44 despliega ese
+// directorio completo, y no queremos subir código de prueba a producción.
+//
+// Correr con:  npm run test:functions
+//
+// Estas pruebas afirman el comportamiento ACTUAL. Si alguna falla después de un
+// cambio, el cambio rompió un cálculo que antes funcionaba. La única excepción
+// está marcada explícitamente abajo (TRUCKY-48).
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  assertEquals,
+  assertStringIncludes,
+  assert,
+} from 'jsr:@std/assert@1';
+
+import type { RateCheckContext } from '../base44/functions/marketChat/rateEngine.ts';
+import {
+  EQUIPMENT_BENCHMARKS,
+  FLAT_MINIMUMS,
+  PORT_EVERGLADES_SURCHARGE,
+  DETENTION,
+  normalizeText,
+  matchesAny,
+  findLane,
+  resolveMiles,
+  normalizeEquipment,
+  getFlatBucket,
+  computeFloor,
+  computeTarget,
+  computeVerdict,
+  formatUSD,
+  buildRateCheckMarkdown,
+  buildGeneralMarkdown,
+  buildMissingDataMarkdown,
+  safeFallbackContent,
+  capHistory,
+  isValidMessages,
+} from '../base44/functions/marketChat/rateEngine.ts';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DATOS DE REFERENCIA — si alguien cambia un número de la tabla, esto falla y
+// dice cuál. Es el criterio 3 del ticket TRUCKY-50.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('datos: los 7 equipos conservan sus benchmarks', () => {
+  assertEquals(EQUIPMENT_BENCHMARKS.length, 7);
+  const porId = Object.fromEntries(EQUIPMENT_BENCHMARKS.map(e => [e.id, e]));
+  assertEquals(porId.dry_van.rpm_min, 2.00);
+  assertEquals(porId.dry_van.rpm_target, 2.50);
+  assertEquals(porId.reefer.rpm_min, 2.30);
+  assertEquals(porId.flatbed.rpm_min, 2.50);
+  assertEquals(porId.step_deck.rpm_min, 2.75);
+  assertEquals(porId.drayage_20.rpm_min, 2.75);
+  assertEquals(porId.drayage_20.rpm_target, 3.50);
+  assertEquals(porId.drayage_40.rpm_min, 2.50);
+  assertEquals(porId.power_only.rpm_min, 1.50);
+});
+
+Deno.test('datos: los 7 tramos de mínimo flat conservan sus valores', () => {
+  assertEquals(FLAT_MINIMUMS.length, 7);
+  assertEquals(FLAT_MINIMUMS[0].min, 400);
+  assertEquals(FLAT_MINIMUMS[1].min, 500);
+  assertEquals(FLAT_MINIMUMS[2].min, 650);
+  assertEquals(FLAT_MINIMUMS[3].min, 900);
+  assertEquals(FLAT_MINIMUMS[4].min, 1400);
+  assertEquals(FLAT_MINIMUMS[5].min, 1800);
+  assertEquals(FLAT_MINIMUMS[6].min, 2400);
+  assertEquals(FLAT_MINIMUMS[6].max, null);
+});
+
+Deno.test('datos: el detention tiene un solo valor estándar', () => {
+  assertEquals(DETENTION.standard, 75);
+  assertEquals(DETENTION.min, 50);
+  assertEquals(DETENTION.max, 100);
+  assertEquals(DETENTION.free_hours, 2);
+});
+
+Deno.test('datos: el recargo de Port Everglades es $50', () => {
+  assertEquals(PORT_EVERGLADES_SURCHARGE, 50);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EL PISO — la regla de oro: el mayor entre el mínimo del tramo y RPM × millas.
+// Es el bug que corrigió el PR #1 (cotizaba $99 una ruta de 18 millas).
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('piso: en ruta corta manda el mínimo del tramo, no el cálculo por milla', () => {
+  // 18 mi redondo en dry van: 2.00 × 18 = $36. El tramo <50 mi exige $400.
+  const bucket = getFlatBucket(18);
+  assertEquals(computeFloor(18, 2.00, bucket.min), 400);
+});
+
+Deno.test('piso: en ruta larga manda el cálculo por milla', () => {
+  // 900 mi en drayage 20': 2.75 × 900 = $2.475 > los $2.400 del tramo 800+.
+  const bucket = getFlatBucket(900);
+  assertEquals(computeFloor(900, 2.75, bucket.min), 2475);
+});
+
+Deno.test('piso: Miami-Tampa en dry van lo gobierna el tramo', () => {
+  // 540 mi: 2.00 × 540 = $1.080 < los $1.400 del tramo 400-600.
+  const bucket = getFlatBucket(540);
+  assertEquals(computeFloor(540, 2.00, bucket.min), 1400);
+});
+
+Deno.test('piso: el recargo de Port Everglades se suma al final', () => {
+  const bucket = getFlatBucket(136);
+  assertEquals(computeFloor(136, 2.00, bucket.min), 650);
+  assertEquals(computeFloor(136, 2.00, bucket.min, PORT_EVERGLADES_SURCHARGE), 700);
+});
+
+Deno.test('objetivo: usa el máximo del tramo y el RPM objetivo', () => {
+  const corto = getFlatBucket(18);
+  assertEquals(computeTarget(18, 2.50, corto.max), 500);
+  const largo = getFlatBucket(900);
+  // El tramo 800+ no tiene máximo: manda el cálculo por milla.
+  assertEquals(computeTarget(900, 3.50, largo.max), 3150);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAMOS — los bordes exactos, que es donde se cometen los errores.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('tramos: los bordes caen en el tramo correcto', () => {
+  assertEquals(getFlatBucket(0).range, '<50 mi');
+  assertEquals(getFlatBucket(49).range, '<50 mi');
+  assertEquals(getFlatBucket(50).range, '50–100 mi');
+  assertEquals(getFlatBucket(99).range, '50–100 mi');
+  assertEquals(getFlatBucket(100).range, '100–200 mi');
+  assertEquals(getFlatBucket(199).range, '100–200 mi');
+  assertEquals(getFlatBucket(200).range, '200–400 mi');
+  assertEquals(getFlatBucket(399).range, '200–400 mi');
+  assertEquals(getFlatBucket(400).range, '400–600 mi');
+  assertEquals(getFlatBucket(599).range, '400–600 mi');
+  assertEquals(getFlatBucket(600).range, '600–800 mi');
+  assertEquals(getFlatBucket(799).range, '600–800 mi');
+  assertEquals(getFlatBucket(800).range, '800+ mi');
+  assertEquals(getFlatBucket(5000).range, '800+ mi');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// EQUIPO
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('equipo: los 7 ids válidos se resuelven sin asumir nada', () => {
+  for (const e of EQUIPMENT_BENCHMARKS) {
+    const r = normalizeEquipment(e.id);
+    assertEquals(r.id, e.id);
+    assertEquals(r.was_defaulted, false);
+  }
+});
+
+Deno.test('equipo: un id desconocido cae en dry van y queda marcado como asumido', () => {
+  const r = normalizeEquipment('unknown');
+  assertEquals(r.id, 'dry_van');
+  assertEquals(r.was_defaulted, true);
+});
+
+Deno.test('equipo: sin dato cae en dry van y queda marcado como asumido', () => {
+  assertEquals(normalizeEquipment(undefined).was_defaulted, true);
+  assertEquals(normalizeEquipment(null).was_defaulted, true);
+  assertEquals(normalizeEquipment('').was_defaulted, true);
+});
+
+// DEFECTO CONOCIDO — TRUCKY-48 (F2-09).
+// "drayage" a secas NO es un valor válido: el catálogo solo tiene drayage_20 y
+// drayage_40. Por eso cae en dry van, que tiene un RPM más bajo, y subvalúa el
+// piso. Esta prueba afirma el comportamiento ACTUAL a propósito, para que quede
+// documentado. Cuando TRUCKY-48 lo corrija, esta prueba debe invertirse de forma
+// deliberada — si falla sola, es que alguien lo arregló sin querer, y eso también
+// es información útil.
+Deno.test('equipo: DEFECTO TRUCKY-48 — "drayage" a secas cae en dry van', () => {
+  const r = normalizeEquipment('drayage');
+  assertEquals(r.id, 'dry_van');
+  assertEquals(r.was_defaulted, true);
+  // Y esto es el daño concreto: cotiza con $2.00/mi en vez de $2.50 o $2.75.
+  assertEquals(r.rpm_min, 2.00);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MILLAS Y RUTAS
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('millas: el catálogo gana sobre la estimación de la IA', () => {
+  const r = resolveMiles('Miami', 'Tampa', 999, true);
+  assertEquals(r.miles, 540);
+  assertEquals(r.source, 'catalog');
+  assertEquals(r.lane_label, 'Miami ↔ Tampa');
+  assertEquals(r.insufficient, false);
+});
+
+Deno.test('millas: redondo es el comportamiento por defecto', () => {
+  assertEquals(resolveMiles('Miami', 'Tampa', null, undefined).miles, 540);
+});
+
+Deno.test('millas: "solo ida" divide el trayecto del catálogo', () => {
+  assertEquals(resolveMiles('Miami', 'Tampa', null, false).miles, 270);
+});
+
+Deno.test('rutas: los alias del catálogo se reconocen', () => {
+  assertEquals(resolveMiles('Miami', 'WPB', null, true).miles, 136);
+  assertEquals(resolveMiles('Miami', 'jax', null, true).miles, 680);
+  assertEquals(resolveMiles('Miami', 'ft myers', null, true).miles, 240);
+  assertEquals(resolveMiles('Miami', 'pompano beach', null, true).miles, 70);
+  assertEquals(resolveMiles('Miami', 'Fort Pierce', null, true).miles, 230);
+  assertEquals(resolveMiles('Miami', 'Orlando', null, true).miles, 470);
+});
+
+Deno.test('rutas: la dirección no importa, el destino se detecta en cualquier extremo', () => {
+  assertEquals(resolveMiles('Tampa', 'Miami', null, true).miles, 540);
+});
+
+Deno.test('millas: sin ruta catalogada usa la estimación de la IA y lo declara', () => {
+  const r = resolveMiles('South Palm Beach', 'Wellington', 30, true);
+  assertEquals(r.miles, 60);
+  assertEquals(r.source, 'llm');
+  assertEquals(r.lane_label, null);
+});
+
+Deno.test('millas: sin ruta y sin estimación NO inventa un piso', () => {
+  const r = resolveMiles('Savannah', 'Atlanta', null, true);
+  assertEquals(r.insufficient, true);
+  assertEquals(r.miles, null);
+});
+
+Deno.test('millas: marca confianza baja fuera del rango de sanidad', () => {
+  assert(resolveMiles('A', 'B', 2, true).low_confidence, 'debería marcar confianza baja bajo 10 mi');
+  assert(resolveMiles('A', 'B', 2000, true).low_confidence, 'debería marcar confianza baja sobre 3000 mi');
+  assertEquals(resolveMiles('A', 'B', 100, true).low_confidence, false);
+});
+
+Deno.test('rutas: Port Everglades activa el recargo y cuenta como zona base', () => {
+  const r = resolveMiles('Port Everglades', 'Tampa', null, true);
+  assertEquals(r.portEverglades, true);
+  assertEquals(r.miles, 540);
+});
+
+Deno.test('rutas: dos extremos base no resuelven ninguna lane', () => {
+  const r = findLane('Miami', 'Fort Lauderdale');
+  assertEquals(r.lane, null);
+  assertEquals(r.portEverglades, true);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VEREDICTO
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('veredicto: sin oferta es solo referencia', () => {
+  assertEquals(computeVerdict(null, 1000, 1500).band, 'reference');
+  assertEquals(computeVerdict(null, 1000, 1500).label, 'REFERENCIA');
+});
+
+Deno.test('veredicto: bajo el piso se rechaza', () => {
+  assertEquals(computeVerdict(999, 1000, 1500).band, 'reject');
+  assertEquals(computeVerdict(999, 1000, 1500).label, 'RECHAZAR');
+});
+
+Deno.test('veredicto: entre piso y objetivo se negocia', () => {
+  assertEquals(computeVerdict(1200, 1000, 1500).band, 'negotiate');
+  assertEquals(computeVerdict(1499, 1000, 1500).band, 'negotiate');
+});
+
+Deno.test('veredicto: en o sobre el objetivo se acepta', () => {
+  assertEquals(computeVerdict(1500, 1000, 1500).band, 'accept');
+  assertEquals(computeVerdict(2000, 1000, 1500).band, 'accept');
+});
+
+Deno.test('veredicto: justo en el piso ya no se rechaza', () => {
+  assertEquals(computeVerdict(1000, 1000, 1500).band, 'negotiate');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TEXTO Y FORMATO
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('formato: los montos van con separador de miles y sin decimales', () => {
+  assertEquals(formatUSD(1400), '$1,400');
+  assertEquals(formatUSD(400.6), '$401');
+  assertEquals(formatUSD(0), '$0');
+});
+
+Deno.test('texto: la normalización quita acentos, espacios y mayúsculas', () => {
+  assertEquals(normalizeText('  Bogotá  '), 'bogota');
+  assertEquals(normalizeText('MIAMI'), 'miami');
+  assertEquals(normalizeText(null), '');
+  assertEquals(normalizeText(undefined), '');
+});
+
+Deno.test('texto: matchesAny encuentra cualquiera de los tokens', () => {
+  assert(matchesAny('port everglades terminal', ['port everglades']));
+  assertEquals(matchesAny('miami', ['tampa', 'orlando']), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESPUESTA ARMADA — el desglose numérico siempre presente (bug del PR #1).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const CTX_BASE: RateCheckContext = {
+  origen: 'Miami',
+  destino: 'Tampa',
+  miles: 540,
+  esRedondo: true,
+  laneLabel: 'Miami ↔ Tampa',
+  source: 'catalog',
+  lowConfidence: false,
+  equipment: normalizeEquipment('dry_van'),
+  floor: 1400,
+  target: 1800,
+  tarifaOfrecida: null,
+  portEverglades: false,
+};
+
+Deno.test('respuesta: sin oferta muestra piso y objetivo como referencia', () => {
+  const out = buildRateCheckMarkdown(CTX_BASE);
+  assertStringIncludes(out, 'REFERENCIA');
+  assertStringIncludes(out, 'Piso: $1,400');
+  assertStringIncludes(out, 'Objetivo: $1,800');
+});
+
+Deno.test('respuesta: con oferta siempre trae el desglose completo', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 });
+  assertStringIncludes(out, 'RECHAZAR');
+  assertStringIncludes(out, 'Piso: $1,400');
+  assertStringIncludes(out, 'Ofrecen $1,000');
+  assertStringIncludes(out, '/mi');
+  assertStringIncludes(out, 'diferencia');
+});
+
+Deno.test('respuesta: avisa cuando asumió el equipo', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: normalizeEquipment('drayage') });
+  assertStringIncludes(out, '(asumido dry van)');
+});
+
+Deno.test('respuesta: avisa cuando las millas son estimadas', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, source: 'llm' });
+  assertStringIncludes(out, 'millas estimadas');
+});
+
+Deno.test('respuesta: declara el recargo de Port Everglades', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, portEverglades: true });
+  assertStringIncludes(out, 'recargo Port Everglades');
+});
+
+Deno.test('respuesta: cuando faltan datos pide aclaración en vez de inventar', () => {
+  const out = buildMissingDataMarkdown();
+  assertStringIncludes(out, 'Necesito más datos');
+});
+
+Deno.test('respuesta: una respuesta general vacía cae en el mensaje seguro', () => {
+  assertEquals(buildGeneralMarkdown(''), safeFallbackContent());
+  assertEquals(buildGeneralMarkdown('   '), safeFallbackContent());
+  assertEquals(buildGeneralMarkdown(null), safeFallbackContent());
+  assertEquals(buildGeneralMarkdown('  hola  '), 'hola');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTRADA
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('historial: se recortan los mensajes viejos y se conservan los últimos 8', () => {
+  const doce = Array.from({ length: 12 }, (_, i) => ({ role: 'user', content: `m${i}` }));
+  const cap = capHistory(doce);
+  assertEquals(cap.length, 8);
+  assertEquals(cap[0].content, 'm4');
+  assertEquals(cap[7].content, 'm11');
+});
+
+Deno.test('historial: menos mensajes que el tope pasan enteros', () => {
+  const tres = [{ role: 'user', content: 'a' }, { role: 'assistant', content: 'b' }, { role: 'user', content: 'c' }];
+  assertEquals(capHistory(tres).length, 3);
+});
+
+Deno.test('entrada: se rechaza cualquier forma inválida de mensajes', () => {
+  assertEquals(isValidMessages([{ role: 'user', content: 'hola' }]), true);
+  assertEquals(isValidMessages([]), false);
+  assertEquals(isValidMessages(null), false);
+  assertEquals(isValidMessages('hola'), false);
+  assertEquals(isValidMessages([{ content: 'sin rol' }]), false);
+  assertEquals(isValidMessages([{ role: 'user' }]), false);
+  assertEquals(isValidMessages([{ role: 'user', content: 42 }]), false);
+});

@@ -5,10 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:local": "BASE44_LEGACY_SDK_IMPORTS=true vite --logLevel info",
     "build": "vite build",
     "lint": "eslint . --quiet",
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
+    "test:functions": "deno test --allow-read tests/",
     "preview": "vite preview"
   },
   "dependencies": {
