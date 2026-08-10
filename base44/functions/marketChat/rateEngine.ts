@@ -27,10 +27,6 @@ export interface Equipment {
   rpm_target: number;
 }
 
-export interface ResolvedEquipment extends Equipment {
-  was_defaulted: boolean;
-}
-
 export interface FlatBucket {
   range: string;
   from: number;
@@ -81,7 +77,7 @@ export interface RateCheckContext {
   laneLabel: string | null;
   source: 'catalog' | 'llm';
   lowConfidence: boolean;
-  equipment: ResolvedEquipment;
+  equipment: Equipment;
   floor: number;
   target: number;
   tarifaOfrecida: number | null;
@@ -412,17 +408,48 @@ export function resolveMiles(
   return { miles: null, source: 'llm', lane_label: null, low_confidence: false, portEverglades, insufficient: true };
 }
 
-// dry_van es el fallback y siempre existe en el catálogo de equipos.
-const DRY_VAN: Equipment = EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van')!;
+// ─────────────────────────────────────────────────────────────────────────────
+// RESOLUCIÓN DE EQUIPO — reemplaza a normalizeEquipment (TRUCKY-48 F2-09).
+//
+// ANTES: cualquier id que no estuviera en EQUIPMENT_BENCHMARKS caía en dry_van,
+// incluyendo "drayage" a secas (el enum solo tiene drayage_20 y drayage_40).
+// Eso subvaluaba el piso silenciosamente — el defecto que corregía TRUCKY-48.
+//
+// AHORA: resolveEquipment nunca sustituye un tipo de camión. O el usuario dijo
+// un id válido del benchmark, o se pregunta — nunca se asume dry van. Total y
+// determinista: la misma entrada siempre da la misma salida, por construcción
+// (no hay estado ni I/O).
+// ─────────────────────────────────────────────────────────────────────────────
 
-// OJO: cualquier id que no esté en EQUIPMENT_BENCHMARKS cae en dry_van. Eso
-// incluye "drayage" a secas, porque el enum solo tiene drayage_20 y drayage_40.
-// Es el defecto que corrige TRUCKY-48 (F2-09); acá se conserva el comportamiento
-// actual a propósito, y las pruebas lo documentan como tal.
-export function normalizeEquipment(raw: unknown): ResolvedEquipment {
+export type EquipmentResolution =
+  | { status: 'ok'; equipment: Equipment }
+  | { status: 'ask'; reason: 'missing' | 'size' };
+
+// "drayage"/"container"/"contenedor" a secas mencionan un contenedor sin decir
+// el tamaño — no es un equipo desconocido, es un equipo incompleto.
+const CONTAINER_WITHOUT_SIZE_TOKENS = ['drayage', 'container', 'contenedor'];
+
+export function resolveEquipment(raw: unknown): EquipmentResolution {
   const found = EQUIPMENT_BENCHMARKS.find(e => e.id === raw);
-  if (found) return { ...found, was_defaulted: false };
-  return { ...DRY_VAN, was_defaulted: true };
+  if (found) return { status: 'ok', equipment: found };
+  if (typeof raw === 'string' && CONTAINER_WITHOUT_SIZE_TOKENS.includes(raw)) {
+    return { status: 'ask', reason: 'size' };
+  }
+  return { status: 'ask', reason: 'missing' };
+}
+
+/** Copia distinta según qué le falta al equipo: el equipo entero, o solo el tamaño. */
+export function buildEquipmentQuestionMarkdown(reason: 'missing' | 'size'): string {
+  if (reason === 'size') {
+    return [
+      '📦 Para darte un piso preciso necesito el tamaño del contenedor.',
+      "¿Es un contenedor de 20' o de 40'?",
+    ].join('\n');
+  }
+  return [
+    '📦 Para calcular el piso necesito saber el equipo.',
+    '¿Con qué equipo lo mueves? (dry van, reefer, flatbed, step deck, drayage 20\' o 40\', power only)',
+  ].join('\n');
 }
 
 export function getFlatBucket(miles: number): FlatBucket {
@@ -477,7 +504,7 @@ export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
   // catálogo; "confianza baja" es una señal extra para estimaciones fuera del
   // rango de sanidad (10–3000 mi).
   const millasTag = `~${miles} mi ${esRedondo === false ? 'solo ida' : 'redondo'}${source === 'llm' ? ' · millas estimadas' : ''}${lowConfidence ? ' · confianza baja' : ''}`;
-  const equipoTag = `${equipment.label}${equipment.was_defaulted ? ' (asumido dry van)' : ''}`;
+  const equipoTag = equipment.label;
   const puertoTag = portEverglades ? ` · +$${PORT_EVERGLADES_SURCHARGE} recargo Port Everglades incluido` : '';
 
   // Solo se muestra la referencia por milla cuando ES la que puso el piso. Si el

@@ -1,7 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto y armado
-// de la respuesta) vive en ./rateEngine.ts para poder cubrirlo con `deno test`.
+// El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto, la
+// resolución de equipo y el armado de la respuesta) vive en ./rateEngine.ts
+// para poder cubrirlo con `deno test`.
 // Acá queda solo lo que necesita I/O: el prompt, la llamada al LLM, la lectura
 // de CostConfig y el handler HTTP.
 import {
@@ -15,7 +16,8 @@ import {
   HISTORY_CAP,
   MAX_REQUEST_CHARS,
   resolveMiles,
-  normalizeEquipment,
+  resolveEquipment,
+  buildEquipmentQuestionMarkdown,
   getFlatBucket,
   computeFloor,
   computeTarget,
@@ -98,7 +100,7 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHEMA DE EXTRACCIÓN — Único InvokeLLM del handler devuelve exactamente esto.
 // El código NO confía ciegamente en enum/formato: normaliza defensivamente
-// (ver normalizeEquipment/resolveMiles) por si el LLM se desvía del schema.
+// (ver resolveEquipment/resolveMiles) por si el LLM se desvía del schema.
 // ─────────────────────────────────────────────────────────────────────────────
 const EXTRACTION_SCHEMA = {
   type: 'object',
@@ -110,7 +112,7 @@ const EXTRACTION_SCHEMA = {
     es_redondo: { type: 'boolean' },
     equipo: {
       type: 'string',
-      enum: ['dry_van', 'reefer', 'flatbed', 'step_deck', 'drayage_20', 'drayage_40', 'power_only', 'unknown'],
+      enum: ['dry_van', 'reefer', 'flatbed', 'step_deck', 'drayage_20', 'drayage_40', 'power_only', 'drayage', 'unknown'],
     },
     tarifa_ofrecida: { type: 'number' },
     respuesta_general: { type: 'string' },
@@ -165,6 +167,8 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - millas_ida: tu mejor estimación de millas de SOLO IDA (una dirección); null si no puedes estimarla.
 - es_redondo: true por defecto; usa false solo si el dispatcher dice explícitamente "solo ida" o "one way".
 - equipo: uno de dry_van, reefer, flatbed, step_deck, drayage_20, drayage_40, power_only; usa "unknown" si no se menciona o no coincide.
+- equipo="drayage": si el dispatcher dice "drayage" o "contenedor"/"container" SIN especificar 20' ni 40', usa "drayage" — NO adivines el tamaño.
+- equipo, distinción reefer vs. contenedor: "reefer" es un trailer refrigerado (tarifa por RPM); un contenedor refrigerado que sale de puerto es un movimiento de drayage → usa "drayage" (o drayage_20/drayage_40 si dice el tamaño), nunca "reefer".
 - tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece; null si no se menciona ninguna cifra.
 - respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, en español, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
 }
@@ -310,7 +314,15 @@ Deno.serve(async (req) => {
       return Response.json({ content: buildMissingDataMarkdown() });
     }
 
-    const equipment = normalizeEquipment(raw.equipo);
+    // Guardarraíl de equipo (TRUCKY-48 parcial): igual que el guardarraíl de
+    // mercado, corre ANTES de calcular ninguna cifra. resolveEquipment nunca
+    // sustituye un tipo de camión: si no está claro, se pregunta.
+    const resolvedEquipment = resolveEquipment(raw.equipo);
+    if (resolvedEquipment.status === 'ask') {
+      return Response.json({ content: buildEquipmentQuestionMarkdown(resolvedEquipment.reason) });
+    }
+
+    const equipment = resolvedEquipment.equipment;
     const bucket = getFlatBucket(resolved.miles);
     const surcharge = resolved.portEverglades ? PORT_EVERGLADES_SURCHARGE : 0;
     const floor = computeFloor(resolved.miles, equipment.rpm_min, bucket.min, surcharge);

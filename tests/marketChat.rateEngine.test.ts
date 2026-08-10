@@ -28,7 +28,8 @@ import {
   matchesAny,
   findLane,
   resolveMiles,
-  normalizeEquipment,
+  resolveEquipment,
+  buildEquipmentQuestionMarkdown,
   getFlatBucket,
   computeFloor,
   computeTarget,
@@ -154,39 +155,47 @@ Deno.test('tramos: los bordes caen en el tramo correcto', () => {
 // EQUIPO
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TEST INVERSION 1/7 (TRUCKY-48 F2-09): antes afirmaba
+// ResolvedEquipment.was_defaulted === false para los 7 ids; ahora
+// normalizeEquipment ya no existe — el nuevo shape es EquipmentResolution, y un
+// id válido del benchmark siempre resuelve 'ok' con ese equipo exacto.
 Deno.test('equipo: los 7 ids válidos se resuelven sin asumir nada', () => {
   for (const e of EQUIPMENT_BENCHMARKS) {
-    const r = normalizeEquipment(e.id);
-    assertEquals(r.id, e.id);
-    assertEquals(r.was_defaulted, false);
+    const r = resolveEquipment(e.id);
+    assertEquals(r.status, 'ok');
+    if (r.status === 'ok') assertEquals(r.equipment.id, e.id);
   }
 });
 
-Deno.test('equipo: un id desconocido cae en dry van y queda marcado como asumido', () => {
-  const r = normalizeEquipment('unknown');
-  assertEquals(r.id, 'dry_van');
-  assertEquals(r.was_defaulted, true);
+// TEST INVERSION 2/7 (TRUCKY-48 F2-09): antes un id desconocido caía en dry van
+// marcado was_defaulted=true; ahora se pregunta — nunca se sustituye un equipo.
+Deno.test('equipo: un id desconocido pide el equipo en vez de asumir dry van', () => {
+  const r = resolveEquipment('unknown');
+  assertEquals(r.status, 'ask');
+  if (r.status === 'ask') assertEquals(r.reason, 'missing');
 });
 
-Deno.test('equipo: sin dato cae en dry van y queda marcado como asumido', () => {
-  assertEquals(normalizeEquipment(undefined).was_defaulted, true);
-  assertEquals(normalizeEquipment(null).was_defaulted, true);
-  assertEquals(normalizeEquipment('').was_defaulted, true);
+// TEST INVERSION 3/7 (TRUCKY-48 F2-09): antes sin dato caía en dry van con el
+// sufijo " (asumido dry van)" en la respuesta armada; ahora pide el equipo y
+// ningún texto renderizado contiene la palabra "asumido".
+Deno.test('equipo: sin dato pide el equipo en vez de asumir dry van', () => {
+  for (const raw of [undefined, null, '']) {
+    const r = resolveEquipment(raw);
+    assertEquals(r.status, 'ask');
+    if (r.status === 'ask') assertEquals(r.reason, 'missing');
+  }
 });
 
-// DEFECTO CONOCIDO — TRUCKY-48 (F2-09).
-// "drayage" a secas NO es un valor válido: el catálogo solo tiene drayage_20 y
-// drayage_40. Por eso cae en dry van, que tiene un RPM más bajo, y subvalúa el
-// piso. Esta prueba afirma el comportamiento ACTUAL a propósito, para que quede
-// documentado. Cuando TRUCKY-48 lo corrija, esta prueba debe invertirse de forma
-// deliberada — si falla sola, es que alguien lo arregló sin querer, y eso también
-// es información útil.
-Deno.test('equipo: DEFECTO TRUCKY-48 — "drayage" a secas cae en dry van', () => {
-  const r = normalizeEquipment('drayage');
-  assertEquals(r.id, 'dry_van');
-  assertEquals(r.was_defaulted, true);
-  // Y esto es el daño concreto: cotiza con $2.00/mi en vez de $2.50 o $2.75.
-  assertEquals(r.rpm_min, 2.00);
+// TEST INVERSION 4/7 — TRUCKY-48 (F2-09) CORREGIDO.
+// Esta prueba antes documentaba el defecto a propósito: "drayage" a secas caía
+// en dry van y subvaluaba el piso ($2.00/mi en vez de $2.50-$2.75). Ahora prueba
+// el arreglo: "drayage" a secas nunca cotiza como dry van, pide el tamaño del
+// contenedor. Si esta prueba falla sola después de un cambio futuro, es que
+// alguien reintrodujo el default silencioso — eso también es información útil.
+Deno.test('equipo: TRUCKY-48 corregido — "drayage" a secas pide el tamaño, no cae en dry van', () => {
+  const r = resolveEquipment('drayage');
+  assertEquals(r.status, 'ask');
+  if (r.status === 'ask') assertEquals(r.reason, 'size');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -371,6 +380,15 @@ Deno.test('texto: matchesAny encuentra cualquiera de los tokens', () => {
 // RESPUESTA ARMADA — el desglose numérico siempre presente (bug del PR #1).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TEST ADAPTATION 7/7 (TRUCKY-48 F2-09): CTX_BASE.equipment usaba
+// normalizeEquipment (que ya no existe); ahora usa un Equipment plano, resuelto
+// con resolveEquipment y desempaquetado desde el shape 'ok'.
+function equipoOk(id: string) {
+  const r = resolveEquipment(id);
+  if (r.status !== 'ok') throw new Error(`fixture de prueba inválido: '${id}' no resuelve 'ok'`);
+  return r.equipment;
+}
+
 const CTX_BASE: RateCheckContext = {
   origen: 'Miami',
   destino: 'Tampa',
@@ -379,7 +397,7 @@ const CTX_BASE: RateCheckContext = {
   laneLabel: 'Miami ↔ Tampa',
   source: 'catalog',
   lowConfidence: false,
-  equipment: normalizeEquipment('dry_van'),
+  equipment: equipoOk('dry_van'),
   floor: 1400,
   target: 1800,
   tarifaOfrecida: null,
@@ -461,9 +479,14 @@ Deno.test('respuesta: el mínimo por milla que compara es el que gobierna el pis
   assertEquals(/\(mín \$2\.00\/mi\)/.test(out), false);
 });
 
-Deno.test('respuesta: avisa cuando asumió el equipo', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: normalizeEquipment('drayage') });
-  assertStringIncludes(out, '(asumido dry van)');
+// TEST INVERSION 5/7 (TRUCKY-48 F2-09): antes probaba que un equipo asumido
+// aparecía marcado "(asumido dry van)"; ese concepto ya no existe — el equipo
+// que llega a buildRateCheckMarkdown siempre es real (resuelto 'ok'), así que
+// la respuesta nunca puede contener "asumido".
+Deno.test('respuesta: nunca menciona un equipo asumido', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: equipoOk('reefer') });
+  assertEquals(/asumido/i.test(out), false);
+  assertStringIncludes(out, 'Reefer');
 });
 
 Deno.test('respuesta: avisa cuando las millas son estimadas', () => {
@@ -604,4 +627,19 @@ Deno.test('tema-blocklist: resolveIntent — rate_check gana incluso sobre el bl
 
 Deno.test('tema-blocklist: resolveIntent — declina cuando ni el LLM ni la allowlist rescatan', () => {
   assertEquals(resolveIntent('general', [{ role: 'user', content: 'cuéntame un chiste' }]), 'off_topic');
+});
+
+Deno.test('equipo: resolveEquipment es determinista — 10 llamadas idénticas dan el mismo resultado', () => {
+  const resultados = Array.from({ length: 10 }, () => resolveEquipment('reefer'));
+  for (const r of resultados) assertEquals(r, resultados[0]);
+  const resultadosAsk = Array.from({ length: 10 }, () => resolveEquipment('drayage'));
+  for (const r of resultadosAsk) assertEquals(r, resultadosAsk[0]);
+});
+
+Deno.test('equipo: buildEquipmentQuestionMarkdown tiene copia distinta para "missing" y "size"', () => {
+  const missing = buildEquipmentQuestionMarkdown('missing');
+  const size = buildEquipmentQuestionMarkdown('size');
+  assertStringIncludes(missing, 'qué equipo');
+  assertStringIncludes(size, "20' o de 40'");
+  assertEquals(missing === size, false);
 });
