@@ -205,11 +205,14 @@ export default function MarketChat() {
         </div>
       </div>
 
-      {/* Cost config banner */}
-      {costConfig && (
+      {/* Cost config banner — oculto salvo que costo_por_milla sea un número
+          válido y presente. Nunca debe renderizar "$undefined/mi": un
+          registro sin configurar (null) o con valores no finitos no cuenta
+          como "personalizado". */}
+      {costConfig && Number.isFinite(costConfig.costo_por_milla) && (
         <div className="mx-4 md:mx-6 mt-3 flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary">
           <Zap className="w-3.5 h-3.5 flex-shrink-0" />
-          Personalizado: ${costConfig.costo_por_milla?.toFixed(2)}/mi costo · ${costConfig.tarifa_objetivo}/mi objetivo
+          Personalizado: ${costConfig.costo_por_milla.toFixed(2)}/mi costo · ${costConfig.tarifa_objetivo}/mi objetivo
         </div>
       )}
 
