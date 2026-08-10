@@ -335,9 +335,11 @@ Deno.test('veredicto: sin oferta es solo referencia', () => {
   assertEquals(computeVerdict(null, 1000, 1500).label, 'REFERENCIA');
 });
 
+// TRUCKY-53 Q5: el label deja de ser una orden imperativa ("RECHAZAR") y pasa a
+// ser una sugerencia. El band (el semáforo) NO cambia — sigue siendo 'reject'.
 Deno.test('veredicto: bajo el piso se rechaza', () => {
   assertEquals(computeVerdict(999, 1000, 1500).band, 'reject');
-  assertEquals(computeVerdict(999, 1000, 1500).label, 'RECHAZAR');
+  assertEquals(computeVerdict(999, 1000, 1500).label, 'TE SUGIERO PEDIR MÁS');
 });
 
 Deno.test('veredicto: entre piso y objetivo se negocia', () => {
@@ -352,6 +354,43 @@ Deno.test('veredicto: en o sobre el objetivo se acepta', () => {
 
 Deno.test('veredicto: justo en el piso ya no se rechaza', () => {
   assertEquals(computeVerdict(1000, 1000, 1500).band, 'negotiate');
+});
+
+// TRUCKY-53 Q5 — encabezados de sugerencia, uno por banda. El semáforo (emoji +
+// band) está congelado; lo único que cambia es que el label deja de ser una
+// orden. Ninguna respuesta debe contener "debes" ni los labels imperativos
+// viejos de otra banda.
+Deno.test('veredicto: encabezado de sugerencia — banda rechazo', () => {
+  const verdict = computeVerdict(999, 1000, 1500);
+  assertEquals(verdict.emoji, '🔴');
+  assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 999, floor: 1000, target: 1500 });
+  assertEquals(out.includes('debes'), false);
+  assertEquals(out.includes('**RECHAZAR**'), false);
+  assertEquals(out.includes('**ACEPTAR**'), false);
+  assertEquals(out.includes('**NEGOCIAR**'), false);
+});
+
+Deno.test('veredicto: encabezado de sugerencia — banda negociar', () => {
+  const verdict = computeVerdict(1200, 1000, 1500);
+  assertEquals(verdict.emoji, '🟡');
+  assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1200, floor: 1000, target: 1500 });
+  assertEquals(out.includes('debes'), false);
+  assertEquals(out.includes('**RECHAZAR**'), false);
+  assertEquals(out.includes('**ACEPTAR**'), false);
+  assertEquals(out.includes('**NEGOCIAR**'), false);
+});
+
+Deno.test('veredicto: encabezado de sugerencia — banda aceptar', () => {
+  const verdict = computeVerdict(2000, 1000, 1500);
+  assertEquals(verdict.emoji, '🟢');
+  assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 2000, floor: 1000, target: 1500 });
+  assertEquals(out.includes('debes'), false);
+  assertEquals(out.includes('**RECHAZAR**'), false);
+  assertEquals(out.includes('**ACEPTAR**'), false);
+  assertEquals(out.includes('**NEGOCIAR**'), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -415,7 +454,7 @@ Deno.test('respuesta: sin oferta muestra piso y objetivo como referencia', () =>
 
 Deno.test('respuesta: con oferta siempre trae el desglose completo', () => {
   const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 });
-  assertStringIncludes(out, 'RECHAZAR');
+  assertStringIncludes(out, 'TE SUGIERO PEDIR MÁS');
   assertStringIncludes(out, 'Piso: $1,400');
   assertStringIncludes(out, 'Ofrecen $1,000');
   assertStringIncludes(out, '/mi');

@@ -479,11 +479,13 @@ export function resolveFloorBasis(miles: number, rpmMin: number, flatMin: number
   return flatMin >= Math.round(rpmMin * miles) ? 'flat' : 'rpm';
 }
 
+// TRUCKY-53 Q5: el label es una sugerencia, no una orden. El emoji y el band
+// (el semáforo) quedan byte-a-byte iguales — solo cambia el texto del label.
 export function computeVerdict(tarifa: number | null, floor: number, target: number): Verdict {
   if (tarifa == null) return { emoji: '📊', label: 'REFERENCIA', band: 'reference' };
-  if (tarifa < floor) return { emoji: '🔴', label: 'RECHAZAR', band: 'reject' };
-  if (tarifa < target) return { emoji: '🟡', label: 'NEGOCIAR', band: 'negotiate' };
-  return { emoji: '🟢', label: 'ACEPTAR', band: 'accept' };
+  if (tarifa < floor) return { emoji: '🔴', label: 'TE SUGIERO PEDIR MÁS', band: 'reject' };
+  if (tarifa < target) return { emoji: '🟡', label: 'TE SUGIERO NEGOCIAR', band: 'negotiate' };
+  return { emoji: '🟢', label: 'TE SUGIERO TOMARLA', band: 'accept' };
 }
 
 export function formatUSD(n: number): string {
@@ -528,11 +530,14 @@ export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
   const verdict = computeVerdict(tarifaOfrecida, floor, target);
   const diferencia = tarifaOfrecida - floor;
   const posicion = tarifaOfrecida < floor ? 'bajo el piso' : (tarifaOfrecida < target ? 'entre piso y objetivo' : 'sobre objetivo');
+  // El consejo agrega la acción, no repite el label — el label ya dice "TE
+  // SUGIERO...", así que acá va lo que sigue: cuánto contraofertar, cuánto
+  // margen queda, o qué hacer para no perder una buena tarifa.
   const consejo = verdict.band === 'reject'
-    ? `Bajo el piso; contrarresta en ${formatUSD(floor)} mínimo.`
+    ? `Contraoferta ${formatUSD(target)}; no la dejes ir por menos de ${formatUSD(floor)}.`
     : verdict.band === 'negotiate'
-      ? `Negocia hacia ${formatUSD(target)}; hay margen.`
-      : 'Buena tarifa, confirma el RC rápido.';
+      ? `Ya cubre el piso; el margen hasta ${formatUSD(target)} es lo que puedes empujar.`
+      : 'Sobre objetivo; asegura el RC antes de que la reasignen.';
 
   return [
     `${verdict.emoji} **${verdict.label}** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,
