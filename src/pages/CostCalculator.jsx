@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Calculator, Save, TrendingUp, TrendingDown, DollarSign, Fuel, Loader2 } from 'lucide-react';
+import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
+import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2 } from 'lucide-react';
 
 const QUICKLOAD_RATE = 2.20;
 const TARGET_RATE = 3.00;
@@ -36,29 +37,30 @@ export default function CostCalculator() {
 
   const set = (key, val) => setConfig(prev => ({ ...prev, [key]: val }));
 
-  // Calculations
-  const dieselPerMile = config.diesel_precio / config.mpg;
-  const totalFixedWeekly = (Number(config.seguro_semanal) || 0) + (Number(config.lease_semanal) || 0) + (Number(config.otros_gastos_semanales) || 0);
-  const fixedPerMile = config.millas_semana_promedio > 0 ? totalFixedWeekly / config.millas_semana_promedio : 0;
-  const variablePerMile = dieselPerMile;
-  const driverFraction = (Number(config.pago_conductor_porcentaje) || 0) / 100;
-  // costo_por_milla without driver (driver is % of revenue, not cost)
-  const costPerMile = variablePerMile + fixedPerMile;
-  // break-even: revenue × (1 - driver%) = costPerMile → revenue = costPerMile / (1 - driver%)
-  const breakEvenRate = driverFraction < 1 ? costPerMile / (1 - driverFraction) : 0;
+  // Cálculo — costMath.js es la fuente única de verdad (compartida con
+  // Onboarding.jsx). `costos.valido` decide qué se muestra y si se puede
+  // guardar; `breakEvenRate` usa un fallback seguro de 0 solo para que el
+  // gráfico de barras no reciba NaN cuando es inválido — el texto de "Costo
+  // por milla"/"Break-even" muestra "—" en ese caso, nunca el número crudo.
+  const costos = deriveCosts(config);
+  const costPerMile = costos.valido ? costos.costoPorMilla : null;
+  const breakEvenRate = costos.valido ? costos.tarifaBreakEven : 0;
   const targetProfit = config.tarifa_objetivo - breakEvenRate;
 
   const quickloadProfit = QUICKLOAD_RATE - breakEvenRate;
   const quickloadStatus = quickloadProfit > 0.1 ? 'ganancia' : quickloadProfit > -0.1 ? 'break_even' : 'perdida';
 
   const saveConfig = async () => {
+    // Guardar refusado si los valores derivados no son finitos — nunca se
+    // reporta éxito con un costo_por_milla/tarifa_break_even inválido.
+    if (!costos.valido) return;
     setSaving(true);
     const user = await base44.auth.me();
     const data = {
       ...config,
       usuario: user.email,
-      costo_por_milla: costPerMile,
-      tarifa_break_even: breakEvenRate,
+      costo_por_milla: costos.costoPorMilla,
+      tarifa_break_even: costos.tarifaBreakEven,
     };
     if (configId) {
       await base44.entities.CostConfig.update(configId, data);
@@ -154,12 +156,12 @@ export default function CostCalculator() {
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="bg-muted rounded-xl p-3 text-center">
             <p className="text-xs text-muted-foreground">Costo por milla</p>
-            <p className="text-xl font-bold font-mono text-foreground mt-1">${costPerMile.toFixed(2)}</p>
+            <p className="text-xl font-bold font-mono text-foreground mt-1">{costos.valido ? `$${costPerMile.toFixed(2)}` : '—'}</p>
             <p className="text-xs text-muted-foreground">diesel + fijos</p>
           </div>
           <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-center">
             <p className="text-xs text-yellow-400">Break-even</p>
-            <p className="text-xl font-bold font-mono text-yellow-400 mt-1">${breakEvenRate.toFixed(2)}</p>
+            <p className="text-xl font-bold font-mono text-yellow-400 mt-1">{costos.valido ? `$${breakEvenRate.toFixed(2)}` : '—'}</p>
             <p className="text-xs text-muted-foreground">tarifa mínima</p>
           </div>
           <div className="bg-violet-400/10 border border-violet-400/20 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
@@ -207,7 +209,13 @@ export default function CostCalculator() {
         </div>
       </div>
 
-      <button onClick={saveConfig} disabled={saving}
+      {!costos.valido && (
+        <p className="text-xs text-red-400 text-center">
+          Falta {CAMPO_LABEL[costos.faltante] || 'un dato'}: no puedo calcular tu costo por milla.
+        </p>
+      )}
+
+      <button onClick={saveConfig} disabled={saving || !costos.valido}
         className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         {saved ? '✓ Guardado' : 'Guardar configuración'}

@@ -1,21 +1,21 @@
 import { useState } from 'react';
 import { base44 } from '@/api/base44Client';
+import { deriveCosts, FIXED_COST_DEFAULTS } from '@/lib/freight/costMath';
 import { Truck, Users, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 
 /**
  * Onboarding — v4
  * 4 pasos: Rol → Datos de negocio → Costos → Confirmación
+ *
+ * Onboarding solo recolecta diésel, MPG y % de pago al conductor — no pide
+ * costos fijos (seguro/lease/otros gastos). Para no mentir con un fixedCpm
+ * hardcodeado, el costo fijo usa FIXED_COST_DEFAULTS (la misma fuente que
+ * src/lib/freight/costMath.js), y esos 4 campos se escriben en el registro
+ * junto con los derivados — así la Calculadora recarga exactamente el mismo
+ * número (ver M7/M11 en el walkthrough de la demo).
  */
 
 const DEFAULT_COSTS = { diesel: 5.40, mpg: 6.5, conductor: 25 };
-
-function calcBreakEven(diesel, mpg, conductorPct) {
-  const fuelCpm = parseFloat(diesel) / parseFloat(mpg);
-  const fixedCpm = 0.45; // seguro + lease estimado por milla
-  const baseCpm = fuelCpm + fixedCpm;
-  const total = baseCpm / (1 - parseFloat(conductorPct) / 100);
-  return isNaN(total) ? 0 : total.toFixed(2);
-}
 
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
@@ -34,7 +34,16 @@ export default function Onboarding({ onComplete }) {
   const [mpg, setMpg] = useState(DEFAULT_COSTS.mpg);
   const [conductor, setConductor] = useState(DEFAULT_COSTS.conductor);
 
-  const breakEven = calcBreakEven(diesel, mpg, conductor);
+  // deriveCosts coerce sus inputs internamente (ver `num()` en costMath.js),
+  // así que diesel/mpg/conductor pueden llegar como string (typeo de <input>)
+  // o number (el estado inicial) sin necesidad de convertir acá.
+  const costos = deriveCosts({
+    diesel_precio: diesel,
+    mpg,
+    pago_conductor_porcentaje: conductor,
+    ...FIXED_COST_DEFAULTS,
+  });
+  const breakEvenDisplay = costos.valido ? `$${costos.tarifaBreakEven.toFixed(2)}` : 'sin calcular';
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -109,6 +118,10 @@ export default function Onboarding({ onComplete }) {
     }
 
     // 6. CostConfig
+    // Los 4 campos de costo fijo + los derivados solo se escriben cuando
+    // costos.valido — un registro incompleto se queda "sin configurar" en
+    // vez de guardar un costo_por_milla que no es finito (ver requerimiento
+    // "Onboarding completion leaves a recognized cost-configuration state").
     const existingCosts = await base44.entities.CostConfig.filter({ usuario: user.email });
     const costData = {
       usuario:       user.email,
@@ -116,6 +129,11 @@ export default function Onboarding({ onComplete }) {
       diesel_precio: parseFloat(diesel),
       mpg:           parseFloat(mpg),
       pago_conductor_porcentaje: parseFloat(conductor),
+      ...(costos.valido ? {
+        ...FIXED_COST_DEFAULTS,
+        costo_por_milla:   costos.costoPorMilla,
+        tarifa_break_even: costos.tarifaBreakEven,
+      } : {}),
     };
     if (existingCosts.length > 0) {
       await base44.entities.CostConfig.update(existingCosts[0].id, costData);
@@ -332,8 +350,12 @@ export default function Onboarding({ onComplete }) {
                 {/* Break-even en tiempo real */}
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5">
                   <p className="text-xs text-muted-foreground">Break-even estimado</p>
-                  <p className="text-2xl font-bold text-primary font-mono mt-0.5">${breakEven}<span className="text-sm font-normal text-muted-foreground">/mi</span></p>
+                  <p className="text-2xl font-bold text-primary font-mono mt-0.5">
+                    {breakEvenDisplay}
+                    {costos.valido && <span className="text-sm font-normal text-muted-foreground">/mi</span>}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">Necesitas cobrar al menos esta tarifa por milla para cubrir costos.</p>
+                  <p className="text-xs text-muted-foreground mt-1">Incluye una estimación de seguro, lease y otros gastos; ajústala en la Calculadora.</p>
                 </div>
               </div>
 
@@ -391,7 +413,9 @@ export default function Onboarding({ onComplete }) {
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 bg-primary/5">
                   <span className="text-xs text-primary font-medium">Break-even</span>
-                  <span className="text-xs font-bold text-primary font-mono">${breakEven}/mi</span>
+                  <span className="text-xs font-bold text-primary font-mono">
+                    {breakEvenDisplay}{costos.valido && '/mi'}
+                  </span>
                 </div>
               </div>
 
