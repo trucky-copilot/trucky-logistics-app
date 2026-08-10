@@ -32,3 +32,9 @@ dist-ssr
 
 # AEGIS audit state (generated)
 .aegis/
+
+# Estado e indices generados por herramientas locales.
+# Son por maquina: cada checkout regenera el suyo y no deben viajar en el repo.
+.atl/
+.codegraph/
+.playwright-mcp/
