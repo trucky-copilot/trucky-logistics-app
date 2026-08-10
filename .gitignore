@@ -29,3 +29,6 @@ dist-ssr
 
 .env
 .vite
+
+# AEGIS audit state (generated)
+.aegis/
