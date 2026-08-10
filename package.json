@@ -11,6 +11,7 @@
     "lint:fix": "eslint . --fix",
     "typecheck": "tsc -p ./jsconfig.json",
     "test:functions": "deno test --allow-read tests/",
+    "prepare": "git config core.hooksPath .githooks || true",
     "preview": "vite preview"
   },
   "dependencies": {

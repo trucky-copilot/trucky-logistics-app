@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# Corre las pruebas del motor de tarifas antes de cada commit.
+#
+# Por qué un hook y no CI: el repo no tiene pipeline, y hoy una sola persona
+# manda commits. Un hook local cubre el 100% de esos commits sin montar
+# infraestructura.
+#
+# LÍMITE CONOCIDO: el bot de Base44 (base44-builder) commitea directo por la API
+# de GitHub cuando alguien edita desde el Builder. Esos commits NO pasan por acá.
+# Si en algún momento el Builder vuelve a ser una vía de cambio real, esto ya no
+# alcanza y hace falta CI.
+#
+# Se activa con:  git config core.hooksPath .githooks
+# (el script "prepare" de package.json lo hace solo al correr npm install)
+
+set -e
+
+if ! command -v deno >/dev/null 2>&1; then
+  echo "pre-commit: deno no está instalado; se omiten las pruebas del motor de tarifas." >&2
+  echo "            Instalá deno para que este control vuelva a correr." >&2
+  exit 0
+fi
+
+echo "pre-commit: corriendo las pruebas del motor de tarifas..."
+
+if ! deno test --allow-read --quiet tests/; then
+  echo "" >&2
+  echo "pre-commit: las pruebas fallaron, el commit se detuvo." >&2
+  echo "            Corré 'npm run test:functions' para ver el detalle." >&2
+  echo "            Si el cambio es intencional, actualizá la prueba en el mismo commit." >&2
+  exit 1
+fi
+
+echo "pre-commit: pruebas en verde."
