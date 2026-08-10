@@ -33,6 +33,7 @@ import {
   computeFloor,
   computeTarget,
   computeVerdict,
+  resolveFloorBasis,
   formatUSD,
   buildRateCheckMarkdown,
   buildGeneralMarkdown,
@@ -378,6 +379,8 @@ const CTX_BASE: RateCheckContext = {
   target: 1800,
   tarifaOfrecida: null,
   portEverglades: false,
+  floorBasis: 'flat',
+  bucketRange: '400–600 mi',
 };
 
 Deno.test('respuesta: sin oferta muestra piso y objetivo como referencia', () => {
@@ -394,6 +397,63 @@ Deno.test('respuesta: con oferta siempre trae el desglose completo', () => {
   assertStringIncludes(out, 'Ofrecen $1,000');
   assertStringIncludes(out, '/mi');
   assertStringIncludes(out, 'diferencia');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LA CONTRADICCIÓN EN PANTALLA — hallazgo de la revisión sobre F2-00.
+// El cálculo del piso siempre estuvo bien; lo que confundía era mostrar una
+// referencia por milla al lado de una cifra que no salió de ella.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('base del piso: el tramo manda en ruta corta y el RPM en ruta larga', () => {
+  // 30 mi en dry van: el tramo <50 exige $400 contra $60 del cálculo por milla.
+  assertEquals(resolveFloorBasis(30, 2.00, 400), 'flat');
+  // 900 mi en drayage 20': 2.75 × 900 = $2.475 supera los $2.400 del tramo.
+  assertEquals(resolveFloorBasis(900, 2.75, 2400), 'rpm');
+  // Empate: manda el tramo, que es el criterio conservador.
+  assertEquals(resolveFloorBasis(200, 2.00, 400), 'flat');
+});
+
+Deno.test('respuesta: en ruta corta NO muestra un rango por milla que contradiga el piso', () => {
+  // El caso reportado: 30 mi con piso $400. Antes decía "Mercado $2.00–$2.50/mi"
+  // junto a una cifra que equivale a $13.33/mi.
+  const out = buildRateCheckMarkdown({
+    ...CTX_BASE,
+    origen: 'South Palm Beach',
+    destino: 'Wellington',
+    miles: 30,
+    laneLabel: null,
+    source: 'llm',
+    floor: 400,
+    target: 500,
+    floorBasis: 'flat',
+    bucketRange: '<50 mi',
+  });
+  assertEquals(/Mercado: \$/.test(out), false);
+  assertStringIncludes(out, 'mínimo del tramo <50 mi');
+  assertStringIncludes(out, '$13.33/mi');
+});
+
+Deno.test('respuesta: en ruta larga sí muestra el rango de mercado por milla', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, floorBasis: 'rpm' });
+  assertStringIncludes(out, 'Mercado: $2.00–$2.50/mi');
+  assertEquals(/mínimo del tramo/.test(out), false);
+});
+
+Deno.test('respuesta: el mínimo por milla que compara es el que gobierna el piso', () => {
+  // Ofrecen $500 en 30 mi = $16.67/mi. Contra el benchmark del equipo ($2.00)
+  // parecería una tarifa excelente, pero el piso real es $400 = $13.33/mi.
+  const out = buildRateCheckMarkdown({
+    ...CTX_BASE,
+    miles: 30,
+    floor: 400,
+    target: 500,
+    tarifaOfrecida: 500,
+    floorBasis: 'flat',
+    bucketRange: '<50 mi',
+  });
+  assertStringIncludes(out, '(mín $13.33/mi)');
+  assertEquals(/\(mín \$2\.00\/mi\)/.test(out), false);
 });
 
 Deno.test('respuesta: avisa cuando asumió el equipo', () => {

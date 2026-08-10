@@ -19,6 +19,7 @@ import {
   getFlatBucket,
   computeFloor,
   computeTarget,
+  resolveFloorBasis,
   buildRateCheckMarkdown,
   buildGeneralMarkdown,
   buildMissingDataMarkdown,
@@ -319,6 +320,8 @@ Deno.serve(async (req) => {
       target,
       tarifaOfrecida,
       portEverglades: resolved.portEverglades,
+      floorBasis: resolveFloorBasis(resolved.miles, equipment.rpm_min, bucket.min),
+      bucketRange: bucket.range,
     });
 
     return Response.json({ content });

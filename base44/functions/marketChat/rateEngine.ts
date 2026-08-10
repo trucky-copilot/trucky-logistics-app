@@ -86,6 +86,10 @@ export interface RateCheckContext {
   target: number;
   tarifaOfrecida: number | null;
   portEverglades: boolean;
+  /** Qué regla puso el piso. Decide si se muestra la referencia por milla. */
+  floorBasis: 'flat' | 'rpm';
+  /** Rango del tramo que aplicó, para poder nombrarlo en la respuesta. */
+  bucketRange: string;
 }
 
 // 7 equipos — el id se usa también como valor del enum "equipo" en EXTRACTION_SCHEMA
@@ -333,6 +337,19 @@ export function computeTarget(miles: number, rpmTarget: number, flatMax: number 
   return Math.max(flatMax ?? 0, Math.round(rpmTarget * miles)) + surcharge;
 }
 
+/**
+ * Qué regla gobierna el piso: el mínimo del tramo o el cálculo por milla.
+ *
+ * Existe para no mostrar una referencia por milla al lado de una cifra que no
+ * salió de ella. En una ruta corta el piso lo pone el mínimo del tramo —$400 en
+ * 30 millas son $13/mi— y enseñar "$2.00–$2.50/mi" ahí hace que el dispatcher
+ * crea que se le está cotizando por milla. Es el hallazgo de la revisión sobre
+ * F2-00: el cálculo estaba bien, lo que confundía era la presentación.
+ */
+export function resolveFloorBasis(miles: number, rpmMin: number, flatMin: number): 'flat' | 'rpm' {
+  return flatMin >= Math.round(rpmMin * miles) ? 'flat' : 'rpm';
+}
+
 export function computeVerdict(tarifa: number | null, floor: number, target: number): Verdict {
   if (tarifa == null) return { emoji: '📊', label: 'REFERENCIA', band: 'reference' };
   if (tarifa < floor) return { emoji: '🔴', label: 'RECHAZAR', band: 'reject' };
@@ -351,7 +368,7 @@ export function formatUSD(n: number): string {
 // El desglose numérico SIEMPRE está presente: piso, objetivo, RPM ofrecida vs
 // mínima, y diferencia en dólares.
 export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
-  const { origen, destino, miles, esRedondo, laneLabel, source, lowConfidence, equipment, floor, target, tarifaOfrecida, portEverglades } = ctx;
+  const { origen, destino, miles, esRedondo, laneLabel, source, lowConfidence, equipment, floor, target, tarifaOfrecida, portEverglades, floorBasis, bucketRange } = ctx;
 
   const rutaLabel = origen && destino ? `${origen} → ${destino}` : (laneLabel || 'Ruta solicitada');
   // "millas estimadas" se muestra siempre que la milla venga del LLM y no del
@@ -360,7 +377,13 @@ export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
   const millasTag = `~${miles} mi ${esRedondo === false ? 'solo ida' : 'redondo'}${source === 'llm' ? ' · millas estimadas' : ''}${lowConfidence ? ' · confianza baja' : ''}`;
   const equipoTag = `${equipment.label}${equipment.was_defaulted ? ' (asumido dry van)' : ''}`;
   const puertoTag = portEverglades ? ` · +$${PORT_EVERGLADES_SURCHARGE} recargo Port Everglades incluido` : '';
-  const mercadoLine = `💰 Mercado: $${equipment.rpm_min.toFixed(2)}–$${equipment.rpm_target.toFixed(2)}/mi · Equipo: ${equipoTag}`;
+
+  // Solo se muestra la referencia por milla cuando ES la que puso el piso. Si el
+  // piso lo puso el mínimo del tramo, se nombra ese mínimo y se da su equivalente
+  // por milla, para que las dos cifras de la pantalla no se contradigan.
+  const mercadoLine = floorBasis === 'flat'
+    ? `📐 Manda el mínimo del tramo ${bucketRange} · equivale a $${(miles > 0 ? floor / miles : 0).toFixed(2)}/mi con estas millas · Equipo: ${equipoTag}`
+    : `💰 Mercado: $${equipment.rpm_min.toFixed(2)}–$${equipment.rpm_target.toFixed(2)}/mi · Equipo: ${equipoTag}`;
 
   if (tarifaOfrecida == null) {
     return [
@@ -386,7 +409,10 @@ export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
     `${verdict.emoji} **${verdict.label}** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,
     `📍 ${rutaLabel} (${millasTag}${puertoTag})`,
     mercadoLine,
-    `🧮 Ofrecen ${formatUSD(tarifaOfrecida)} = $${rpmOfrecida.toFixed(2)}/mi (mín $${equipment.rpm_min.toFixed(2)}/mi) → ${posicion}, diferencia ${diferencia >= 0 ? '+' : ''}${formatUSD(diferencia)} vs piso`,
+    // El "mínimo por milla" que se compara debe ser el que de verdad gobierna el
+    // piso, no el benchmark del equipo: si no, en ruta corta el dispatcher lee
+    // que le ofrecen más del mínimo por milla y sin embargo el veredicto rechaza.
+    `🧮 Ofrecen ${formatUSD(tarifaOfrecida)} = $${rpmOfrecida.toFixed(2)}/mi (mín $${(floorBasis === 'flat' && miles > 0 ? floor / miles : equipment.rpm_min).toFixed(2)}/mi) → ${posicion}, diferencia ${diferencia >= 0 ? '+' : ''}${formatUSD(diferencia)} vs piso`,
     `💡 ${consejo}`,
   ].join('\n');
 }
