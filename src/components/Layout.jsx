@@ -1,10 +1,19 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
-import { 
-  LayoutDashboard, MessageSquare, FileSearch, Calculator, 
-  Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight
+import {
+  LayoutDashboard, MessageSquare, FileSearch, Calculator,
+  Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
+  LogOut, ChevronUp
 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { useAuth } from '@/lib/AuthContext';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import NotificationBell from './NotificationBell';
 import OperationalReadinessBanner from './OperationalReadinessBanner';
 import MarketTicker from './MarketTicker';
@@ -24,6 +33,13 @@ const NAV_ITEMS = [
 export default function Layout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const { user, logout } = useAuth();
+
+  // El correo identifica la cuenta activa. Es lo único que se muestra: el nombre
+  // de la empresa no se pone acá a propósito, para no repetir el problema de
+  // mostrar identidad que no corresponde (F1-10).
+  const correo = user?.email || '';
+  const inicial = (correo.trim()[0] || 't').toLowerCase();
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
@@ -92,17 +108,39 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Footer */}
+        {/* Perfil — antes era branding estático; ahora abre el menú de la cuenta */}
         <div className="p-4 border-t border-border">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-700 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">t</span>
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-medium text-foreground truncate">trucky</div>
-              <div className="text-[10px] text-violet-300/70">Your road co-pilot</div>
-            </div>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              aria-label="Abrir menú de perfil"
+              className="w-full flex items-center gap-2 rounded-lg p-1.5 -m-1.5 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+            >
+              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-700 flex items-center justify-center flex-shrink-0">
+                <span className="text-xs font-bold text-white">{inicial}</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-medium text-foreground truncate">Perfil</div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {correo || 'Sesión activa'}
+                </div>
+              </div>
+              <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+            </DropdownMenuTrigger>
+
+            <DropdownMenuContent align="start" side="top" className="w-56">
+              <DropdownMenuLabel className="font-normal">
+                <div className="text-xs font-medium text-foreground">Cuenta</div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {correo || 'Sin correo asociado'}
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onSelect={() => logout()} className="text-sm">
+                <LogOut className="w-4 h-4 mr-2" />
+                Cerrar sesión
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </aside>
 

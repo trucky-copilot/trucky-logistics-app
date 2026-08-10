@@ -45,7 +45,7 @@ const ACCESSORIALS_LINE = ACCESSORIALS
     : `${a.label} $${a.min}-${a.max}${a.unit || ''}`)
   .join(' | ');
 
-const BASE_CONTEXT = `Eres TruckyAI, el asistente de inteligencia de mercado para Larcofer USA, empresa de drayage intermodal en Miami, FL.
+const BASE_CONTEXT = `Eres TruckyAI, el asistente de inteligencia de mercado para dispatchers y carriers de drayage intermodal en el sur de Florida.
 
 [Freight Dispatcher KB v${FREIGHT_KB_VERSION}]
 
@@ -63,15 +63,14 @@ VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
 - void check = cheque anulado para configurar pago ACH/EFT con broker
 - TONU = Truck Order Not Used (cuando el broker cancela después de confirmar)
 
-EMPRESA:
-- Larcofer USA, Miami FL — Drayage intermodal
-- Puertos: PortMiami, Port Everglades (Fort Lauderdale)
-- Rutas principales: Tampa, Fort Myers/Naples, WPB, Fort Pierce, Pompano, Orlando, Jacksonville
+MERCADO DE REFERENCIA (dato del mercado, NO de una empresa en particular):
+- Puertos del sur de Florida: PortMiami, Port Everglades (Fort Lauderdale)
+- Corredores habituales desde esa zona: Tampa, Fort Myers/Naples, WPB, Fort Pierce, Pompano, Orlando, Jacksonville
 
 EQUIPOS Y BENCHMARKS RPM (7 tipos — usa estos IDs exactos al extraer "equipo"):
 ${EQUIPMENT_LINES}
 
-LANES LARCOFER (catálogo; millas REDONDO = ida + vuelta, salvo que el dispatcher diga "solo ida"/"one way"):
+CATÁLOGO DE RUTAS DE REFERENCIA (millas REDONDO = ida + vuelta, salvo que el dispatcher diga "solo ida"/"one way"):
 ${LANE_LINES}
 - Port Everglades (Fort Lauderdale) se trata como zona base de Miami; agrega +$${PORT_EVERGLADES_SURCHARGE} de recargo de puerto — NO es una ruta aparte.
 
@@ -88,7 +87,8 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
 1. Respuestas MUY CORTAS — máximo 5 líneas. El dispatcher no quiere leer párrafos.
 2. NUNCA sugerir "busca carga de regreso" — eso lo maneja el dispatcher, no el broker.
 3. NUNCA inventes cifras de tarifas, millas o mínimos que no estén en esta KB — si no las tienes, dilo.
-4. Para preguntas que no son de ruta, responde en máximo 3 líneas.`;
+4. Para preguntas que no son de ruta, responde en máximo 3 líneas.
+5. IDENTIDAD: la empresa del usuario es únicamente la que aparezca en el bloque "EMPRESA DEL USUARIO". Si ese bloque no está, NO tienes ese dato: dilo y NUNCA nombres ni supongas una empresa. Jamás menciones el nombre de ninguna otra empresa como si fuera la del usuario.`;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHEMA DE EXTRACCIÓN — Único InvokeLLM del handler devuelve exactamente esto.
@@ -166,6 +166,37 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 
 const COSTCONFIG_DEFAULTS = { diesel_precio: 5.5, mpg: 6.5, tarifa_objetivo: 3.0 };
 
+// ─────────────────────────────────────────────────────────────────────────────
+// EMPRESA DEL USUARIO — se resuelve server-side desde la cuenta autenticada.
+//
+// Antes el nombre de una empresa estaba escrito a mano en BASE_CONTEXT, así que
+// el chat se lo atribuía a cualquier cuenta (F1-10). Ahora sale de la membresía
+// activa del usuario.
+//
+// FAIL-CLOSED: si no se puede resolver, devuelve null y el prompt NO incluye el
+// bloque de empresa. Nunca un nombre por defecto: es preferible que el chat diga
+// que no tiene el dato antes que nombrar una empresa ajena.
+// ─────────────────────────────────────────────────────────────────────────────
+
+async function getOrganizationName(base44, userEmail) {
+  try {
+    const membresias = await base44.entities.OrganizationMember.filter({
+      user_email: userEmail,
+      active: true,
+    });
+    const organizationId = membresias?.[0]?.organization_id;
+    if (!organizationId) return null;
+
+    const organizaciones = await base44.entities.Organization.filter({ id: organizationId });
+    const nombre = organizaciones?.[0]?.name;
+    return typeof nombre === 'string' && nombre.trim() ? nombre.trim() : null;
+  } catch (_error) {
+    // Si la lectura falla, se sigue sin nombre de empresa en vez de romper la
+    // respuesta del chat.
+    return null;
+  }
+}
+
 async function getCostConfig(base44, userEmail, clientCostConfig) {
   try {
     const registros = await base44.entities.CostConfig.filter({ usuario: userEmail });
@@ -217,9 +248,15 @@ Deno.serve(async (req) => {
 
   try {
     const cappedMessages = capHistory(messages, HISTORY_CAP);
-    const costConfig = await getCostConfig(base44, user.email, clientCostConfig);
+    const [costConfig, organizationName] = await Promise.all([
+      getCostConfig(base44, user.email, clientCostConfig),
+      getOrganizationName(base44, user.email),
+    ]);
 
     let systemContext = BASE_CONTEXT;
+    if (organizationName) {
+      systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
+    }
     if (costConfig && costConfig.costo_por_milla) {
       systemContext += `\n\nCOSTOS PERSONALIZADOS DEL USUARIO (solo contexto de rentabilidad para respuestas generales; NUNCA se usan para el piso/objetivo de rate_check):
 - Diésel: $${costConfig.diesel_precio ?? COSTCONFIG_DEFAULTS.diesel_precio}/gal | MPG: ${costConfig.mpg ?? COSTCONFIG_DEFAULTS.mpg}
