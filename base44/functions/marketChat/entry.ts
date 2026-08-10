@@ -1,7 +1,8 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
-// El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto y armado
-// de la respuesta) vive en ./rateEngine.ts para poder cubrirlo con `deno test`.
+// El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto, la
+// resolución de equipo y el armado de la respuesta) vive en ./rateEngine.ts
+// para poder cubrirlo con `deno test`.
 // Acá queda solo lo que necesita I/O: el prompt, la llamada al LLM, la lectura
 // de CostConfig y el handler HTTP.
 import {
@@ -15,7 +16,8 @@ import {
   HISTORY_CAP,
   MAX_REQUEST_CHARS,
   resolveMiles,
-  normalizeEquipment,
+  resolveEquipment,
+  buildEquipmentQuestionMarkdown,
   getFlatBucket,
   computeFloor,
   computeTarget,
@@ -24,7 +26,9 @@ import {
   buildGeneralMarkdown,
   buildMissingDataMarkdown,
   buildOutOfMarketMarkdown,
+  buildOffTopicMarkdown,
   detectarFueraDeMercado,
+  resolveIntent,
   safeFallbackContent,
   capHistory,
   isValidMessages,
@@ -96,19 +100,19 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHEMA DE EXTRACCIÓN — Único InvokeLLM del handler devuelve exactamente esto.
 // El código NO confía ciegamente en enum/formato: normaliza defensivamente
-// (ver normalizeEquipment/resolveMiles) por si el LLM se desvía del schema.
+// (ver resolveEquipment/resolveMiles) por si el LLM se desvía del schema.
 // ─────────────────────────────────────────────────────────────────────────────
 const EXTRACTION_SCHEMA = {
   type: 'object',
   properties: {
-    intent: { type: 'string', enum: ['rate_check', 'general'] },
+    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic'] },
     origen: { type: 'string' },
     destino: { type: 'string' },
     millas_ida: { type: 'number' },
     es_redondo: { type: 'boolean' },
     equipo: {
       type: 'string',
-      enum: ['dry_van', 'reefer', 'flatbed', 'step_deck', 'drayage_20', 'drayage_40', 'power_only', 'unknown'],
+      enum: ['dry_van', 'reefer', 'flatbed', 'step_deck', 'drayage_20', 'drayage_40', 'power_only', 'drayage', 'unknown'],
     },
     tarifa_ofrecida: { type: 'number' },
     respuesta_general: { type: 'string' },
@@ -153,11 +157,18 @@ ${conversationHistory}
 
 === INSTRUCCIONES DE EXTRACCIÓN ===
 Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversación y extrae los datos según el schema. Reglas:
-- intent="rate_check" solo si el dispatcher pregunta por una tarifa/ruta específica; en cualquier otro caso usa "general".
+- intent="rate_check" solo si el dispatcher pregunta por una tarifa/ruta específica.
+- intent="off_topic" solo si el mensaje NO tiene relación con freight, dispatch u operación de carriers — por ejemplo: programación, clima, deportes, recetas, política, traducción, chistes, o aritmética sin referencia a freight, consejos personales, u otras industrias.
+- intent="general" en cualquier otro caso: freight, drayage, puertos, brokers, carriers, equipo, documentos (rate confirmation, BOL), costos (diésel, MPG, peajes), regulación (HOS, TWIC, DOT), cargos (detention, per diem, demurrage, TONU, chassis split), geografía del mercado — incluso frases genéricas como "¿cuánto está el diésel?", "¿qué es TWIC?" o "¿qué es un chasis?".
+- Ante la duda usa "general". Nunca uses "off_topic" si el mensaje menciona algún término de la KB.
+- Ejemplos de off_topic: "¿cómo escribo un for loop en Python?" · "¿cómo está el clima en Miami hoy?" · "¿quién ganó el partido de fútbol de ayer?" · "dame una receta de arroz con pollo" · "¿qué opinas de las elecciones?" · "¿cuánto es 15% de 2400?" · "traduce 'hello' al español" · "cuéntame un chiste".
+- Ejemplos que SÍ son general aunque suenen genéricos: "¿cuánto está el diésel?" · "¿qué es TWIC?" · "¿qué es un chasis?" · "¿cuánto es 15% de una carga de $2,400?" (tiene referente de freight).
 - origen/destino: nombres de ciudad tal como los menciona el dispatcher; usa null si no aparecen.
 - millas_ida: tu mejor estimación de millas de SOLO IDA (una dirección); null si no puedes estimarla.
 - es_redondo: true por defecto; usa false solo si el dispatcher dice explícitamente "solo ida" o "one way".
 - equipo: uno de dry_van, reefer, flatbed, step_deck, drayage_20, drayage_40, power_only; usa "unknown" si no se menciona o no coincide.
+- equipo="drayage": si el dispatcher dice "drayage" o "contenedor"/"container" SIN especificar 20' ni 40', usa "drayage" — NO adivines el tamaño.
+- equipo, distinción reefer vs. contenedor: "reefer" es un trailer refrigerado (tarifa por RPM); un contenedor refrigerado que sale de puerto es un movimiento de drayage → usa "drayage" (o drayage_20/drayage_40 si dice el tamaño), nunca "reefer".
 - tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece; null si no se menciona ninguna cifra.
 - respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, en español, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
 }
@@ -274,7 +285,13 @@ Deno.serve(async (req) => {
       return Response.json({ content: safeFallbackContent() });
     }
 
-    const intent = raw.intent === 'rate_check' ? 'rate_check' : 'general';
+    // Guardarraíl de tema (Decisión 1): decide el intent en código, no confía
+    // ciegamente en lo que devolvió el LLM. Va antes de cualquier cálculo.
+    const intent = resolveIntent(raw.intent, cappedMessages);
+
+    if (intent === 'off_topic') {
+      return Response.json({ content: buildOffTopicMarkdown() });
+    }
 
     if (intent === 'general') {
       return Response.json({ content: buildGeneralMarkdown(raw.respuesta_general) });
@@ -297,7 +314,15 @@ Deno.serve(async (req) => {
       return Response.json({ content: buildMissingDataMarkdown() });
     }
 
-    const equipment = normalizeEquipment(raw.equipo);
+    // Guardarraíl de equipo (TRUCKY-48 parcial): igual que el guardarraíl de
+    // mercado, corre ANTES de calcular ninguna cifra. resolveEquipment nunca
+    // sustituye un tipo de camión: si no está claro, se pregunta.
+    const resolvedEquipment = resolveEquipment(raw.equipo);
+    if (resolvedEquipment.status === 'ask') {
+      return Response.json({ content: buildEquipmentQuestionMarkdown(resolvedEquipment.reason) });
+    }
+
+    const equipment = resolvedEquipment.equipment;
     const bucket = getFlatBucket(resolved.miles);
     const surcharge = resolved.portEverglades ? PORT_EVERGLADES_SURCHARGE : 0;
     const floor = computeFloor(resolved.miles, equipment.rpm_min, bucket.min, surcharge);

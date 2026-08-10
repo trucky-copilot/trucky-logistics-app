@@ -27,10 +27,6 @@ export interface Equipment {
   rpm_target: number;
 }
 
-export interface ResolvedEquipment extends Equipment {
-  was_defaulted: boolean;
-}
-
 export interface FlatBucket {
   range: string;
   from: number;
@@ -81,7 +77,7 @@ export interface RateCheckContext {
   laneLabel: string | null;
   source: 'catalog' | 'llm';
   lowConfidence: boolean;
-  equipment: ResolvedEquipment;
+  equipment: Equipment;
   floor: number;
   target: number;
   tarifaOfrecida: number | null;
@@ -283,6 +279,108 @@ export function buildOutOfMarketMarkdown(origen: unknown, destino: unknown): str
   ].join('\n');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDARRAÍL DE TEMA — Decisión 1: backstop determinista de alcance de tema.
+//
+// El LLM ya recibe instrucciones de solo responder freight en el prompt, pero
+// eso no es determinista. Igual que detectarFueraDeMercado re-tokeniza el
+// origen/destino en vez de confiar en el LLM, esConsultaDeNegocio re-tokeniza
+// el último mensaje del dispatcher contra el vocabulario de la KB.
+//
+// Precedencia en resolveIntent: rate_check > allowlist de negocio > blocklist
+// (blocklist llega en la Fase 2). La allowlist va ANTES de cualquier blocklist
+// a propósito: negar una pregunta de freight real frente a un prospecto es peor
+// que responder una broma. "Ante la duda, dentro" — igual que FLORIDA_TOKENS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Vocabulario de negocio: equipos, cargos, documentos, geografía cubierta.
+// Reutiliza FLORIDA_TOKENS porque una mención de la zona que cubrimos también
+// es evidencia de que la pregunta es de negocio.
+const DOMAIN_TOKENS = [
+  'drayage', 'contenedor', 'container', 'chasis', 'chassis', 'per diem',
+  'demurrage', 'detention', 'tonu', 'twic', 'bol', 'rate confirmation',
+  'red confirmation', 'backhaul', 'void check', 'broker', 'carrier',
+  'dispatcher', 'diesel', 'mpg', 'milla', 'millas', 'tarifa', 'carga', 'load',
+  'puerto', 'terminal', 'hos', 'deadhead', 'reefer', 'flatbed', 'dry van',
+  'power only', 'step deck', 'pre-pull', 'prepull', 'storage', 'rpm',
+  ...FLORIDA_TOKENS,
+];
+
+/** true si el texto contiene vocabulario de negocio de la KB — la allowlist. */
+export function esConsultaDeNegocio(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  return contieneToken(normalizado, DOMAIN_TOKENS) !== null;
+}
+
+/** Contenido del último mensaje del dispatcher (role 'user'), o '' si no hay. */
+export function ultimoMensajeDelDispatcher(messages: ChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return messages[i].content;
+  }
+  return '';
+}
+
+// TEMPORARY: blocklist de demo, remover después del 2026-08-18 (#7784 item 1).
+// Fast-follow: quitar esta capa una vez el clasificador del LLM esté probado en
+// producción. Cubre 8 categorías, acotadas a lo que aparece de verdad en una
+// demo. Va DETRÁS de la allowlist a propósito: nunca puede ganarle a un término
+// de la KB, así que esFueraDeTema re-chequea la allowlist como defensa interna
+// además de la que ya hace resolveIntent.
+const OFF_TOPIC_TOKENS = [
+  // 1. programación
+  'python', 'javascript', 'codigo', 'programa', 'programar', 'algoritmo', 'script',
+  // 2. clima
+  'clima', 'pronostico del tiempo', 'va a llover',
+  // 3. deportes
+  'futbol', 'partido de futbol', 'campeonato',
+  // 4. recetas
+  'receta', 'cocinar', 'ingredientes de cocina',
+  // 5. política
+  'eleccion', 'elecciones', 'candidato presidencial',
+  // 6. traducción
+  'traduce', 'traducir', 'how do you say',
+  // 7. chistes
+  'chiste', 'cuentame una broma',
+];
+
+// 8va categoría: aritmética pura sin referente de freight ("15% de 2400" vs.
+// "15% de una carga de $2,400" — este último tiene "carga", que ya es un
+// término de la KB y lo rescata la allowlist antes de llegar acá).
+const PURE_ARITHMETIC_RE = /\d+\s*%\s*(de|of)\s*\$?\s*[\d,.]+/;
+
+/** true si el texto cae en una de las 8 categorías de demo Y no hay término de la KB. */
+export function esFueraDeTema(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  if (esConsultaDeNegocio(normalizado)) return false; // la allowlist siempre gana
+  if (contieneToken(normalizado, OFF_TOPIC_TOKENS) !== null) return true;
+  return PURE_ARITHMETIC_RE.test(normalizado);
+}
+
+/**
+ * Decide el intent final con precedencia determinista:
+ *   1. raw === 'rate_check'                                  → 'rate_check'  (nunca se declina)
+ *   2. esConsultaDeNegocio(último mensaje)                    → 'general'     (la allowlist rescata)
+ *   3. raw === 'off_topic' || esFueraDeTema(último mensaje)   → 'off_topic'   (LLM o blocklist temporal)
+ *   4. cualquier otro caso                                    → 'general'     (comportamiento por defecto)
+ */
+export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' {
+  if (raw === 'rate_check') return 'rate_check';
+  const ultimo = ultimoMensajeDelDispatcher(messages);
+  if (esConsultaDeNegocio(ultimo)) return 'general';
+  if (raw === 'off_topic' || esFueraDeTema(ultimo)) return 'off_topic';
+  return 'general';
+}
+
+/** Respuesta de rechazo cuando el mensaje no es de negocio. Sin cifras. */
+export function buildOffTopicMarkdown(): string {
+  return [
+    '🚚 Solo manejo temas de freight: tarifas, rutas y operación de drayage en el sur de Florida.',
+    'Pregúntame por tarifas, rutas u operación y te respondo al instante.',
+  ].join('\n');
+}
+
 // Resuelve millas RT: el catálogo gana sobre la estimación del LLM.
 // Sin match en catálogo y sin millas_ida → insufficient=true (pedir aclaración,
 // nunca inventar).
@@ -310,17 +408,48 @@ export function resolveMiles(
   return { miles: null, source: 'llm', lane_label: null, low_confidence: false, portEverglades, insufficient: true };
 }
 
-// dry_van es el fallback y siempre existe en el catálogo de equipos.
-const DRY_VAN: Equipment = EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van')!;
+// ─────────────────────────────────────────────────────────────────────────────
+// RESOLUCIÓN DE EQUIPO — reemplaza a normalizeEquipment (TRUCKY-48 F2-09).
+//
+// ANTES: cualquier id que no estuviera en EQUIPMENT_BENCHMARKS caía en dry_van,
+// incluyendo "drayage" a secas (el enum solo tiene drayage_20 y drayage_40).
+// Eso subvaluaba el piso silenciosamente — el defecto que corregía TRUCKY-48.
+//
+// AHORA: resolveEquipment nunca sustituye un tipo de camión. O el usuario dijo
+// un id válido del benchmark, o se pregunta — nunca se asume dry van. Total y
+// determinista: la misma entrada siempre da la misma salida, por construcción
+// (no hay estado ni I/O).
+// ─────────────────────────────────────────────────────────────────────────────
 
-// OJO: cualquier id que no esté en EQUIPMENT_BENCHMARKS cae en dry_van. Eso
-// incluye "drayage" a secas, porque el enum solo tiene drayage_20 y drayage_40.
-// Es el defecto que corrige TRUCKY-48 (F2-09); acá se conserva el comportamiento
-// actual a propósito, y las pruebas lo documentan como tal.
-export function normalizeEquipment(raw: unknown): ResolvedEquipment {
+export type EquipmentResolution =
+  | { status: 'ok'; equipment: Equipment }
+  | { status: 'ask'; reason: 'missing' | 'size' };
+
+// "drayage"/"container"/"contenedor" a secas mencionan un contenedor sin decir
+// el tamaño — no es un equipo desconocido, es un equipo incompleto.
+const CONTAINER_WITHOUT_SIZE_TOKENS = ['drayage', 'container', 'contenedor'];
+
+export function resolveEquipment(raw: unknown): EquipmentResolution {
   const found = EQUIPMENT_BENCHMARKS.find(e => e.id === raw);
-  if (found) return { ...found, was_defaulted: false };
-  return { ...DRY_VAN, was_defaulted: true };
+  if (found) return { status: 'ok', equipment: found };
+  if (typeof raw === 'string' && CONTAINER_WITHOUT_SIZE_TOKENS.includes(raw)) {
+    return { status: 'ask', reason: 'size' };
+  }
+  return { status: 'ask', reason: 'missing' };
+}
+
+/** Copia distinta según qué le falta al equipo: el equipo entero, o solo el tamaño. */
+export function buildEquipmentQuestionMarkdown(reason: 'missing' | 'size'): string {
+  if (reason === 'size') {
+    return [
+      '📦 Para darte un piso preciso necesito el tamaño del contenedor.',
+      "¿Es un contenedor de 20' o de 40'?",
+    ].join('\n');
+  }
+  return [
+    '📦 Para calcular el piso necesito saber el equipo.',
+    '¿Con qué equipo lo mueves? (dry van, reefer, flatbed, step deck, drayage 20\' o 40\', power only)',
+  ].join('\n');
 }
 
 export function getFlatBucket(miles: number): FlatBucket {
@@ -350,11 +479,13 @@ export function resolveFloorBasis(miles: number, rpmMin: number, flatMin: number
   return flatMin >= Math.round(rpmMin * miles) ? 'flat' : 'rpm';
 }
 
+// TRUCKY-53 Q5: el label es una sugerencia, no una orden. El emoji y el band
+// (el semáforo) quedan byte-a-byte iguales — solo cambia el texto del label.
 export function computeVerdict(tarifa: number | null, floor: number, target: number): Verdict {
   if (tarifa == null) return { emoji: '📊', label: 'REFERENCIA', band: 'reference' };
-  if (tarifa < floor) return { emoji: '🔴', label: 'RECHAZAR', band: 'reject' };
-  if (tarifa < target) return { emoji: '🟡', label: 'NEGOCIAR', band: 'negotiate' };
-  return { emoji: '🟢', label: 'ACEPTAR', band: 'accept' };
+  if (tarifa < floor) return { emoji: '🔴', label: 'TE SUGIERO PEDIR MÁS', band: 'reject' };
+  if (tarifa < target) return { emoji: '🟡', label: 'TE SUGIERO NEGOCIAR', band: 'negotiate' };
+  return { emoji: '🟢', label: 'TE SUGIERO TOMARLA', band: 'accept' };
 }
 
 export function formatUSD(n: number): string {
@@ -375,7 +506,7 @@ export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
   // catálogo; "confianza baja" es una señal extra para estimaciones fuera del
   // rango de sanidad (10–3000 mi).
   const millasTag = `~${miles} mi ${esRedondo === false ? 'solo ida' : 'redondo'}${source === 'llm' ? ' · millas estimadas' : ''}${lowConfidence ? ' · confianza baja' : ''}`;
-  const equipoTag = `${equipment.label}${equipment.was_defaulted ? ' (asumido dry van)' : ''}`;
+  const equipoTag = equipment.label;
   const puertoTag = portEverglades ? ` · +$${PORT_EVERGLADES_SURCHARGE} recargo Port Everglades incluido` : '';
 
   // Solo se muestra la referencia por milla cuando ES la que puso el piso. Si el
@@ -399,11 +530,14 @@ export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
   const verdict = computeVerdict(tarifaOfrecida, floor, target);
   const diferencia = tarifaOfrecida - floor;
   const posicion = tarifaOfrecida < floor ? 'bajo el piso' : (tarifaOfrecida < target ? 'entre piso y objetivo' : 'sobre objetivo');
+  // El consejo agrega la acción, no repite el label — el label ya dice "TE
+  // SUGIERO...", así que acá va lo que sigue: cuánto contraofertar, cuánto
+  // margen queda, o qué hacer para no perder una buena tarifa.
   const consejo = verdict.band === 'reject'
-    ? `Bajo el piso; contrarresta en ${formatUSD(floor)} mínimo.`
+    ? `Contraoferta ${formatUSD(target)}; no la dejes ir por menos de ${formatUSD(floor)}.`
     : verdict.band === 'negotiate'
-      ? `Negocia hacia ${formatUSD(target)}; hay margen.`
-      : 'Buena tarifa, confirma el RC rápido.';
+      ? `Ya cubre el piso; el margen hasta ${formatUSD(target)} es lo que puedes empujar.`
+      : 'Sobre objetivo; asegura el RC antes de que la reasignen.';
 
   return [
     `${verdict.emoji} **${verdict.label}** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,

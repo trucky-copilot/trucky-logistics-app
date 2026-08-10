@@ -28,7 +28,8 @@ import {
   matchesAny,
   findLane,
   resolveMiles,
-  normalizeEquipment,
+  resolveEquipment,
+  buildEquipmentQuestionMarkdown,
   getFlatBucket,
   computeFloor,
   computeTarget,
@@ -43,6 +44,11 @@ import {
   safeFallbackContent,
   capHistory,
   isValidMessages,
+  esConsultaDeNegocio,
+  ultimoMensajeDelDispatcher,
+  resolveIntent,
+  buildOffTopicMarkdown,
+  esFueraDeTema,
 } from '../base44/functions/marketChat/rateEngine.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,39 +155,47 @@ Deno.test('tramos: los bordes caen en el tramo correcto', () => {
 // EQUIPO
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TEST INVERSION 1/7 (TRUCKY-48 F2-09): antes afirmaba
+// ResolvedEquipment.was_defaulted === false para los 7 ids; ahora
+// normalizeEquipment ya no existe — el nuevo shape es EquipmentResolution, y un
+// id válido del benchmark siempre resuelve 'ok' con ese equipo exacto.
 Deno.test('equipo: los 7 ids válidos se resuelven sin asumir nada', () => {
   for (const e of EQUIPMENT_BENCHMARKS) {
-    const r = normalizeEquipment(e.id);
-    assertEquals(r.id, e.id);
-    assertEquals(r.was_defaulted, false);
+    const r = resolveEquipment(e.id);
+    assertEquals(r.status, 'ok');
+    if (r.status === 'ok') assertEquals(r.equipment.id, e.id);
   }
 });
 
-Deno.test('equipo: un id desconocido cae en dry van y queda marcado como asumido', () => {
-  const r = normalizeEquipment('unknown');
-  assertEquals(r.id, 'dry_van');
-  assertEquals(r.was_defaulted, true);
+// TEST INVERSION 2/7 (TRUCKY-48 F2-09): antes un id desconocido caía en dry van
+// marcado was_defaulted=true; ahora se pregunta — nunca se sustituye un equipo.
+Deno.test('equipo: un id desconocido pide el equipo en vez de asumir dry van', () => {
+  const r = resolveEquipment('unknown');
+  assertEquals(r.status, 'ask');
+  if (r.status === 'ask') assertEquals(r.reason, 'missing');
 });
 
-Deno.test('equipo: sin dato cae en dry van y queda marcado como asumido', () => {
-  assertEquals(normalizeEquipment(undefined).was_defaulted, true);
-  assertEquals(normalizeEquipment(null).was_defaulted, true);
-  assertEquals(normalizeEquipment('').was_defaulted, true);
+// TEST INVERSION 3/7 (TRUCKY-48 F2-09): antes sin dato caía en dry van con el
+// sufijo " (asumido dry van)" en la respuesta armada; ahora pide el equipo y
+// ningún texto renderizado contiene la palabra "asumido".
+Deno.test('equipo: sin dato pide el equipo en vez de asumir dry van', () => {
+  for (const raw of [undefined, null, '']) {
+    const r = resolveEquipment(raw);
+    assertEquals(r.status, 'ask');
+    if (r.status === 'ask') assertEquals(r.reason, 'missing');
+  }
 });
 
-// DEFECTO CONOCIDO — TRUCKY-48 (F2-09).
-// "drayage" a secas NO es un valor válido: el catálogo solo tiene drayage_20 y
-// drayage_40. Por eso cae en dry van, que tiene un RPM más bajo, y subvalúa el
-// piso. Esta prueba afirma el comportamiento ACTUAL a propósito, para que quede
-// documentado. Cuando TRUCKY-48 lo corrija, esta prueba debe invertirse de forma
-// deliberada — si falla sola, es que alguien lo arregló sin querer, y eso también
-// es información útil.
-Deno.test('equipo: DEFECTO TRUCKY-48 — "drayage" a secas cae en dry van', () => {
-  const r = normalizeEquipment('drayage');
-  assertEquals(r.id, 'dry_van');
-  assertEquals(r.was_defaulted, true);
-  // Y esto es el daño concreto: cotiza con $2.00/mi en vez de $2.50 o $2.75.
-  assertEquals(r.rpm_min, 2.00);
+// TEST INVERSION 4/7 — TRUCKY-48 (F2-09) CORREGIDO.
+// Esta prueba antes documentaba el defecto a propósito: "drayage" a secas caía
+// en dry van y subvaluaba el piso ($2.00/mi en vez de $2.50-$2.75). Ahora prueba
+// el arreglo: "drayage" a secas nunca cotiza como dry van, pide el tamaño del
+// contenedor. Si esta prueba falla sola después de un cambio futuro, es que
+// alguien reintrodujo el default silencioso — eso también es información útil.
+Deno.test('equipo: TRUCKY-48 corregido — "drayage" a secas pide el tamaño, no cae en dry van', () => {
+  const r = resolveEquipment('drayage');
+  assertEquals(r.status, 'ask');
+  if (r.status === 'ask') assertEquals(r.reason, 'size');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -321,9 +335,11 @@ Deno.test('veredicto: sin oferta es solo referencia', () => {
   assertEquals(computeVerdict(null, 1000, 1500).label, 'REFERENCIA');
 });
 
+// TRUCKY-53 Q5: el label deja de ser una orden imperativa ("RECHAZAR") y pasa a
+// ser una sugerencia. El band (el semáforo) NO cambia — sigue siendo 'reject'.
 Deno.test('veredicto: bajo el piso se rechaza', () => {
   assertEquals(computeVerdict(999, 1000, 1500).band, 'reject');
-  assertEquals(computeVerdict(999, 1000, 1500).label, 'RECHAZAR');
+  assertEquals(computeVerdict(999, 1000, 1500).label, 'TE SUGIERO PEDIR MÁS');
 });
 
 Deno.test('veredicto: entre piso y objetivo se negocia', () => {
@@ -338,6 +354,43 @@ Deno.test('veredicto: en o sobre el objetivo se acepta', () => {
 
 Deno.test('veredicto: justo en el piso ya no se rechaza', () => {
   assertEquals(computeVerdict(1000, 1000, 1500).band, 'negotiate');
+});
+
+// TRUCKY-53 Q5 — encabezados de sugerencia, uno por banda. El semáforo (emoji +
+// band) está congelado; lo único que cambia es que el label deja de ser una
+// orden. Ninguna respuesta debe contener "debes" ni los labels imperativos
+// viejos de otra banda.
+Deno.test('veredicto: encabezado de sugerencia — banda rechazo', () => {
+  const verdict = computeVerdict(999, 1000, 1500);
+  assertEquals(verdict.emoji, '🔴');
+  assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 999, floor: 1000, target: 1500 });
+  assertEquals(out.includes('debes'), false);
+  assertEquals(out.includes('**RECHAZAR**'), false);
+  assertEquals(out.includes('**ACEPTAR**'), false);
+  assertEquals(out.includes('**NEGOCIAR**'), false);
+});
+
+Deno.test('veredicto: encabezado de sugerencia — banda negociar', () => {
+  const verdict = computeVerdict(1200, 1000, 1500);
+  assertEquals(verdict.emoji, '🟡');
+  assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1200, floor: 1000, target: 1500 });
+  assertEquals(out.includes('debes'), false);
+  assertEquals(out.includes('**RECHAZAR**'), false);
+  assertEquals(out.includes('**ACEPTAR**'), false);
+  assertEquals(out.includes('**NEGOCIAR**'), false);
+});
+
+Deno.test('veredicto: encabezado de sugerencia — banda aceptar', () => {
+  const verdict = computeVerdict(2000, 1000, 1500);
+  assertEquals(verdict.emoji, '🟢');
+  assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 2000, floor: 1000, target: 1500 });
+  assertEquals(out.includes('debes'), false);
+  assertEquals(out.includes('**RECHAZAR**'), false);
+  assertEquals(out.includes('**ACEPTAR**'), false);
+  assertEquals(out.includes('**NEGOCIAR**'), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -366,6 +419,15 @@ Deno.test('texto: matchesAny encuentra cualquiera de los tokens', () => {
 // RESPUESTA ARMADA — el desglose numérico siempre presente (bug del PR #1).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// TEST ADAPTATION 7/7 (TRUCKY-48 F2-09): CTX_BASE.equipment usaba
+// normalizeEquipment (que ya no existe); ahora usa un Equipment plano, resuelto
+// con resolveEquipment y desempaquetado desde el shape 'ok'.
+function equipoOk(id: string) {
+  const r = resolveEquipment(id);
+  if (r.status !== 'ok') throw new Error(`fixture de prueba inválido: '${id}' no resuelve 'ok'`);
+  return r.equipment;
+}
+
 const CTX_BASE: RateCheckContext = {
   origen: 'Miami',
   destino: 'Tampa',
@@ -374,7 +436,7 @@ const CTX_BASE: RateCheckContext = {
   laneLabel: 'Miami ↔ Tampa',
   source: 'catalog',
   lowConfidence: false,
-  equipment: normalizeEquipment('dry_van'),
+  equipment: equipoOk('dry_van'),
   floor: 1400,
   target: 1800,
   tarifaOfrecida: null,
@@ -392,7 +454,7 @@ Deno.test('respuesta: sin oferta muestra piso y objetivo como referencia', () =>
 
 Deno.test('respuesta: con oferta siempre trae el desglose completo', () => {
   const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 });
-  assertStringIncludes(out, 'RECHAZAR');
+  assertStringIncludes(out, 'TE SUGIERO PEDIR MÁS');
   assertStringIncludes(out, 'Piso: $1,400');
   assertStringIncludes(out, 'Ofrecen $1,000');
   assertStringIncludes(out, '/mi');
@@ -456,9 +518,14 @@ Deno.test('respuesta: el mínimo por milla que compara es el que gobierna el pis
   assertEquals(/\(mín \$2\.00\/mi\)/.test(out), false);
 });
 
-Deno.test('respuesta: avisa cuando asumió el equipo', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: normalizeEquipment('drayage') });
-  assertStringIncludes(out, '(asumido dry van)');
+// TEST INVERSION 5/7 (TRUCKY-48 F2-09): antes probaba que un equipo asumido
+// aparecía marcado "(asumido dry van)"; ese concepto ya no existe — el equipo
+// que llega a buildRateCheckMarkdown siempre es real (resuelto 'ok'), así que
+// la respuesta nunca puede contener "asumido".
+Deno.test('respuesta: nunca menciona un equipo asumido', () => {
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: equipoOk('reefer') });
+  assertEquals(/asumido/i.test(out), false);
+  assertStringIncludes(out, 'Reefer');
 });
 
 Deno.test('respuesta: avisa cuando las millas son estimadas', () => {
@@ -508,4 +575,110 @@ Deno.test('entrada: se rechaza cualquier forma inválida de mensajes', () => {
   assertEquals(isValidMessages([{ content: 'sin rol' }]), false);
   assertEquals(isValidMessages([{ role: 'user' }]), false);
   assertEquals(isValidMessages([{ role: 'user', content: 42 }]), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDARRAÍL DE TEMA — Decisión 1 (allowlist determinista de vocabulario KB).
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('tema: esConsultaDeNegocio reconoce vocabulario de negocio', () => {
+  assert(esConsultaDeNegocio('¿cuánto está el diésel hoy?'), 'diésel debería reconocerse');
+  assert(esConsultaDeNegocio('necesito saber qué es TWIC'), 'TWIC debería reconocerse');
+  assert(esConsultaDeNegocio('¿qué es un chasis?'), 'chasis debería reconocerse');
+});
+
+Deno.test('tema: un mensaje sin vocabulario de negocio no es consulta de negocio', () => {
+  assertEquals(esConsultaDeNegocio('cuéntame un chiste'), false);
+  assertEquals(esConsultaDeNegocio('¿cómo está el clima hoy?'), false);
+  assertEquals(esConsultaDeNegocio(''), false);
+  assertEquals(esConsultaDeNegocio(null), false);
+  assertEquals(esConsultaDeNegocio(undefined), false);
+});
+
+Deno.test('tema: ultimoMensajeDelDispatcher toma el último mensaje de role user', () => {
+  const msgs: Array<{ role: string; content: string }> = [
+    { role: 'user', content: 'primero' },
+    { role: 'assistant', content: 'respuesta' },
+    { role: 'user', content: 'último' },
+  ];
+  assertEquals(ultimoMensajeDelDispatcher(msgs), 'último');
+  assertEquals(ultimoMensajeDelDispatcher([]), '');
+  assertEquals(ultimoMensajeDelDispatcher([{ role: 'assistant', content: 'solo bot' }]), '');
+});
+
+Deno.test('tema: resolveIntent — rate_check explícito siempre gana', () => {
+  assertEquals(resolveIntent('rate_check', [{ role: 'user', content: 'cuéntame un chiste' }]), 'rate_check');
+});
+
+Deno.test('tema: resolveIntent — la allowlist de negocio rescata intent=off_topic', () => {
+  assertEquals(resolveIntent('off_topic', [{ role: 'user', content: '¿cuánto está el diésel?' }]), 'general');
+  assertEquals(resolveIntent('general', [{ role: 'user', content: '¿qué es TWIC?' }]), 'general');
+});
+
+Deno.test('tema: resolveIntent — off_topic explícito sin vocabulario de negocio se declina', () => {
+  assertEquals(resolveIntent('off_topic', [{ role: 'user', content: 'cuéntame un chiste' }]), 'off_topic');
+});
+
+Deno.test('tema: resolveIntent — cualquier otro caso cae en general', () => {
+  assertEquals(resolveIntent('general', [{ role: 'user', content: 'hola, ¿cómo estás?' }]), 'general');
+  assertEquals(resolveIntent(undefined, [{ role: 'user', content: 'hola' }]), 'general');
+});
+
+Deno.test('tema: buildOffTopicMarkdown declina en 2 líneas exactas, sin cifras', () => {
+  const out = buildOffTopicMarkdown();
+  const lineas = out.split('\n');
+  assertEquals(lineas.length, 2);
+  assertStringIncludes(out, 'freight');
+  assertStringIncludes(out, 'sur de Florida');
+  assertEquals(/\$\d/.test(out), false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BLOCKLIST DE DEMO — capa temporal detrás de la allowlist (Fase 2, #7784 item 1).
+// Remover después del 2026-08-18; ver comentario TEMPORARY junto a OFF_TOPIC_TOKENS.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('tema-blocklist: esFueraDeTema detecta las 8 categorías de demo', () => {
+  assert(esFueraDeTema('escribe un script de python que ordene una lista'), 'programación');
+  assert(esFueraDeTema('¿cómo está el clima hoy?'), 'clima');
+  assert(esFueraDeTema('¿quién ganó el partido de fútbol de ayer?'), 'deportes');
+  assert(esFueraDeTema('dame una receta de arroz con pollo'), 'recetas');
+  assert(esFueraDeTema('¿qué opinas de las elecciones?'), 'política');
+  assert(esFueraDeTema('¿cuánto es 15% de 2400?'), 'aritmética pura');
+  assert(esFueraDeTema("traduce 'hello' al español"), 'traducción');
+  assert(esFueraDeTema('cuéntame un chiste'), 'chistes');
+});
+
+Deno.test('tema-blocklist: la allowlist de negocio siempre gana sobre el blocklist', () => {
+  assertEquals(esFueraDeTema('¿cuánto es 15% de una carga de $2,400?'), false);
+  assertEquals(esFueraDeTema('necesito un chiste sobre el TWIC'), false);
+});
+
+Deno.test('tema-blocklist: sin evidencia de las 8 categorías no bloquea', () => {
+  assertEquals(esFueraDeTema('hola, ¿cómo estás?'), false);
+  assertEquals(esFueraDeTema(''), false);
+  assertEquals(esFueraDeTema(null), false);
+});
+
+Deno.test('tema-blocklist: resolveIntent — rate_check gana incluso sobre el blocklist', () => {
+  assertEquals(resolveIntent('rate_check', [{ role: 'user', content: 'cuéntame un chiste' }]), 'rate_check');
+});
+
+Deno.test('tema-blocklist: resolveIntent — declina cuando ni el LLM ni la allowlist rescatan', () => {
+  assertEquals(resolveIntent('general', [{ role: 'user', content: 'cuéntame un chiste' }]), 'off_topic');
+});
+
+Deno.test('equipo: resolveEquipment es determinista — 10 llamadas idénticas dan el mismo resultado', () => {
+  const resultados = Array.from({ length: 10 }, () => resolveEquipment('reefer'));
+  for (const r of resultados) assertEquals(r, resultados[0]);
+  const resultadosAsk = Array.from({ length: 10 }, () => resolveEquipment('drayage'));
+  for (const r of resultadosAsk) assertEquals(r, resultadosAsk[0]);
+});
+
+Deno.test('equipo: buildEquipmentQuestionMarkdown tiene copia distinta para "missing" y "size"', () => {
+  const missing = buildEquipmentQuestionMarkdown('missing');
+  const size = buildEquipmentQuestionMarkdown('size');
+  assertStringIncludes(missing, 'qué equipo');
+  assertStringIncludes(size, "20' o de 40'");
+  assertEquals(missing === size, false);
 });
