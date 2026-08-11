@@ -105,7 +105,20 @@ export default function MarketChat() {
       }
     } catch (err) {
       console.error('MarketChat: error al enviar mensaje', err);
-      setError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.');
+      // El cliente de functions se crea con `interceptResponses: false`, así que
+      // axios rechaza cualquier respuesta no-2xx con el status en `err.response`.
+      // Las entidades (saveSession) sí pasan por el interceptor y lanzan
+      // Base44Error, que trae el status en `err.status`. Antes todo caía en el
+      // mismo mensaje de "revisa tu conexión", así que un 401 del backend
+      // (sesión vencida) se reportaba como problema de red.
+      const status = err?.response?.status ?? err?.status;
+      if (status === 401 || status === 403) {
+        setError('Tu sesión expiró. Vuelve a iniciar sesión para seguir consultando.');
+      } else if (status) {
+        setError(`El asesor no pudo responder (error ${status}). Intenta de nuevo en unos segundos.`);
+      } else {
+        setError('No se pudo enviar el mensaje. Revisa tu conexión e intenta de nuevo.');
+      }
     } finally {
       setLoading(false);
     }

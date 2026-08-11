@@ -46,6 +46,14 @@ function AppContent() {
     if (authError.type === 'auth_required') return <Welcome />;
   }
 
+  // ── SIN SESIÓN (TRUCKY-46) ─────────────────────────────────────────────────
+  // `unauthenticated` significa que `base44.auth.me()` falló: no hay sesión.
+  // Antes este estado no se manejaba y caía al `return <Routes>` de abajo, así
+  // que después de "Cerrar sesión" la app volvía a pintar el shell completo
+  // (sidebar + dashboard) sin sesión: parecía que el logout no hacía nada, y
+  // toda llamada al backend fallaba con 401. Sin sesión, se muestra el login.
+  if (appState === 'unauthenticated') return <Welcome />;
+
   // ── SETUP: user needs to complete onboarding ───────────────────────────────
   if (appState === 'setup') {
     return <Onboarding onComplete={resolveState} />;
