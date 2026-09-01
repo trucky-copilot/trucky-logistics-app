@@ -1067,3 +1067,51 @@ Deno.test('anti-mezcla: un input en español con toggle EN no arrastra el idioma
   }
   assertStringIncludes(out, 'I SUGGEST ASKING FOR MORE');
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVARIANZA NUMÉRICA ENTRE LOCALES (chat-idioma-toggle, Fase 5, criterio 6 del
+// kickoff #9360): la misma consulta en ES y EN debe devolver EXACTAMENTE las
+// mismas cifras (montos, millas, RPM) — solo cambia el texto.
+//
+// Por qué hace falta una prueba nueva: las pruebas de Fase 1-3 ya comparan
+// strings puntuales por caso ('Piso: $1,400' vs 'Floor: $1,400'), pero ninguna
+// extrae TODAS las cifras de la respuesta ensamblada y las compara como
+// secuencia. Un builder que interpolara mal el catálogo — por ejemplo,
+// intercambiar floor/target al armar headerLine solo para uno de los dos
+// locales — podría cambiar una cifra (o su ORDEN) sin que ningún assert
+// puntual existente lo note, porque cada assert puntual mira un fragmento a
+// la vez, no la respuesta completa. Este es exactamente el riesgo que el
+// kickoff señala como el de mayor probabilidad de regresión silenciosa.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Extrae toda secuencia numérica (con o sin '$', con separador de miles y
+// hasta 2 decimales), preservando el ORDEN de aparición. El orden importa
+// tanto como el valor: si un builder intercambiara floor/target al armar el
+// texto, los valores seguirían coincidiendo entre locales como conjunto, pero
+// el orden se invertiría frente al otro locale — comparar como Set no lo
+// detectaría; comparar como array (orden incluido) sí.
+function extraerCifras(texto: string): string[] {
+  return texto.match(/\$?\d[\d,]*(\.\d+)?/g) || [];
+}
+
+const ESCENARIOS_NUMERICOS: Array<{ nombre: string; ctx: RateCheckContext }> = [
+  { nombre: 'sin oferta (solo referencia)', ctx: CTX_BASE },
+  { nombre: 'oferta bajo el piso', ctx: { ...CTX_BASE, tarifaOfrecida: 999 } },
+  { nombre: 'oferta entre piso y objetivo', ctx: { ...CTX_BASE, tarifaOfrecida: 1600 } },
+  { nombre: 'oferta sobre objetivo', ctx: { ...CTX_BASE, tarifaOfrecida: 2000 } },
+  { nombre: 'piso gobernado por RPM (ruta larga)', ctx: { ...CTX_BASE, floorBasis: 'rpm', tarifaOfrecida: 1000 } },
+  { nombre: 'con recargo de Port Everglades', ctx: { ...CTX_BASE, portEverglades: true, tarifaOfrecida: 1000 } },
+  { nombre: 'millas estimadas por el LLM', ctx: { ...CTX_BASE, source: 'llm', tarifaOfrecida: 1000 } },
+];
+
+Deno.test('invarianza numérica: la misma consulta en ES y EN devuelve exactamente las mismas cifras, en el mismo orden (criterio 6 del kickoff)', () => {
+  for (const { nombre, ctx } of ESCENARIOS_NUMERICOS) {
+    const outEs = buildRateCheckMarkdown(ctx, 'es');
+    const outEn = buildRateCheckMarkdown(ctx, 'en');
+    assertEquals(
+      extraerCifras(outEn),
+      extraerCifras(outEs),
+      `[${nombre}] las cifras deberían ser idénticas y en el mismo orden entre ES y EN`,
+    );
+  }
+});
