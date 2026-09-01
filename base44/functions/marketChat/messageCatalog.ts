@@ -14,6 +14,14 @@
 // o un `{ parts: string[] }` — fragmentos estáticos alrededor de los puntos de
 // interpolación, para que `render()` los una y `collectStaticFragments()` los
 // pueda recorrer mecánicamente sin listas mantenidas a mano.
+//
+// reglas-v3-multiestado (reconciliación con chat-idioma-toggle): el motor de
+// tarifas se reescribió por completo (tabla-primero + cálculo-siempre, 259
+// rutas) en paralelo a este catálogo. Las hojas de `rateCheck`/`askMiles`/
+// `sanityCap`/`drayageRoundTrip`/`marginVerdict` de esta sección reemplazan
+// las del árbol viejo (basado en `RateCheckContext`/lanes/flat-minimums, que
+// ya no existe) por las que consume el nuevo `CalculatedQuote` — mismo
+// mecanismo de catálogo, contenido informativo nuevo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type Locale = 'es' | 'en';
@@ -39,26 +47,61 @@ export interface VerdictMessages extends CatalogTree {
   accept: string;
 }
 
+// reglas-v3-multiestado: hojas que consume el nuevo `buildRateCheckMarkdown(q:
+// CalculatedQuote, locale)`. Cada campo de acá tiene un call site concreto en
+// rateEngine.ts — ver el comentario junto a cada builder.
 export interface RateCheckMessages extends CatalogTree {
   fallbackRuta: string;
-  roundTripTag: string;
-  oneWayTag: string;
-  estimatedMilesSuffix: string;
-  lowConfidenceSuffix: string;
-  portSurchargeSuffix: { parts: string[] };
-  flatBasisLine: { parts: string[] };
-  rpmBasisLine: { parts: string[] };
+  milesIdaSuffix: string;
+  userDataTag: string;
   headerLine: { parts: string[] };
-  locationLine: { parts: string[] };
-  confirmPrompt: string;
-  askOfferPrompt: string;
-  adviceReject: { parts: string[] };
-  adviceNegotiate: { parts: string[] };
-  adviceAccept: string;
-  posicionBajoPiso: string;
-  posicionEntre: string;
-  posicionSobre: string;
-  tallyLine: { parts: string[] };
+  targetTabla: { parts: string[] };
+  targetDerivadoPrefix: { parts: string[] };
+  targetDerivadoDobleSupuesto: string;
+  targetDerivadoSimple: string;
+  targetTramoCorto: { parts: string[] };
+  targetCalculo: { parts: string[] };
+  floorTabla: { parts: string[] };
+  floorDatoUsuario: { parts: string[] };
+  floorTramoCorto: { parts: string[] };
+  floorSinDato: string;
+  segundaLecturaLine: { parts: string[] };
+  referenciasEstadoLabel: { parts: string[] };
+  referenciasGeneralLabel: string;
+  referenciaItemLine: { parts: string[] };
+  accesorialesPropios: { parts: string[] };
+  accesorialesHeredados: { parts: string[] };
+  accesorialItemLine: { parts: string[] };
+  estadoGenericoFallback: string;
+  txFuelSurchargeWarning: string;
+  ofertaVerdictLine: { parts: string[] };
+}
+
+export interface AskMilesMessages extends CatalogTree {
+  line1: { parts: string[] };
+  line2: string;
+}
+
+export interface SanityCapMessages extends CatalogTree {
+  line1: string;
+  line2: string;
+}
+
+export interface DrayageRoundTripMessages extends CatalogTree {
+  includedLine: { parts: string[] };
+  includedDistanceLine: { parts: string[] };
+  hypothesisLine: { parts: string[] };
+  estimatedDistanceLine: { parts: string[] };
+}
+
+export interface MarginVerdictMessages extends CatalogTree {
+  baseLabelPagoCamion: string;
+  baseLabelCostoPropio: string;
+  bandFuerte: string;
+  bandAjustado: string;
+  bandDebil: string;
+  line: { parts: string[] };
+  masRestrictivoLine: { parts: string[] };
 }
 
 export interface EquipmentQuestionMessages extends CatalogTree {
@@ -78,13 +121,6 @@ export interface MissingDataMessages extends CatalogTree {
   line2: string;
 }
 
-export interface OutOfMarketMessages extends CatalogTree {
-  noRatesPrefix: string;
-  coverageLine: string;
-  confirmedRoutesLine: { parts: string[] };
-  askMoreLine: string;
-}
-
 export interface SafeFallbackMessages extends CatalogTree {
   content: string;
 }
@@ -101,20 +137,30 @@ export interface ExtractionMessages extends CatalogTree {
 }
 
 // Insumos derivados que entry.ts calcula UNA vez (locale-neutral: cifras,
-// labels de equipo/lane) y pasa a la función de BASE_CONTEXT del locale
-// activo. `accessorialsLine` SÍ depende del locale (buildAccessorialsLine) y
-// entry.ts la recalcula por request.
+// labels de equipo, conteos de tabla) y pasa a la función de BASE_CONTEXT del
+// locale activo. `accessorialsLine` SÍ depende del locale (buildAccessorialsLine)
+// y entry.ts la recalcula por request.
 export interface BaseContextInputs {
   freightKbVersion: string;
   equipmentLines: string;
-  laneLines: string;
-  flatMinLine: string;
+  routeCountFl: number;
+  routeCountTx: number;
   accessorialsLine: string;
-  portEvergladesSurcharge: number;
   detentionStandard: number;
   detentionFreeHours: number;
   detentionMin: number;
   detentionMax: number;
+  deadheadOkPct: number;
+  deadheadConcerningPct: number;
+  deadheadLongMiles: number;
+  deadheadExtraMin: number;
+  deadheadExtraMax: number;
+  hosDrivingHours: number;
+  hosOnDutyHours: number;
+  hosBreakMinutes: number;
+  hosBreakAfterHours: number;
+  hos8Days: number;
+  hos7Days: number;
 }
 
 export type BaseContextBuilder = (inputs: BaseContextInputs) => string;
@@ -122,10 +168,13 @@ export type BaseContextBuilder = (inputs: BaseContextInputs) => string;
 export interface LocaleMessages {
   verdict: VerdictMessages;
   rateCheck: RateCheckMessages;
+  askMiles: AskMilesMessages;
+  sanityCap: SanityCapMessages;
+  drayageRoundTrip: DrayageRoundTripMessages;
+  marginVerdict: MarginVerdictMessages;
   equipmentQuestion: EquipmentQuestionMessages;
   offTopic: OffTopicMessages;
   missingData: MissingDataMessages;
-  outOfMarket: OutOfMarketMessages;
   safeFallback: SafeFallbackMessages;
   units: UnitsMessages;
   extraction: ExtractionMessages;
@@ -143,31 +192,59 @@ export const MESSAGES: Record<Locale, LocaleMessages> = {
       accept: 'TE SUGIERO TOMARLA',
     },
     rateCheck: {
-      fallbackRuta: 'Ruta solicitada',
-      roundTripTag: 'redondo',
-      oneWayTag: 'solo ida',
-      estimatedMilesSuffix: ' · millas estimadas',
-      lowConfidenceSuffix: ' · confianza baja',
-      portSurchargeSuffix: { parts: [' · +$', ' recargo Port Everglades incluido'] },
-      flatBasisLine: { parts: ['📐 Manda el mínimo del tramo ', ' · equivale a $', '/mi con estas millas · Equipo: ', ''] },
-      rpmBasisLine: { parts: ['💰 Mercado: $', '–$', '/mi · Equipo: ', ''] },
-      headerLine: { parts: ['', ' **', '** | Piso: ', ' | Objetivo: ', ''] },
-      locationLine: { parts: ['📍 ', ' (', ')'] },
-      confirmPrompt: '💡 Confirma origen, destino, millas y equipo para afinar la cifra.',
-      askOfferPrompt: '¿Cuánto te ofrecen? Te digo si conviene.',
-      adviceReject: { parts: ['Contraoferta ', '; no la dejes ir por menos de ', '.'] },
-      adviceNegotiate: { parts: ['Ya cubre el piso; el margen hasta ', ' es lo que puedes empujar.'] },
-      adviceAccept: 'Sobre objetivo; asegura el RC antes de que la reasignen.',
-      posicionBajoPiso: 'bajo el piso',
-      posicionEntre: 'entre piso y objetivo',
-      posicionSobre: 'sobre objetivo',
-      tallyLine: { parts: ['🧮 Ofrecen ', ' = $', '/mi (mín $', '/mi) → ', ', diferencia ', ' vs piso'] },
+      fallbackRuta: 'la ruta consultada',
+      milesIdaSuffix: ' mi de ida',
+      userDataTag: ' · dato del usuario',
+      headerLine: { parts: ['📊 ', ' (', ') · ', ''] },
+      targetTabla: { parts: ['Objetivo de tabla: ', ''] },
+      targetDerivadoPrefix: { parts: ["Objetivo derivado del 40' de tabla: ", ''] },
+      targetDerivadoDobleSupuesto: ' · doble supuesto: se aplica un factor estándar de industria sobre OTRO factor estándar de industria, no es tarifa de tabla',
+      targetDerivadoSimple: ' · derivado, no es tarifa de tabla',
+      targetTramoCorto: { parts: ['Objetivo de tramo corto (mínimo de referencia bajo ', ' mi): ', ''] },
+      targetCalculo: { parts: ['Objetivo calculado (RPM × millas): ', ''] },
+      floorTabla: { parts: ['Piso de tabla: ', ''] },
+      floorDatoUsuario: { parts: ['Piso desde tu dato (lo que le pagás al camión): ', ''] },
+      floorTramoCorto: { parts: ['Piso de tramo corto (mínimo de referencia bajo ', ' mi): ', ' · si querés afinarlo decime tu costo por día'] },
+      floorSinDato: 'Sin piso: no tengo tu costo por milla ni lo que le pagás al camión.',
+      segundaLecturaLine: { parts: ['🔁 Segunda lectura — HIPÓTESIS (regreso vacío, no es un dato confirmado): si el camión vuelve vacío recorriendo las mismas millas, ese mismo pago equivale a $', '/mi sobre ', ' mi ida y vuelta.'] },
+      referenciasEstadoLabel: { parts: ['Rutas cercanas de referencia en ', ' (no es una cotización de esta ruta):'] },
+      referenciasGeneralLabel: 'Valores de referencia general del mercado (no es una cotización de esta ruta):',
+      referenciaItemLine: { parts: ['- ', ' (', ' mi): ', ''] },
+      accesorialesPropios: { parts: ['Accesoriales de ', ':'] },
+      accesorialesHeredados: { parts: ['Accesoriales heredados de ', ' (tu ruta no tiene tabla propia de accesoriales; la tarifa de arriba NO sale de ahí):'] },
+      accesorialItemLine: { parts: ['- ', ': ', ''] },
+      estadoGenericoFallback: 'el mercado',
+      txFuelSurchargeWarning: '⚠️ El Fuel Surcharge de Texas ya está incluido en la tarifa de tabla de arriba — no se suma aparte. En la confirmación con el bróker suele presentarse por separado; conviene verificarlo ahí.',
+      ofertaVerdictLine: { parts: ['', ' Te ofrecen ', ' → ', ''] },
+    },
+    askMiles: {
+      line1: { parts: ['📊 No tengo esa ruta en mi tabla', ', así que necesito las millas de ida para calcular.'] },
+      line2: 'Decime las millas y te doy el número — nunca las estimo por mi cuenta.',
+    },
+    sanityCap: {
+      line1: '⚠️ Con esas millas no tengo una referencia confiable para calcular por milla.',
+      line2: 'Pásame las millas exactas, o lo que le pagás al camión, y te doy un número defendible.',
+    },
+    drayageRoundTrip: {
+      includedLine: { parts: ['🔁 La tarifa de tabla (', ') ya incluye ida, vuelta y devolución del equipo — no hay nada que sumar.'] },
+      includedDistanceLine: { parts: ['Distancia total del movimiento: ~', ' mi.'] },
+      hypothesisLine: { parts: ['🔁 Total aproximado ida y vuelta: ', ' — HIPÓTESIS: asumimos que el regreso recorre las mismas ', ' mi; no es un dato confirmado de tabla.'] },
+      estimatedDistanceLine: { parts: ['Distancia total estimada: ~', ' mi.'] },
+    },
+    marginVerdict: {
+      baseLabelPagoCamion: 'lo que le pagás al camión',
+      baseLabelCostoPropio: 'tu costo propio declarado',
+      bandFuerte: 'margen fuerte',
+      bandAjustado: 'margen ajustado, vale la pena comparar otras opciones',
+      bandDebil: 'margen débil frente a ese costo',
+      line: { parts: ['', ' Margen vs. ', ': ', ' (', '%) → ', ''] },
+      masRestrictivoLine: { parts: ['Entre las dos bases, la más restrictiva es "', '" — con esa conviene comparar antes de confirmar.'] },
     },
     equipmentQuestion: {
       sizeIntro: '📦 Para darte un piso preciso necesito el tamaño del contenedor.',
-      sizeQuestion: "¿Es un contenedor de 20' o de 40'?",
+      sizeQuestion: "¿Es un contenedor de 20', 40', 45' o 20' Heavy?",
       missingIntro: '📦 Para calcular el piso necesito saber el equipo.',
-      missingQuestion: "¿Con qué equipo lo mueves? (dry van, reefer, flatbed, step deck, drayage 20' o 40', power only)",
+      missingQuestion: '¿Con qué equipo lo mueves? (dry van, reefer, flatbed, step deck, drayage, power only)',
     },
     offTopic: {
       line1: '🚚 Solo manejo temas de freight: tarifas, rutas y operación de drayage en el sur de Florida.',
@@ -175,13 +252,7 @@ export const MESSAGES: Record<Locale, LocaleMessages> = {
     },
     missingData: {
       line1: '📊 Necesito más datos para calcular el piso y el objetivo.',
-      line2: 'Dime origen, destino y millas (o si es "solo ida") — con eso te doy el número exacto.',
-    },
-    outOfMarket: {
-      noRatesPrefix: '📊 No tengo tarifas de esa ruta',
-      coverageLine: 'Mis datos cubren drayage del sur de Florida: PortMiami y Port Everglades.',
-      confirmedRoutesLine: { parts: ['Rutas con tarifa confirmada: ', '.'] },
-      askMoreLine: 'Si necesitas esa zona, dime las millas y te calculo con referencias de mercado, aclarando que no es una tarifa de tabla.',
+      line2: 'Dime origen, destino, equipo y millas (de ida) — con eso te doy el número exacto.',
     },
     safeFallback: {
       content: '⚠️ No pude procesar la consulta; reintenta. Para tarifas incluye origen, destino, millas y equipo.',
@@ -192,17 +263,21 @@ export const MESSAGES: Record<Locale, LocaleMessages> = {
     extraction: {
       languageDirective: 'en español',
     },
-    // Migrado ÍNTEGRO desde entry.ts (BASE_CONTEXT, chat-idioma-toggle Fase 2
-    // T2.4) — mismo contenido semántico, sin traducir ni recortar, solo
-    // reubicado y parametrizado por los insumos derivados que antes eran
-    // interpolación directa de módulo.
-    baseContext: (i) => `Eres TruckyAI, el asistente de inteligencia de mercado para dispatchers y carriers de drayage intermodal en el sur de Florida.
+    // reglas-v3-multiestado: reemplaza el CATÁLOGO DE RUTAS DE REFERENCIA /
+    // MÍNIMOS FLAT RATE de la versión chat-idioma-toggle original (conceptos
+    // eliminados por Fase 3 — ver cabecera de rateEngine.ts) por la descripción
+    // del mercado tabla-primero + cálculo-siempre. DEADHEAD/HOS pasan a
+    // interpolarse desde HOS_LIMITS/DEADHEAD_THRESHOLDS (única fuente de
+    // verdad, Fase 7) en vez de quedar como literales fijos — mismo contenido
+    // numérico que la versión anterior.
+    baseContext: (i) => `Eres TruckyAI, el asistente de inteligencia de mercado para dispatchers y carriers de drayage y freight en Florida y Texas.
 
 [Freight Dispatcher KB v${i.freightKbVersion}]
 
 VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
 - FIT = Florida International Terminal (Medley/Hialeah, zona de PortMiami)
-- SFST = South Florida Staging Terminal
+- POMTOC / SFCT = terminales de PortMiami
+- PET / Broward / Everglades = Port Everglades (Fort Lauderdale)
 - Pompano = Pompano Beach, FL
 - WPB = West Palm Beach, FL
 - drayage = transporte de contenedores desde/hacia puerto
@@ -214,25 +289,17 @@ VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
 - void check = cheque anulado para configurar pago ACH/EFT con broker
 - TONU = Truck Order Not Used (cuando el broker cancela después de confirmar)
 
-MERCADO DE REFERENCIA (dato del mercado, NO de una empresa en particular):
-- Puertos del sur de Florida: PortMiami, Port Everglades (Fort Lauderdale)
-- Corredores habituales desde esa zona: Tampa, Fort Myers/Naples, WPB, Fort Pierce, Pompano, Orlando, Jacksonville
+MERCADOS CUBIERTOS POR TABLA REAL DE TARIFAS: Florida (${i.routeCountFl} rutas de drayage) y Texas (${i.routeCountTx} rutas de drayage, Houston/Dallas-Ft Worth/El Paso). Para cualquier otro estado, o para cualquier equipo que no sea drayage, NO hay tabla: se calcula por RPM y se declara como cálculo — nunca se rechaza por falta de tabla.
 
-EQUIPOS Y BENCHMARKS RPM (7 tipos — usa estos IDs exactos al extraer "equipo"):
+RPM BASE POR EQUIPO (7 tipos — usa estos IDs exactos al extraer "equipo"; el número de piso/objetivo real lo calcula el código, no lo inventes):
 ${i.equipmentLines}
-
-CATÁLOGO DE RUTAS DE REFERENCIA (millas REDONDO = ida + vuelta, salvo que el dispatcher diga "solo ida"/"one way"):
-${i.laneLines}
-- Port Everglades (Fort Lauderdale) se trata como zona base de Miami; agrega +$${i.portEvergladesSurcharge} de recargo de puerto — NO es una ruta aparte.
-
-MÍNIMOS FLAT RATE (el piso real siempre es el MAYOR entre este mínimo y RPM mínimo del equipo × millas): ${i.flatMinLine}
 
 DETENTION: único valor válido en toda respuesta — $${i.detentionStandard}/hr estándar tras ${i.detentionFreeHours}h libres (rango $${i.detentionMin}-$${i.detentionMax}/hr). NUNCA menciones otra cifra de detention.
 ACCESSORIALS: ${i.accessorialsLine}
 
-DEADHEAD: <20% millas cargadas=OK | 20-40%=Preocupante | >40%=Deal-breaker. Si deadhead >100mi, pedir $1.00-$1.50/mi adicional.
+DEADHEAD: <${i.deadheadOkPct}% millas cargadas=OK | ${i.deadheadOkPct}-${i.deadheadConcerningPct}%=Preocupante | >${i.deadheadConcerningPct}%=Deal-breaker. Si deadhead >${i.deadheadLongMiles}mi, pedir $${i.deadheadExtraMin.toFixed(2)}-$${i.deadheadExtraMax.toFixed(2)}/mi adicional.
 
-HOS: 11h conducción diaria | 14h on-duty | Pausa 30min tras 8h conduciendo | 70h/8días o 60h/7días.
+HOS: ${i.hosDrivingHours}h conducción diaria | ${i.hosOnDutyHours}h on-duty | Pausa ${i.hosBreakMinutes}min tras ${i.hosBreakAfterHours}h conduciendo | ${i.hos8Days}h/8días o ${i.hos7Days}h/7días.
 
 REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálculos de tarifa de rate_check se hacen en código, no aquí):
 1. Respuestas MUY CORTAS — máximo 5 líneas. El dispatcher no quiere leer párrafos.
@@ -249,31 +316,59 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
       accept: 'I SUGGEST TAKING IT',
     },
     rateCheck: {
-      fallbackRuta: 'Requested route',
-      roundTripTag: 'round trip',
-      oneWayTag: 'one way',
-      estimatedMilesSuffix: ' · estimated miles',
-      lowConfidenceSuffix: ' · low confidence',
-      portSurchargeSuffix: { parts: [' · +$', ' Port Everglades surcharge included'] },
-      flatBasisLine: { parts: ['📐 The segment minimum ', ' applies · equals $', '/mi at this distance · Equipment: ', ''] },
-      rpmBasisLine: { parts: ['💰 Market: $', '–$', '/mi · Equipment: ', ''] },
-      headerLine: { parts: ['', ' **', '** | Floor: ', ' | Target: ', ''] },
-      locationLine: { parts: ['📍 ', ' (', ')'] },
-      confirmPrompt: '💡 Confirm origin, destination, miles, and equipment to refine the number.',
-      askOfferPrompt: "How much are they offering you? I'll tell you if it's worth it.",
-      adviceReject: { parts: ['Counter at ', "; don't let it go for less than ", '.'] },
-      adviceNegotiate: { parts: ['It already covers the floor; the room up to ', ' is what you can push for.'] },
-      adviceAccept: 'Above target; lock in the rate confirmation before it gets reassigned.',
-      posicionBajoPiso: 'below the floor',
-      posicionEntre: 'between floor and target',
-      posicionSobre: 'above target',
-      tallyLine: { parts: ["🧮 They're offering ", ' = $', '/mi (min $', '/mi) → ', ', difference ', ' vs floor'] },
+      fallbackRuta: 'the requested route',
+      milesIdaSuffix: ' mi one way',
+      userDataTag: ' · user-provided',
+      headerLine: { parts: ['📊 ', ' (', ') · ', ''] },
+      targetTabla: { parts: ['Table target: ', ''] },
+      targetDerivadoPrefix: { parts: ["Target derived from the table 40': ", ''] },
+      targetDerivadoDobleSupuesto: ' · double assumption: a standard industry factor is applied on top of ANOTHER standard industry factor, this is not a table rate',
+      targetDerivadoSimple: ' · derived, not a table rate',
+      targetTramoCorto: { parts: ['Short-haul target (reference minimum under ', ' mi): ', ''] },
+      targetCalculo: { parts: ['Calculated target (RPM × miles): ', ''] },
+      floorTabla: { parts: ['Table floor: ', ''] },
+      floorDatoUsuario: { parts: ['Floor from your data (what you pay the truck): ', ''] },
+      floorTramoCorto: { parts: ['Short-haul floor (reference minimum under ', ' mi): ', ' · tell me your daily cost to refine it'] },
+      floorSinDato: "No floor: I don't have your cost per mile or what you pay the truck.",
+      segundaLecturaLine: { parts: ['🔁 Second reading — HYPOTHESIS (empty return, not a confirmed figure): if the truck returns empty covering the same miles, that same pay equals $', '/mi over ', ' round-trip mi.'] },
+      referenciasEstadoLabel: { parts: ['Nearby reference routes in ', ' (not a quote for this route):'] },
+      referenciasGeneralLabel: 'General market reference values (not a quote for this route):',
+      referenciaItemLine: { parts: ['- ', ' (', ' mi): ', ''] },
+      accesorialesPropios: { parts: ['Accessorials from ', ':'] },
+      accesorialesHeredados: { parts: ['Accessorials inherited from ', ' (your route has no accessorials table of its own; the rate above does NOT come from there):'] },
+      accesorialItemLine: { parts: ['- ', ': ', ''] },
+      estadoGenericoFallback: 'the market',
+      txFuelSurchargeWarning: "⚠️ The Texas Fuel Surcharge is already included in the table rate above — do not add it separately. It's often shown separately on the broker's rate confirmation; worth double-checking there.",
+      ofertaVerdictLine: { parts: ['', ' They are offering ', ' → ', ''] },
+    },
+    askMiles: {
+      line1: { parts: ["📊 I don't have that route in my table", ', so I need the one-way miles to calculate.'] },
+      line2: "Tell me the miles and I'll give you the number — I never estimate them on my own.",
+    },
+    sanityCap: {
+      line1: "⚠️ With those miles I don't have a reliable per-mile reference to calculate.",
+      line2: "Send me the exact miles, or what you pay the truck, and I'll give you a defensible number.",
+    },
+    drayageRoundTrip: {
+      includedLine: { parts: ['🔁 The table rate (', ') already includes there, back, and equipment return — nothing to add.'] },
+      includedDistanceLine: { parts: ['Total movement distance: ~', ' mi.'] },
+      hypothesisLine: { parts: ['🔁 Approximate round-trip total: ', ' — HYPOTHESIS: assumes the return covers the same ', ' mi; not a confirmed table figure.'] },
+      estimatedDistanceLine: { parts: ['Estimated total distance: ~', ' mi.'] },
+    },
+    marginVerdict: {
+      baseLabelPagoCamion: 'what you pay the truck',
+      baseLabelCostoPropio: 'your declared own cost',
+      bandFuerte: 'strong margin',
+      bandAjustado: 'tight margin, worth comparing other options',
+      bandDebil: 'weak margin against that cost',
+      line: { parts: ['', ' Margin vs. ', ': ', ' (', '%) → ', ''] },
+      masRestrictivoLine: { parts: ['Between the two bases, the most restrictive is "', '" — worth comparing before confirming.'] },
     },
     equipmentQuestion: {
       sizeIntro: '📦 To give you an accurate floor I need the container size.',
-      sizeQuestion: "Is it a 20' or 40' container?",
+      sizeQuestion: "Is it a 20', 40', 45', or 20' Heavy container?",
       missingIntro: '📦 To calculate the floor I need to know the equipment.',
-      missingQuestion: "What equipment are you moving it with? (dry van, reefer, flatbed, step deck, drayage 20' or 40', power only)",
+      missingQuestion: 'What equipment are you moving it with? (dry van, reefer, flatbed, step deck, drayage, power only)',
     },
     offTopic: {
       line1: '🚚 I only handle freight topics: rates, routes, and drayage operations in South Florida.',
@@ -281,13 +376,7 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
     },
     missingData: {
       line1: '📊 I need more data to calculate the floor and target.',
-      line2: 'Tell me origin, destination, and miles (or if it\'s "one way") — with that I\'ll give you the exact number.',
-    },
-    outOfMarket: {
-      noRatesPrefix: "📊 I don't have rates for that route",
-      coverageLine: 'My data covers South Florida drayage: PortMiami and Port Everglades.',
-      confirmedRoutesLine: { parts: ['Confirmed-rate routes: ', '.'] },
-      askMoreLine: "If you need that area, tell me the miles and I'll calculate it using market references, noting it's not a table rate.",
+      line2: "Tell me origin, destination, equipment, and miles (one way) — with that I'll give you the exact number.",
     },
     safeFallback: {
       content: "⚠️ I couldn't process the request; please retry. For rates include origin, destination, miles, and equipment.",
@@ -302,38 +391,31 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
     // porque para un lector angloparlante fluido drayage/backhaul/detention/
     // per diem/demurrage/TONU/void check son vocabulario nativo, no siglas que
     // haya que explicar. Se conservan únicamente los acrónimos propios de esta
-    // KB (FIT, SFST, Pompano, WPB) — códigos internos del proyecto, no
-    // vocabulario general de freight. Mismas 5 reglas críticas, mismo
-    // guardarraíl de identidad, mismo contenido numérico (Design).
-    baseContext: (i) => `You are TruckyAI, the market intelligence assistant for dispatchers and carriers of intermodal drayage in South Florida.
+    // KB (FIT, POMTOC, SFCT, PET, Pompano, WPB) — códigos internos del
+    // proyecto, no vocabulario general de freight. Mismas 5 reglas críticas,
+    // mismo guardarraíl de identidad, mismo contenido numérico (Design).
+    baseContext: (i) => `You are TruckyAI, the market intelligence assistant for dispatchers and carriers of drayage and freight in Florida and Texas.
 
 [Freight Dispatcher KB v${i.freightKbVersion}]
 
 KB-SPECIFIC LOCATION CODES:
 - FIT = Florida International Terminal (Medley/Hialeah, PortMiami area)
-- SFST = South Florida Staging Terminal
+- POMTOC / SFCT = PortMiami terminals
+- PET / Broward / Everglades = Port Everglades (Fort Lauderdale)
 - Pompano = Pompano Beach, FL
 - WPB = West Palm Beach, FL
 
-REFERENCE MARKET (market-wide data, NOT a specific company's rates):
-- South Florida ports: PortMiami, Port Everglades (Fort Lauderdale)
-- Common corridors from this area: Tampa, Fort Myers/Naples, WPB, Fort Pierce, Pompano, Orlando, Jacksonville
+MARKETS COVERED BY A REAL RATE TABLE: Florida (${i.routeCountFl} drayage routes) and Texas (${i.routeCountTx} drayage routes, Houston/Dallas-Ft Worth/El Paso). For any other state, or for any non-drayage equipment, there is no table: the rate is calculated by RPM and declared as a calculation — never rejected for lack of a table.
 
-EQUIPMENT AND RPM BENCHMARKS (7 types — use these exact IDs when extracting "equipo"):
+EQUIPMENT RPM BASE (7 types — use these exact IDs when extracting "equipo"; the code calculates the real floor/target number, do not invent it):
 ${i.equipmentLines}
-
-REFERENCE LANE CATALOG (miles are ROUND TRIP = there and back, unless the dispatcher says "one way"):
-${i.laneLines}
-- Port Everglades (Fort Lauderdale) counts as a Miami-area base zone; add +$${i.portEvergladesSurcharge} port surcharge — it is NOT a separate lane.
-
-FLAT RATE MINIMUMS (the real floor is always the GREATER of this minimum and the equipment's RPM minimum × miles): ${i.flatMinLine}
 
 DETENTION: the only valid figure across the whole response — $${i.detentionStandard}/hr standard after ${i.detentionFreeHours}h free (range $${i.detentionMin}-$${i.detentionMax}/hr). NEVER mention a different detention figure.
 ACCESSORIALS: ${i.accessorialsLine}
 
-DEADHEAD: <20% loaded miles=OK | 20-40%=Concerning | >40%=Deal-breaker. If deadhead is over 100mi, ask for an extra $1.00-$1.50/mi.
+DEADHEAD: <${i.deadheadOkPct}% loaded miles=OK | ${i.deadheadOkPct}-${i.deadheadConcerningPct}%=Concerning | >${i.deadheadConcerningPct}%=Deal-breaker. If deadhead is over ${i.deadheadLongMiles}mi, ask for an extra $${i.deadheadExtraMin.toFixed(2)}-$${i.deadheadExtraMax.toFixed(2)}/mi.
 
-HOS: 11h daily driving | 14h on-duty | 30min break after 8h driving | 70h/8days or 60h/7days.
+HOS: ${i.hosDrivingHours}h daily driving | ${i.hosOnDutyHours}h on-duty | ${i.hosBreakMinutes}min break after ${i.hosBreakAfterHours}h driving | ${i.hos8Days}h/8days or ${i.hos7Days}h/7days.
 
 CRITICAL RESPONSE RULES (apply only to "respuesta_general" — rate_check calculations are handled in code, not here):
 1. VERY SHORT responses — 5 lines max. The dispatcher doesn't want to read paragraphs.

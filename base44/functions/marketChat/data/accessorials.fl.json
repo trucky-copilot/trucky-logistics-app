@@ -1,0 +1,202 @@
+[
+  {
+    "concepto": "Pre-Pull Fee (MIA)",
+    "gatillo": "Sacar contenedor del puerto antes y guardarlo en yarda",
+    "monto": "$100 · por contenedor",
+    "nota": "No aplica cargo si el movimiento ya es OTR. Evita per diem/demurrage.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 3
+    }
+  },
+  {
+    "concepto": "Pre-Pull Fee (PEV)",
+    "gatillo": "Igual que arriba, desde Port Everglades",
+    "monto": "$115 · por contenedor",
+    "nota": "No aplica cargo si el movimiento ya es OTR.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 4
+    }
+  },
+  {
+    "concepto": "Reefer",
+    "gatillo": "Contenedor refrigerado",
+    "monto": "Por contenedor · cotizar",
+    "nota": "Cargo por el CONTENEDOR refrigerado, no por el tipo de camión reefer. Requiere generador/genset — sobrecosto según disponibilidad.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 5
+    }
+  },
+  {
+    "concepto": "Hazmat",
+    "gatillo": "Carga peligrosa",
+    "monto": "$60 · por contenedor",
+    "nota": "Requiere endoso y a veces ruta/tiempo especial.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 6
+    }
+  },
+  {
+    "concepto": "Drop Fee / Bobtail",
+    "gatillo": "Dejar contenedor o mover sin él — 30 a 50 millas",
+    "monto": "Media pierna (half leg)",
+    "nota": "Cobra la mitad del tramo.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 7
+    }
+  },
+  {
+    "concepto": "Drop Fee / Bobtail",
+    "gatillo": "Dejar contenedor o mover sin él — 50 millas o más",
+    "monto": "Round trip completo",
+    "nota": "Cobra la vuelta completa.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 8
+    }
+  },
+  {
+    "concepto": "Extra Stop",
+    "gatillo": "Parada extra 0–5 mi (solo live loads)",
+    "monto": "$50",
+    "nota": "Parada adicional dentro del mismo viaje.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 9
+    }
+  },
+  {
+    "concepto": "Extra Stop",
+    "gatillo": "Parada extra 5–50 mi",
+    "monto": "Tarifa de pierna (leg)",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 10
+    }
+  },
+  {
+    "concepto": "Extra Stop",
+    "gatillo": "Parada extra +50 mi",
+    "monto": "Round trip completo",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 11
+    }
+  },
+  {
+    "concepto": "Lost Trip",
+    "gatillo": "Viaje perdido 0–50 mi",
+    "monto": "Tarifa de pierna (leg)",
+    "nota": "Cliente canceló con camión ya en ruta.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 12
+    }
+  },
+  {
+    "concepto": "Lost Trip",
+    "gatillo": "Viaje perdido 50 mi o más",
+    "monto": "Round trip completo",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 13
+    }
+  },
+  {
+    "concepto": "Daily Chassis Charge",
+    "gatillo": "Uso de chasis",
+    "monto": "2 días gratis incluidos · luego per diem",
+    "nota": "Después de 2 días libres se cobra per diem diario del chasis.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 14
+    }
+  },
+  {
+    "concepto": "Waiting Time",
+    "gatillo": "OTR: tras 2 h gratis · Local: tras 1 h gratis",
+    "monto": "$75 · por hora",
+    "nota": "Detención. Rango de mercado $50–$100/hora (confirmado en TRUCKY-53). Empieza a correr pasado el tiempo libre.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 15
+    }
+  },
+  {
+    "concepto": "Yard Stop Fee",
+    "gatillo": "Horario estricto: OTR(>80mi) tras 10am · Mid-OTR(50–80mi) tras 1pm · Local(0–20mi) tras 2pm",
+    "monto": "$100–$115",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 16
+    }
+  },
+  {
+    "concepto": "Layover",
+    "gatillo": "Camión retenido de un día para otro",
+    "monto": "$250",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 17
+    }
+  },
+  {
+    "concepto": "Weekend / Holiday",
+    "gatillo": "Entrega en fin de semana o feriado",
+    "monto": "$25 · por pierna",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 18
+    }
+  },
+  {
+    "concepto": "Residential Charge",
+    "gatillo": "Entrega residencial",
+    "monto": "Por movimiento · cotizar",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 19
+    }
+  },
+  {
+    "concepto": "Seal Fee",
+    "gatillo": "Sello de contenedor",
+    "monto": "$0",
+    "nota": "Incluido.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 20
+    }
+  },
+  {
+    "concepto": "Dock Move",
+    "gatillo": "Movimiento en muelle",
+    "monto": "$25 · por contenedor",
+    "nota": null,
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 21
+    }
+  },
+  {
+    "concepto": "Congestion",
+    "gatillo": "Más de 3 horas en el puerto",
+    "monto": "$50",
+    "nota": "Congestión portuaria.",
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "fila": 22
+    }
+  }
+]

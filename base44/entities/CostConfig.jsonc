@@ -48,6 +48,10 @@
     "tarifa_objetivo": {
       "type": "number",
       "default": 3.0
+    },
+    "pago_camion_rpm": {
+      "type": "number",
+      "description": "Lo que el usuario le paga al camión por milla (RPM). Decisión 9-B: NO es dato de tabla, lo declara el usuario, se pregunta una sola vez y se reutiliza como piso cuando el estado consultado no trae piso de tabla (Florida). Sin default a propósito: su ausencia significa que todavía no se preguntó."
     }
   },
   "required": [
