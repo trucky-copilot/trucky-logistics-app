@@ -51,6 +51,69 @@ import {
   esFueraDeTema,
 } from '../base44/functions/marketChat/rateEngine.ts';
 
+import type { Locale } from '../base44/functions/marketChat/messageCatalog.ts';
+import {
+  MESSAGES,
+  render,
+  collectStaticFragments,
+  resolveLocale,
+} from '../base44/functions/marketChat/messageCatalog.ts';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATÁLOGO DE MENSAJES — bootstrap del módulo (chat-idioma-toggle, Fase 1A).
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('messageCatalog: es/en tienen el mismo árbol de claves', () => {
+  // Recorre el árbol y devuelve solo la FORMA (claves), nunca el contenido de
+  // las hojas — así la prueba de paridad no se acopla a la redacción.
+  const keysTree = (node: unknown): unknown => {
+    if (typeof node === 'string') return null;
+    if (node && typeof node === 'object' && Array.isArray((node as { parts?: unknown }).parts)) return null;
+    if (node && typeof node === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(node as Record<string, unknown>).sort()) {
+        out[k] = keysTree((node as Record<string, unknown>)[k]);
+      }
+      return out;
+    }
+    return null;
+  };
+  assertEquals(keysTree(MESSAGES.es), keysTree(MESSAGES.en));
+});
+
+Deno.test('render: hoja string devuelve el string', () => {
+  assertEquals(render('hola'), 'hola');
+});
+
+Deno.test('render: hoja {parts} concatena e interpola argumentos', () => {
+  assertEquals(render({ parts: ['a-', '-b-', '-c'] }, 'X', 'Y'), 'a-X-b-Y-c');
+  assertEquals(render({ parts: ['solo'] }), 'solo');
+});
+
+Deno.test('collectStaticFragments: recorre el árbol y filtra fragmentos <3 chars no-espacio', () => {
+  const tree = {
+    dominio: {
+      corto: '· ',
+      largo: 'hola mundo',
+      hoja: { parts: ['ab', 'cde'] },
+    },
+  };
+  const fragments = collectStaticFragments(tree);
+  assertEquals(fragments.includes('hola mundo'), true);
+  assertEquals(fragments.includes('cde'), true);
+  assertEquals(fragments.includes('· '), false);
+  assertEquals(fragments.includes('ab'), false);
+});
+
+Deno.test("resolveLocale: allowlist ['es','en'], default 'es' ante undefined/inválido/tipo incorrecto", () => {
+  assertEquals(resolveLocale('es'), 'es');
+  assertEquals(resolveLocale('en'), 'en');
+  assertEquals(resolveLocale(undefined), 'es');
+  assertEquals(resolveLocale('fr'), 'es');
+  assertEquals(resolveLocale(123), 'es');
+  assertEquals(resolveLocale(null), 'es');
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DATOS DE REFERENCIA — si alguien cambia un número de la tabla, esto falla y
 // dice cuál. Es el criterio 3 del ticket TRUCKY-50.
@@ -319,11 +382,17 @@ Deno.test('mercado: los abreviados no coinciden dentro de otra palabra', () => {
 });
 
 Deno.test('mercado: el mensaje de rechazo no entrega ninguna cifra de tarifa', () => {
-  const out = buildOutOfMarketMarkdown('Savannah, Georgia', 'Atlanta');
+  const out = buildOutOfMarketMarkdown('Savannah, Georgia', 'Atlanta', 'es');
   assertStringIncludes(out, 'No tengo tarifas de esa ruta');
   assertStringIncludes(out, 'sur de Florida');
   assertStringIncludes(out, 'Tampa');
   assertEquals(/\$\d/.test(out), false);
+
+  const outEn = buildOutOfMarketMarkdown('Savannah, Georgia', 'Atlanta', 'en');
+  assertStringIncludes(outEn, "don't have rates for that route");
+  assertStringIncludes(outEn, 'South Florida');
+  assertStringIncludes(outEn, 'Tampa');
+  assertEquals(/\$\d/.test(outEn), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -331,15 +400,21 @@ Deno.test('mercado: el mensaje de rechazo no entrega ninguna cifra de tarifa', (
 // ─────────────────────────────────────────────────────────────────────────────
 
 Deno.test('veredicto: sin oferta es solo referencia', () => {
-  assertEquals(computeVerdict(null, 1000, 1500).band, 'reference');
-  assertEquals(computeVerdict(null, 1000, 1500).label, 'REFERENCIA');
+  assertEquals(computeVerdict(null, 1000, 1500, 'es').band, 'reference');
+  assertEquals(computeVerdict(null, 1000, 1500, 'es').label, 'REFERENCIA');
+
+  assertEquals(computeVerdict(null, 1000, 1500, 'en').band, 'reference');
+  assertEquals(computeVerdict(null, 1000, 1500, 'en').label, 'REFERENCE');
 });
 
 // TRUCKY-53 Q5: el label deja de ser una orden imperativa ("RECHAZAR") y pasa a
 // ser una sugerencia. El band (el semáforo) NO cambia — sigue siendo 'reject'.
 Deno.test('veredicto: bajo el piso se rechaza', () => {
-  assertEquals(computeVerdict(999, 1000, 1500).band, 'reject');
-  assertEquals(computeVerdict(999, 1000, 1500).label, 'TE SUGIERO PEDIR MÁS');
+  assertEquals(computeVerdict(999, 1000, 1500, 'es').band, 'reject');
+  assertEquals(computeVerdict(999, 1000, 1500, 'es').label, 'TE SUGIERO PEDIR MÁS');
+
+  assertEquals(computeVerdict(999, 1000, 1500, 'en').band, 'reject');
+  assertEquals(computeVerdict(999, 1000, 1500, 'en').label, 'I SUGGEST ASKING FOR MORE');
 });
 
 Deno.test('veredicto: entre piso y objetivo se negocia', () => {
@@ -361,36 +436,63 @@ Deno.test('veredicto: justo en el piso ya no se rechaza', () => {
 // orden. Ninguna respuesta debe contener "debes" ni los labels imperativos
 // viejos de otra banda.
 Deno.test('veredicto: encabezado de sugerencia — banda rechazo', () => {
-  const verdict = computeVerdict(999, 1000, 1500);
+  const verdict = computeVerdict(999, 1000, 1500, 'es');
   assertEquals(verdict.emoji, '🔴');
   assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 999, floor: 1000, target: 1500 });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 999, floor: 1000, target: 1500 }, 'es');
   assertEquals(out.includes('debes'), false);
   assertEquals(out.includes('**RECHAZAR**'), false);
   assertEquals(out.includes('**ACEPTAR**'), false);
   assertEquals(out.includes('**NEGOCIAR**'), false);
+
+  const verdictEn = computeVerdict(999, 1000, 1500, 'en');
+  assertEquals(verdictEn.emoji, '🔴');
+  assert(verdictEn.label.startsWith('I SUGGEST'), 'the label should start with "I SUGGEST"');
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 999, floor: 1000, target: 1500 }, 'en');
+  assertEquals(outEn.includes('must'), false);
+  assertEquals(outEn.includes('**REJECT**'), false);
+  assertEquals(outEn.includes('**ACCEPT**'), false);
+  assertEquals(outEn.includes('**NEGOTIATE**'), false);
 });
 
 Deno.test('veredicto: encabezado de sugerencia — banda negociar', () => {
-  const verdict = computeVerdict(1200, 1000, 1500);
+  const verdict = computeVerdict(1200, 1000, 1500, 'es');
   assertEquals(verdict.emoji, '🟡');
   assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1200, floor: 1000, target: 1500 });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1200, floor: 1000, target: 1500 }, 'es');
   assertEquals(out.includes('debes'), false);
   assertEquals(out.includes('**RECHAZAR**'), false);
   assertEquals(out.includes('**ACEPTAR**'), false);
   assertEquals(out.includes('**NEGOCIAR**'), false);
+
+  const verdictEn = computeVerdict(1200, 1000, 1500, 'en');
+  assertEquals(verdictEn.emoji, '🟡');
+  assert(verdictEn.label.startsWith('I SUGGEST'), 'the label should start with "I SUGGEST"');
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1200, floor: 1000, target: 1500 }, 'en');
+  assertEquals(outEn.includes('must'), false);
+  assertEquals(outEn.includes('**REJECT**'), false);
+  assertEquals(outEn.includes('**ACCEPT**'), false);
+  assertEquals(outEn.includes('**NEGOTIATE**'), false);
 });
 
 Deno.test('veredicto: encabezado de sugerencia — banda aceptar', () => {
-  const verdict = computeVerdict(2000, 1000, 1500);
+  const verdict = computeVerdict(2000, 1000, 1500, 'es');
   assertEquals(verdict.emoji, '🟢');
   assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 2000, floor: 1000, target: 1500 });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 2000, floor: 1000, target: 1500 }, 'es');
   assertEquals(out.includes('debes'), false);
   assertEquals(out.includes('**RECHAZAR**'), false);
   assertEquals(out.includes('**ACEPTAR**'), false);
   assertEquals(out.includes('**NEGOCIAR**'), false);
+
+  const verdictEn = computeVerdict(2000, 1000, 1500, 'en');
+  assertEquals(verdictEn.emoji, '🟢');
+  assert(verdictEn.label.startsWith('I SUGGEST'), 'the label should start with "I SUGGEST"');
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 2000, floor: 1000, target: 1500 }, 'en');
+  assertEquals(outEn.includes('must'), false);
+  assertEquals(outEn.includes('**REJECT**'), false);
+  assertEquals(outEn.includes('**ACCEPT**'), false);
+  assertEquals(outEn.includes('**NEGOTIATE**'), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -446,19 +548,31 @@ const CTX_BASE: RateCheckContext = {
 };
 
 Deno.test('respuesta: sin oferta muestra piso y objetivo como referencia', () => {
-  const out = buildRateCheckMarkdown(CTX_BASE);
+  const out = buildRateCheckMarkdown(CTX_BASE, 'es');
   assertStringIncludes(out, 'REFERENCIA');
   assertStringIncludes(out, 'Piso: $1,400');
   assertStringIncludes(out, 'Objetivo: $1,800');
+
+  const outEn = buildRateCheckMarkdown(CTX_BASE, 'en');
+  assertStringIncludes(outEn, 'REFERENCE');
+  assertStringIncludes(outEn, 'Floor: $1,400');
+  assertStringIncludes(outEn, 'Target: $1,800');
 });
 
 Deno.test('respuesta: con oferta siempre trae el desglose completo', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 }, 'es');
   assertStringIncludes(out, 'TE SUGIERO PEDIR MÁS');
   assertStringIncludes(out, 'Piso: $1,400');
   assertStringIncludes(out, 'Ofrecen $1,000');
   assertStringIncludes(out, '/mi');
   assertStringIncludes(out, 'diferencia');
+
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 }, 'en');
+  assertStringIncludes(outEn, 'I SUGGEST ASKING FOR MORE');
+  assertStringIncludes(outEn, 'Floor: $1,400');
+  assertStringIncludes(outEn, 'offering $1,000');
+  assertStringIncludes(outEn, '/mi');
+  assertStringIncludes(outEn, 'difference');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -479,7 +593,7 @@ Deno.test('base del piso: el tramo manda en ruta corta y el RPM en ruta larga', 
 Deno.test('respuesta: en ruta corta NO muestra un rango por milla que contradiga el piso', () => {
   // El caso reportado: 30 mi con piso $400. Antes decía "Mercado $2.00–$2.50/mi"
   // junto a una cifra que equivale a $13.33/mi.
-  const out = buildRateCheckMarkdown({
+  const build = (locale: Locale) => buildRateCheckMarkdown({
     ...CTX_BASE,
     origen: 'South Palm Beach',
     destino: 'Wellington',
@@ -490,22 +604,32 @@ Deno.test('respuesta: en ruta corta NO muestra un rango por milla que contradiga
     target: 500,
     floorBasis: 'flat',
     bucketRange: '<50 mi',
-  });
+  }, locale);
+  const out = build('es');
   assertEquals(/Mercado: \$/.test(out), false);
   assertStringIncludes(out, 'mínimo del tramo <50 mi');
   assertStringIncludes(out, '$13.33/mi');
+
+  const outEn = build('en');
+  assertEquals(/Market: \$/.test(outEn), false);
+  assertStringIncludes(outEn, 'segment minimum <50 mi');
+  assertStringIncludes(outEn, '$13.33/mi');
 });
 
 Deno.test('respuesta: en ruta larga sí muestra el rango de mercado por milla', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, floorBasis: 'rpm' });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, floorBasis: 'rpm' }, 'es');
   assertStringIncludes(out, 'Mercado: $2.00–$2.50/mi');
   assertEquals(/mínimo del tramo/.test(out), false);
+
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, floorBasis: 'rpm' }, 'en');
+  assertStringIncludes(outEn, 'Market: $2.00–$2.50/mi');
+  assertEquals(/segment minimum/.test(outEn), false);
 });
 
 Deno.test('respuesta: el mínimo por milla que compara es el que gobierna el piso', () => {
   // Ofrecen $500 en 30 mi = $16.67/mi. Contra el benchmark del equipo ($2.00)
   // parecería una tarifa excelente, pero el piso real es $400 = $13.33/mi.
-  const out = buildRateCheckMarkdown({
+  const build = (locale: Locale) => buildRateCheckMarkdown({
     ...CTX_BASE,
     miles: 30,
     floor: 400,
@@ -513,9 +637,14 @@ Deno.test('respuesta: el mínimo por milla que compara es el que gobierna el pis
     tarifaOfrecida: 500,
     floorBasis: 'flat',
     bucketRange: '<50 mi',
-  });
+  }, locale);
+  const out = build('es');
   assertStringIncludes(out, '(mín $13.33/mi)');
   assertEquals(/\(mín \$2\.00\/mi\)/.test(out), false);
+
+  const outEn = build('en');
+  assertStringIncludes(outEn, '(min $13.33/mi)');
+  assertEquals(/\(min \$2\.00\/mi\)/.test(outEn), false);
 });
 
 // TEST INVERSION 5/7 (TRUCKY-48 F2-09): antes probaba que un equipo asumido
@@ -523,31 +652,49 @@ Deno.test('respuesta: el mínimo por milla que compara es el que gobierna el pis
 // que llega a buildRateCheckMarkdown siempre es real (resuelto 'ok'), así que
 // la respuesta nunca puede contener "asumido".
 Deno.test('respuesta: nunca menciona un equipo asumido', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: equipoOk('reefer') });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, equipment: equipoOk('reefer') }, 'es');
   assertEquals(/asumido/i.test(out), false);
   assertStringIncludes(out, 'Reefer');
+
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, equipment: equipoOk('reefer') }, 'en');
+  assertEquals(/assumed/i.test(outEn), false);
+  assertStringIncludes(outEn, 'Reefer');
 });
 
 Deno.test('respuesta: avisa cuando las millas son estimadas', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, source: 'llm' });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, source: 'llm' }, 'es');
   assertStringIncludes(out, 'millas estimadas');
+
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, source: 'llm' }, 'en');
+  assertStringIncludes(outEn, 'estimated miles');
 });
 
 Deno.test('respuesta: declara el recargo de Port Everglades', () => {
-  const out = buildRateCheckMarkdown({ ...CTX_BASE, portEverglades: true });
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, portEverglades: true }, 'es');
   assertStringIncludes(out, 'recargo Port Everglades');
+
+  const outEn = buildRateCheckMarkdown({ ...CTX_BASE, portEverglades: true }, 'en');
+  assertStringIncludes(outEn, 'Port Everglades surcharge');
 });
 
 Deno.test('respuesta: cuando faltan datos pide aclaración en vez de inventar', () => {
-  const out = buildMissingDataMarkdown();
+  const out = buildMissingDataMarkdown('es');
   assertStringIncludes(out, 'Necesito más datos');
+
+  const outEn = buildMissingDataMarkdown('en');
+  assertStringIncludes(outEn, 'I need more data');
 });
 
 Deno.test('respuesta: una respuesta general vacía cae en el mensaje seguro', () => {
-  assertEquals(buildGeneralMarkdown(''), safeFallbackContent());
-  assertEquals(buildGeneralMarkdown('   '), safeFallbackContent());
-  assertEquals(buildGeneralMarkdown(null), safeFallbackContent());
-  assertEquals(buildGeneralMarkdown('  hola  '), 'hola');
+  assertEquals(buildGeneralMarkdown('', 'es'), safeFallbackContent('es'));
+  assertEquals(buildGeneralMarkdown('   ', 'es'), safeFallbackContent('es'));
+  assertEquals(buildGeneralMarkdown(null, 'es'), safeFallbackContent('es'));
+  assertEquals(buildGeneralMarkdown('  hola  ', 'es'), 'hola');
+
+  assertEquals(buildGeneralMarkdown('', 'en'), safeFallbackContent('en'));
+  assertEquals(buildGeneralMarkdown('   ', 'en'), safeFallbackContent('en'));
+  assertEquals(buildGeneralMarkdown(null, 'en'), safeFallbackContent('en'));
+  assertEquals(buildGeneralMarkdown('  hello  ', 'en'), 'hello');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -625,12 +772,19 @@ Deno.test('tema: resolveIntent — cualquier otro caso cae en general', () => {
 });
 
 Deno.test('tema: buildOffTopicMarkdown declina en 2 líneas exactas, sin cifras', () => {
-  const out = buildOffTopicMarkdown();
+  const out = buildOffTopicMarkdown('es');
   const lineas = out.split('\n');
   assertEquals(lineas.length, 2);
   assertStringIncludes(out, 'freight');
   assertStringIncludes(out, 'sur de Florida');
   assertEquals(/\$\d/.test(out), false);
+
+  const outEn = buildOffTopicMarkdown('en');
+  const lineasEn = outEn.split('\n');
+  assertEquals(lineasEn.length, 2);
+  assertStringIncludes(outEn, 'freight');
+  assertStringIncludes(outEn, 'South Florida');
+  assertEquals(/\$\d/.test(outEn), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -676,9 +830,15 @@ Deno.test('equipo: resolveEquipment es determinista — 10 llamadas idénticas d
 });
 
 Deno.test('equipo: buildEquipmentQuestionMarkdown tiene copia distinta para "missing" y "size"', () => {
-  const missing = buildEquipmentQuestionMarkdown('missing');
-  const size = buildEquipmentQuestionMarkdown('size');
+  const missing = buildEquipmentQuestionMarkdown('missing', 'es');
+  const size = buildEquipmentQuestionMarkdown('size', 'es');
   assertStringIncludes(missing, 'qué equipo');
   assertStringIncludes(size, "20' o de 40'");
   assertEquals(missing === size, false);
+
+  const missingEn = buildEquipmentQuestionMarkdown('missing', 'en');
+  const sizeEn = buildEquipmentQuestionMarkdown('size', 'en');
+  assertStringIncludes(missingEn, 'equipment');
+  assertStringIncludes(sizeEn, "20' or 40'");
+  assertEquals(missingEn === sizeEn, false);
 });
