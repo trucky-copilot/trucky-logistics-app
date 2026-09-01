@@ -24,6 +24,8 @@ import {
   FLAT_MINIMUMS,
   PORT_EVERGLADES_SURCHARGE,
   DETENTION,
+  ACCESSORIALS,
+  buildAccessorialsLine,
   normalizeText,
   matchesAny,
   findLane,
@@ -112,6 +114,106 @@ Deno.test("resolveLocale: allowlist ['es','en'], default 'es' ante undefined/inv
   assertEquals(resolveLocale('fr'), 'es');
   assertEquals(resolveLocale(123), 'es');
   assertEquals(resolveLocale(null), 'es');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 2 — locale de punta a punta (chat-idioma-toggle, T2.2/T2.3/T2.4/T2.5).
+//
+// `entry.ts` no se puede importar desde una prueba (Deno.serve() de nivel
+// superior + el import npm:@base44/sdk pinneado en @0.8.25 no resuelve contra
+// el node_modules instalado, que trae @0.8.41 — falla `deno check` por una
+// razón totalmente ajena al locale, preexistente al SDD). Por eso todo lo que
+// necesita cobertura de prueba real en esta fase se extrajo/autoró como
+// función pura en rateEngine.ts/messageCatalog.ts, siguiendo el mismo criterio
+// que ya usa rateEngine.ts para el resto de los builders (ver su comentario de
+// cabecera). El wiring que sí queda solo en entry.ts (extracción del payload,
+// selección de BASE_CONTEXT/buildExtractionPrompt por locale) se verifica por
+// lectura manual, documentado en apply-progress.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('ACCESSORIALS: unit es un tag semántico "perDay", nunca el literal en español', () => {
+  for (const a of ACCESSORIALS) {
+    if (a.unit !== undefined) assertEquals(a.unit, 'perDay');
+  }
+});
+
+Deno.test('buildAccessorialsLine: cambia el sufijo de unidad por locale sin tocar los labels', () => {
+  const es = buildAccessorialsLine('es');
+  assertStringIncludes(es, 'Chassis split $75/día');
+  assertStringIncludes(es, 'Storage $75-150/día');
+  assertStringIncludes(es, 'TONU $150-300');
+  assertStringIncludes(es, 'Pre-Pull $100-200');
+
+  const en = buildAccessorialsLine('en');
+  assertStringIncludes(en, 'Chassis split $75/day');
+  assertStringIncludes(en, 'Storage $75-150/day');
+  assertStringIncludes(en, 'TONU $150-300');
+  assertStringIncludes(en, 'Pre-Pull $100-200');
+});
+
+Deno.test('messageCatalog: extraction.languageDirective flips es/en', () => {
+  assertEquals(MESSAGES.es.extraction.languageDirective, 'en español');
+  assertEquals(MESSAGES.en.extraction.languageDirective, 'in English');
+});
+
+const BASE_CONTEXT_INPUTS = {
+  freightKbVersion: '1.0.0',
+  equipmentLines: '- dry_van (53\' Dry Van): Mín $2.00 | Bueno $2.50/mi',
+  laneLines: '- Miami ↔ Tampa: ~540 mi redondo',
+  flatMinLine: '<50 mi=$400-$500',
+  accessorialsLine: buildAccessorialsLine('es'),
+  portEvergladesSurcharge: 50,
+  detentionStandard: 75,
+  detentionFreeHours: 2,
+  detentionMin: 50,
+  detentionMax: 100,
+};
+
+Deno.test('messageCatalog: baseContext ES conserva reglas críticas, glosario e identidad', () => {
+  const out = MESSAGES.es.baseContext(BASE_CONTEXT_INPUTS);
+  assertStringIncludes(out, 'REGLAS CRÍTICAS DE RESPUESTA');
+  assertStringIncludes(out, 'VOCABULARIO DEL MERCADO');
+  assertStringIncludes(out, 'drayage');
+  assertStringIncludes(out, 'backhaul');
+  assertStringIncludes(out, 'detention');
+  assertStringIncludes(out, 'per diem');
+  assertStringIncludes(out, 'demurrage');
+  assertStringIncludes(out, 'TONU');
+  assertStringIncludes(out, 'void check');
+  assertStringIncludes(out, 'IDENTIDAD');
+  assertStringIncludes(out, BASE_CONTEXT_INPUTS.equipmentLines);
+  assertStringIncludes(out, BASE_CONTEXT_INPUTS.laneLines);
+  assertStringIncludes(out, BASE_CONTEXT_INPUTS.flatMinLine);
+  assertStringIncludes(out, BASE_CONTEXT_INPUTS.accessorialsLine);
+  assertStringIncludes(out, '$75/hr');
+  assertStringIncludes(out, '+$50');
+});
+
+Deno.test('messageCatalog: baseContext EN autorado — sin glosario, con acrónimos KB, mismas reglas e identidad', () => {
+  const inputsEn = { ...BASE_CONTEXT_INPUTS, accessorialsLine: buildAccessorialsLine('en') };
+  const out = MESSAGES.en.baseContext(inputsEn);
+  assertEquals(out.includes('VOCABULARIO DEL MERCADO'), false);
+  assertStringIncludes(out, 'FIT = Florida International Terminal');
+  assertStringIncludes(out, 'SFST');
+  assertStringIncludes(out, 'Pompano');
+  assertStringIncludes(out, 'WPB');
+  assertStringIncludes(out, 'CRITICAL RESPONSE RULES');
+  assertStringIncludes(out, 'IDENTITY');
+  assertStringIncludes(out, inputsEn.equipmentLines);
+  assertStringIncludes(out, inputsEn.laneLines);
+  assertStringIncludes(out, inputsEn.flatMinLine);
+  assertStringIncludes(out, inputsEn.accessorialsLine);
+  assertStringIncludes(out, '$75/hr');
+  assertStringIncludes(out, '+$50');
+});
+
+Deno.test('messageCatalog: baseContext — ninguna cifra cambia entre locales', () => {
+  const outEs = MESSAGES.es.baseContext(BASE_CONTEXT_INPUTS);
+  const outEn = MESSAGES.en.baseContext(BASE_CONTEXT_INPUTS);
+  for (const cifra of ['$2.00', '$2.50', '$400', '$500', '+$50', '$75/hr', '$50-$100/hr']) {
+    assertStringIncludes(outEs, cifra);
+    assertStringIncludes(outEn, cifra);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

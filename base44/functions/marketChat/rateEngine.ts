@@ -130,12 +130,34 @@ export const PORT_EVERGLADES_SURCHARGE = 50;
 // DETENTION unificado — único valor válido en todo el prompt
 export const DETENTION = { standard: 75, min: 50, max: 100, free_hours: 2 };
 
-export const ACCESSORIALS: Array<{ label: string; min: number; max: number; unit?: string }> = [
+// `unit` es un tag semántico (locale-neutral), NUNCA el literal de texto en
+// ningún idioma — chat-idioma-toggle Fase 2 (T2.2). El texto que corresponde a
+// cada locale se resuelve al renderizar, vía buildAccessorialsLine() +
+// MESSAGES[locale].units.perDay, no acá en la data.
+export const ACCESSORIALS: Array<{ label: string; min: number; max: number; unit?: 'perDay' }> = [
   { label: 'TONU', min: 150, max: 300 },
   { label: 'Pre-Pull', min: 100, max: 200 },
-  { label: 'Chassis split', min: 75, max: 75, unit: '/día' },
-  { label: 'Storage', min: 75, max: 150, unit: '/día' },
+  { label: 'Chassis split', min: 75, max: 75, unit: 'perDay' },
+  { label: 'Storage', min: 75, max: 150, unit: 'perDay' },
 ];
+
+// Arma la línea de accesoriales resolviendo el tag semántico de ACCESSORIALS a
+// texto de unidad por locale. Vive acá (no en entry.ts, que le da el archivo
+// el Design) por el mismo motivo que el resto de los builders de este módulo:
+// entry.ts no se puede importar desde `deno test` (Deno.serve() de nivel
+// superior), así que la lógica que necesita cobertura real se extrae acá —
+// entry.ts solo la invoca con el `locale` ya resuelto de la request.
+export function buildAccessorialsLine(locale: Locale): string {
+  const unitText = MESSAGES[locale].units.perDay;
+  return ACCESSORIALS
+    .map(a => {
+      const unit = a.unit === 'perDay' ? unitText : '';
+      return a.min === a.max
+        ? `${a.label} $${a.min}${unit}`
+        : `${a.label} $${a.min}-${a.max}${unit}`;
+    })
+    .join(' | ');
+}
 
 export const HISTORY_CAP = 8;
 
