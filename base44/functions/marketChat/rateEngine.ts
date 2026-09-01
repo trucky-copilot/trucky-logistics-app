@@ -18,6 +18,9 @@
 // comportamiento original; los tipos solo lo hacen explícito.
 // ─────────────────────────────────────────────────────────────────────────────
 
+import { MESSAGES, render, type Locale } from './messageCatalog.ts';
+export type { Locale } from './messageCatalog.ts';
+
 export const FREIGHT_KB_VERSION = '1.0.0';
 
 export interface Equipment {
@@ -127,12 +130,34 @@ export const PORT_EVERGLADES_SURCHARGE = 50;
 // DETENTION unificado — único valor válido en todo el prompt
 export const DETENTION = { standard: 75, min: 50, max: 100, free_hours: 2 };
 
-export const ACCESSORIALS: Array<{ label: string; min: number; max: number; unit?: string }> = [
+// `unit` es un tag semántico (locale-neutral), NUNCA el literal de texto en
+// ningún idioma — chat-idioma-toggle Fase 2 (T2.2). El texto que corresponde a
+// cada locale se resuelve al renderizar, vía buildAccessorialsLine() +
+// MESSAGES[locale].units.perDay, no acá en la data.
+export const ACCESSORIALS: Array<{ label: string; min: number; max: number; unit?: 'perDay' }> = [
   { label: 'TONU', min: 150, max: 300 },
   { label: 'Pre-Pull', min: 100, max: 200 },
-  { label: 'Chassis split', min: 75, max: 75, unit: '/día' },
-  { label: 'Storage', min: 75, max: 150, unit: '/día' },
+  { label: 'Chassis split', min: 75, max: 75, unit: 'perDay' },
+  { label: 'Storage', min: 75, max: 150, unit: 'perDay' },
 ];
+
+// Arma la línea de accesoriales resolviendo el tag semántico de ACCESSORIALS a
+// texto de unidad por locale. Vive acá (no en entry.ts, que le da el archivo
+// el Design) por el mismo motivo que el resto de los builders de este módulo:
+// entry.ts no se puede importar desde `deno test` (Deno.serve() de nivel
+// superior), así que la lógica que necesita cobertura real se extrae acá —
+// entry.ts solo la invoca con el `locale` ya resuelto de la request.
+export function buildAccessorialsLine(locale: Locale): string {
+  const unitText = MESSAGES[locale].units.perDay;
+  return ACCESSORIALS
+    .map(a => {
+      const unit = a.unit === 'perDay' ? unitText : '';
+      return a.min === a.max
+        ? `${a.label} $${a.min}${unit}`
+        : `${a.label} $${a.min}-${a.max}${unit}`;
+    })
+    .join(' | ');
+}
 
 export const HISTORY_CAP = 8;
 
@@ -268,14 +293,15 @@ export function detectarFueraDeMercado(origen: unknown, destino: unknown): strin
 }
 
 /** Respuesta honesta cuando la ruta pedida está fuera del mercado cubierto. */
-export function buildOutOfMarketMarkdown(origen: unknown, destino: unknown): string {
+export function buildOutOfMarketMarkdown(origen: unknown, destino: unknown, locale: Locale): string {
+  const m = MESSAGES[locale].outOfMarket;
   const ruta = [origen, destino].filter(Boolean).join(' → ');
   const destinos = LANES.map(l => l.destino).join(', ');
   return [
-    `📊 No tengo tarifas de esa ruta${ruta ? ` (${ruta})` : ''}.`,
-    'Mis datos cubren drayage del sur de Florida: PortMiami y Port Everglades.',
-    `Rutas con tarifa confirmada: ${destinos}.`,
-    'Si necesitas esa zona, dime las millas y te calculo con referencias de mercado, aclarando que no es una tarifa de tabla.',
+    `${m.noRatesPrefix}${ruta ? ` (${ruta})` : ''}.`,
+    m.coverageLine,
+    render(m.confirmedRoutesLine, destinos),
+    m.askMoreLine,
   ].join('\n');
 }
 
@@ -374,11 +400,9 @@ export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_chec
 }
 
 /** Respuesta de rechazo cuando el mensaje no es de negocio. Sin cifras. */
-export function buildOffTopicMarkdown(): string {
-  return [
-    '🚚 Solo manejo temas de freight: tarifas, rutas y operación de drayage en el sur de Florida.',
-    'Pregúntame por tarifas, rutas u operación y te respondo al instante.',
-  ].join('\n');
+export function buildOffTopicMarkdown(locale: Locale): string {
+  const m = MESSAGES[locale].offTopic;
+  return [m.line1, m.line2].join('\n');
 }
 
 // Resuelve millas RT: el catálogo gana sobre la estimación del LLM.
@@ -439,17 +463,12 @@ export function resolveEquipment(raw: unknown): EquipmentResolution {
 }
 
 /** Copia distinta según qué le falta al equipo: el equipo entero, o solo el tamaño. */
-export function buildEquipmentQuestionMarkdown(reason: 'missing' | 'size'): string {
+export function buildEquipmentQuestionMarkdown(reason: 'missing' | 'size', locale: Locale): string {
+  const m = MESSAGES[locale].equipmentQuestion;
   if (reason === 'size') {
-    return [
-      '📦 Para darte un piso preciso necesito el tamaño del contenedor.',
-      "¿Es un contenedor de 20' o de 40'?",
-    ].join('\n');
+    return [m.sizeIntro, m.sizeQuestion].join('\n');
   }
-  return [
-    '📦 Para calcular el piso necesito saber el equipo.',
-    '¿Con qué equipo lo mueves? (dry van, reefer, flatbed, step deck, drayage 20\' o 40\', power only)',
-  ].join('\n');
+  return [m.missingIntro, m.missingQuestion].join('\n');
 }
 
 export function getFlatBucket(miles: number): FlatBucket {
@@ -481,11 +500,18 @@ export function resolveFloorBasis(miles: number, rpmMin: number, flatMin: number
 
 // TRUCKY-53 Q5: el label es una sugerencia, no una orden. El emoji y el band
 // (el semáforo) quedan byte-a-byte iguales — solo cambia el texto del label.
-export function computeVerdict(tarifa: number | null, floor: number, target: number): Verdict {
-  if (tarifa == null) return { emoji: '📊', label: 'REFERENCIA', band: 'reference' };
-  if (tarifa < floor) return { emoji: '🔴', label: 'TE SUGIERO PEDIR MÁS', band: 'reject' };
-  if (tarifa < target) return { emoji: '🟡', label: 'TE SUGIERO NEGOCIAR', band: 'negotiate' };
-  return { emoji: '🟢', label: 'TE SUGIERO TOMARLA', band: 'accept' };
+//
+// `locale` tiene default 'es': a diferencia de los builders de armado de
+// respuesta (cuyos únicos call sites son los bloques de prueba migrados en
+// esta misma fase), computeVerdict tiene otros Deno.test que lo llaman sin
+// locale y no forman parte de las 18 tasks de esta fase — deben seguir
+// funcionando sin cambios (mismo criterio que safeFallbackContent).
+export function computeVerdict(tarifa: number | null, floor: number, target: number, locale: Locale = 'es'): Verdict {
+  const labels = MESSAGES[locale].verdict;
+  if (tarifa == null) return { emoji: '📊', label: labels.reference, band: 'reference' };
+  if (tarifa < floor) return { emoji: '🔴', label: labels.reject, band: 'reject' };
+  if (tarifa < target) return { emoji: '🟡', label: labels.negotiate, band: 'negotiate' };
+  return { emoji: '🟢', label: labels.accept, band: 'accept' };
 }
 
 export function formatUSD(n: number): string {
@@ -498,77 +524,87 @@ export function formatUSD(n: number): string {
 
 // El desglose numérico SIEMPRE está presente: piso, objetivo, RPM ofrecida vs
 // mínima, y diferencia en dólares.
-export function buildRateCheckMarkdown(ctx: RateCheckContext): string {
+export function buildRateCheckMarkdown(ctx: RateCheckContext, locale: Locale): string {
   const { origen, destino, miles, esRedondo, laneLabel, source, lowConfidence, equipment, floor, target, tarifaOfrecida, portEverglades, floorBasis, bucketRange } = ctx;
+  const m = MESSAGES[locale].rateCheck;
 
-  const rutaLabel = origen && destino ? `${origen} → ${destino}` : (laneLabel || 'Ruta solicitada');
+  const rutaLabel = origen && destino ? `${origen} → ${destino}` : (laneLabel || m.fallbackRuta);
   // "millas estimadas" se muestra siempre que la milla venga del LLM y no del
   // catálogo; "confianza baja" es una señal extra para estimaciones fuera del
   // rango de sanidad (10–3000 mi).
-  const millasTag = `~${miles} mi ${esRedondo === false ? 'solo ida' : 'redondo'}${source === 'llm' ? ' · millas estimadas' : ''}${lowConfidence ? ' · confianza baja' : ''}`;
+  const millasTag = `~${miles} mi ${esRedondo === false ? m.oneWayTag : m.roundTripTag}${source === 'llm' ? m.estimatedMilesSuffix : ''}${lowConfidence ? m.lowConfidenceSuffix : ''}`;
   const equipoTag = equipment.label;
-  const puertoTag = portEverglades ? ` · +$${PORT_EVERGLADES_SURCHARGE} recargo Port Everglades incluido` : '';
+  const puertoTag = portEverglades ? render(m.portSurchargeSuffix, PORT_EVERGLADES_SURCHARGE) : '';
 
   // Solo se muestra la referencia por milla cuando ES la que puso el piso. Si el
   // piso lo puso el mínimo del tramo, se nombra ese mínimo y se da su equivalente
   // por milla, para que las dos cifras de la pantalla no se contradigan.
   const mercadoLine = floorBasis === 'flat'
-    ? `📐 Manda el mínimo del tramo ${bucketRange} · equivale a $${(miles > 0 ? floor / miles : 0).toFixed(2)}/mi con estas millas · Equipo: ${equipoTag}`
-    : `💰 Mercado: $${equipment.rpm_min.toFixed(2)}–$${equipment.rpm_target.toFixed(2)}/mi · Equipo: ${equipoTag}`;
+    ? render(m.flatBasisLine, bucketRange, (miles > 0 ? floor / miles : 0).toFixed(2), equipoTag)
+    : render(m.rpmBasisLine, equipment.rpm_min.toFixed(2), equipment.rpm_target.toFixed(2), equipoTag);
 
   if (tarifaOfrecida == null) {
+    const verdictLabels = MESSAGES[locale].verdict;
     return [
-      `📊 **REFERENCIA** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,
-      `📍 ${rutaLabel} (${millasTag}${puertoTag})`,
+      render(m.headerLine, '📊', verdictLabels.reference, formatUSD(floor), formatUSD(target)),
+      render(m.locationLine, rutaLabel, `${millasTag}${puertoTag}`),
       mercadoLine,
-      `💡 Confirma origen, destino, millas y equipo para afinar la cifra.`,
-      `¿Cuánto te ofrecen? Te digo si conviene.`,
+      m.confirmPrompt,
+      m.askOfferPrompt,
     ].join('\n');
   }
 
   const rpmOfrecida = miles > 0 ? tarifaOfrecida / miles : 0;
-  const verdict = computeVerdict(tarifaOfrecida, floor, target);
+  const verdict = computeVerdict(tarifaOfrecida, floor, target, locale);
   const diferencia = tarifaOfrecida - floor;
-  const posicion = tarifaOfrecida < floor ? 'bajo el piso' : (tarifaOfrecida < target ? 'entre piso y objetivo' : 'sobre objetivo');
+  const posicion = tarifaOfrecida < floor ? m.posicionBajoPiso : (tarifaOfrecida < target ? m.posicionEntre : m.posicionSobre);
   // El consejo agrega la acción, no repite el label — el label ya dice "TE
   // SUGIERO...", así que acá va lo que sigue: cuánto contraofertar, cuánto
   // margen queda, o qué hacer para no perder una buena tarifa.
   const consejo = verdict.band === 'reject'
-    ? `Contraoferta ${formatUSD(target)}; no la dejes ir por menos de ${formatUSD(floor)}.`
+    ? render(m.adviceReject, formatUSD(target), formatUSD(floor))
     : verdict.band === 'negotiate'
-      ? `Ya cubre el piso; el margen hasta ${formatUSD(target)} es lo que puedes empujar.`
-      : 'Sobre objetivo; asegura el RC antes de que la reasignen.';
+      ? render(m.adviceNegotiate, formatUSD(target))
+      : m.adviceAccept;
 
   return [
-    `${verdict.emoji} **${verdict.label}** | Piso: ${formatUSD(floor)} | Objetivo: ${formatUSD(target)}`,
-    `📍 ${rutaLabel} (${millasTag}${puertoTag})`,
+    render(m.headerLine, verdict.emoji, verdict.label, formatUSD(floor), formatUSD(target)),
+    render(m.locationLine, rutaLabel, `${millasTag}${puertoTag}`),
     mercadoLine,
     // El "mínimo por milla" que se compara debe ser el que de verdad gobierna el
     // piso, no el benchmark del equipo: si no, en ruta corta el dispatcher lee
     // que le ofrecen más del mínimo por milla y sin embargo el veredicto rechaza.
-    `🧮 Ofrecen ${formatUSD(tarifaOfrecida)} = $${rpmOfrecida.toFixed(2)}/mi (mín $${(floorBasis === 'flat' && miles > 0 ? floor / miles : equipment.rpm_min).toFixed(2)}/mi) → ${posicion}, diferencia ${diferencia >= 0 ? '+' : ''}${formatUSD(diferencia)} vs piso`,
+    render(
+      m.tallyLine,
+      formatUSD(tarifaOfrecida),
+      rpmOfrecida.toFixed(2),
+      (floorBasis === 'flat' && miles > 0 ? floor / miles : equipment.rpm_min).toFixed(2),
+      posicion,
+      `${diferencia >= 0 ? '+' : ''}${formatUSD(diferencia)}`,
+    ),
     `💡 ${consejo}`,
   ].join('\n');
 }
 
-export function buildGeneralMarkdown(respuestaGeneral: unknown): string {
+export function buildGeneralMarkdown(respuestaGeneral: unknown, locale: Locale): string {
   if (typeof respuestaGeneral !== 'string' || !respuestaGeneral.trim()) {
-    return safeFallbackContent();
+    return safeFallbackContent(locale);
   }
   return respuestaGeneral.trim();
 }
 
 // Cuando no hay lane catalogada ni millas_ida: pedir aclaración en vez de
 // inventar un piso.
-export function buildMissingDataMarkdown(): string {
-  return [
-    '📊 Necesito más datos para calcular el piso y el objetivo.',
-    'Dime origen, destino y millas (o si es "solo ida") — con eso te doy el número exacto.',
-  ].join('\n');
+export function buildMissingDataMarkdown(locale: Locale): string {
+  const m = MESSAGES[locale].missingData;
+  return [m.line1, m.line2].join('\n');
 }
 
-export function safeFallbackContent(): string {
-  return '⚠️ No pude procesar la consulta; reintenta. Para tarifas incluye origen, destino, millas y equipo.';
+// `locale` con default 'es': entry.ts llama a esta función desde su catch-all
+// externo (antes de que el body se termine de parsear), donde todavía no hay
+// un locale resuelto de forma segura — ver Design (call sites "pre-locale").
+export function safeFallbackContent(locale: Locale = 'es'): string {
+  return MESSAGES[locale].safeFallback.content;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
