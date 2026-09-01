@@ -53,7 +53,7 @@ import {
   esFueraDeTema,
 } from '../base44/functions/marketChat/rateEngine.ts';
 
-import type { Locale } from '../base44/functions/marketChat/messageCatalog.ts';
+import type { Locale, CatalogTree } from '../base44/functions/marketChat/messageCatalog.ts';
 import {
   MESSAGES,
   render,
@@ -943,4 +943,127 @@ Deno.test('equipo: buildEquipmentQuestionMarkdown tiene copia distinta para "mis
   assertStringIncludes(missingEn, 'equipment');
   assertStringIncludes(sizeEn, "20' or 40'");
   assertEquals(missingEn === sizeEn, false);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VERIFICACIÓN ANTI-MEZCLA DE IDIOMA (chat-idioma-toggle, Fase 4).
+//
+// Corazón del pedido (kickoff #9360, criterios 2/3/4): la verificación de "no
+// se mezclan los idiomas" NO puede ser un regex de acentos/palabras sueltas
+// (NFR de spec #9365) — tiene que apoyarse en el catálogo mismo. Mecanismo
+// (design #9366): diff de fragmentos ESTÁTICOS exclusivos de cada locale,
+// derivado de collectStaticFragments() (ya probada en Fase 1, T1.3). Ningún
+// fragmento se mantiene a mano: si el catálogo crece, esOnly/enOnly crecen
+// solos con el próximo `deno test`.
+//
+// Nota de alcance (T4.1, documentada también en tasks #9367): `baseContext`
+// (Fase 2) es una función que arma una plantilla larga, no un árbol de hojas
+// — collectStaticFragments() no la recorre (Object.keys() de una función da
+// `[]`), así que el diff de esta fase cubre los 4 CAMINOS DE RESPUESTA AL
+// DISPATCHER (lo que pide el criterio 2/3/4), no el prompt de sistema interno.
+// Cubrir baseContext requeriría un mecanismo aparte, fuera de este alcance.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// collectStaticFragments() exige un `CatalogTree` (objeto con índice de
+// string). `baseContext` es una función (plantilla autorada, Fase 2), no un
+// nodo `Leaf`/`CatalogTree` — por eso TS rechaza pasarle `MESSAGES.es`
+// completo (mismo motivo por el que T1.1, arriba, escribió su propio walker
+// tipado `unknown` en vez de reusar collectStaticFragments directamente). Se
+// excluye acá antes de pasarle el resto del árbol —ya sí compatible— al
+// tree-walker real, sin tocar messageCatalog.ts ni su shape público.
+function fragmentsOfLocale(locale: Locale): string[] {
+  const { baseContext: _baseContext, ...tree } = MESSAGES[locale];
+  return collectStaticFragments(tree as unknown as CatalogTree);
+}
+
+const ES_FRAGMENTS = fragmentsOfLocale('es');
+const EN_FRAGMENTS = fragmentsOfLocale('en');
+
+// T4.1 — mecánico, nunca una lista mantenida a mano.
+const ES_ONLY = ES_FRAGMENTS.filter(f => !EN_FRAGMENTS.includes(f));
+const EN_ONLY = EN_FRAGMENTS.filter(f => !ES_FRAGMENTS.includes(f));
+
+Deno.test('anti-mezcla: esOnly/enOnly se derivan del catálogo y excluyen automáticamente lo compartido', () => {
+  // ' · +$' es un fragmento {parts} IDÉNTICO en es y en (portSurchargeSuffix) —
+  // debe quedar afuera de los dos conjuntos sin ningún ajuste manual.
+  assertEquals(ES_FRAGMENTS.includes(' · +$'), true, 'fixture inválido: el fragmento compartido ya no existe en ES');
+  assertEquals(EN_FRAGMENTS.includes(' · +$'), true, 'fixture inválido: el fragmento compartido ya no existe en EN');
+  assertEquals(ES_ONLY.includes(' · +$'), false, '" · +$" es compartido, no debería ser esOnly');
+  assertEquals(EN_ONLY.includes(' · +$'), false, '" · +$" es compartido, no debería ser enOnly');
+
+  // Los dos conjuntos tienen contenido real — si estuvieran vacíos el diff no
+  // estaría probando nada.
+  assert(ES_ONLY.length > 0, 'esOnly no debería estar vacío');
+  assert(EN_ONLY.length > 0, 'enOnly no debería estar vacío');
+
+  // Fragmentos inequívocos de cada idioma caen del lado correcto.
+  assert(ES_ONLY.includes('REFERENCIA'), '"REFERENCIA" debería ser esOnly');
+  assert(EN_ONLY.includes('REFERENCE'), '"REFERENCE" debería ser enOnly');
+  assertEquals(ES_ONLY.includes('REFERENCE'), false);
+  assertEquals(EN_ONLY.includes('REFERENCIA'), false);
+});
+
+// T4.2 — fuga cross-locale sobre los 4 caminos de respuesta × 2 locales.
+// Los 4 caminos: veredicto de cotización, pregunta de equipo, rechazo por
+// tema (off-topic), y datos faltantes. Ninguno de los builders invocados acá
+// recibe el mensaje del usuario como argumento — solo `locale` — así que esta
+// prueba también confirma estructuralmente el criterio 4 del kickoff: el
+// idioma del input nunca puede arrastrar el output porque los builders no lo
+// reciben.
+const CAMINOS_DE_RESPUESTA: Array<{ nombre: string; build: (locale: Locale) => string }> = [
+  {
+    nombre: 'veredicto de cotización (con oferta)',
+    build: (locale) => buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 }, locale),
+  },
+  {
+    nombre: 'pregunta de equipo',
+    build: (locale) => buildEquipmentQuestionMarkdown('missing', locale),
+  },
+  {
+    nombre: 'rechazo por tema (off-topic)',
+    build: (locale) => buildOffTopicMarkdown(locale),
+  },
+  {
+    nombre: 'datos faltantes',
+    build: (locale) => buildMissingDataMarkdown(locale),
+  },
+];
+
+Deno.test('anti-mezcla: ninguno de los 4 caminos de respuesta filtra texto del otro locale', () => {
+  for (const { nombre, build } of CAMINOS_DE_RESPUESTA) {
+    const outEn = build('en');
+    for (const frag of ES_ONLY) {
+      assertEquals(outEn.includes(frag), false, `[${nombre}] EN filtró fragmento exclusivo de ES: "${frag}"`);
+    }
+    const outEs = build('es');
+    for (const frag of EN_ONLY) {
+      assertEquals(outEs.includes(frag), false, `[${nombre}] ES filtró fragmento exclusivo de EN: "${frag}"`);
+    }
+  }
+});
+
+// Caso cruzado explícito del criterio 4: escribir la consulta en español con
+// el toggle en inglés. Los builders de armado de respuesta son puros y jamás
+// reciben el `content` del mensaje del usuario (solo `locale`) — confirmado
+// leyendo rateEngine.ts: computeVerdict, buildRateCheckMarkdown,
+// buildOffTopicMarkdown, buildEquipmentQuestionMarkdown,
+// buildOutOfMarketMarkdown, buildMissingDataMarkdown, buildGeneralMarkdown/
+// safeFallbackContent y buildAccessorialsLine — ninguno toma `messages` ni
+// `content` como argumento. Solo `resolveIntent` lee el mensaje, y únicamente
+// para decidir el INTENT (rate_check/general/off_topic), nunca el idioma.
+Deno.test('anti-mezcla: un input en español con toggle EN no arrastra el idioma de la respuesta', () => {
+  const mensajeEnEspanol = [
+    { role: 'user', content: 'Necesito cotizar drayage de Miami a Tampa, ¿cuánto me pagan?' },
+  ];
+
+  // El intent se resuelve igual sin importar el idioma del mensaje.
+  assertEquals(resolveIntent('rate_check', mensajeEnEspanol), 'rate_check');
+
+  // El mismo query, con locale='en' explícito pese al input en español: salida
+  // 100% en inglés, sin ningún fragmento exclusivo de ES.
+  const out = buildRateCheckMarkdown({ ...CTX_BASE, tarifaOfrecida: 1000 }, 'en');
+  for (const frag of ES_ONLY) {
+    assertEquals(out.includes(frag), false, `fuga de "${frag}" con input en español, toggle EN: "${frag}"`);
+  }
+  assertStringIncludes(out, 'I SUGGEST ASKING FOR MORE');
 });
