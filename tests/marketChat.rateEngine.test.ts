@@ -29,6 +29,8 @@ import {
 import {
   EQUIPMENT_BENCHMARKS,
   DETENTION,
+  ACCESSORIALS,
+  buildAccessorialsLine,
   normalizeText,
   matchesAny,
   resolveEquipment,
@@ -67,7 +69,187 @@ import {
   buildMarginVerdictMarkdown,
   MARGIN_THRESHOLD_STRONG,
   MARGIN_THRESHOLD_ACCEPTABLE,
+  type CalculatedQuote,
 } from '../base44/functions/marketChat/rateEngine.ts';
+
+import type { Locale, CatalogTree } from '../base44/functions/marketChat/messageCatalog.ts';
+import {
+  MESSAGES,
+  render,
+  collectStaticFragments,
+  resolveLocale,
+} from '../base44/functions/marketChat/messageCatalog.ts';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CATÁLOGO DE MENSAJES — bootstrap del módulo (chat-idioma-toggle, Fase 1A).
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('messageCatalog: es/en tienen el mismo árbol de claves', () => {
+  // Recorre el árbol y devuelve solo la FORMA (claves), nunca el contenido de
+  // las hojas — así la prueba de paridad no se acopla a la redacción.
+  const keysTree = (node: unknown): unknown => {
+    if (typeof node === 'string') return null;
+    if (node && typeof node === 'object' && Array.isArray((node as { parts?: unknown }).parts)) return null;
+    if (node && typeof node === 'object') {
+      const out: Record<string, unknown> = {};
+      for (const k of Object.keys(node as Record<string, unknown>).sort()) {
+        out[k] = keysTree((node as Record<string, unknown>)[k]);
+      }
+      return out;
+    }
+    return null;
+  };
+  assertEquals(keysTree(MESSAGES.es), keysTree(MESSAGES.en));
+});
+
+Deno.test('render: hoja string devuelve el string', () => {
+  assertEquals(render('hola'), 'hola');
+});
+
+Deno.test('render: hoja {parts} concatena e interpola argumentos', () => {
+  assertEquals(render({ parts: ['a-', '-b-', '-c'] }, 'X', 'Y'), 'a-X-b-Y-c');
+  assertEquals(render({ parts: ['solo'] }), 'solo');
+});
+
+Deno.test('collectStaticFragments: recorre el árbol y filtra fragmentos <3 chars no-espacio', () => {
+  const tree = {
+    dominio: {
+      corto: '· ',
+      largo: 'hola mundo',
+      hoja: { parts: ['ab', 'cde'] },
+    },
+  };
+  const fragments = collectStaticFragments(tree);
+  assertEquals(fragments.includes('hola mundo'), true);
+  assertEquals(fragments.includes('cde'), true);
+  assertEquals(fragments.includes('· '), false);
+  assertEquals(fragments.includes('ab'), false);
+});
+
+Deno.test("resolveLocale: allowlist ['es','en'], default 'es' ante undefined/inválido/tipo incorrecto", () => {
+  assertEquals(resolveLocale('es'), 'es');
+  assertEquals(resolveLocale('en'), 'en');
+  assertEquals(resolveLocale(undefined), 'es');
+  assertEquals(resolveLocale('fr'), 'es');
+  assertEquals(resolveLocale(123), 'es');
+  assertEquals(resolveLocale(null), 'es');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FASE 2 — locale de punta a punta (chat-idioma-toggle, T2.2/T2.3/T2.4/T2.5).
+//
+// `entry.ts` no se puede importar desde una prueba (Deno.serve() de nivel
+// superior + el import npm:@base44/sdk pinneado en @0.8.25 no resuelve contra
+// el node_modules instalado, que trae @0.8.41 — falla `deno check` por una
+// razón totalmente ajena al locale, preexistente al SDD). Por eso todo lo que
+// necesita cobertura de prueba real en esta fase se extrajo/autoró como
+// función pura en rateEngine.ts/messageCatalog.ts, siguiendo el mismo criterio
+// que ya usa rateEngine.ts para el resto de los builders (ver su comentario de
+// cabecera). El wiring que sí queda solo en entry.ts (extracción del payload,
+// selección de BASE_CONTEXT/buildExtractionPrompt por locale) se verifica por
+// lectura manual, documentado en apply-progress.
+// ─────────────────────────────────────────────────────────────────────────────
+
+Deno.test('ACCESSORIALS: unit es un tag semántico "perDay", nunca el literal en español', () => {
+  for (const a of ACCESSORIALS) {
+    if (a.unit !== undefined) assertEquals(a.unit, 'perDay');
+  }
+});
+
+Deno.test('buildAccessorialsLine: cambia el sufijo de unidad por locale sin tocar los labels', () => {
+  const es = buildAccessorialsLine('es');
+  assertStringIncludes(es, 'Chassis split $75/día');
+  assertStringIncludes(es, 'Storage $75-150/día');
+  assertStringIncludes(es, 'TONU $150-300');
+  assertStringIncludes(es, 'Pre-Pull $100-200');
+
+  const en = buildAccessorialsLine('en');
+  assertStringIncludes(en, 'Chassis split $75/day');
+  assertStringIncludes(en, 'Storage $75-150/day');
+  assertStringIncludes(en, 'TONU $150-300');
+  assertStringIncludes(en, 'Pre-Pull $100-200');
+});
+
+Deno.test('messageCatalog: extraction.languageDirective flips es/en', () => {
+  assertEquals(MESSAGES.es.extraction.languageDirective, 'en español');
+  assertEquals(MESSAGES.en.extraction.languageDirective, 'in English');
+});
+
+// reglas-v3-multiestado: BaseContextInputs perdió laneLines/flatMinLine/
+// portEvergladesSurcharge (conceptos eliminados por Fase 3 — LANES/
+// FLAT_MINIMUMS/PORT_EVERGLADES_SURCHARGE ya no existen, ver cabecera de
+// rateEngine.ts) y ganó routeCountFl/routeCountTx/deadhead*/hos* — DEADHEAD y
+// HOS ahora se interpolan desde HOS_LIMITS/DEADHEAD_THRESHOLDS (Fase 7, única
+// fuente de verdad) en vez de quedar hardcodeados en la plantilla.
+const BASE_CONTEXT_INPUTS = {
+  freightKbVersion: '1.0.0',
+  equipmentLines: '- dry_van (53\' Dry Van): $3.01/mi',
+  routeCountFl: 187,
+  routeCountTx: 72,
+  accessorialsLine: buildAccessorialsLine('es'),
+  detentionStandard: 75,
+  detentionFreeHours: 2,
+  detentionMin: 50,
+  detentionMax: 100,
+  deadheadOkPct: 20,
+  deadheadConcerningPct: 40,
+  deadheadLongMiles: 100,
+  deadheadExtraMin: 1.00,
+  deadheadExtraMax: 1.50,
+  hosDrivingHours: 11,
+  hosOnDutyHours: 14,
+  hosBreakMinutes: 30,
+  hosBreakAfterHours: 8,
+  hos8Days: 70,
+  hos7Days: 60,
+};
+
+Deno.test('messageCatalog: baseContext ES conserva reglas críticas, glosario e identidad', () => {
+  const out = MESSAGES.es.baseContext(BASE_CONTEXT_INPUTS);
+  assertStringIncludes(out, 'REGLAS CRÍTICAS DE RESPUESTA');
+  assertStringIncludes(out, 'VOCABULARIO DEL MERCADO');
+  assertStringIncludes(out, 'drayage');
+  assertStringIncludes(out, 'backhaul');
+  assertStringIncludes(out, 'detention');
+  assertStringIncludes(out, 'per diem');
+  assertStringIncludes(out, 'demurrage');
+  assertStringIncludes(out, 'TONU');
+  assertStringIncludes(out, 'void check');
+  assertStringIncludes(out, 'IDENTIDAD');
+  assertStringIncludes(out, BASE_CONTEXT_INPUTS.equipmentLines);
+  assertStringIncludes(out, `Florida (${BASE_CONTEXT_INPUTS.routeCountFl} rutas`);
+  assertStringIncludes(out, `Texas (${BASE_CONTEXT_INPUTS.routeCountTx} rutas`);
+  assertStringIncludes(out, BASE_CONTEXT_INPUTS.accessorialsLine);
+  assertStringIncludes(out, '$75/hr');
+  assertStringIncludes(out, '11h conducción diaria');
+});
+
+Deno.test('messageCatalog: baseContext EN autorado — sin glosario, con acrónimos KB, mismas reglas e identidad', () => {
+  const inputsEn = { ...BASE_CONTEXT_INPUTS, accessorialsLine: buildAccessorialsLine('en') };
+  const out = MESSAGES.en.baseContext(inputsEn);
+  assertEquals(out.includes('VOCABULARIO DEL MERCADO'), false);
+  assertStringIncludes(out, 'FIT = Florida International Terminal');
+  assertStringIncludes(out, 'POMTOC');
+  assertStringIncludes(out, 'Pompano');
+  assertStringIncludes(out, 'WPB');
+  assertStringIncludes(out, 'CRITICAL RESPONSE RULES');
+  assertStringIncludes(out, 'IDENTITY');
+  assertStringIncludes(out, inputsEn.equipmentLines);
+  assertStringIncludes(out, `Florida (${inputsEn.routeCountFl} drayage routes)`);
+  assertStringIncludes(out, `Texas (${inputsEn.routeCountTx} drayage routes`);
+  assertStringIncludes(out, inputsEn.accessorialsLine);
+  assertStringIncludes(out, '$75/hr');
+  assertStringIncludes(out, '11h daily driving');
+});
+
+Deno.test('messageCatalog: baseContext — ninguna cifra cambia entre locales', () => {
+  const outEs = MESSAGES.es.baseContext(BASE_CONTEXT_INPUTS);
+  const outEn = MESSAGES.en.baseContext(BASE_CONTEXT_INPUTS);
+  for (const cifra of ['$3.01', String(BASE_CONTEXT_INPUTS.routeCountFl), String(BASE_CONTEXT_INPUTS.routeCountTx), '$75/hr', '$50-$100/hr', '11h', '70h', '60h']) {
+    assertStringIncludes(outEs, cifra);
+    assertStringIncludes(outEn, cifra);
+  }
+});
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATOS DE REFERENCIA
@@ -222,6 +404,8 @@ Deno.test('equipo: "drayage" a secas pide el tamaño, no cae en dry van', () => 
 Deno.test('equipo: resolveEquipment es determinista — 10 llamadas idénticas dan el mismo resultado', () => {
   const resultados = Array.from({ length: 10 }, () => resolveEquipment('reefer'));
   for (const r of resultados) assertEquals(r, resultados[0]);
+  const resultadosAsk = Array.from({ length: 10 }, () => resolveEquipment('drayage'));
+  for (const r of resultadosAsk) assertEquals(r, resultadosAsk[0]);
 });
 
 // old=`assertStringIncludes(size, "20' o de 40'")` (la pregunta de tamaño solo
@@ -232,12 +416,22 @@ Deno.test('equipo: resolveEquipment es determinista — 10 llamadas idénticas d
 // propio" (la Fase 0 los dejaba pendientes a propósito); ahora se resuelven
 // nativamente contra tabla + sizeDerivation.ts, así que la pregunta al usuario
 // debe ofrecer las 4 opciones reales.
+//
+// reconciliación con chat-idioma-toggle: agrega la variante EN — el texto
+// sale de messageCatalog.ts (sizeQuestion actualizado a las 4 opciones para
+// ambos locales), no cambia qué prueba este test.
 Deno.test('equipo: buildEquipmentQuestionMarkdown tiene copia distinta para "missing" y "size"', () => {
-  const missing = buildEquipmentQuestionMarkdown('missing');
-  const size = buildEquipmentQuestionMarkdown('size');
+  const missing = buildEquipmentQuestionMarkdown('missing', 'es');
+  const size = buildEquipmentQuestionMarkdown('size', 'es');
   assertStringIncludes(missing, 'qué equipo');
   assertStringIncludes(size, "45'");
   assertEquals(missing === size, false);
+
+  const missingEn = buildEquipmentQuestionMarkdown('missing', 'en');
+  const sizeEn = buildEquipmentQuestionMarkdown('size', 'en');
+  assertStringIncludes(missingEn, 'equipment');
+  assertStringIncludes(sizeEn, "45'");
+  assertEquals(missingEn === sizeEn, false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -911,18 +1105,36 @@ Deno.test('criterio 16: ningún build*Markdown genera lenguaje de mandato ("debe
   }
 });
 
+// old=`mercado: el mensaje de rechazo no entrega ninguna cifra de tarifa`
+// (probaba buildOutOfMarketMarkdown)
+// new=eliminado — no hay reemplazo directo: el guardarraíl geográfico que
+// generaba ese mensaje ya no existe (ver cabecera de rateEngine.ts, "SE
+// ELIMINÓ POR COMPLETO"). El toggle de idioma para el camino de "sin cifra de
+// tarifa" queda cubierto por los tests de buildMissingDataMarkdown/
+// buildSanityCapMarkdown/buildAskMilesMarkdown más abajo, que sí siguen
+// existiendo en reglas-v3-multiestado.
+// why=reconciliación con chat-idioma-toggle — la otra rama localizó un
+// builder que esta fase borró; localizar un builder inexistente no tiene
+// sentido, así que el test se retira en vez de re-crear la función muerta.
+
 // ─────────────────────────────────────────────────────────────────────────────
 // VEREDICTO
 // ─────────────────────────────────────────────────────────────────────────────
 
 Deno.test('veredicto: sin oferta es solo referencia', () => {
-  assertEquals(computeVerdict(null, 1000, 1500).band, 'reference');
-  assertEquals(computeVerdict(null, 1000, 1500).label, 'REFERENCIA');
+  assertEquals(computeVerdict(null, 1000, 1500, 'es').band, 'reference');
+  assertEquals(computeVerdict(null, 1000, 1500, 'es').label, 'REFERENCIA');
+
+  assertEquals(computeVerdict(null, 1000, 1500, 'en').band, 'reference');
+  assertEquals(computeVerdict(null, 1000, 1500, 'en').label, 'REFERENCE');
 });
 
 Deno.test('veredicto: bajo el piso se rechaza', () => {
-  assertEquals(computeVerdict(999, 1000, 1500).band, 'reject');
-  assertEquals(computeVerdict(999, 1000, 1500).label, 'TE SUGIERO PEDIR MÁS');
+  assertEquals(computeVerdict(999, 1000, 1500, 'es').band, 'reject');
+  assertEquals(computeVerdict(999, 1000, 1500, 'es').label, 'TE SUGIERO PEDIR MÁS');
+
+  assertEquals(computeVerdict(999, 1000, 1500, 'en').band, 'reject');
+  assertEquals(computeVerdict(999, 1000, 1500, 'en').label, 'I SUGGEST ASKING FOR MORE');
 });
 
 Deno.test('veredicto: entre piso y objetivo se negocia', () => {
@@ -947,12 +1159,70 @@ Deno.test('veredicto: sin piso (null), nunca rechaza — compara contra el objet
   assertEquals(computeVerdict(2000, null, 1500).band, 'accept');
 });
 
-Deno.test('veredicto: encabezado de sugerencia — banda rechazo, sin lenguaje imperativo', () => {
-  const verdict = computeVerdict(999, 1000, 1500);
+// reconciliación con chat-idioma-toggle (TRUCKY-53 Q5 + Fase 3): encabezados
+// de sugerencia, uno por banda, en ambos locales. El semáforo (emoji + band)
+// está congelado; lo único que cambia por locale es el texto del label.
+// Ninguna respuesta debe contener lenguaje de mandato ni los labels
+// imperativos viejos de otra banda, en ningún idioma.
+//
+// `MARGIN_QUOTE_EQUIPMENT`/`buildVerdictQuote` fabrican un CalculatedQuote vía
+// resolveGenericQuote real (no un fixture de otro tipo) con floor=1000,
+// target=1500 — los mismos números que usaba el viejo `CTX_BASE` (equipo
+// sintético rpm_target=3 × 500mi=1500; pagoCamionRpm=2 × 500mi=1000), para que
+// esta prueba siga verificando exactamente las mismas 3 bandas.
+const VERDICT_TEST_EQUIPMENT = { id: 'test_equipment', label: 'Test Equipment', rpm_min: 3, rpm_target: 3 };
+
+function buildVerdictQuote(tarifaOfrecida: number) {
+  const outcome = resolveGenericQuote({ equipment: VERDICT_TEST_EQUIPMENT, millasIdaDeclaradas: 500, pagoCamionRpm: 2, tarifaOfrecida });
+  if (outcome.kind !== 'quote') throw new Error('fixture inválido');
+  return outcome.calculo;
+}
+
+Deno.test('veredicto: encabezado de sugerencia — banda rechazo, sin lenguaje imperativo, en ambos locales', () => {
+  const verdict = computeVerdict(999, 1000, 1500, 'es');
   assertEquals(verdict.emoji, '🔴');
   assert(verdict.label.startsWith('TE SUGIERO'), 'el label debe empezar con "TE SUGIERO"');
   assertEquals(verdict.label.includes('debes'), false);
   assertEquals(verdict.label.includes('RECHAZAR'), false);
+  const out = buildRateCheckMarkdown(buildVerdictQuote(999), 'es');
+  assertStringIncludes(out, 'Piso desde tu dato');
+  assertStringIncludes(out, '$1,000');
+  assertEquals(out.includes('debes'), false);
+
+  const verdictEn = computeVerdict(999, 1000, 1500, 'en');
+  assertEquals(verdictEn.emoji, '🔴');
+  assert(verdictEn.label.startsWith('I SUGGEST'), 'the label should start with "I SUGGEST"');
+  const outEn = buildRateCheckMarkdown(buildVerdictQuote(999), 'en');
+  assertEquals(outEn.includes('must'), false);
+  assertStringIncludes(outEn, 'I SUGGEST ASKING FOR MORE');
+});
+
+Deno.test('veredicto: encabezado de sugerencia — banda negociar, en ambos locales', () => {
+  const verdict = computeVerdict(1200, 1000, 1500, 'es');
+  assertEquals(verdict.emoji, '🟡');
+  const out = buildRateCheckMarkdown(buildVerdictQuote(1200), 'es');
+  assertStringIncludes(out, 'TE SUGIERO NEGOCIAR');
+  assertEquals(out.includes('debes'), false);
+
+  const verdictEn = computeVerdict(1200, 1000, 1500, 'en');
+  assertEquals(verdictEn.emoji, '🟡');
+  const outEn = buildRateCheckMarkdown(buildVerdictQuote(1200), 'en');
+  assertStringIncludes(outEn, 'I SUGGEST NEGOTIATING');
+  assertEquals(outEn.includes('must'), false);
+});
+
+Deno.test('veredicto: encabezado de sugerencia — banda aceptar, en ambos locales', () => {
+  const verdict = computeVerdict(2000, 1000, 1500, 'es');
+  assertEquals(verdict.emoji, '🟢');
+  const out = buildRateCheckMarkdown(buildVerdictQuote(2000), 'es');
+  assertStringIncludes(out, 'TE SUGIERO TOMARLA');
+  assertEquals(out.includes('debes'), false);
+
+  const verdictEn = computeVerdict(2000, 1000, 1500, 'en');
+  assertEquals(verdictEn.emoji, '🟢');
+  const outEn = buildRateCheckMarkdown(buildVerdictQuote(2000), 'en');
+  assertStringIncludes(outEn, 'I SUGGEST TAKING IT');
+  assertEquals(outEn.includes('must'), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1002,6 +1272,34 @@ Deno.test('respuesta: un objetivo derivado se declara explícitamente como tal, 
   assertStringIncludes(out, 'doble supuesto');
 });
 
+// reconciliación con chat-idioma-toggle: reemplaza `respuesta: sin oferta
+// muestra piso y objetivo como referencia` / `con oferta siempre trae el
+// desglose completo` (viejo `CTX_BASE: RateCheckContext`, tipo eliminado) por
+// el mismo caso sobre el `CalculatedQuote` real (vía `resolveGenericQuote`,
+// mismo `VERDICT_TEST_EQUIPMENT` de la sección VEREDICTO arriba), en ambos
+// locales.
+// Sin tarifaOfrecida, buildRateCheckMarkdown nunca llama a computeVerdict
+// (ver su cuerpo: el bloque de veredicto solo se arma `if (q.tarifaOfrecida
+// != null)`) — a diferencia del viejo headerLine (CTX_BASE), que SIEMPRE
+// mostraba "REFERENCIA" como placeholder. El desglose de piso/objetivo sigue
+// presente igual; simplemente no hay una banda que reportar todavía.
+Deno.test('respuesta: sin oferta muestra piso y objetivo sin banda de veredicto, en ambos locales', () => {
+  const outcome = resolveGenericQuote({ equipment: VERDICT_TEST_EQUIPMENT, millasIdaDeclaradas: 500, pagoCamionRpm: 2, tarifaOfrecida: null });
+  if (outcome.kind !== 'quote') throw new Error('fixture inválido');
+
+  const out = buildRateCheckMarkdown(outcome.calculo, 'es');
+  assertEquals(out.includes('Te ofrecen'), false);
+  assertStringIncludes(out, 'Piso desde tu dato');
+  assertStringIncludes(out, '$1,000');
+  assertStringIncludes(out, 'Objetivo calculado');
+  assertStringIncludes(out, '$1,500');
+
+  const outEn = buildRateCheckMarkdown(outcome.calculo, 'en');
+  assertEquals(outEn.includes('They are offering'), false);
+  assertStringIncludes(outEn, 'Floor from your data');
+  assertStringIncludes(outEn, 'Calculated target');
+});
+
 Deno.test('respuesta: una ruta ausente muestra las referencias etiquetadas como tal, nunca como precio de la ruta pedida', () => {
   const outcome = resolveDrayageQuote({ destinoRaw: 'Fake City, Florida', tamano: '40', millasIdaDeclaradas: 90, pagoCamionRpm: null, tarifaOfrecida: null });
   if (outcome.kind !== 'quote') throw new Error('fixture inválido');
@@ -1035,16 +1333,40 @@ Deno.test('respuesta: buildAskMilesMarkdown nombra la ciudad conocida cuando exi
   assertEquals(sinCiudad.includes('Pompano Beach'), false);
 });
 
-Deno.test('respuesta: cuando faltan todos los datos pide aclaración en vez de inventar', () => {
-  const out = buildMissingDataMarkdown();
+// old=`respuesta: en ruta corta NO muestra un rango por milla que contradiga
+// el piso` / `en ruta larga sí muestra el rango de mercado por milla` / `el
+// mínimo por milla que compara es el que gobierna el piso` (floorBasis:
+// 'flat'|'rpm', bucketRange — conceptos del viejo sistema de tramos flat) /
+// `nunca menciona un equipo asumido` (concepto ya cubierto por T-1/derivado
+// arriba, con el `CalculatedQuote` real) / `avisa cuando las millas son
+// estimadas` (source:'llm' — Fase 3 elimina la estimación de millas por IA
+// por completo) / `declara el recargo de Port Everglades`
+// (PORT_EVERGLADES_SURCHARGE ya no existe, ver nota de "datos" arriba)
+// new=eliminados — sin reemplazo directo: cada uno testeaba un mecanismo que
+// Fase 3/4 retiró del motor (ver cabecera de rateEngine.ts). El toggle de
+// idioma para el desglose de piso/objetivo/veredicto que SÍ sigue existiendo
+// queda cubierto por los tests T-1/derivado/veredicto (arriba) y por
+// `buildMissingDataMarkdown` (abajo), ahora en ambos locales.
+// why=reconciliación con chat-idioma-toggle — localizar un mecanismo que ya
+// no existe no aporta cobertura real.
+Deno.test('respuesta: cuando faltan todos los datos pide aclaración en vez de inventar, en ambos locales', () => {
+  const out = buildMissingDataMarkdown('es');
   assertStringIncludes(out, 'Necesito más datos');
+
+  const outEn = buildMissingDataMarkdown('en');
+  assertStringIncludes(outEn, 'I need more data');
 });
 
 Deno.test('respuesta: una respuesta general vacía cae en el mensaje seguro', () => {
-  assertEquals(buildGeneralMarkdown(''), safeFallbackContent());
-  assertEquals(buildGeneralMarkdown('   '), safeFallbackContent());
-  assertEquals(buildGeneralMarkdown(null), safeFallbackContent());
-  assertEquals(buildGeneralMarkdown('  hola  '), 'hola');
+  assertEquals(buildGeneralMarkdown('', 'es'), safeFallbackContent('es'));
+  assertEquals(buildGeneralMarkdown('   ', 'es'), safeFallbackContent('es'));
+  assertEquals(buildGeneralMarkdown(null, 'es'), safeFallbackContent('es'));
+  assertEquals(buildGeneralMarkdown('  hola  ', 'es'), 'hola');
+
+  assertEquals(buildGeneralMarkdown('', 'en'), safeFallbackContent('en'));
+  assertEquals(buildGeneralMarkdown('   ', 'en'), safeFallbackContent('en'));
+  assertEquals(buildGeneralMarkdown(null, 'en'), safeFallbackContent('en'));
+  assertEquals(buildGeneralMarkdown('  hello  ', 'en'), 'hello');
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1124,12 +1446,19 @@ Deno.test('tema: resolveIntent — cualquier otro caso cae en general', () => {
 });
 
 Deno.test('tema: buildOffTopicMarkdown declina en 2 líneas exactas, sin cifras', () => {
-  const out = buildOffTopicMarkdown();
+  const out = buildOffTopicMarkdown('es');
   const lineas = out.split('\n');
   assertEquals(lineas.length, 2);
   assertStringIncludes(out, 'freight');
   assertStringIncludes(out, 'sur de Florida');
   assertEquals(/\$\d/.test(out), false);
+
+  const outEn = buildOffTopicMarkdown('en');
+  const lineasEn = outEn.split('\n');
+  assertEquals(lineasEn.length, 2);
+  assertStringIncludes(outEn, 'freight');
+  assertStringIncludes(outEn, 'South Florida');
+  assertEquals(/\$\d/.test(outEn), false);
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1164,4 +1493,191 @@ Deno.test('tema-blocklist: resolveIntent — rate_check gana incluso sobre el bl
 
 Deno.test('tema-blocklist: resolveIntent — declina cuando ni el LLM ni la allowlist rescatan', () => {
   assertEquals(resolveIntent('general', [{ role: 'user', content: 'cuéntame un chiste' }]), 'off_topic');
+});
+// ─────────────────────────────────────────────────────────────────────────────
+// VERIFICACIÓN ANTI-MEZCLA DE IDIOMA (chat-idioma-toggle, Fase 4).
+//
+// Corazón del pedido (kickoff #9360, criterios 2/3/4): la verificación de "no
+// se mezclan los idiomas" NO puede ser un regex de acentos/palabras sueltas
+// (NFR de spec #9365) — tiene que apoyarse en el catálogo mismo. Mecanismo
+// (design #9366): diff de fragmentos ESTÁTICOS exclusivos de cada locale,
+// derivado de collectStaticFragments() (ya probada en Fase 1, T1.3). Ningún
+// fragmento se mantiene a mano: si el catálogo crece, esOnly/enOnly crecen
+// solos con el próximo `deno test`.
+//
+// Nota de alcance (T4.1, documentada también en tasks #9367): `baseContext`
+// (Fase 2) es una función que arma una plantilla larga, no un árbol de hojas
+// — collectStaticFragments() no la recorre (Object.keys() de una función da
+// `[]`), así que el diff de esta fase cubre los 4 CAMINOS DE RESPUESTA AL
+// DISPATCHER (lo que pide el criterio 2/3/4), no el prompt de sistema interno.
+// Cubrir baseContext requeriría un mecanismo aparte, fuera de este alcance.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// collectStaticFragments() exige un `CatalogTree` (objeto con índice de
+// string). `baseContext` es una función (plantilla autorada, Fase 2), no un
+// nodo `Leaf`/`CatalogTree` — por eso TS rechaza pasarle `MESSAGES.es`
+// completo (mismo motivo por el que T1.1, arriba, escribió su propio walker
+// tipado `unknown` en vez de reusar collectStaticFragments directamente). Se
+// excluye acá antes de pasarle el resto del árbol —ya sí compatible— al
+// tree-walker real, sin tocar messageCatalog.ts ni su shape público.
+function fragmentsOfLocale(locale: Locale): string[] {
+  const { baseContext: _baseContext, ...tree } = MESSAGES[locale];
+  return collectStaticFragments(tree as unknown as CatalogTree);
+}
+
+const ES_FRAGMENTS = fragmentsOfLocale('es');
+const EN_FRAGMENTS = fragmentsOfLocale('en');
+
+// T4.1 — mecánico, nunca una lista mantenida a mano.
+const ES_ONLY = ES_FRAGMENTS.filter(f => !EN_FRAGMENTS.includes(f));
+const EN_ONLY = EN_FRAGMENTS.filter(f => !ES_FRAGMENTS.includes(f));
+
+Deno.test('anti-mezcla: esOnly/enOnly se derivan del catálogo y excluyen automáticamente lo compartido', () => {
+  // ' mi): ' es un fragmento {parts} IDÉNTICO en es y en (targetTramoCorto/
+  // floorTramoCorto/referenciaItemLine — "mi" y ": " son universales, no se
+  // traducen) — debe quedar afuera de los dos conjuntos sin ningún ajuste
+  // manual. Reemplaza el ' · +$' de portSurchargeSuffix (chat-idioma-toggle
+  // original), que dejó de existir con el recargo de Port Everglades
+  // eliminado por reglas-v3-multiestado Fase 3.
+  assertEquals(ES_FRAGMENTS.includes(' mi): '), true, 'fixture inválido: el fragmento compartido ya no existe en ES');
+  assertEquals(EN_FRAGMENTS.includes(' mi): '), true, 'fixture inválido: el fragmento compartido ya no existe en EN');
+  assertEquals(ES_ONLY.includes(' mi): '), false, '" mi): " es compartido, no debería ser esOnly');
+  assertEquals(EN_ONLY.includes(' mi): '), false, '" mi): " es compartido, no debería ser enOnly');
+
+  // Los dos conjuntos tienen contenido real — si estuvieran vacíos el diff no
+  // estaría probando nada.
+  assert(ES_ONLY.length > 0, 'esOnly no debería estar vacío');
+  assert(EN_ONLY.length > 0, 'enOnly no debería estar vacío');
+
+  // Fragmentos inequívocos de cada idioma caen del lado correcto.
+  assert(ES_ONLY.includes('REFERENCIA'), '"REFERENCIA" debería ser esOnly');
+  assert(EN_ONLY.includes('REFERENCE'), '"REFERENCE" debería ser enOnly');
+  assertEquals(ES_ONLY.includes('REFERENCE'), false);
+  assertEquals(EN_ONLY.includes('REFERENCIA'), false);
+});
+
+// T4.2 — fuga cross-locale sobre los 4 caminos de respuesta × 2 locales.
+// Los 4 caminos: veredicto de cotización, pregunta de equipo, rechazo por
+// tema (off-topic), y datos faltantes. Ninguno de los builders invocados acá
+// recibe el mensaje del usuario como argumento — solo `locale` — así que esta
+// prueba también confirma estructuralmente el criterio 4 del kickoff: el
+// idioma del input nunca puede arrastrar el output porque los builders no lo
+// reciben.
+const CAMINOS_DE_RESPUESTA: Array<{ nombre: string; build: (locale: Locale) => string }> = [
+  {
+    nombre: 'veredicto de cotización (con oferta)',
+    build: (locale) => buildRateCheckMarkdown(buildVerdictQuote(1000), locale),
+  },
+  {
+    nombre: 'pregunta de equipo',
+    build: (locale) => buildEquipmentQuestionMarkdown('missing', locale),
+  },
+  {
+    nombre: 'rechazo por tema (off-topic)',
+    build: (locale) => buildOffTopicMarkdown(locale),
+  },
+  {
+    nombre: 'datos faltantes',
+    build: (locale) => buildMissingDataMarkdown(locale),
+  },
+];
+
+Deno.test('anti-mezcla: ninguno de los 4 caminos de respuesta filtra texto del otro locale', () => {
+  for (const { nombre, build } of CAMINOS_DE_RESPUESTA) {
+    const outEn = build('en');
+    for (const frag of ES_ONLY) {
+      assertEquals(outEn.includes(frag), false, `[${nombre}] EN filtró fragmento exclusivo de ES: "${frag}"`);
+    }
+    const outEs = build('es');
+    for (const frag of EN_ONLY) {
+      assertEquals(outEs.includes(frag), false, `[${nombre}] ES filtró fragmento exclusivo de EN: "${frag}"`);
+    }
+  }
+});
+
+// Caso cruzado explícito del criterio 4: escribir la consulta en español con
+// el toggle en inglés. Los builders de armado de respuesta son puros y jamás
+// reciben el `content` del mensaje del usuario (solo `locale`) — confirmado
+// leyendo rateEngine.ts: computeVerdict, buildRateCheckMarkdown,
+// buildOffTopicMarkdown, buildEquipmentQuestionMarkdown,
+// buildOutOfMarketMarkdown, buildMissingDataMarkdown, buildGeneralMarkdown/
+// safeFallbackContent y buildAccessorialsLine — ninguno toma `messages` ni
+// `content` como argumento. Solo `resolveIntent` lee el mensaje, y únicamente
+// para decidir el INTENT (rate_check/general/off_topic), nunca el idioma.
+Deno.test('anti-mezcla: un input en español con toggle EN no arrastra el idioma de la respuesta', () => {
+  const mensajeEnEspanol = [
+    { role: 'user', content: 'Necesito cotizar drayage de Miami a Tampa, ¿cuánto me pagan?' },
+  ];
+
+  // El intent se resuelve igual sin importar el idioma del mensaje.
+  assertEquals(resolveIntent('rate_check', mensajeEnEspanol), 'rate_check');
+
+  // El mismo query, con locale='en' explícito pese al input en español: salida
+  // 100% en inglés, sin ningún fragmento exclusivo de ES.
+  const out = buildRateCheckMarkdown(buildVerdictQuote(999), 'en');
+  for (const frag of ES_ONLY) {
+    assertEquals(out.includes(frag), false, `fuga de "${frag}" con input en español, toggle EN: "${frag}"`);
+  }
+  assertStringIncludes(out, 'I SUGGEST ASKING FOR MORE');
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// INVARIANZA NUMÉRICA ENTRE LOCALES (chat-idioma-toggle, Fase 5, criterio 6 del
+// kickoff #9360): la misma consulta en ES y EN debe devolver EXACTAMENTE las
+// mismas cifras (montos, millas, RPM) — solo cambia el texto.
+//
+// Por qué hace falta una prueba nueva: las pruebas de Fase 1-3 ya comparan
+// strings puntuales por caso ('Piso: $1,400' vs 'Floor: $1,400'), pero ninguna
+// extrae TODAS las cifras de la respuesta ensamblada y las compara como
+// secuencia. Un builder que interpolara mal el catálogo — por ejemplo,
+// intercambiar floor/target al armar headerLine solo para uno de los dos
+// locales — podría cambiar una cifra (o su ORDEN) sin que ningún assert
+// puntual existente lo note, porque cada assert puntual mira un fragmento a
+// la vez, no la respuesta completa. Este es exactamente el riesgo que el
+// kickoff señala como el de mayor probabilidad de regresión silenciosa.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Extrae toda secuencia numérica (con o sin '$', con separador de miles y
+// hasta 2 decimales), preservando el ORDEN de aparición. El orden importa
+// tanto como el valor: si un builder intercambiara floor/target al armar el
+// texto, los valores seguirían coincidiendo entre locales como conjunto, pero
+// el orden se invertiría frente al otro locale — comparar como Set no lo
+// detectaría; comparar como array (orden incluido) sí.
+function extraerCifras(texto: string): string[] {
+  return texto.match(/\$?\d[\d,]*(\.\d+)?/g) || [];
+}
+
+// reglas-v3-multiestado: reemplaza los 7 escenarios sobre `CTX_BASE`
+// (floorBasis/portEverglades/source:'llm' — conceptos eliminados por Fase 3,
+// ver cabecera de rateEngine.ts) por escenarios sobre `CalculatedQuote` real,
+// cubriendo los caminos que sí siguen existiendo: sin oferta, bajo/entre/
+// sobre piso-objetivo (vía VERDICT_TEST_EQUIPMENT, igual que la sección
+// VEREDICTO arriba), match de tabla (piso+objetivo reales de TX), objetivo
+// derivado (TX 45'), y con veredicto por perfil (margen %) — más superficie
+// numérica que los 7 escenarios originales, no menos.
+function quoteDe(outcome: { kind: string; calculo?: unknown }) {
+  if (outcome.kind !== 'quote') throw new Error('fixture inválido: se esperaba kind="quote"');
+  return outcome.calculo as CalculatedQuote;
+}
+
+const ESCENARIOS_NUMERICOS: Array<{ nombre: string; calculo: CalculatedQuote }> = [
+  { nombre: 'sin oferta (solo referencia)', calculo: quoteDe(resolveGenericQuote({ equipment: VERDICT_TEST_EQUIPMENT, millasIdaDeclaradas: 500, pagoCamionRpm: 2, tarifaOfrecida: null })) },
+  { nombre: 'oferta bajo el piso', calculo: buildVerdictQuote(999) },
+  { nombre: 'oferta entre piso y objetivo', calculo: buildVerdictQuote(1200) },
+  { nombre: 'oferta sobre objetivo', calculo: buildVerdictQuote(2000) },
+  { nombre: 'match de tabla (piso y objetivo de TX)', calculo: quoteDe(resolveDrayageQuote({ destinoRaw: 'Houston', tamano: '40', millasIdaDeclaradas: null, pagoCamionRpm: null, tarifaOfrecida: 900 })) },
+  { nombre: 'objetivo derivado (TX 45\')', calculo: quoteDe(resolveDrayageQuote({ destinoRaw: 'Houston', tamano: '45', millasIdaDeclaradas: null, pagoCamionRpm: null, tarifaOfrecida: null })) },
+  { nombre: 'con veredicto por perfil (margen %)', calculo: quoteDe(resolveGenericQuote({ equipment: dryVan, millasIdaDeclaradas: 500, pagoCamionRpm: 2.0, tarifaOfrecida: 1400 })) },
+];
+
+Deno.test('invarianza numérica: la misma consulta en ES y EN devuelve exactamente las mismas cifras, en el mismo orden (criterio 6 del kickoff)', () => {
+  for (const { nombre, calculo } of ESCENARIOS_NUMERICOS) {
+    const outEs = buildRateCheckMarkdown(calculo, 'es');
+    const outEn = buildRateCheckMarkdown(calculo, 'en');
+    assertEquals(
+      extraerCifras(outEn),
+      extraerCifras(outEs),
+      `[${nombre}] las cifras deberían ser idénticas y en el mismo orden entre ES y EN`,
+    );
+  }
 });

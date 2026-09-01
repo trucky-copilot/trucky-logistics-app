@@ -9,9 +9,9 @@ import {
   FREIGHT_KB_VERSION,
   EQUIPMENT_BENCHMARKS,
   DETENTION,
-  ACCESSORIALS,
   HOS_LIMITS,
   DEADHEAD_THRESHOLDS,
+  buildAccessorialsLine,
   HISTORY_CAP,
   MAX_REQUEST_CHARS,
   resolveEquipment,
@@ -44,55 +44,24 @@ import {
   buildGeneralIntentAllowedNumbers,
 } from './llmDataBoundary.ts';
 
+// chat-idioma-toggle Fase 2 (re-aplicado en la reconciliación con
+// reglas-v3-multiestado): `locale` viaja desde el payload hasta cada builder
+// de rateEngine.ts y hasta el BASE_CONTEXT/prompt de extracción. Ver Design
+// (engram sdd/chat-idioma-toggle/design) y apply-progress para el detalle de
+// por qué esta pieza no tiene Deno.test directo (entry.ts no se puede
+// importar desde una prueba).
+import { MESSAGES, resolveLocale, type Locale } from './messageCatalog.ts';
+
 const ROUTE_COUNTS = getRouteCounts();
 
 const EQUIPMENT_LINES = EQUIPMENT_BENCHMARKS
   .map(e => `- ${e.id} (${e.label}): $${e.rpm_target.toFixed(2)}/mi`)
   .join('\n');
 
-const ACCESSORIALS_LINE = ACCESSORIALS
-  .map(a => a.min === a.max
-    ? `${a.label} $${a.min}${a.unit || ''}`
-    : `${a.label} $${a.min}-${a.max}${a.unit || ''}`)
-  .join(' | ');
-
-const BASE_CONTEXT = `Eres TruckyAI, el asistente de inteligencia de mercado para dispatchers y carriers de drayage y freight en Florida y Texas.
-
-[Freight Dispatcher KB v${FREIGHT_KB_VERSION}]
-
-VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
-- FIT = Florida International Terminal (Medley/Hialeah, zona de PortMiami)
-- POMTOC / SFCT = terminales de PortMiami
-- PET / Broward / Everglades = Port Everglades (Fort Lauderdale)
-- Pompano = Pompano Beach, FL
-- WPB = West Palm Beach, FL
-- drayage = transporte de contenedores desde/hacia puerto
-- rate confirmation / red confirmation = rate confirmation (documento de tarifa)
-- backhaul = carga de regreso vacío
-- detention = cobro por espera excesiva en puerto o cliente
-- per diem = cargo diario por uso de contenedor del naviero
-- demurrage = cargo por contenedor que sigue en puerto después de free days
-- void check = cheque anulado para configurar pago ACH/EFT con broker
-- TONU = Truck Order Not Used (cuando el broker cancela después de confirmar)
-
-MERCADOS CUBIERTOS POR TABLA REAL DE TARIFAS: Florida (${ROUTE_COUNTS.fl} rutas de drayage) y Texas (${ROUTE_COUNTS.tx} rutas de drayage, Houston/Dallas-Ft Worth/El Paso). Para cualquier otro estado, o para cualquier equipo que no sea drayage, NO hay tabla: se calcula por RPM y se declara como cálculo — nunca se rechaza por falta de tabla.
-
-RPM BASE POR EQUIPO (7 tipos — usa estos IDs exactos al extraer "equipo"; el número de piso/objetivo real lo calcula el código, no lo inventes):
-${EQUIPMENT_LINES}
-
-DETENTION: único valor válido en toda respuesta — $${DETENTION.standard}/hr estándar tras ${DETENTION.free_hours}h libres (rango $${DETENTION.min}-$${DETENTION.max}/hr). NUNCA menciones otra cifra de detention.
-ACCESSORIALS: ${ACCESSORIALS_LINE}
-
-DEADHEAD: <${DEADHEAD_THRESHOLDS.ok_pct}% millas cargadas=OK | ${DEADHEAD_THRESHOLDS.ok_pct}-${DEADHEAD_THRESHOLDS.concerning_pct}%=Preocupante | >${DEADHEAD_THRESHOLDS.concerning_pct}%=Deal-breaker. Si deadhead >${DEADHEAD_THRESHOLDS.long_deadhead_miles}mi, pedir $${DEADHEAD_THRESHOLDS.extra_rpm_min.toFixed(2)}-$${DEADHEAD_THRESHOLDS.extra_rpm_max.toFixed(2)}/mi adicional.
-
-HOS: ${HOS_LIMITS.driving_hours}h conducción diaria | ${HOS_LIMITS.on_duty_hours}h on-duty | Pausa ${HOS_LIMITS.break_minutes}min tras ${HOS_LIMITS.break_after_hours}h conduciendo | ${HOS_LIMITS.hours_8_days}h/8días o ${HOS_LIMITS.hours_7_days}h/7días.
-
-REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálculos de tarifa de rate_check se hacen en código, no aquí):
-1. Respuestas MUY CORTAS — máximo 5 líneas. El dispatcher no quiere leer párrafos.
-2. NUNCA sugerir "busca carga de regreso" — eso lo maneja el dispatcher, no el broker.
-3. NUNCA inventes cifras de tarifas, millas o mínimos que no estén en esta KB — si no las tienes, dilo.
-4. Para preguntas que no son de ruta, responde en máximo 3 líneas.
-5. IDENTIDAD: la empresa del usuario es únicamente la que aparezca en el bloque "EMPRESA DEL USUARIO". Si ese bloque no está, NO tienes ese dato: dilo y NUNCA nombres ni supongas una empresa. Jamás menciones el nombre de ninguna otra empresa como si fuera la del usuario.`;
+// BASE_CONTEXT dejó de ser una const de módulo: depende de `locale`, que es un
+// dato de la request (chat-idioma-toggle Fase 2). Se arma por request dentro
+// del handler — ver buildAccessorialsLine() en rateEngine.ts y
+// MESSAGES[locale].baseContext() en messageCatalog.ts.
 
 // EXTRACTION_SCHEMA — Único InvokeLLM del handler devuelve exactamente esto.
 // Vive en rateEngine.ts (objeto puro, sin I/O) para poder cubrirlo con
@@ -127,7 +96,7 @@ async function extractWithRetry(base44, prompt) {
 // PROMPT BUILDER
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildExtractionPrompt(systemContext, cappedMessages) {
+function buildExtractionPrompt(systemContext, cappedMessages, locale: Locale) {
   const conversationHistory = cappedMessages
     .map(m => `${m.role === 'user' ? 'Dispatcher' : 'TruckyAI'}: ${m.content}`)
     .join('\n\n');
@@ -155,7 +124,7 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece; null si no se menciona ninguna cifra.
 - pago_camion: el RPM (dólares por milla) que el dispatcher dice que le paga al camión/carrier, SOLO si lo menciona explícitamente en este mensaje; null si no lo dice. No lo confundas con tarifa_ofrecida (eso es lo que el broker le paga al dispatcher).
 - accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis"); arreglo vacío si no menciona ninguno.
-- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, en español, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
+- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,7 +229,12 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Cuerpo de la petición inválido' }, { status: 400 });
   }
 
-  const { messages, costConfig: clientCostConfig } = body || {};
+  const { messages, costConfig: clientCostConfig, locale: rawLocale } = body || {};
+  // Resuelto ANTES del try/catch externo (L~263) a propósito: si algo dentro
+  // de ese bloque revienta, el catch-all (safeFallbackContent) ya tiene un
+  // locale seguro en scope — nunca cae en undefined. Payload aditivo: si
+  // `locale` no viene, resolveLocale default a 'es'.
+  const locale: Locale = resolveLocale(rawLocale);
 
   if (!isValidMessages(messages)) {
     return Response.json({ error: 'messages debe ser un array no vacío de objetos { role, content } con valores string' }, { status: 400 });
@@ -277,7 +251,28 @@ Deno.serve(async (req) => {
     ]);
     const costConfig = getCostConfig(costConfigRecord, clientCostConfig);
 
-    let systemContext = BASE_CONTEXT;
+    let systemContext = MESSAGES[locale].baseContext({
+      freightKbVersion: FREIGHT_KB_VERSION,
+      equipmentLines: EQUIPMENT_LINES,
+      routeCountFl: ROUTE_COUNTS.fl,
+      routeCountTx: ROUTE_COUNTS.tx,
+      accessorialsLine: buildAccessorialsLine(locale),
+      detentionStandard: DETENTION.standard,
+      detentionFreeHours: DETENTION.free_hours,
+      detentionMin: DETENTION.min,
+      detentionMax: DETENTION.max,
+      deadheadOkPct: DEADHEAD_THRESHOLDS.ok_pct,
+      deadheadConcerningPct: DEADHEAD_THRESHOLDS.concerning_pct,
+      deadheadLongMiles: DEADHEAD_THRESHOLDS.long_deadhead_miles,
+      deadheadExtraMin: DEADHEAD_THRESHOLDS.extra_rpm_min,
+      deadheadExtraMax: DEADHEAD_THRESHOLDS.extra_rpm_max,
+      hosDrivingHours: HOS_LIMITS.driving_hours,
+      hosOnDutyHours: HOS_LIMITS.on_duty_hours,
+      hosBreakMinutes: HOS_LIMITS.break_minutes,
+      hosBreakAfterHours: HOS_LIMITS.break_after_hours,
+      hos8Days: HOS_LIMITS.hours_8_days,
+      hos7Days: HOS_LIMITS.hours_7_days,
+    });
     if (organizationName) {
       systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
     }
@@ -301,11 +296,11 @@ Deno.serve(async (req) => {
 - Objetivo: $${objetivo}/mi`;
     }
 
-    const prompt = buildExtractionPrompt(systemContext, cappedMessages);
+    const prompt = buildExtractionPrompt(systemContext, cappedMessages, locale);
     const raw = await extractWithRetry(base44, prompt);
 
     if (!raw) {
-      return Response.json({ content: safeFallbackContent() });
+      return Response.json({ content: safeFallbackContent(locale) });
     }
 
     // Guardarraíl de tema (Decisión 1): decide el intent en código, no confía
@@ -325,12 +320,12 @@ Deno.serve(async (req) => {
     if (intent === 'off_topic') {
       // Sin cifras por diseño (buildOffTopicMarkdown) — igual pasa por la
       // frontera para que ningún camino de respuesta quede sin verificar.
-      return Response.json({ content: conFronteraVerificada(buildOffTopicMarkdown(), new Set()) });
+      return Response.json({ content: conFronteraVerificada(buildOffTopicMarkdown(locale), new Set()) });
     }
 
     if (intent === 'general') {
       const permitidasGeneral = buildGeneralIntentAllowedNumbers(costConfigValuesShown);
-      return Response.json({ content: conFronteraVerificada(buildGeneralMarkdown(raw.respuesta_general), permitidasGeneral) });
+      return Response.json({ content: conFronteraVerificada(buildGeneralMarkdown(raw.respuesta_general, locale), permitidasGeneral) });
     }
 
     // intent === 'rate_check'
@@ -357,7 +352,7 @@ Deno.serve(async (req) => {
     if (raw.equipo === 'drayage') {
       const tamano: Tamano | null = ['20', '40', '45', '20_heavy'].includes(raw.tamano) ? (raw.tamano as Tamano) : null;
       if (!tamano) {
-        content = buildEquipmentQuestionMarkdown('size');
+        content = buildEquipmentQuestionMarkdown('size', locale);
       } else {
         const outcome = resolveDrayageQuote({
           destinoRaw: raw.destino,
@@ -369,17 +364,17 @@ Deno.serve(async (req) => {
           costoPorMillaPropio,
         });
         if (outcome.kind === 'ask_miles') {
-          content = raw.destino ? buildAskMilesMarkdown(outcome.ciudadConocida) : buildMissingDataMarkdown();
+          content = raw.destino ? buildAskMilesMarkdown(outcome.ciudadConocida, locale) : buildMissingDataMarkdown(locale);
         } else if (outcome.kind === 'fuera_de_rango') {
-          content = buildSanityCapMarkdown();
+          content = buildSanityCapMarkdown(locale);
         } else {
           calculo = outcome.calculo;
-          content = buildRateCheckMarkdown(outcome.calculo);
+          content = buildRateCheckMarkdown(outcome.calculo, locale);
           // reglas-v3-multiestado Fase 4 (Decisión 2-A): en drayage la doble
           // lectura NUNCA aparece por defecto — solo si el dispatcher pregunta
           // explícitamente por el total de ida y vuelta.
           if (preguntaPorTotalRedondo(ultimoMensajeDelDispatcher(cappedMessages))) {
-            content += `\n\n${buildDrayageRoundTripMarkdown(outcome.calculo)}`;
+            content += `\n\n${buildDrayageRoundTripMarkdown(outcome.calculo, locale)}`;
           }
         }
       }
@@ -388,7 +383,7 @@ Deno.serve(async (req) => {
       // sustituye un tipo de camión: si no está claro, se pregunta.
       const resolvedEquipment = resolveEquipment(raw.equipo);
       if (resolvedEquipment.status === 'ask') {
-        content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason);
+        content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale);
       } else {
         const outcome = resolveGenericQuote({
           equipment: resolvedEquipment.equipment,
@@ -398,12 +393,12 @@ Deno.serve(async (req) => {
           costoPorMillaPropio,
         });
         if (outcome.kind === 'ask_miles') {
-          content = buildMissingDataMarkdown();
+          content = buildMissingDataMarkdown(locale);
         } else if (outcome.kind === 'fuera_de_rango') {
-          content = buildSanityCapMarkdown();
+          content = buildSanityCapMarkdown(locale);
         } else {
           calculo = outcome.calculo;
-          content = buildRateCheckMarkdown(outcome.calculo);
+          content = buildRateCheckMarkdown(outcome.calculo, locale);
         }
       }
     }
@@ -417,6 +412,6 @@ Deno.serve(async (req) => {
 
   } catch (_error) {
     // Cualquier falla inesperada retorna respuesta segura, nunca 500 con stack trace.
-    return Response.json({ content: safeFallbackContent() });
+    return Response.json({ content: safeFallbackContent(locale) });
   }
 });

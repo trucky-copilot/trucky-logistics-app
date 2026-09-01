@@ -33,6 +33,15 @@
       "type": "boolean",
       "default": false,
       "description": "Marca este workspace como demo interno. Solo para uso expl\u00edcito del equipo \u2014 nunca se activa autom\u00e1ticamente en cuentas reales."
+    },
+    "idioma_chat": {
+      "type": "string",
+      "enum": [
+        "es",
+        "en"
+      ],
+      "default": "es",
+      "description": "Idioma de las respuestas del Chat de Mercado. Aditivo: no forma parte del flujo de onboarding."
     }
   },
   "required": [
