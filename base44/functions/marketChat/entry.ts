@@ -12,7 +12,7 @@ import {
   LANES,
   PORT_EVERGLADES_SURCHARGE,
   DETENTION,
-  ACCESSORIALS,
+  buildAccessorialsLine,
   HISTORY_CAP,
   MAX_REQUEST_CHARS,
   resolveMiles,
@@ -34,6 +34,13 @@ import {
   isValidMessages,
 } from './rateEngine.ts';
 
+// chat-idioma-toggle Fase 2: `locale` viaja desde el payload hasta cada
+// builder de rateEngine.ts y hasta el BASE_CONTEXT/prompt de extracción. Ver
+// Design (engram sdd/chat-idioma-toggle/design) y apply-progress para el
+// detalle de por qué esta pieza no tiene Deno.test directo (entry.ts no se
+// puede importar desde una prueba).
+import { MESSAGES, resolveLocale, type Locale } from './messageCatalog.ts';
+
 const EQUIPMENT_LINES = EQUIPMENT_BENCHMARKS
   .map(e => `- ${e.id} (${e.label}): Mín $${e.rpm_min.toFixed(2)} | Bueno $${e.rpm_target.toFixed(2)}/mi`)
   .join('\n');
@@ -46,56 +53,10 @@ const FLAT_MIN_LINE = FLAT_MINIMUMS
   .map(b => `${b.range}=$${b.min.toLocaleString('en-US')}${b.max ? '-$' + b.max.toLocaleString('en-US') : '+'}`)
   .join(' | ');
 
-const ACCESSORIALS_LINE = ACCESSORIALS
-  .map(a => a.min === a.max
-    ? `${a.label} $${a.min}${a.unit || ''}`
-    : `${a.label} $${a.min}-${a.max}${a.unit || ''}`)
-  .join(' | ');
-
-const BASE_CONTEXT = `Eres TruckyAI, el asistente de inteligencia de mercado para dispatchers y carriers de drayage intermodal en el sur de Florida.
-
-[Freight Dispatcher KB v${FREIGHT_KB_VERSION}]
-
-VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
-- FIT = Florida International Terminal (Medley/Hialeah, zona de PortMiami)
-- SFST = South Florida Staging Terminal
-- Pompano = Pompano Beach, FL
-- WPB = West Palm Beach, FL
-- drayage = transporte de contenedores desde/hacia puerto
-- rate confirmation / red confirmation = rate confirmation (documento de tarifa)
-- backhaul = carga de regreso vacío
-- detention = cobro por espera excesiva en puerto o cliente
-- per diem = cargo diario por uso de contenedor del naviero
-- demurrage = cargo por contenedor que sigue en puerto después de free days
-- void check = cheque anulado para configurar pago ACH/EFT con broker
-- TONU = Truck Order Not Used (cuando el broker cancela después de confirmar)
-
-MERCADO DE REFERENCIA (dato del mercado, NO de una empresa en particular):
-- Puertos del sur de Florida: PortMiami, Port Everglades (Fort Lauderdale)
-- Corredores habituales desde esa zona: Tampa, Fort Myers/Naples, WPB, Fort Pierce, Pompano, Orlando, Jacksonville
-
-EQUIPOS Y BENCHMARKS RPM (7 tipos — usa estos IDs exactos al extraer "equipo"):
-${EQUIPMENT_LINES}
-
-CATÁLOGO DE RUTAS DE REFERENCIA (millas REDONDO = ida + vuelta, salvo que el dispatcher diga "solo ida"/"one way"):
-${LANE_LINES}
-- Port Everglades (Fort Lauderdale) se trata como zona base de Miami; agrega +$${PORT_EVERGLADES_SURCHARGE} de recargo de puerto — NO es una ruta aparte.
-
-MÍNIMOS FLAT RATE (el piso real siempre es el MAYOR entre este mínimo y RPM mínimo del equipo × millas): ${FLAT_MIN_LINE}
-
-DETENTION: único valor válido en toda respuesta — $${DETENTION.standard}/hr estándar tras ${DETENTION.free_hours}h libres (rango $${DETENTION.min}-$${DETENTION.max}/hr). NUNCA menciones otra cifra de detention.
-ACCESSORIALS: ${ACCESSORIALS_LINE}
-
-DEADHEAD: <20% millas cargadas=OK | 20-40%=Preocupante | >40%=Deal-breaker. Si deadhead >100mi, pedir $1.00-$1.50/mi adicional.
-
-HOS: 11h conducción diaria | 14h on-duty | Pausa 30min tras 8h conduciendo | 70h/8días o 60h/7días.
-
-REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálculos de tarifa de rate_check se hacen en código, no aquí):
-1. Respuestas MUY CORTAS — máximo 5 líneas. El dispatcher no quiere leer párrafos.
-2. NUNCA sugerir "busca carga de regreso" — eso lo maneja el dispatcher, no el broker.
-3. NUNCA inventes cifras de tarifas, millas o mínimos que no estén en esta KB — si no las tienes, dilo.
-4. Para preguntas que no son de ruta, responde en máximo 3 líneas.
-5. IDENTIDAD: la empresa del usuario es únicamente la que aparezca en el bloque "EMPRESA DEL USUARIO". Si ese bloque no está, NO tienes ese dato: dilo y NUNCA nombres ni supongas una empresa. Jamás menciones el nombre de ninguna otra empresa como si fuera la del usuario.`;
+// ACCESSORIALS_LINE y BASE_CONTEXT dejaron de ser consts de módulo: dependen
+// de `locale`, que es un dato de la request (chat-idioma-toggle Fase 2). Se
+// arman por request dentro del handler — ver buildAccessorialsLine() en
+// rateEngine.ts y MESSAGES[locale].baseContext() en messageCatalog.ts.
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SCHEMA DE EXTRACCIÓN — Único InvokeLLM del handler devuelve exactamente esto.
@@ -145,7 +106,7 @@ async function extractWithRetry(base44, prompt) {
 // PROMPT BUILDER
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildExtractionPrompt(systemContext, cappedMessages) {
+function buildExtractionPrompt(systemContext, cappedMessages, locale: Locale) {
   const conversationHistory = cappedMessages
     .map(m => `${m.role === 'user' ? 'Dispatcher' : 'TruckyAI'}: ${m.content}`)
     .join('\n\n');
@@ -170,7 +131,7 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - equipo="drayage": si el dispatcher dice "drayage" o "contenedor"/"container" SIN especificar 20' ni 40', usa "drayage" — NO adivines el tamaño.
 - equipo, distinción reefer vs. contenedor: "reefer" es un trailer refrigerado (tarifa por RPM); un contenedor refrigerado que sale de puerto es un movimiento de drayage → usa "drayage" (o drayage_20/drayage_40 si dice el tamaño), nunca "reefer".
 - tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece; null si no se menciona ninguna cifra.
-- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, en español, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
+- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -251,7 +212,12 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Cuerpo de la petición inválido' }, { status: 400 });
   }
 
-  const { messages, costConfig: clientCostConfig } = body || {};
+  const { messages, costConfig: clientCostConfig, locale: rawLocale } = body || {};
+  // Resuelto ANTES del try/catch externo (L~263) a propósito: si algo dentro
+  // de ese bloque revienta, el catch-all (safeFallbackContent) ya tiene un
+  // locale seguro en scope — nunca cae en undefined. Payload aditivo: si
+  // `locale` no viene, resolveLocale default a 'es'.
+  const locale: Locale = resolveLocale(rawLocale);
 
   if (!isValidMessages(messages)) {
     return Response.json({ error: 'messages debe ser un array no vacío de objetos { role, content } con valores string' }, { status: 400 });
@@ -267,7 +233,18 @@ Deno.serve(async (req) => {
       getOrganizationName(base44, user.email),
     ]);
 
-    let systemContext = BASE_CONTEXT;
+    let systemContext = MESSAGES[locale].baseContext({
+      freightKbVersion: FREIGHT_KB_VERSION,
+      equipmentLines: EQUIPMENT_LINES,
+      laneLines: LANE_LINES,
+      flatMinLine: FLAT_MIN_LINE,
+      accessorialsLine: buildAccessorialsLine(locale),
+      portEvergladesSurcharge: PORT_EVERGLADES_SURCHARGE,
+      detentionStandard: DETENTION.standard,
+      detentionFreeHours: DETENTION.free_hours,
+      detentionMin: DETENTION.min,
+      detentionMax: DETENTION.max,
+    });
     if (organizationName) {
       systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
     }
@@ -278,11 +255,11 @@ Deno.serve(async (req) => {
 - Objetivo: $${costConfig.tarifa_objetivo ?? COSTCONFIG_DEFAULTS.tarifa_objetivo}/mi`;
     }
 
-    const prompt = buildExtractionPrompt(systemContext, cappedMessages);
+    const prompt = buildExtractionPrompt(systemContext, cappedMessages, locale);
     const raw = await extractWithRetry(base44, prompt);
 
     if (!raw) {
-      return Response.json({ content: safeFallbackContent() });
+      return Response.json({ content: safeFallbackContent(locale) });
     }
 
     // Guardarraíl de tema (Decisión 1): decide el intent en código, no confía
@@ -290,11 +267,11 @@ Deno.serve(async (req) => {
     const intent = resolveIntent(raw.intent, cappedMessages);
 
     if (intent === 'off_topic') {
-      return Response.json({ content: buildOffTopicMarkdown() });
+      return Response.json({ content: buildOffTopicMarkdown(locale) });
     }
 
     if (intent === 'general') {
-      return Response.json({ content: buildGeneralMarkdown(raw.respuesta_general) });
+      return Response.json({ content: buildGeneralMarkdown(raw.respuesta_general, locale) });
     }
 
     // intent === 'rate_check'
@@ -305,13 +282,13 @@ Deno.serve(async (req) => {
     // escapar el número.
     const mercadoAjeno = detectarFueraDeMercado(raw.origen, raw.destino);
     if (mercadoAjeno) {
-      return Response.json({ content: buildOutOfMarketMarkdown(raw.origen, raw.destino) });
+      return Response.json({ content: buildOutOfMarketMarkdown(raw.origen, raw.destino, locale) });
     }
 
     const resolved = resolveMiles(raw.origen, raw.destino, raw.millas_ida, raw.es_redondo);
 
     if (resolved.insufficient) {
-      return Response.json({ content: buildMissingDataMarkdown() });
+      return Response.json({ content: buildMissingDataMarkdown(locale) });
     }
 
     // Guardarraíl de equipo (TRUCKY-48 parcial): igual que el guardarraíl de
@@ -319,7 +296,7 @@ Deno.serve(async (req) => {
     // sustituye un tipo de camión: si no está claro, se pregunta.
     const resolvedEquipment = resolveEquipment(raw.equipo);
     if (resolvedEquipment.status === 'ask') {
-      return Response.json({ content: buildEquipmentQuestionMarkdown(resolvedEquipment.reason) });
+      return Response.json({ content: buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale) });
     }
 
     const equipment = resolvedEquipment.equipment;
@@ -347,12 +324,12 @@ Deno.serve(async (req) => {
       portEverglades: resolved.portEverglades,
       floorBasis: resolveFloorBasis(resolved.miles, equipment.rpm_min, bucket.min),
       bucketRange: bucket.range,
-    });
+    }, locale);
 
     return Response.json({ content });
 
   } catch (_error) {
     // Cualquier falla inesperada retorna respuesta segura, nunca 500 con stack trace.
-    return Response.json({ content: safeFallbackContent() });
+    return Response.json({ content: safeFallbackContent(locale) });
   }
 });
