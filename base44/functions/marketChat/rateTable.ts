@@ -148,13 +148,16 @@ export function findRouteById(estado: Estado, id: string): RouteRecord | null {
 // ─────────────────────────────────────────────────────────────────────────────
 // REPORTE DE RUTAS NO ENCONTRADAS (criterio de éxito 9, kickoff §7.9 y §12
 // 14-A: "es justo la información que hace falta para saber qué agregar
-// primero"). Estructura de datos base — el consumo completo (endpoint/reporte
-// visible) es de una fase posterior; acá solo se garantiza que la señal se
-// capture y nunca bloquee ni rompa la respuesta al usuario.
+// primero").
 //
-// Vive en memoria del proceso: cada isolate de la función es efímero, así que
-// esto es intencionalmente ligero. Cuando exista un consumidor real (Fase 7+),
-// se decide ahí si conviene persistir a una entidad o exportar a un log.
+// Consumidor real (Decisión 14-A): cada ruta no encontrada se loguea de
+// inmediato — apenas se registra, no en una lectura posterior — como línea
+// estructurada en los logs de la función Base44, que sí son infraestructura
+// existente y consultable por Juan/Mateo. El array en memoria (getUnmatchedRoutes)
+// se conserva además para quien quiera leerlo dentro del mismo isolate, pero
+// deja de ser el único consumidor: el log no depende de que el isolate siga
+// vivo. No se agrega pantalla ni entidad nueva — eso excede el alcance de este
+// SDD (kickoff §8, Alcance OUT).
 // ─────────────────────────────────────────────────────────────────────────────
 
 let unmatchedRoutes: UnmatchedRouteEntry[] = [];
@@ -162,7 +165,13 @@ let unmatchedRoutes: UnmatchedRouteEntry[] = [];
 export function recordUnmatchedRoute(ciudad: string, estado: Estado | string): void {
   try {
     if (!ciudad) return; // sin ciudad no hay nada útil que registrar — no se inventa un valor.
-    unmatchedRoutes.push({ ciudad, estado, timestamp: new Date().toISOString() });
+    const entry: UnmatchedRouteEntry = { ciudad, estado, timestamp: new Date().toISOString() };
+    unmatchedRoutes.push(entry);
+    try {
+      console.error(`[rateTable] ruta no encontrada en tabla: ${JSON.stringify(entry)}`);
+    } catch (_logError) {
+      // El logging nunca debe interrumpir el registro ni la respuesta al usuario.
+    }
   } catch (_error) {
     // Nunca debe interrumpir la respuesta al usuario por un problema de
     // reporting; es una señal de mejora continua, no una ruta crítica.

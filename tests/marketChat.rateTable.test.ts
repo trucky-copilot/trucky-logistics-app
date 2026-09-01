@@ -148,3 +148,30 @@ Deno.test('rateTable: registrar una ruta no encontrada nunca lanza ni bloquea', 
   recordUnmatchedRoute(null as unknown as string, 'TX');
   assert(true, 'no debe llegar a lanzar antes de esta línea');
 });
+
+Deno.test('rateTable: registrar una ruta no encontrada loguea un consumidor real (Decisión 14-A / kickoff §12)', () => {
+  clearUnmatchedRoutes();
+  const llamadas: string[] = [];
+  const originalError = console.error;
+  console.error = (...args: unknown[]) => { llamadas.push(args.map(String).join(' ')); };
+  try {
+    recordUnmatchedRoute('Ocala', 'FL');
+  } finally {
+    console.error = originalError;
+  }
+  assertEquals(llamadas.length, 1, 'debe loguear exactamente una vez, apenas se registra la ruta');
+  assert(llamadas[0].includes('Ocala'), 'el log debe incluir la ciudad');
+  assert(llamadas[0].includes('FL'), 'el log debe incluir el estado');
+});
+
+Deno.test('rateTable: el log de ruta no encontrada no lanza aunque console.error falle', () => {
+  clearUnmatchedRoutes();
+  const originalError = console.error;
+  console.error = () => { throw new Error('logging roto'); };
+  try {
+    recordUnmatchedRoute('Ocala', 'FL');
+    assert(true, 'no debe propagar el error del logger');
+  } finally {
+    console.error = originalError;
+  }
+});
