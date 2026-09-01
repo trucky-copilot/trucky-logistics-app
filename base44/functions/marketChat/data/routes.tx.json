@@ -1,0 +1,1402 @@
+[
+  {
+    "id": "tx-local-irving-dallas-ft-worth-rail-2",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Irving",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 3,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 567,
+        "piso_tabla": 520,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 3,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-grand-prairie-dallas-ft-worth-rail-3",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Grand Prairie",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 9,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 550,
+        "piso_tabla": 510,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 4,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-dallas-dallas-ft-worth-rail-4",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Dallas",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 11,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 600,
+        "piso_tabla": 467,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 5,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-dallas-dallas-ft-worth-rail-5",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Dallas",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 11,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 476,
+        "piso_tabla": 440,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 6,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-grapevine-dallas-ft-worth-rail-6",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Grapevine",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 13,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 550,
+        "piso_tabla": 456,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 7,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-lancaster-dallas-ft-worth-rail-7",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Lancaster",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 22,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 560,
+        "piso_tabla": 487,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 8,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-fort-worth-dallas-ft-worth-rail-8",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Fort Worth",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 27,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 490,
+        "piso_tabla": 436,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 9,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-fort-worth-dallas-ft-worth-rail-9",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Fort Worth",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 27,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 650,
+        "piso_tabla": 395,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 10,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-carrollton-dallas-ft-worth-rail-10",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Carrollton",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 36,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 445,
+        "piso_tabla": 410,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 11,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-cercana-ennis-dallas-ft-worth-rail-11",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Ennis",
+    "zona": "CERCANA",
+    "grupo": null,
+    "millas_ida": 45,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 506,
+        "piso_tabla": 470,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 12,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-daingerfield-dallas-ft-worth-rail-12",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Daingerfield",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 150,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1800,
+        "piso_tabla": 1660,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 13,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-mount-pleasant-dallas-ft-worth-rail-13",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Mount Pleasant",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 161,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1490,
+        "piso_tabla": 978,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 14,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-plainview-dallas-ft-worth-rail-14",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Plainview",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 337,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 2575,
+        "piso_tabla": 2436,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 15,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-amarillo-dallas-ft-worth-rail-15",
+    "estado": "TX",
+    "mercado": "Dallas/Ft Worth (Rail)",
+    "ciudad": "Amarillo",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 401,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 3500,
+        "piso_tabla": 2106,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 16,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-el-paso-el-paso-rail-16",
+    "estado": "TX",
+    "mercado": "El Paso (Rail)",
+    "ciudad": "El Paso",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 7,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 270,
+        "piso_tabla": 250,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 17,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-el-paso-el-paso-rail-17",
+    "estado": "TX",
+    "mercado": "El Paso (Rail)",
+    "ciudad": "El Paso",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 21,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 518,
+        "piso_tabla": 290,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 18,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-18",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 5,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 950,
+        "piso_tabla": 550,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 19,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-19",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 5,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 400,
+        "piso_tabla": 370,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 20,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-20",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 5,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 480,
+        "piso_tabla": 440,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 21,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-21",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 5,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 715,
+        "piso_tabla": 660,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 22,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-baytown-houston-puerto-22",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Baytown",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 27,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 600,
+        "piso_tabla": 500,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 23,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-23",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 28,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 770,
+        "piso_tabla": 531,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 24,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-24",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 28,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 600,
+        "piso_tabla": 580,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 25,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-katy-houston-puerto-25",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Katy",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 29,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 625,
+        "piso_tabla": 580,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 26,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-26",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 30,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 700,
+        "piso_tabla": 460,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 27,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-27",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 30,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 700,
+        "piso_tabla": 550,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 28,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-28",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 30,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 650,
+        "piso_tabla": 619,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 29,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-29",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 30,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 620,
+        "piso_tabla": 525,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 30,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-30",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 30,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 550,
+        "piso_tabla": 510,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 31,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-houston-houston-puerto-31",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Houston",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 30,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 525,
+        "piso_tabla": 480,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 32,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-missouri-city-houston-puerto-32",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Missouri City",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 33,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 525,
+        "piso_tabla": 480,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 33,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-tomball-houston-puerto-33",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Tomball",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 34,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 744,
+        "piso_tabla": 575,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 34,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-local-stafford-houston-puerto-34",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Stafford",
+    "zona": "LOCAL",
+    "grupo": null,
+    "millas_ida": 40,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 495,
+        "piso_tabla": 460,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 35,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-cercana-galveston-houston-puerto-35",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Galveston",
+    "zona": "CERCANA",
+    "grupo": null,
+    "millas_ida": 53,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 781,
+        "piso_tabla": 660,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 36,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-cercana-pinehurst-houston-puerto-36",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Pinehurst",
+    "zona": "CERCANA",
+    "grupo": null,
+    "millas_ida": 60,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 781,
+        "piso_tabla": 720,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 37,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-cercana-beaumont-houston-puerto-37",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Beaumont",
+    "zona": "CERCANA",
+    "grupo": null,
+    "millas_ida": 87,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 938,
+        "piso_tabla": 700,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 38,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-cercana-la-ward-houston-puerto-38",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "La Ward",
+    "zona": "CERCANA",
+    "grupo": null,
+    "millas_ida": 109,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 960,
+        "piso_tabla": 880,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 39,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-caldwell-houston-puerto-39",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Caldwell",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 141,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 781,
+        "piso_tabla": 720,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 40,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-san-marcos-houston-puerto-40",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "San Marcos",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 142,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1375,
+        "piso_tabla": 1260,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 41,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-austin-houston-puerto-41",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Austin",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 174,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1300,
+        "piso_tabla": 1200,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 42,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-san-antonio-houston-puerto-42",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "San Antonio",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 243,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1450,
+        "piso_tabla": 1330,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 43,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-midlothian-houston-puerto-43",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Midlothian",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 260,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1565,
+        "piso_tabla": 1440,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 44,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-lancaster-houston-puerto-44",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Lancaster",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 267,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1450,
+        "piso_tabla": 1330,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 45,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-regional-dallas-houston-puerto-45",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Dallas",
+    "zona": "REGIONAL",
+    "grupo": null,
+    "millas_ida": 276,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1650,
+        "piso_tabla": 1600,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 46,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-dallas-houston-puerto-46",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Dallas",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 281,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1580,
+        "piso_tabla": 1525,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 47,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-flower-mound-houston-puerto-47",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Flower Mound",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 303,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 1550,
+        "piso_tabla": 1430,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 48,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-brownsville-houston-puerto-48",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Brownsville",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 343,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 2200,
+        "piso_tabla": 2100,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 49,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-laredo-houston-puerto-49",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Laredo",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 350,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 2250,
+        "piso_tabla": 2200,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 50,
+      "nota_original": "Rango real observado"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-pharr-houston-puerto-50",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "Pharr",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 351,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 2100,
+        "piso_tabla": 1930,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 51,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  },
+  {
+    "id": "tx-larga-el-paso-houston-puerto-51",
+    "estado": "TX",
+    "mercado": "Houston (Puerto)",
+    "ciudad": "El Paso",
+    "zona": "LARGA",
+    "grupo": null,
+    "millas_ida": 779,
+    "precios": [
+      {
+        "tamano": "40",
+        "objetivo": 4740,
+        "piso_tabla": 4360,
+        "derivado": false
+      }
+    ],
+    "fuente": {
+      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "sha": "5259752bec12d053dd599495da67e98f874befe23c3068ec1322fea623169869",
+      "fila": 52,
+      "nota_original": "Piso derivado (−8%)"
+    },
+    "semantica_millas": {
+      "tipo_millas": "ida",
+      "precio_incluye_regreso": false,
+      "nota": "Columna \"Millas (ida)\" de la hoja, declarada explícitamente de ida. precio_incluye_regreso=false por definición de Design; PENDIENTE DE CONFIRMAR: la columna \"RPM aprox (RT)\" de la hoja se acerca a objetivo÷(millas_ida×2) en casi todas las filas, lo que podría indicar lo contrario. Ver riesgo en apply-progress antes de que Fase 3 use este campo para calcular RPM."
+    }
+  }
+]
