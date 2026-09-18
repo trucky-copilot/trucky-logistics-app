@@ -1,4 +1,17 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+
+// Carga automática del .env local (desarrollo). En producción no existe el
+// archivo y el bloque falla silenciosamente — las vars ya vienen del entorno
+// de la plataforma. Evita tener que setear GOOGLE_MAPS_API_KEY manualmente.
+try {
+  // Se pasa el objeto URL directamente (no .pathname) para que Deno
+  // maneje la ruta correctamente en Windows (evita el /C:/... con barra extra).
+  const envText = await Deno.readTextFile(new URL('.env', import.meta.url));
+  for (const line of envText.split('\n')) {
+    const m = line.match(/^\s*([^#=\s][^=]*?)\s*=\s*(.*)\s*$/);
+    if (m) Deno.env.set(m[1], m[2]);
+  }
+} catch { /* sin .env local — ok */ }
 
 // El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto, la
 // resolución de equipo y el armado de la respuesta) vive en ./rateEngine.ts
@@ -161,6 +174,32 @@ async function getOrganizationName(base44, userEmail) {
   }
 }
 
+async function getRegisteredEquipment(base44, userEmail) {
+  try {
+    const memberships = await base44.entities.OrganizationMember.filter({
+      user_email: userEmail,
+      active: true,
+    });
+
+    const organizationId = memberships?.[0]?.organization_id;
+    if (!organizationId) return null;
+
+    const trucks = await base44.entities.Truck.filter(
+      {
+        organization_id: organizationId,
+        estado: 'disponible',
+      },
+      'created_date',
+      1
+    );
+
+    const equipment = trucks?.[0]?.equipment_type;
+    return equipment || null;
+  } catch (_error) {
+    return null;
+  }
+}
+
 // Lee el registro CRUDO de CostConfig del usuario (o null). Separado de
 // getCostConfig para poder reutilizarlo también en la resolución del pago al
 // camión (Decisión 9-B) sin duplicar el fetch.
@@ -208,6 +247,32 @@ async function persistPagoCamion(base44, userEmail, record, rpm) {
 // código, tabla-primero + cálculo-siempre — reglas-v3-multiestado) o general
 // (wrap de respuesta_general) → siempre { content: string }.
 // ─────────────────────────────────────────────────────────────────────────────
+async function fetchDrivingMiles(
+  origin: string,
+  destination: string,
+): Promise<number | null> {
+  try {
+    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY');
+    if (!apiKey) return null;
+
+    const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
+    url.searchParams.set('origins', origin);
+    url.searchParams.set('destinations', destination);
+    url.searchParams.set('units', 'imperial');
+    url.searchParams.set('key', apiKey);
+
+    const res = await fetch(url.toString());
+    if (!res.ok) return null;
+
+    const data = await res.json();
+    const element = data?.rows?.[0]?.elements?.[0];
+    if (element?.status !== 'OK') return null;
+
+    return Math.round(element.distance.value / 1609);
+  } catch {
+    return null;
+  }
+}
 
 Deno.serve(async (req) => {
   const base44 = createClientFromRequest(req);
@@ -245,11 +310,13 @@ Deno.serve(async (req) => {
 
   try {
     const cappedMessages = capHistory(messages, HISTORY_CAP);
-    const [costConfigRecord, organizationName] = await Promise.all([
+    const [costConfigRecord, organizationName, registeredEquipment] = await Promise.all([
       fetchCostConfigRecord(base44, user.email),
       getOrganizationName(base44, user.email),
+      getRegisteredEquipment(base44, user.email),
     ]);
     const costConfig = getCostConfig(costConfigRecord, clientCostConfig);
+    const defaultEquipment = registeredEquipment;
 
     let systemContext = MESSAGES[locale].baseContext({
       freightKbVersion: FREIGHT_KB_VERSION,
@@ -276,12 +343,17 @@ Deno.serve(async (req) => {
     if (organizationName) {
       systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
     }
+    if (defaultEquipment) {
+      systemContext += `\n\nEQUIPO PREDETERMINADO DEL VEHÍCULO DEL USUARIO: ${defaultEquipment}
+     Si el dispatcher no menciona otro equipo, usa este equipo como valor de equipo.`;
+    }
     // reglas-v3-multiestado Fase 6: costo_por_milla YA existía en CostConfig
     // (Calculadora) como contexto de rentabilidad; ahora ADEMÁS alimenta la
     // base "owner_operator" del veredicto por perfil (ver más abajo). Los
     // valores que se interpolan acá son exactamente los que entran al
     // conjunto autorizado de la frontera LLM/datos para "general" (Fase 7) —
     // el LLM puede repetirlos porque son dato real mostrado, no inventado.
+    // Google Maps: si hay origen y destino pero no millas → calculamos automático
     let costConfigValuesShown: Array<number | null | undefined> = [];
     let costoPorMillaPropio: number | null = null;
     if (costConfig && typeof costConfig.costo_por_milla === 'number') {
@@ -302,10 +374,18 @@ Deno.serve(async (req) => {
     if (!raw) {
       return Response.json({ content: safeFallbackContent(locale) });
     }
+    if ((!raw.equipo || raw.equipo === 'unknown') && defaultEquipment) {
+      raw.equipo = defaultEquipment;
+    }
 
     // Guardarraíl de tema (Decisión 1): decide el intent en código, no confía
     // ciegamente en lo que devolvió el LLM. Va antes de cualquier cálculo.
     const intent = resolveIntent(raw.intent, cappedMessages);
+    // Google Maps: si hay origen y destino pero no millas → calculamos automático.
+    // Va aquí porque necesita que `raw` e `intent` ya estén declarados.
+    if (intent === 'rate_check' && raw.millas_ida == null && raw.origen && raw.destino) {
+      raw.millas_ida = await fetchDrivingMiles(raw.origen, raw.destino);
+    }
 
     // reglas-v3-multiestado Fase 7 (criterio 4): validador automático de la
     // frontera LLM/datos. Corre SIEMPRE, para toda respuesta, justo antes de

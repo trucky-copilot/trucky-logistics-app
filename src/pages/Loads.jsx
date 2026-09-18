@@ -4,10 +4,12 @@ import { Plus, Package } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import LoadForm from '@/components/LoadForm';
 import { useOrganizationId } from '@/lib/AppStateContext';
+import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 
 export default function Loads() {
   const orgId = useOrganizationId();
+  const { t } = useLanguage();
   const [loads, setLoads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -55,25 +57,25 @@ export default function Loads() {
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Cargas</h1>
-          <p className="text-sm text-muted-foreground">{loads.length} registradas</p>
+          <h1 className="text-xl font-bold text-foreground">{t.loadsPage.title}</h1>
+          <p className="text-sm text-muted-foreground">{loads.length} {t.loadsPage.registered}</p>
         </div>
         <button
           onClick={() => { setEditLoad(null); setShowForm(true); }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
-          Nueva carga
+          {t.loadsPage.add}
         </button>
       </div>
 
       {/* Summary strip */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total facturado', value: `$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
-          { label: 'Ganancia estimada', value: `$${totalProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, color: totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
-          { label: 'Cargas mostradas', value: filtered.length },
-          { label: '$/mi promedio', value: filtered.length > 0 ? `$${(filtered.reduce((s, l) => s + (l.revenue_por_milla || 0), 0) / filtered.filter(l => l.revenue_por_milla).length || 0).toFixed(2)}` : '--' },
+          { label: t.loadsPage.revenue, value: `$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
+          { label: t.loadsPage.profit, value: `$${totalProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, color: totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
+          { label: t.loadsPage.shown, value: filtered.length },
+          { label: t.loadsPage.avgRate, value: filtered.length > 0 ? `$${(filtered.reduce((s, l) => s + (l.revenue_por_milla || 0), 0) / filtered.filter(l => l.revenue_por_milla).length || 0).toFixed(2)}` : '--' },
         ].map((item, i) => (
           <div key={i} className="bg-card border border-border rounded-xl p-3">
             <p className="text-xs text-muted-foreground">{item.label}</p>
@@ -85,13 +87,9 @@ export default function Loads() {
       {/* Filter */}
       <div className="flex gap-1.5 flex-wrap">
         {[
-          { key: 'all', label: 'Todas' },
-          { key: 'en_transito', label: 'En tránsito' },
-          { key: 'pendiente', label: 'Pendientes' },
-          { key: 'entregado', label: 'Entregadas' },
-          { key: 'quickload', label: 'Quickload' },
-          { key: 'ganancia', label: '🟢 Ganancia' },
-          { key: 'perdida', label: '🔴 Pérdida' },
+          { key: 'all', label: t.loadsPage.all }, { key: 'en_transito', label: t.loadsPage.inTransit },
+          { key: 'pendiente', label: t.loadsPage.pending }, { key: 'entregado', label: t.loadsPage.delivered },
+          { key: 'ganancia', label: `🟢 ${t.loadsPage.gain}` }, { key: 'perdida', label: `🔴 ${t.loadsPage.loss}` },
         ].map(f => (
           <button
             key={f.key}
@@ -120,7 +118,7 @@ export default function Loads() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">No hay cargas con este filtro</p>
+          <p className="text-sm">{t.loadsPage.noMatches}</p>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -128,15 +126,15 @@ export default function Loads() {
             <table className="w-full text-sm">
               <thead className="border-b border-border">
                 <tr className="text-xs text-muted-foreground">
-                  <th className="text-left px-4 py-3 font-medium">Ruta</th>
-                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Broker</th>
-                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">Tipo</th>
-                  <th className="text-right px-4 py-3 font-medium hidden md:table-cell">Millas</th>
+                  <th className="text-left px-4 py-3 font-medium">{t.loadsPage.route}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">{t.loadsPage.broker}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden md:table-cell">{t.loadsPage.type}</th>
+                  <th className="text-right px-4 py-3 font-medium hidden md:table-cell">{t.loadsPage.miles}</th>
                   <th className="text-right px-4 py-3 font-medium">$/mi</th>
-                  <th className="text-right px-4 py-3 font-medium">Total</th>
-                  <th className="text-right px-4 py-3 font-medium">Ganancia</th>
-                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">Estado</th>
-                  <th className="text-left px-4 py-3 font-medium">Resultado</th>
+                  <th className="text-right px-4 py-3 font-medium">{t.loadsPage.total}</th>
+                  <th className="text-right px-4 py-3 font-medium">{t.loadsPage.profit}</th>
+                  <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">{t.loadsPage.status}</th>
+                  <th className="text-left px-4 py-3 font-medium">{t.loadsPage.result}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">

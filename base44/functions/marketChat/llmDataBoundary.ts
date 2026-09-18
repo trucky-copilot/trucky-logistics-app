@@ -143,10 +143,6 @@ export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
   if (q.piso != null) numeros.push(q.piso);
   if (q.tarifaOfrecida != null) numeros.push(q.tarifaOfrecida);
   if (q.segundaLectura) numeros.push(q.segundaLectura.millasRedondo, q.segundaLectura.rpmRedondo);
-  // El total redondo de drayage a pedido (buildDrayageRoundTripMarkdown) no
-  // está en CalculatedQuote como campo propio — se deriva de objetivo/millas
-  // ya incluidos arriba (objetivo×2 y millasIda×2), así que no hace falta un
-  // campo aparte para que el chequeo lo reconozca.
   numeros.push(Math.round(q.objetivo * 2), q.millasIda * 2);
   for (const r of q.referencias) numeros.push(r.millas_ida, r.objetivo);
   if (q.accesoriales) {
@@ -156,6 +152,22 @@ export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
   }
   for (const v of q.perfilMargen.verdicts) {
     numeros.push(v.costoBase, v.montoMargen, Math.abs(v.montoMargen), v.pctMargen);
+  }
+  // Semáforo — CPM y tarifa objetivo del usuario (en $/mi) y sus totales
+  // calculados para la ruta. Autorizados porque buildRateCheckMarkdown los
+  // muestra explícitamente en el bloque de zonas ROJO/AMARILLO/VERDE.
+  if (q.costoPorMillaPropio != null) {
+    numeros.push(q.costoPorMillaPropio);
+    numeros.push(Math.round(q.costoPorMillaPropio * q.millasIda)); // total $ a CPM
+  }
+  if (q.tarifaObjetivaPropia != null) {
+    numeros.push(q.tarifaObjetivaPropia);
+    numeros.push(Math.round(q.tarifaObjetivaPropia * q.millasIda)); // total $ al objetivo
+    // limSuperior = max(cpm, tObj) — el total que buildRateCheckMarkdown usa cuando cpm > tObj
+    if (q.costoPorMillaPropio != null) {
+      const limSup = Math.max(q.costoPorMillaPropio, q.tarifaObjetivaPropia);
+      numeros.push(Math.round(limSup * q.millasIda));
+    }
   }
   return numeros;
 }

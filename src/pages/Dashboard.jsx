@@ -7,11 +7,13 @@ import OperationalStatusCard from '@/components/OperationalStatusCard';
 import LoadsMap from '@/components/dashboard/LoadsMap';
 import { Link } from 'react-router-dom';
 import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
+import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg } from '@/lib/orgScope';
 
 export default function Dashboard() {
   const orgId = useOrganizationId();
   const { organization } = useAppState();
+  const { t, locale } = useLanguage();
   const [trucks, setTrucks] = useState([]);
   const [loads, setLoads] = useState([]);
   const [brokers, setBrokers] = useState([]);
@@ -34,7 +36,7 @@ export default function Dashboard() {
       setDrivers(d);
     }).catch((err) => {
       console.error('Dashboard: error al cargar datos', err);
-      setError('No se pudieron cargar los datos del dashboard. Intenta recargar la página.');
+      setError(t.dashboard.error);
     }).finally(() => {
       setLoading(false);
     });
@@ -60,8 +62,8 @@ export default function Dashboard() {
   const expiringDocs = drivers.flatMap(d => {
     const alerts = [];
     const fields = [
-      { key: 'licencia_vencimiento', label: 'Licencia' },
-      { key: 'medico_vencimiento', label: 'Médico' },
+      { key: 'licencia_vencimiento', label: locale === 'en' ? 'License' : 'Licencia' },
+      { key: 'medico_vencimiento', label: locale === 'en' ? 'Medical' : 'Médico' },
       { key: 'twic_vencimiento', label: 'TWIC' },
     ];
     fields.forEach(({ key, label }) => {
@@ -95,8 +97,8 @@ export default function Dashboard() {
     <div className="p-4 md:p-6 space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-foreground">Dashboard Operacional</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{organization?.name || 'Mi organización'}</p>
+        <h1 className="text-xl font-bold text-foreground">{t.dashboard.title}</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">{organization?.name || t.dashboard.organization}</p>
       </div>
 
       {/* Estado operativo (solo visible si la config está incompleta) */}
@@ -105,30 +107,30 @@ export default function Dashboard() {
       {/* KPI Grid */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          titulo="Facturación Semana"
+          titulo={t.dashboard.weeklyRevenue}
           valor={`$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
-          subtitulo={`${thisWeek.length} cargas`}
+          subtitulo={`${thisWeek.length} ${t.dashboard.loads}`}
           icon={DollarSign}
           color="cyan"
         />
         <KpiCard
-          titulo="Ganancia Neta"
+          titulo={t.dashboard.netProfit}
           valor={`$${totalProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
-          subtitulo="estimado esta semana"
+          subtitulo={t.dashboard.estimatedThisWeek}
           icon={TrendingUp}
           color={totalProfit >= 0 ? 'green' : 'red'}
         />
         <KpiCard
-          titulo="Tarifa Promedio/Milla"
+          titulo={t.dashboard.averageRate}
           valor={avgRatePerMile > 0 ? `$${avgRatePerMile.toFixed(2)}` : '--'}
-          subtitulo="meta: $3.00/milla"
+          subtitulo={t.dashboard.target}
           icon={Package}
           color={avgRatePerMile >= 3 ? 'green' : avgRatePerMile >= 2.6 ? 'yellow' : 'red'}
         />
         <KpiCard
-          titulo="Viajes Esta Semana"
+          titulo={t.dashboard.weeklyTrips}
           valor={thisWeek.length}
-          subtitulo={`${loads.filter(l => l.estado === 'en_transito').length} en tránsito ahora`}
+          subtitulo={`${loads.filter(l => l.estado === 'en_transito').length} ${t.dashboard.inTransitNow}`}
           icon={Truck}
           color="violet"
         />
@@ -141,18 +143,18 @@ export default function Dashboard() {
         {/* Fleet Status */}
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-foreground">Estado de la Flota</h2>
-            <Link to="/flota" className="text-xs text-primary hover:underline">Ver todo</Link>
+            <h2 className="text-sm font-semibold text-foreground">{t.dashboard.fleetStatus}</h2>
+            <Link to="/flota" className="text-xs text-primary hover:underline">{t.dashboard.viewAll}</Link>
           </div>
           {trucks.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground text-sm">No hay camiones registrados</div>
+            <div className="text-center py-6 text-muted-foreground text-sm">{t.dashboard.noTrucks}</div>
           ) : (
             <div className="space-y-2">
               {trucks.slice(0, 6).map(truck => (
                 <div key={truck.id} className="flex items-center justify-between py-1.5 border-b border-border/50 last:border-0">
                   <div>
                     <div className="text-sm font-medium text-foreground">{truck.placa}</div>
-                    <div className="text-xs text-muted-foreground">{truck.conductor_nombre || 'Sin conductor'}</div>
+                    <div className="text-xs text-muted-foreground">{truck.conductor_nombre || t.dashboard.noDriver}</div>
                   </div>
                   <StatusBadge status={truck.estado} />
                 </div>
@@ -165,14 +167,14 @@ export default function Dashboard() {
         <div className={`rounded-xl p-4 border ${expiringDocs.some(a => a.urgent || a.expired) ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className={`text-sm font-semibold ${expiringDocs.some(a => a.urgent || a.expired) ? 'text-red-400' : 'text-foreground'}`}>
-              {expiringDocs.some(a => a.urgent || a.expired) ? '🔴 Alertas de Documentos' : 'Alertas de Documentos'}
+              {expiringDocs.some(a => a.urgent || a.expired) ? `🔴 ${t.dashboard.documentAlerts}` : t.dashboard.documentAlerts}
             </h2>
-            <span className="text-xs text-muted-foreground">próx. 30 días</span>
+            <span className="text-xs text-muted-foreground">{t.dashboard.next30Days}</span>
           </div>
           {expiringDocs.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle2 className="w-8 h-8 text-green-400 mb-2" />
-              <p className="text-sm text-muted-foreground">Todos los documentos en orden</p>
+              <p className="text-sm text-muted-foreground">{t.dashboard.allDocumentsOk}</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -186,7 +188,7 @@ export default function Dashboard() {
                   }
                   <div>
                     <p className="text-xs font-semibold text-foreground">{alert.driver}</p>
-                    <p className="text-xs text-muted-foreground">{alert.doc} — {alert.expired ? '🔴 VENCIDO' : alert.urgent ? `🔴 Vence: ${alert.date}` : `⚠ Vence: ${alert.date}`}</p>
+                    <p className="text-xs text-muted-foreground">{alert.doc} — {alert.expired ? `🔴 ${t.dashboard.expired}` : alert.urgent ? `🔴 ${t.dashboard.expires}: ${alert.date}` : `⚠ ${t.dashboard.expires}: ${alert.date}`}</p>
                   </div>
                 </div>
               ))}
@@ -197,11 +199,11 @@ export default function Dashboard() {
         {/* Broker Scoreboard */}
         <div className="bg-card border border-border rounded-xl p-4">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-sm font-semibold text-foreground">Top Brokers</h2>
-            <Link to="/brokers" className="text-xs text-primary hover:underline">Ver todo</Link>
+            <h2 className="text-sm font-semibold text-foreground">{t.dashboard.topBrokers}</h2>
+            <Link to="/brokers" className="text-xs text-primary hover:underline">{t.dashboard.viewAll}</Link>
           </div>
           {brokers.length === 0 ? (
-            <div className="text-center py-6 text-muted-foreground text-sm">No hay brokers registrados</div>
+            <div className="text-center py-6 text-muted-foreground text-sm">{t.dashboard.noBrokers}</div>
           ) : (
             <div className="space-y-2">
               {brokers.slice(0, 5).map((b, i) => (
@@ -227,22 +229,22 @@ export default function Dashboard() {
       {/* Recent Loads Table */}
       <div className="bg-card border border-border rounded-xl p-4">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-sm font-semibold text-foreground">Cargas Recientes</h2>
-          <Link to="/cargas" className="text-xs text-primary hover:underline">Ver todas</Link>
+          <h2 className="text-sm font-semibold text-foreground">{t.dashboard.recentLoads}</h2>
+          <Link to="/cargas" className="text-xs text-primary hover:underline">{t.dashboard.viewAllLoads}</Link>
         </div>
         {recentLoads.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground text-sm">No hay cargas registradas aún</div>
+          <div className="text-center py-8 text-muted-foreground text-sm">{t.dashboard.noLoads}</div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-xs text-muted-foreground border-b border-border">
-                  <th className="text-left pb-2 font-medium">Ruta</th>
-                  <th className="text-left pb-2 font-medium hidden sm:table-cell">Broker</th>
-                  <th className="text-right pb-2 font-medium hidden md:table-cell">Millas</th>
+                  <th className="text-left pb-2 font-medium">{t.dashboard.route}</th>
+                  <th className="text-left pb-2 font-medium hidden sm:table-cell">{t.dashboard.broker}</th>
+                  <th className="text-right pb-2 font-medium hidden md:table-cell">{t.dashboard.miles}</th>
                   <th className="text-right pb-2 font-medium">$/mi</th>
-                  <th className="text-right pb-2 font-medium">Total</th>
-                  <th className="text-right pb-2 font-medium hidden sm:table-cell">Resultado</th>
+                  <th className="text-right pb-2 font-medium">{t.dashboard.total}</th>
+                  <th className="text-right pb-2 font-medium hidden sm:table-cell">{t.dashboard.result}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">

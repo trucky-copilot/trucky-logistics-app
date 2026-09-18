@@ -1,4 +1,5 @@
 import { AlertTriangle, XCircle, CheckCircle2, Info } from 'lucide-react';
+import { useLanguage } from '@/lib/LanguageContext';
 
 function getIcon(h) {
   if (h.startsWith('❌')) return { Icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10' };
@@ -18,6 +19,7 @@ function getTopHallazgo(cat) {
 }
 
 export default function KeyFindings({ categorias }) {
+  const { t, locale } = useLanguage();
   if (!categorias?.length) return null;
 
   // Un hallazgo por categoría, priorizando rojos > amarillos > verdes
@@ -38,7 +40,7 @@ export default function KeyFindings({ categorias }) {
   return (
     <div className="bg-card border border-border rounded-xl p-4 space-y-2.5">
       <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
-        {hayProblemas ? 'Alertas principales' : 'Resumen de validación'}
+        {hayProblemas ? t.documents.mainAlerts : (locale === 'en' ? 'Validation summary' : 'Resumen de validación')}
       </p>
       <div className="space-y-2">
         {seleccionados.map(({ h, cat }, i) => {

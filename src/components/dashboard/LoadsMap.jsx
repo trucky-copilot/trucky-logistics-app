@@ -2,6 +2,7 @@ import { Fragment } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
+import { useLanguage } from '@/lib/LanguageContext';
 import { geocode } from '@/lib/floridaLocations';
 
 // Colored pin via divIcon (no external image assets needed)
@@ -31,6 +32,7 @@ function routeColor(load) {
 }
 
 export default function LoadsMap({ loads = [] }) {
+  const { t } = useLanguage();
   // Build geocoded routes — keep only loads where both ends resolve.
   const routes = loads
     .map((load) => {
@@ -48,11 +50,11 @@ export default function LoadsMap({ loads = [] }) {
     <div className="bg-card border border-border rounded-xl overflow-hidden">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">Mapa de Rutas</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t.map.title}</h2>
           <p className="text-xs text-muted-foreground">
             {hasRoutes
-              ? `${routes.length} cargas geolocalizadas · origen → destino`
-              : 'Sin cargas con ubicaciones reconocidas aún'}
+              ? `${routes.length} ${t.map.geolocated}`
+              : t.map.empty}
           </p>
         </div>
       </div>
@@ -77,7 +79,7 @@ export default function LoadsMap({ loads = [] }) {
               <Marker position={[origin.lat, origin.lng]} icon={pinIcon(color)}>
                 <Popup>
                   <div style={{ minWidth: 140 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 2 }}>Origen</div>
+                    <div style={{ fontWeight: 700, marginBottom: 2 }}>{t.map.origin}</div>
                     <div style={{ opacity: 0.8 }}>{load.origen}</div>
                     {load.broker_nombre && <div style={{ fontSize: 11, marginTop: 4 }}>Broker: {load.broker_nombre}</div>}
                   </div>
@@ -86,11 +88,11 @@ export default function LoadsMap({ loads = [] }) {
               <Marker position={[dest.lat, dest.lng]} icon={pinIcon(color)}>
                 <Popup>
                   <div style={{ minWidth: 140 }}>
-                    <div style={{ fontWeight: 700, marginBottom: 2 }}>Destino</div>
+                    <div style={{ fontWeight: 700, marginBottom: 2 }}>{t.map.destination}</div>
                     <div style={{ opacity: 0.8 }}>{load.destino}</div>
                     {load.tarifa_negociada != null && (
                       <div style={{ fontSize: 11, marginTop: 4 }}>
-                        Tarifa: ${Number(load.tarifa_negociada).toLocaleString()}
+                        {t.map.rate}: ${Number(load.tarifa_negociada).toLocaleString()}
                         {load.millas ? ` · $${(load.tarifa_negociada / load.millas).toFixed(2)}/mi` : ''}
                       </div>
                     )}

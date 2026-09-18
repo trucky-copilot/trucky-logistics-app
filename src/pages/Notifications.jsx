@@ -3,6 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Bell, Plus, X, CheckCheck, AlertTriangle, Info, Zap, Truck, FileWarning } from 'lucide-react';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
+import { useLanguage } from '@/lib/LanguageContext';
 
 const TIPO_ICONS = {
   cambio_asignacion: Truck,
@@ -29,6 +30,7 @@ const TIPO_LABELS = {
 };
 
 function NotifForm({ onSave, onClose }) {
+  const { t, locale } = useLanguage();
   const [form, setForm] = useState({ titulo: '', mensaje: '', tipo: 'general', prioridad: 'media' });
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
@@ -36,41 +38,41 @@ function NotifForm({ onSave, onClose }) {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold">Nueva Notificación</h2>
+          <h2 className="text-base font-semibold">{t.notifications.formTitle}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Título *</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.titleLabel} *</label>
             <input required value={form.titulo} onChange={e => set('titulo', e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Mensaje *</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.message} *</label>
             <textarea required value={form.mensaje} onChange={e => set('mensaje', e.target.value)} rows={3}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Tipo</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.type}</label>
               <select value={form.tipo} onChange={e => set('tipo', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
                 {Object.entries(TIPO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Prioridad</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.priority}</label>
               <select value={form.prioridad} onChange={e => set('prioridad', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
-                <option value="alta">Alta</option>
-                <option value="media">Media</option>
-                <option value="baja">Baja</option>
+                <option value="alta">{t.notifications.high}</option>
+                <option value="media">{t.notifications.medium}</option>
+                <option value="baja">{locale === 'en' ? 'Low' : 'Baja'}</option>
               </select>
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">Cancelar</button>
-            <button type="submit" className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">Enviar</button>
+            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">{t.notifications.cancel}</button>
+            <button type="submit" className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">{t.notifications.send}</button>
           </div>
         </form>
       </div>
@@ -80,6 +82,15 @@ function NotifForm({ onSave, onClose }) {
 
 export default function Notifications() {
   const orgId = useOrganizationId();
+  const { t, locale } = useLanguage();
+  const typeLabels = {
+    cambio_asignacion: t.notifications.assignment,
+    retraso_ruta: t.notifications.delay,
+    mensaje_despacho: t.notifications.dispatch,
+    documento_vencido: t.notifications.documentExpired,
+    alerta_tarifa: t.notifications.rateAlert,
+    general: t.notifications.general,
+  };
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -118,7 +129,7 @@ export default function Notifications() {
         <div>
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
-            Notificaciones
+            {t.notifications.title}
             {unreadCount > 0 && (
               <span className="px-1.5 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">{unreadCount}</span>
             )}
@@ -127,18 +138,18 @@ export default function Notifications() {
         <div className="flex gap-2">
           {unreadCount > 0 && (
             <button onClick={markAllRead} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground">
-              <CheckCheck className="w-3.5 h-3.5" />Marcar todas
+              <CheckCheck className="w-3.5 h-3.5" />{t.notifications.markAll}
             </button>
           )}
           <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
-            <Plus className="w-3.5 h-3.5" />Nueva
+            <Plus className="w-3.5 h-3.5" />{t.notifications.new}
           </button>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex gap-1.5 flex-wrap">
-        {[{ key: 'all', label: 'Todas' }, { key: 'unread', label: 'Sin leer' }, { key: 'alta', label: '🔴 Alta' }, { key: 'media', label: '🟡 Media' }].map(f => (
+        {[{ key: 'all', label: t.notifications.all }, { key: 'unread', label: t.notifications.unread }, { key: 'alta', label: `🔴 ${t.notifications.high}` }, { key: 'media', label: `🟡 ${t.notifications.medium}` }].map(f => (
           <button key={f.key} onClick={() => setFilter(f.key)}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${filter === f.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'}`}>
             {f.label}
@@ -153,7 +164,7 @@ export default function Notifications() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Bell className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">No hay notificaciones</p>
+          <p className="text-sm">{t.notifications.noNotifications}</p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -188,7 +199,7 @@ export default function Notifications() {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{notif.mensaje}</p>
-                    <p className="text-xs text-muted-foreground/60 mt-1">{TIPO_LABELS[notif.tipo]}</p>
+                    <p className="text-xs text-muted-foreground/60 mt-1">{typeLabels[notif.tipo]}</p>
                   </div>
                 </div>
               </div>

@@ -1,45 +1,20 @@
 import { CheckCircle2, AlertTriangle, XCircle, MessageSquare, ChevronRight } from 'lucide-react';
-
-const ACTIONS = {
-  'Aceptar': {
-    Icon: CheckCircle2,
-    color: 'text-green-400',
-    bg: 'bg-green-400/10',
-    border: 'border-green-400/30',
-    label: 'Aceptar',
-    desc: 'El documento está dentro de parámetros. Puede proceder a firmar y operar.',
-  },
-  'Revisar antes de aceptar': {
-    Icon: AlertTriangle,
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-400/10',
-    border: 'border-yellow-400/30',
-    label: 'Revisar antes de aceptar',
-    desc: 'Confirma los puntos marcados con el broker antes de firmar.',
-  },
-  'Negociar': {
-    Icon: MessageSquare,
-    color: 'text-yellow-400',
-    bg: 'bg-yellow-400/10',
-    border: 'border-yellow-400/30',
-    label: 'Negociar condiciones',
-    desc: 'Solicita ajustes en tarifa, cláusulas o términos antes de aceptar.',
-  },
-  'No aceptar hasta corregir': {
-    Icon: XCircle,
-    color: 'text-red-400',
-    bg: 'bg-red-400/10',
-    border: 'border-red-400/30',
-    label: 'No aceptar hasta corregir',
-    desc: 'Hay errores críticos que deben resolverse antes de proceder.',
-  },
-  // Compatibilidad legado
-  'FIRMAR':   { Icon: CheckCircle2,  color: 'text-green-400',  bg: 'bg-green-400/10',  border: 'border-green-400/30',  label: 'Aceptar',                  desc: 'El documento está dentro de parámetros.' },
-  'NEGOCIAR': { Icon: MessageSquare, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', label: 'Negociar condiciones',       desc: 'Solicita ajustes antes de aceptar.' },
-  'RECHAZAR': { Icon: XCircle,       color: 'text-red-400',    bg: 'bg-red-400/10',    border: 'border-red-400/30',    label: 'No aceptar hasta corregir',  desc: 'Hay errores críticos que deben resolverse.' },
-};
+import { useLanguage } from '@/lib/LanguageContext';
 
 export default function ActionBlock({ veredicto, puntos_negociar }) {
+  const { t, locale } = useLanguage();
+
+  const ACTIONS = {
+    'Aceptar': { Icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/30', label: locale === 'en' ? 'Accept' : 'Aceptar', desc: locale === 'en' ? 'The document is within parameters. You may proceed.' : 'El documento está dentro de parámetros. Puede proceder a firmar y operar.' },
+    'Accept': { Icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/30', label: locale === 'en' ? 'Accept' : 'Aceptar', desc: locale === 'en' ? 'The document is within parameters. You may proceed.' : 'El documento está dentro de parámetros. Puede proceder a firmar y operar.' },
+    'Revisar antes de aceptar': { Icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', label: locale === 'en' ? 'Review before accepting' : 'Revisar antes de aceptar', desc: locale === 'en' ? 'Confirm the flagged points with the broker before signing.' : 'Confirma los puntos marcados con el broker antes de firmar.' },
+    'Review before accepting': { Icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', label: locale === 'en' ? 'Review before accepting' : 'Revisar antes de aceptar', desc: locale === 'en' ? 'Confirm the flagged points with the broker before signing.' : 'Confirma los puntos marcados con el broker antes de firmar.' },
+    'Negociar': { Icon: MessageSquare, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', label: locale === 'en' ? 'Negotiate conditions' : 'Negociar condiciones', desc: locale === 'en' ? 'Request adjustments to rate, clauses, or terms before accepting.' : 'Solicita ajustes en tarifa, cláusulas o términos antes de aceptar.' },
+    'Negotiate': { Icon: MessageSquare, color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', label: locale === 'en' ? 'Negotiate conditions' : 'Negociar condiciones', desc: locale === 'en' ? 'Request adjustments to rate, clauses, or terms before accepting.' : 'Solicita ajustes en tarifa, cláusulas o términos antes de aceptar.' },
+    'No aceptar hasta corregir': { Icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30', label: locale === 'en' ? 'Do not accept until corrected' : 'No aceptar hasta corregir', desc: locale === 'en' ? 'There are critical errors that must be resolved before proceeding.' : 'Hay errores críticos que deben resolverse antes de proceder.' },
+    'Do not accept until corrected': { Icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30', label: locale === 'en' ? 'Do not accept until corrected' : 'No aceptar hasta corregir', desc: locale === 'en' ? 'There are critical errors that must be resolved before proceeding.' : 'Hay errores críticos que deben resolverse antes de proceder.' },
+  };
+
   const a = ACTIONS[veredicto] || ACTIONS['Negociar'];
   const { Icon } = a;
 
@@ -63,7 +38,7 @@ export default function ActionBlock({ veredicto, puntos_negociar }) {
       {puntos.length > 0 && (
         <div className="border-t border-white/5 px-4 pb-4 pt-3 space-y-2">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">
-            Pasos a seguir
+            {t.documents.stepsToFollow}
           </p>
           {puntos.map((p, i) => (
             <div key={i} className="flex items-start gap-2">

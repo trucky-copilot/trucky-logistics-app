@@ -14,6 +14,18 @@
       "type": "string",
       "description": "Modelo del cami\u00f3n"
     },
+    "equipment_type": {
+  "type": "string",
+  "enum": [
+    "dry_van",
+    "reefer",
+    "flatbed",
+    "step_deck",
+    "power_only",
+    "drayage"
+  ],
+  "description": "Tipo de equipo del camión"
+},
     "a\u00f1o": {
       "type": "number",
       "description": "A\u00f1o del cami\u00f3n"

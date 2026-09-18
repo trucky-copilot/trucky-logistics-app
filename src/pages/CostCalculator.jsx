@@ -2,11 +2,13 @@ import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
 import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2 } from 'lucide-react';
+import { useLanguage } from '@/lib/LanguageContext';
 
 const QUICKLOAD_RATE = 2.20;
 const TARGET_RATE = 3.00;
 
 export default function CostCalculator() {
+  const { t } = useLanguage();
   const [config, setConfig] = useState({
     diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
     lease_semanal: 1200, pago_conductor_porcentaje: 25,
@@ -74,10 +76,10 @@ export default function CostCalculator() {
   };
 
   const barSegments = [
-    { label: 'Q-Load\n$2.20', rate: QUICKLOAD_RATE, color: quickloadStatus === 'ganancia' ? '#4ade80' : '#f87171' },
-    { label: 'Break-Even', rate: breakEvenRate, color: '#facc15' },
-    { label: 'Objetivo', rate: Number(config.tarifa_objetivo), color: '#8b5cf6' },
-    { label: 'Mercado\nFlorida', rate: 3.10, color: '#a78bfa' },
+    { label: t.calculator.breakEvenLabel, rate: breakEvenRate, color: '#facc15' },
+    { label: t.calculator.targetLabel, rate: Number(config.tarifa_objetivo), color: '#8b5cf6' },
+    { label: t.calculator.marketLabel, rate: 3.10, color: '#a78bfa' },
+
   ];
   const maxRate = Math.max(...barSegments.map(s => s.rate), 4);
 
@@ -88,60 +90,60 @@ export default function CostCalculator() {
       <div>
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <Calculator className="w-5 h-5 text-primary" />
-          Calculadora de Costo/Milla
+          {t.calculator.title}
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Calcula tu break-even y tarifa mínima rentable</p>
+        <p className="text-sm text-muted-foreground mt-0.5">{t.calculator.subtitle}</p>
       </div>
 
       {/* Inputs */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">Variables del negocio</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t.calculator.variables}</h2>
         
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block"><Fuel className="w-3 h-3" />Precio diésel ($/gal)</label>
+            <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block"><Fuel className="w-3 h-3" />{t.calculator.diesel}</label>
             <input type="number" step="0.01" value={config.diesel_precio}
               onChange={e => set('diesel_precio', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">MPG del camión</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.mpg}</label>
             <input type="number" step="0.1" value={config.mpg}
               onChange={e => set('mpg', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Seguro ($/semana)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.insurance}</label>
             <input type="number" value={config.seguro_semanal}
               onChange={e => set('seguro_semanal', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Lease/renta ($/semana)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.lease}</label>
             <input type="number" value={config.lease_semanal}
               onChange={e => set('lease_semanal', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">% pago conductor</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.driverPay}</label>
             <input type="number" value={config.pago_conductor_porcentaje}
               onChange={e => set('pago_conductor_porcentaje', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Otros gastos ($/semana)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.otherCosts}</label>
             <input type="number" value={config.otros_gastos_semanales}
               onChange={e => set('otros_gastos_semanales', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Millas/semana promedio</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.weeklyMiles}</label>
             <input type="number" value={config.millas_semana_promedio}
               onChange={e => set('millas_semana_promedio', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Tarifa objetivo ($/mi)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.targetRate}</label>
             <input type="number" step="0.01" value={config.tarifa_objetivo}
               onChange={e => set('tarifa_objetivo', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
@@ -151,23 +153,23 @@ export default function CostCalculator() {
 
       {/* Results */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">Resultados</h2>
+        <h2 className="text-sm font-semibold text-foreground">{t.calculator.results}</h2>
         
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="bg-muted rounded-xl p-3 text-center">
-            <p className="text-xs text-muted-foreground">Costo por milla</p>
+            <p className="text-xs text-muted-foreground">{t.calculator.costPerMile}</p>
             <p className="text-xl font-bold font-mono text-foreground mt-1">{costos.valido ? `$${costPerMile.toFixed(2)}` : '—'}</p>
-            <p className="text-xs text-muted-foreground">diesel + fijos</p>
+            <p className="text-xs text-muted-foreground">{t.calculator.dieselFixed}</p>
           </div>
           <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-center">
-            <p className="text-xs text-yellow-400">Break-even</p>
+            <p className="text-xs text-yellow-400">{t.calculator.breakEven}</p>
             <p className="text-xl font-bold font-mono text-yellow-400 mt-1">{costos.valido ? `$${breakEvenRate.toFixed(2)}` : '—'}</p>
-            <p className="text-xs text-muted-foreground">tarifa mínima</p>
+            <p className="text-xs text-muted-foreground">{t.calculator.minimumRate}</p>
           </div>
           <div className="bg-violet-400/10 border border-violet-400/20 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
-            <p className="text-xs text-violet-400">Tarifa objetivo</p>
+            <p className="text-xs text-violet-400">{t.calculator.target}</p>
             <p className="text-xl font-bold font-mono text-violet-400 mt-1">${Number(config.tarifa_objetivo).toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">+${targetProfit.toFixed(2)}/mi ganancia</p>
+            <p className="text-xs text-muted-foreground">+${targetProfit.toFixed(2)}/mi {t.calculator.profit}</p>
           </div>
         </div>
 
@@ -189,36 +191,18 @@ export default function CostCalculator() {
           ))}
         </div>
 
-        {/* Quickload verdict */}
-        <div className={`rounded-xl border p-3 ${quickloadStatus === 'ganancia' ? 'bg-green-400/10 border-green-400/20' : 'bg-red-400/10 border-red-400/20'}`}>
-          <div className="flex items-center gap-2">
-            {quickloadStatus === 'ganancia' 
-              ? <TrendingUp className="w-4 h-4 text-green-400" />
-              : <TrendingDown className="w-4 h-4 text-red-400" />
-            }
-            <span className={`text-sm font-semibold ${quickloadStatus === 'ganancia' ? 'text-green-400' : 'text-red-400'}`}>
-              Quickload ($2.20/mi): {quickloadStatus === 'ganancia' ? '✓ Rentable' : '✕ Pérdida'}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {quickloadProfit > 0 
-              ? `Ganas $${quickloadProfit.toFixed(2)}/milla sobre tu break-even`
-              : `Pierdes $${Math.abs(quickloadProfit).toFixed(2)}/milla — rechaza o negocia`
-            }
-          </p>
-        </div>
       </div>
 
       {!costos.valido && (
         <p className="text-xs text-red-400 text-center">
-          Falta {CAMPO_LABEL[costos.faltante] || 'un dato'}: no puedo calcular tu costo por milla.
+          {t.calculator.missing} {CAMPO_LABEL[costos.faltante] || t.calculator.cannotCalculate}
         </p>
       )}
 
       <button onClick={saveConfig} disabled={saving || !costos.valido}
         className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {saved ? '✓ Guardado' : 'Guardar configuración'}
+        {saved ? `✓ ${t.calculator.saved}` : t.calculator.save}
       </button>
     </div>
   );

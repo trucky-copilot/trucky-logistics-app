@@ -105,7 +105,7 @@ ${documentText.slice(0, 4000)}
 // REGLAS DE VALIDACIÓN — Sin IA; compara datos extraídos vs perfiles guardados
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function validarRate(datos, costConfig) {
+function validarRate(datos, costConfig, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
 
@@ -147,31 +147,31 @@ function validarRate(datos, costConfig) {
   }
 
   if (!datos.terminos_pago) {
-    hallazgos.push('⚠ Términos de pago no especificados');
+    hallazgos.push(locale === 'en' ? '⚠ Payment terms not specified' : '⚠ Términos de pago no especificados');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const dias = datos.dias_pago;
     if (dias && dias > 45) {
-      hallazgos.push(`⚠ Pago a ${dias} días — riesgo de flujo de caja`);
+      hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days — cash flow risk` : `⚠ Pago a ${dias} días — riesgo de flujo de caja`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else if (dias && dias > 30) {
-      hallazgos.push(`⚠ Pago a ${dias} días — considerar factoring`);
+      hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days — consider factoring` : `⚠ Pago a ${dias} días — considerar factoring`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
-      hallazgos.push(`✓ Términos de pago: ${datos.terminos_pago}`);
+      hallazgos.push(locale === 'en' ? `✓ Payment terms: ${datos.terminos_pago}` : `✓ Términos de pago: ${datos.terminos_pago}`);
     }
     if (datos.factoring_mencionado) {
-      hallazgos.push('⚠ Factoring mencionado — verificar descuento aplicado');
+      hallazgos.push(locale === 'en' ? '⚠ Factoring mentioned — verify applied discount' : '⚠ Factoring mencionado — verificar descuento aplicado');
     }
   }
 
   if (!datos.detention_rate) {
-    hallazgos.push('⚠ Detention rate no especificada — riesgo de tiempo sin compensación');
+    hallazgos.push(locale === 'en' ? '⚠ Detention rate not specified — risk of uncompensated waiting time' : '⚠ Detention rate no especificada — riesgo de tiempo sin compensación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const m = datos.detention_rate.match(/\$?(\d+)/);
     if (m && parseInt(m[1]) < 50) {
-      hallazgos.push(`⚠ Detention muy baja: ${datos.detention_rate} (mínimo recomendado: $50-75/hr)`);
+      hallazgos.push(locale === 'en' ? `⚠ Detention too low: ${datos.detention_rate} (recommended min: $50-75/hr)` : `⚠ Detention muy baja: ${datos.detention_rate} (mínimo recomendado: $50-75/hr)`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
       hallazgos.push(`✓ Detention: ${datos.detention_rate}`);
@@ -179,14 +179,14 @@ function validarRate(datos, costConfig) {
   }
 
   if (!datos.tonu_rate) {
-    hallazgos.push('⚠ TONU no especificado — sin protección por cancelación');
+    hallazgos.push(locale === 'en' ? '⚠ TONU not specified — no cancellation protection' : '⚠ TONU no especificado — sin protección por cancelación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     hallazgos.push(`✓ TONU: ${datos.tonu_rate}`);
   }
 
   if (datos.deducciones || datos.descuentos) {
-    hallazgos.push(`⚠ Descuentos/deducciones detectados: ${datos.deducciones || datos.descuentos} — revisar impacto`);
+    hallazgos.push(locale === 'en' ? `⚠ Discounts/deductions detected: ${datos.deducciones || datos.descuentos} — review impact` : `⚠ Descuentos/deducciones detectados: ${datos.deducciones || datos.descuentos} — revisar impacto`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
@@ -195,33 +195,33 @@ function validarRate(datos, costConfig) {
     semaforo,
     hallazgos,
     datos_extraidos: {
-      tarifa: datos.tarifa_total ? `$${datos.tarifa_total.toLocaleString()}` : 'No encontrada',
-      por_milla: datos.tarifa_por_milla ? `$${datos.tarifa_por_milla}/mi` : 'No calculada',
-      pago: datos.terminos_pago || 'No especificado',
-      detention: datos.detention_rate || 'No especificada',
-      tonu: datos.tonu_rate || 'No especificado',
+      tarifa: datos.tarifa_total ? `$${datos.tarifa_total.toLocaleString()}` : locale === 'en' ? 'Not found' : 'No encontrada',
+      por_milla: datos.tarifa_por_milla ? `$${datos.tarifa_por_milla}/mi` : locale === 'en' ? 'Not calculated' : 'No calculada',
+      pago: datos.terminos_pago || locale === 'en' ? 'Not specified' : 'No especificado',
+      detention: datos.detention_rate || locale === 'en' ? 'Not specified' : 'No especificada',
+      tonu: datos.tonu_rate || locale === 'en' ? 'Not specified' : 'No especificado',
     },
-    recomendacion: semaforo === 'rojo' ? 'No aceptar hasta corregir — tarifa o condiciones inaceptables'
-      : semaforo === 'amarillo' ? 'Negociar términos antes de aceptar'
-      : 'Aceptar — tarifa y condiciones de pago correctas',
+    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept until corrected — unacceptable rate or conditions' : locale === 'en' ? 'Do not accept until corrected — unacceptable rate or conditions' : 'No aceptar hasta corregir — tarifa o condiciones inaceptables'
+      : semaforo === 'amarillo' ? locale === 'en' ? 'Negotiate terms before accepting' : locale === 'en' ? 'Negotiate terms before accepting' : 'Negociar términos antes de aceptar'
+      : locale === 'en' ? 'Accept — rate and payment conditions are correct' : locale === 'en' ? 'Accept — correct rate and payment conditions' : 'Aceptar — tarifa y condiciones de pago correctas',
   };
 }
 
-function validarCommodity(datos, carrierProfile) {
+function validarCommodity(datos, carrierProfile, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
 
   if (!datos.commodity) {
-    hallazgos.push('⚠ Commodity no especificada en el documento');
+    hallazgos.push(locale === 'en' ? '⚠ Commodity not specified in document' : locale === 'en' ? '⚠ Commodity not specified in document' : '⚠ Commodity no especificada en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const commLower = datos.commodity.toLowerCase();
-    hallazgos.push(`✓ Commodity: ${datos.commodity}`);
-    if (datos.peso) hallazgos.push(`✓ Peso: ${datos.peso}`);
+    hallazgos.push(locale === 'en' ? `✓ Commodity: ${datos.commodity}` : `✓ Commodity: ${datos.commodity}`);
+    if (datos.peso) hallazgos.push(locale === 'en' ? `✓ Weight: ${datos.peso}` : `✓ Peso: ${datos.peso}`);
 
     const vagos = ['general cargo', 'freight', 'merchandise', 'goods', 'misc'];
     if (vagos.some(v => commLower === v || commLower === v + '.')) {
-      hallazgos.push('⚠ Commodity muy genérica — solicitar descripción específica');
+      hallazgos.push(locale === 'en' ? '⚠ Very generic commodity — request specific description' : locale === 'en' ? '⚠ Very generic commodity — request specific description' : '⚠ Commodity muy genérica — solicitar descripción específica');
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
 
@@ -273,9 +273,9 @@ function validarCommodity(datos, carrierProfile) {
     semaforo,
     hallazgos,
     datos_extraidos: {
-      commodity: datos.commodity || 'No especificada',
-      peso: datos.peso || 'No especificado',
-      especial: datos.commodity_especial || 'Ninguna',
+      commodity: datos.commodity || locale === 'en' ? 'Not specified' : 'No especificada',
+      peso: datos.peso || locale === 'en' ? 'Not specified' : 'No especificado',
+      especial: datos.commodity_especial || locale === 'en' ? 'None' : 'Ninguna',
     },
     recomendacion: semaforo === 'rojo' ? 'No aceptar — commodity incompatible con la operación'
       : semaforo === 'amarillo' ? 'Revisar antes de aceptar — commodity requiere confirmación'
@@ -283,7 +283,7 @@ function validarCommodity(datos, carrierProfile) {
   };
 }
 
-function validarEquipo(datos, trucks, carrierProfile) {
+function validarEquipo(datos, trucks, carrierProfile, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
 
@@ -351,8 +351,8 @@ function validarEquipo(datos, trucks, carrierProfile) {
     semaforo,
     hallazgos,
     datos_extraidos: {
-      equipo: datos.tipo_equipo || datos.tamano_contenedor || 'No especificado',
-      operacion: datos.operacion_tipo || 'No especificada',
+      equipo: datos.tipo_equipo || datos.tamano_contenedor || locale === 'en' ? 'Not specified' : 'No especificado',
+      operacion: datos.operacion_tipo || locale === 'en' ? 'Not specified' : 'No especificada',
       chasis: datos.chasis_requerido ? `Requerido (${datos.chasis_provisto_por || 'no especificado'})` : 'No requerido',
     },
     recomendacion: semaforo === 'rojo' ? 'No aceptar — equipo o chasis incompatible'
@@ -361,7 +361,7 @@ function validarEquipo(datos, trucks, carrierProfile) {
   };
 }
 
-function validarBroker(datos, brokers, brokerProfiles) {
+function validarBroker(datos, brokers, brokerProfiles, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
 
@@ -387,23 +387,23 @@ function validarBroker(datos, brokers, brokerProfiles) {
   }
 
   if (perfilEncontrado) {
-    hallazgos.push(`✓ Broker identificado en perfil: ${perfilEncontrado.legal_name}`);
+    hallazgos.push(locale === 'en' ? `✓ Broker identified in profile: ${perfilEncontrado.legal_name}` : `✓ Broker identificado en perfil: ${perfilEncontrado.legal_name}`);
     if (datos.broker_mc && perfilEncontrado.mc_number) {
       const docMC = datos.broker_mc.replace(/\D/g, '');
       const perfilMC = perfilEncontrado.mc_number.replace(/\D/g, '');
       if (docMC !== perfilMC) {
-        hallazgos.push(`❌ MC del documento (${datos.broker_mc}) NO coincide con perfil (${perfilEncontrado.mc_number})`);
+        hallazgos.push(locale === 'en' ? `❌ Document MC (${datos.broker_mc}) DOES NOT match profile (${perfilEncontrado.mc_number})` : `❌ MC del documento (${datos.broker_mc}) NO coincide con perfil (${perfilEncontrado.mc_number})`);
         semaforo = 'rojo';
       } else {
-        hallazgos.push(`✓ MC verificado: ${datos.broker_mc}`);
+        hallazgos.push(locale === 'en' ? `✓ MC verified: ${datos.broker_mc}` : `✓ MC verificado: ${datos.broker_mc}`);
       }
     }
     if (perfilEncontrado.reliability_score) {
       if (perfilEncontrado.reliability_score < 5) {
-        hallazgos.push(`⚠ Confiabilidad baja: ${perfilEncontrado.reliability_score}/10`);
+        hallazgos.push(locale === 'en' ? `⚠ Low reliability: ${perfilEncontrado.reliability_score}/10` : `⚠ Confiabilidad baja: ${perfilEncontrado.reliability_score}/10`);
         if (semaforo === 'verde') semaforo = 'amarillo';
       } else {
-        hallazgos.push(`✓ Confiabilidad: ${perfilEncontrado.reliability_score}/10`);
+        hallazgos.push(locale === 'en' ? `✓ Reliability: ${perfilEncontrado.reliability_score}/10` : `✓ Confiabilidad: ${perfilEncontrado.reliability_score}/10`);
       }
     }
     if (perfilEncontrado.notes) hallazgos.push(`ℹ ${perfilEncontrado.notes}`);
@@ -417,10 +417,10 @@ function validarBroker(datos, brokers, brokerProfiles) {
     );
     if (legacy) {
       if (legacy.estado === 'bloqueado') {
-        hallazgos.push(`❌ BROKER BLOQUEADO: ${legacy.nombre}`);
+        hallazgos.push(locale === 'en' ? `❌ BLOCKED BROKER: ${legacy.nombre}` : `❌ BROKER BLOQUEADO: ${legacy.nombre}`);
         semaforo = 'rojo';
       } else if (legacy.estado === 'precaucion') {
-        hallazgos.push(`⚠ Broker en PRECAUCIÓN: ${legacy.nombre}`);
+        hallazgos.push(locale === 'en' ? `⚠ CAUTION Broker: ${legacy.nombre}` : `⚠ Broker en PRECAUCIÓN: ${legacy.nombre}`);
         if (semaforo === 'verde') semaforo = 'amarillo';
       } else {
         hallazgos.push(`✓ Broker conocido: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} cargas`);
@@ -430,7 +430,7 @@ function validarBroker(datos, brokers, brokerProfiles) {
         }
       }
     } else if (datos.broker_nombre) {
-      hallazgos.push('⚠ Broker no encontrado en historial — primer contacto, verificar credenciales');
+      hallazgos.push(locale === 'en' ? '⚠ Broker not found in history — first contact, verify credentials' : '⚠ Broker no encontrado en historial — primer contacto, verificar credenciales');
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
     if (datos.broker_mc) {
@@ -447,19 +447,19 @@ function validarBroker(datos, brokers, brokerProfiles) {
       mc: datos.broker_mc || 'No encontrado',
       dot: datos.broker_dot || 'No encontrado',
     },
-    recomendacion: semaforo === 'rojo' ? 'No aceptar — broker bloqueado o MC inconsistente'
-      : semaforo === 'amarillo' ? 'Verificar MC en FMCSA y confirmar historial'
-      : 'Aceptar — broker verificado con buen historial',
+    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — blocked broker or inconsistent MC' : 'No aceptar — broker bloqueado o MC inconsistente'
+      : semaforo === 'amarillo' ? locale === 'en' ? 'Verify MC in FMCSA and confirm history' : 'Verificar MC en FMCSA y confirmar historial'
+      : locale === 'en' ? 'Accept — verified broker with good history' : 'Aceptar — broker verificado con buen historial',
   };
 }
 
-function validarCarrier(datos, carrierProfile) {
+function validarCarrier(datos, carrierProfile, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
   let identity_match = 'not_found';
 
   if (!datos.carrier_nombre) {
-    hallazgos.push('⚠ Nombre del carrier no encontrado en el documento');
+    hallazgos.push(locale === 'en' ? '⚠ Carrier name not found in document' : '⚠ Nombre del carrier no encontrado en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else if (carrierProfile) {
     const docLower = datos.carrier_nombre.toLowerCase();
@@ -475,8 +475,8 @@ function validarCarrier(datos, carrierProfile) {
       && datos.carrier_dot.replace(/\D/g, '') === carrierProfile.dot_number.replace(/\D/g, '');
 
     if (nameMatch && (mcMatch || !datos.carrier_mc)) {
-      hallazgos.push(`✓ Carrier verificado: ${carrierProfile.company_name}`);
-      if (mcMatch) hallazgos.push(`✓ MC coincide: ${datos.carrier_mc}`);
+      hallazgos.push(locale === 'en' ? `✓ Carrier verified: ${carrierProfile.company_name}` : `✓ Carrier verificado: ${carrierProfile.company_name}`);
+      if (mcMatch) hallazgos.push(locale === 'en' ? `✓ MC matches: ${datos.carrier_mc}` : `✓ MC coincide: ${datos.carrier_mc}`);
       if (dotMatch) hallazgos.push(`✓ DOT coincide: ${datos.carrier_dot}`);
       identity_match = 'matched';
     } else if (nameMatch && datos.carrier_mc && !mcMatch) {
@@ -499,7 +499,7 @@ function validarCarrier(datos, carrierProfile) {
     identity_match = 'pending';
   }
 
-  if (!datos.carrier_mc) hallazgos.push('⚠ MC del carrier no especificado en documento');
+  if (!datos.carrier_mc) hallazgos.push(locale === 'en' ? '⚠ Carrier MC not specified in document' : '⚠ MC del carrier no especificado en documento');
 
   return {
     categoria: 'Carrier / Identidad',
@@ -511,24 +511,24 @@ function validarCarrier(datos, carrierProfile) {
       mc: datos.carrier_mc || 'No encontrado',
       dot: datos.carrier_dot || 'No encontrado',
     },
-    recomendacion: semaforo === 'rojo' ? 'No aceptar — identidad del carrier incorrecta'
-      : semaforo === 'amarillo' ? 'Confirmar identidad del carrier antes de aceptar'
-      : 'Aceptar — identidad del carrier verificada correctamente',
+    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — incorrect carrier identity' : 'No aceptar — identidad del carrier incorrecta'
+      : semaforo === 'amarillo' ? locale === 'en' ? 'Confirm carrier identity before accepting' : 'Confirmar identidad del carrier antes de aceptar'
+      : locale === 'en' ? 'Accept — carrier identity correctly verified' : 'Aceptar — identidad del carrier verificada correctamente',
   };
 }
 
-function validarFechasOperacion(datos) {
+function validarFechasOperacion(datos, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
   const hoy = new Date();
 
   if (!datos.pickup_fecha) {
-    hallazgos.push('⚠ Fecha de pickup no especificada');
+    hallazgos.push(locale === 'en' ? '⚠ Pickup date not specified' : '⚠ Fecha de pickup no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const pickup = new Date(datos.pickup_fecha);
     if (!isNaN(pickup) && pickup < hoy && (hoy - pickup) / 86400000 > 1) {
-      hallazgos.push(`❌ Fecha de pickup ya pasó: ${datos.pickup_fecha}`);
+      hallazgos.push(locale === 'en' ? `❌ Pickup date has passed: ${datos.pickup_fecha}` : `❌ Fecha de pickup ya pasó: ${datos.pickup_fecha}`);
       semaforo = 'rojo';
     } else {
       hallazgos.push(`✓ Pickup: ${datos.pickup_fecha}${datos.pickup_hora ? ' @ ' + datos.pickup_hora : ''}`);
@@ -536,7 +536,7 @@ function validarFechasOperacion(datos) {
   }
 
   if (!datos.delivery_fecha) {
-    hallazgos.push('⚠ Fecha de entrega no especificada');
+    hallazgos.push(locale === 'en' ? '⚠ Delivery date not specified' : '⚠ Fecha de entrega no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     hallazgos.push(`✓ Delivery: ${datos.delivery_fecha}${datos.delivery_hora ? ' @ ' + datos.delivery_hora : ''}`);
@@ -548,10 +548,10 @@ function validarFechasOperacion(datos) {
     const horas = (delivery - pickup) / 3600000;
     if (!isNaN(horas)) {
       if (delivery < pickup) {
-        hallazgos.push('❌ Fecha de entrega es anterior al pickup — error en el documento');
+        hallazgos.push(locale === 'en' ? '❌ Delivery date is before pickup — document error' : '❌ Fecha de entrega es anterior al pickup — error en el documento');
         semaforo = 'rojo';
       } else if (horas < 4 && datos.millas && datos.millas > 100) {
-        hallazgos.push(`❌ Ventana de ${horas.toFixed(0)}h para ${datos.millas} millas — inviable`);
+        hallazgos.push(locale === 'en' ? `❌ Window of ${horas.toFixed(0)}h for ${datos.millas} miles — not viable` : `❌ Ventana de ${horas.toFixed(0)}h para ${datos.millas} millas — inviable`);
         semaforo = 'rojo';
       }
     }
@@ -560,21 +560,21 @@ function validarFechasOperacion(datos) {
   if (datos.appointment_window) {
     hallazgos.push(`✓ Appointment window: ${datos.appointment_window}`);
   } else {
-    hallazgos.push('⚠ Appointment window no especificada — posibles esperas sin compensación');
+    hallazgos.push(locale === 'en' ? '⚠ Appointment window not specified — potential uncompensated wait' : '⚠ Appointment window no especificada — posibles esperas sin compensación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   if (!datos.origen || !datos.destino) {
-    hallazgos.push('⚠ Origen o destino incompleto');
+    hallazgos.push(locale === 'en' ? '⚠ Incomplete origin or destination' : '⚠ Origen o destino incompleto');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
-    hallazgos.push(`✓ Ruta: ${datos.origen} → ${datos.destino}`);
-    if (datos.millas) hallazgos.push(`✓ Distancia: ${datos.millas} millas`);
+    hallazgos.push(locale === 'en' ? `✓ Route: ${datos.origen} → ${datos.destino}` : `✓ Ruta: ${datos.origen} → ${datos.destino}`);
+    if (datos.millas) hallazgos.push(locale === 'en' ? `✓ Distance: ${datos.millas} miles` : `✓ Distancia: ${datos.millas} millas`);
   }
 
   const tieneRef = datos.load_number || datos.reference_number || datos.delivery_order_number;
   if (!tieneRef) {
-    hallazgos.push('⚠ Sin número de referencia — solicitar antes de operar');
+    hallazgos.push(locale === 'en' ? '⚠ No reference number — request before operating' : '⚠ Sin número de referencia — solicitar antes de operar');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     if (datos.load_number) hallazgos.push(`✓ Load #: ${datos.load_number}`);
@@ -587,14 +587,14 @@ function validarFechasOperacion(datos) {
     semaforo,
     hallazgos,
     datos_extraidos: {
-      pickup: datos.pickup_fecha || 'No especificado',
-      delivery: datos.delivery_fecha || 'No especificado',
-      ruta: datos.origen && datos.destino ? `${datos.origen} → ${datos.destino}` : 'No especificada',
-      referencias: [datos.load_number, datos.reference_number, datos.delivery_order_number].filter(Boolean).join(', ') || 'Ninguna',
+      pickup: datos.pickup_fecha || locale === 'en' ? 'Not specified' : 'No especificado',
+      delivery: datos.delivery_fecha || locale === 'en' ? 'Not specified' : 'No especificado',
+      ruta: datos.origen && datos.destino ? `${datos.origen} → ${datos.destino}` : locale === 'en' ? 'Not specified' : 'No especificada',
+      referencias: [datos.load_number, datos.reference_number, datos.delivery_order_number].filter(Boolean).join(', ') || locale === 'en' ? 'None' : 'Ninguna',
     },
-    recomendacion: semaforo === 'rojo' ? 'No aceptar — fechas imposibles o referencias ausentes'
-      : semaforo === 'amarillo' ? 'Confirmar tiempos y referencias con el broker'
-      : 'Aceptar — fechas y referencias completas y viables',
+    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — impossible dates or missing references' : 'No aceptar — fechas imposibles o referencias ausentes'
+      : semaforo === 'amarillo' ? locale === 'en' ? 'Confirm times and references with broker' : 'Confirmar tiempos y referencias con el broker'
+      : locale === 'en' ? 'Accept — dates and references complete and viable' : 'Aceptar — fechas y referencias completas y viables',
   };
 }
 
@@ -609,7 +609,7 @@ const CLAUSULAS_ABUSIVAS = [
   'unlimited liability', 'unconditional guarantee',
 ];
 
-function validarClausulas(datos) {
+function validarClausulas(datos, locale) {
   const hallazgos = [];
   let semaforo = 'verde';
 
@@ -649,19 +649,19 @@ function validarClausulas(datos) {
   }
 
   if (datos.per_diem) {
-    hallazgos.push(`⚠ Per diem: ${datos.per_diem} — revisar responsabilidad`);
+    hallazgos.push(locale === 'en' ? `⚠ Per diem: ${datos.per_diem} — review responsibility` : `⚠ Per diem: ${datos.per_diem} — revisar responsabilidad`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   if (!datos.tonu_rate) {
-    hallazgos.push('⚠ TONU no mencionado — sin protección por cancelación');
+    hallazgos.push(locale === 'en' ? '⚠ TONU not mentioned — no cancellation protection' : '⚠ TONU no mencionado — sin protección por cancelación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     hallazgos.push(`✓ TONU: ${datos.tonu_rate}`);
   }
 
   if (datos.fee_deductions) {
-    hallazgos.push(`⚠ Fee deductions detectadas: ${datos.fee_deductions}`);
+    hallazgos.push(locale === 'en' ? `⚠ Fee deductions detected: ${datos.fee_deductions}` : `⚠ Fee deductions detectadas: ${datos.fee_deductions}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
@@ -678,26 +678,26 @@ function validarClausulas(datos) {
   }
 
   if (datos.penalidades) {
-    hallazgos.push(`⚠ Penalidades: ${datos.penalidades}`);
+    hallazgos.push(locale === 'en' ? `⚠ Penalties: ${datos.penalidades}` : `⚠ Penalidades: ${datos.penalidades}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
-  if (hallazgos.length === 0) hallazgos.push('✓ Sin cláusulas de riesgo detectadas');
+  if (hallazgos.length === 0) hallazgos.push(locale === 'en' ? '✓ No risk clauses detected' : '✓ Sin cláusulas de riesgo detectadas');
 
   return {
     categoria: 'Cláusulas y Penalidades',
     semaforo,
     hallazgos,
     datos_extraidos: {
-      detention: datos.detention_rate || 'No especificada',
-      tonu: datos.tonu_rate || 'No especificado',
-      demurrage: datos.demurrage || 'No mencionado',
-      per_diem: datos.per_diem || 'No mencionado',
-      penalidades: datos.penalidades || 'Ninguna',
+      detention: datos.detention_rate || locale === 'en' ? 'Not specified' : 'No especificada',
+      tonu: datos.tonu_rate || locale === 'en' ? 'Not specified' : 'No especificado',
+      demurrage: datos.demurrage || locale === 'en' ? 'Not mentioned' : 'No mencionado',
+      per_diem: datos.per_diem || locale === 'en' ? 'Not mentioned' : 'No mencionado',
+      penalidades: datos.penalidades || locale === 'en' ? 'None' : 'Ninguna',
     },
-    recomendacion: semaforo === 'rojo' ? 'No aceptar — cláusulas abusivas o responsabilidad excesiva'
-      : semaforo === 'amarillo' ? 'Negociar — revisar cláusulas antes de firmar'
-      : 'Aceptar — cláusulas dentro de parámetros normales',
+    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — abusive clauses or excessive liability' : locale === 'en' ? 'Do not accept — abusive clauses or excessive liability' : 'No aceptar — cláusulas abusivas o responsabilidad excesiva'
+      : semaforo === 'amarillo' ? locale === 'en' ? 'Negotiate — review clauses before signing' : locale === 'en' ? 'Negotiate — review clauses before signing' : 'Negociar — revisar cláusulas antes de firmar'
+      : locale === 'en' ? 'Accept — clauses within normal parameters' : locale === 'en' ? 'Accept — clauses within normal parameters' : 'Aceptar — cláusulas dentro de parámetros normales',
   };
 }
 
@@ -705,40 +705,40 @@ function validarClausulas(datos) {
 // VEREDICTO FINAL — Lógica pura, sin IA
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function calcularVeredicto(categorias, userRole) {
+function calcularVeredicto(categorias, userRole, locale) {
   const rojos = categorias.filter(c => c.semaforo === 'rojo').length;
   const amarillos = categorias.filter(c => c.semaforo === 'amarillo').length;
 
   let veredicto, semaforo_general, resumen;
 
   if (rojos >= 2) {
-    veredicto = 'No aceptar hasta corregir';
+    veredicto = locale === 'en' ? 'Do not accept until corrected' : 'No aceptar hasta corregir';
     semaforo_general = 'rojo';
     resumen = userRole === 'carrier'
-      ? `${rojos} alertas críticas de rentabilidad u operación. No aceptar esta carga.`
-      : `${rojos} alertas críticas. El documento no está listo para asignar a operación.`;
+      ? locale === 'en' ? `${rojos} critical profitability or operational alerts. Do not accept this load.` : `${rojos} alertas críticas de rentabilidad u operación. No aceptar esta carga.`
+      : locale === 'en' ? `${rojos} critical alerts. The document is not ready to be assigned to operations.` : `${rojos} alertas críticas. El documento no está listo para asignar a operación.`;
   } else if (rojos === 1) {
-    veredicto = 'No aceptar hasta corregir';
+    veredicto = locale === 'en' ? 'Do not accept until corrected' : 'No aceptar hasta corregir';
     semaforo_general = 'rojo';
-    resumen = `Alerta crítica en "${categorias.find(c => c.semaforo === 'rojo')?.categoria}". Debe corregirse antes de proceder.`;
+    resumen = locale === 'en' ? `Critical alert in "${categorias.find(c => c.semaforo === 'rojo')?.categoria}". Must be corrected before proceeding.` : `Alerta crítica en "${categorias.find(c => c.semaforo === 'rojo')?.categoria}". Debe corregirse antes de proceder.`;
   } else if (amarillos >= 3) {
-    veredicto = 'Negociar';
+    veredicto = locale === 'en' ? 'Negotiate' : 'Negociar';
     semaforo_general = 'amarillo';
     resumen = userRole === 'carrier'
-      ? `${amarillos} condiciones a negociar antes de aceptar la carga.`
-      : `${amarillos} puntos a confirmar. Coordinar con broker antes de asignar.`;
+      ? locale === 'en' ? `${amarillos} conditions to negotiate before accepting the load.` : `${amarillos} condiciones a negociar antes de aceptar la carga.`
+      : locale === 'en' ? `${amarillos} points to confirm. Coordinate with broker before assigning.` : `${amarillos} puntos a confirmar. Coordinar con broker antes de asignar.`;
   } else if (amarillos >= 1) {
-    veredicto = 'Revisar antes de aceptar';
+    veredicto = locale === 'en' ? 'Review before accepting' : 'Revisar antes de aceptar';
     semaforo_general = 'amarillo';
     resumen = userRole === 'carrier'
-      ? `${amarillos} punto(s) a revisar. Confirmar condiciones antes de firmar.`
-      : `${amarillos} punto(s) a confirmar. Verificar con broker antes de asignar al carrier.`;
+      ? locale === 'en' ? `${amarillos} point(s) to review. Confirm conditions before signing.` : `${amarillos} punto(s) a revisar. Confirmar condiciones antes de firmar.`
+      : locale === 'en' ? `${amarillos} point(s) to confirm. Verify with broker before assigning to carrier.` : `${amarillos} punto(s) a confirmar. Verificar con broker antes de asignar al carrier.`;
   } else {
-    veredicto = 'Aceptar';
+    veredicto = locale === 'en' ? 'Accept' : 'Aceptar';
     semaforo_general = 'verde';
     resumen = userRole === 'carrier'
-      ? 'Carga rentable y compatible con tu operación. Puede proceder.'
-      : 'Documento completo y compatible con el carrier asignado. Listo para operación.';
+      ? locale === 'en' ? 'Profitable and compatible load. You may proceed.' : 'Carga rentable y compatible con tu operación. Puede proceder.'
+      : locale === 'en' ? 'Complete document compatible with assigned carrier. Ready for operation.' : 'Documento completo y compatible con el carrier asignado. Listo para operación.';
   }
 
   const alertas_criticas = categorias
@@ -802,7 +802,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'No autorizado' }, { status: 401 });
 
-    const { documentText, selectedCarrierId } = await req.json();
+    const { documentText, selectedCarrierId, locale = 'es' } = await req.json();
     if (!documentText || documentText.trim().length < 20) {
       return Response.json({ error: 'Texto del documento vacío o muy corto' }, { status: 400 });
     }
@@ -923,7 +923,7 @@ Deno.serve(async (req) => {
       });
       if (typeof typeCheck === 'string' && typeCheck.toLowerCase().trim().startsWith('no')) {
         return Response.json({
-          error: 'Solo proceso Rate Confirmations y Delivery Orders. No se aceptan documentos bancarios ni sensibles.'
+          error: locale === 'en' ? 'I only process Rate Confirmations and Delivery Orders. Bank or sensitive documents are not accepted.' : 'Solo proceso Rate Confirmations y Delivery Orders. No se aceptan documentos bancarios ni sensibles.'
         }, { status: 400 });
       }
     }
@@ -937,29 +937,29 @@ Deno.serve(async (req) => {
     if (userRole === 'carrier') {
       // Carrier: prioridad en rentabilidad, compatibilidad operativa y cláusulas
       categorias = [
-        validarRate(datos, costConfig),          // ← más crítico: ¿es rentable?
-        validarCarrier(datos, carrierProfile),   // ← ¿está correcto mi nombre/MC?
-        validarEquipo(datos, trucks, carrierProfile), // ← ¿tengo el equipo?
-        validarCommodity(datos, carrierProfile), // ← ¿puedo mover esta carga?
-        validarClausulas(datos),                 // ← ¿qué riesgos contractuales hay?
-        validarFechasOperacion(datos),           // ← ¿son viables los tiempos?
-        validarBroker(datos, brokers, brokerProfiles), // ← info del broker
+        validarRate(datos, costConfig, locale),          // ← más crítico: ¿es rentable?
+        validarCarrier(datos, carrierProfile, locale),   // ← ¿está correcto mi nombre/MC?
+        validarEquipo(datos, trucks, carrierProfile, locale), // ← ¿tengo el equipo?
+        validarCommodity(datos, carrierProfile, locale), // ← ¿puedo mover esta carga?
+        validarClausulas(datos, locale),                 // ← ¿qué riesgos contractuales hay?
+        validarFechasOperacion(datos, locale),           // ← ¿son viables los tiempos?
+        validarBroker(datos, brokers, brokerProfiles, locale), // ← info del broker
       ];
     } else {
       // Dispatcher: prioridad en completitud, broker correcto, carrier asignado y readiness
       categorias = [
-        validarBroker(datos, brokers, brokerProfiles), // ← ¿broker verificado?
-        validarCarrier(datos, carrierProfile),         // ← ¿carrier correcto asignado?
-        validarFechasOperacion(datos),                 // ← ¿está completo para operar?
-        validarEquipo(datos, trucks, carrierProfile),  // ← ¿compatible con el carrier?
-        validarCommodity(datos, carrierProfile),       // ← ¿commodity OK para el carrier?
-        validarClausulas(datos),                       // ← ¿cláusulas aceptables?
-        validarRate(datos, costConfig),                // ← info de tarifa (menos crítico)
+        validarBroker(datos, brokers, brokerProfiles, locale), // ← ¿broker verificado?
+        validarCarrier(datos, carrierProfile, locale),         // ← ¿carrier correcto asignado?
+        validarFechasOperacion(datos, locale),                 // ← ¿está completo para operar?
+        validarEquipo(datos, trucks, carrierProfile, locale),  // ← ¿compatible con el carrier?
+        validarCommodity(datos, carrierProfile, locale),       // ← ¿commodity OK para el carrier?
+        validarClausulas(datos, locale),                       // ← ¿cláusulas aceptables?
+        validarRate(datos, costConfig, locale),                // ← info de tarifa (menos crítico)
       ];
     }
 
     // ── PASO 7: Veredicto por reglas ──────────────────────────────────────────
-    const { veredicto, semaforo_general, resumen_ejecutivo, alertas_criticas, puntos_negociar } = calcularVeredicto(categorias, userRole);
+    const { veredicto, semaforo_general, resumen_ejecutivo, alertas_criticas, puntos_negociar } = calcularVeredicto(categorias, userRole, locale);
     const confidence_score = calcularConfidence(datos);
 
     // ── PASO 8: Guardar resultado estructurado (permite caché futura) ─────────

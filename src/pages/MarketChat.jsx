@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { marketChat } from '@/functions/marketChat';
 import { useAppState } from '@/lib/AppStateContext';
+import { useLanguage } from '@/lib/LanguageContext';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import ReactMarkdown from 'react-markdown';
 
@@ -19,7 +19,7 @@ const UI_STRINGS = {
     quickPrompts: [
       "¿Cuánto cobro Miami a Tampa?",
       "Port Everglades a Naples, ¿cuánto pido?",
-      "¿Vale Quickload a $2.20?",
+      "¿Vale la tarifa de $2.20?",
       "Miami a WPB, ¿cuánto mínimo?",
       "¿Qué es detention y cuánto cobro?",
     ],
@@ -46,7 +46,7 @@ const UI_STRINGS = {
     quickPrompts: [
       "How much should I charge Miami to Tampa?",
       "Port Everglades to Naples, what should I ask for?",
-      "Is Quickload worth it at $2.20?",
+      "Is the $2.20 rate worth it?",
       "Miami to WPB, what's the minimum?",
       "What is detention and how much do I charge?",
     ],
@@ -73,6 +73,7 @@ const UI_STRINGS = {
 
 export default function MarketChat() {
   const { userProfile } = useAppState();
+  const { locale, setLocale } = useLanguage();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -85,7 +86,6 @@ export default function MarketChat() {
   // locale del toggle ES/EN. Fuente inicial: UserProfile.idioma_chat (carga
   // ya hecha por AppStateContext, sin fetch adicional). Default 'es' si el
   // perfil no trae el campo (usuarios previos a este cambio).
-  const [locale, setLocale] = useState(userProfile?.idioma_chat === 'en' ? 'en' : 'es');
   const t = UI_STRINGS[locale];
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
@@ -95,25 +95,6 @@ export default function MarketChat() {
   // preferencia en UserProfile en paralelo, sin bloquear. Sigue el mismo
   // patrón filter→update/create de Onboarding.jsx L82-88. Una falla acá no
   // revierte el toggle — solo no persiste para la próxima sesión.
-  const persistLocale = async (nextLocale) => {
-    try {
-      const user = await base44.auth.me();
-      const existingProfiles = await base44.entities.UserProfile.filter({ usuario: user.email });
-      if (existingProfiles.length > 0) {
-        await base44.entities.UserProfile.update(existingProfiles[0].id, { idioma_chat: nextLocale });
-      } else {
-        await base44.entities.UserProfile.create({ usuario: user.email, idioma_chat: nextLocale });
-      }
-    } catch (err) {
-      console.error('MarketChat: no se pudo persistir idioma_chat', err);
-    }
-  };
-
-  const handleLocaleChange = (nextLocale) => {
-    if (!nextLocale || nextLocale === locale) return; // Radix single-select puede devolver '' al deseleccionar
-    setLocale(nextLocale);
-    persistLocale(nextLocale);
-  };
 
   useEffect(() => {
     const init = async () => {
@@ -180,8 +161,11 @@ export default function MarketChat() {
 
     try {
       const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
-      const res = await marketChat({ messages: apiMessages, costConfig, locale });
-
+      const res = await base44.functions.invoke('marketChat', {
+        messages: apiMessages,
+        costConfig,
+        locale,
+      });
       if (res.data?.error) {
         setError(res.data.error);
       } else if (res.data?.content) {
@@ -289,15 +273,6 @@ export default function MarketChat() {
           <p className="text-xs text-muted-foreground mt-0.5">{t.headerSubtitle}</p>
         </div>
         <div className="flex items-center gap-2">
-          <ToggleGroup
-            type="single"
-            value={locale}
-            onValueChange={handleLocaleChange}
-            className="border border-border rounded-lg p-0.5"
-          >
-            <ToggleGroupItem value="es" size="sm" className="text-xs px-2.5 h-6">ES</ToggleGroupItem>
-            <ToggleGroupItem value="en" size="sm" className="text-xs px-2.5 h-6">EN</ToggleGroupItem>
-          </ToggleGroup>
           <button
             onClick={openHistory}
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
@@ -351,19 +326,17 @@ export default function MarketChat() {
 
         {messages.map((msg, i) => (
           <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center ${
-              msg.role === 'user' ? 'bg-primary/20' : 'bg-muted'
-            }`}>
+            <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-primary/20' : 'bg-muted'
+              }`}>
               {msg.role === 'user'
                 ? <User className="w-4 h-4 text-primary" />
                 : <Bot className="w-4 h-4 text-muted-foreground" />
               }
             </div>
-            <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${
-              msg.role === 'user'
+            <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${msg.role === 'user'
                 ? 'bg-primary text-primary-foreground ml-auto'
                 : 'bg-card border border-border text-foreground'
-            }`}>
+              }`}>
               {msg.role === 'assistant' ? (
                 <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground">
                   <ReactMarkdown>{msg.content}</ReactMarkdown>

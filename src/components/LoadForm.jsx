@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
 
 const TIPO_OPTIONS = [
-  { value: 'quickload', label: 'Quickload' },
   { value: 'broker_directo', label: 'Broker Directo' },
   { value: 'cliente_directo', label: 'Cliente Directo' },
 ];

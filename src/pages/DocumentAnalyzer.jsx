@@ -4,7 +4,6 @@ import {
   FileSearch, Upload, XCircle, Loader2, Image,
   Truck, Users
 } from 'lucide-react';
-import { analyzeDocument } from '@/functions/analyzeDocument';
 import { base44 } from '@/api/base44Client';
 import ResultHeader from '@/components/doc-analyzer/ResultHeader';
 import CategoryGrid from '@/components/doc-analyzer/CategoryGrid';
@@ -14,11 +13,13 @@ import LoadMatch from '@/components/doc-analyzer/LoadMatch';
 import CarrierSelector from '@/components/doc-analyzer/CarrierSelector';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { filterByOrg } from '@/lib/orgScope';
+import { useLanguage } from '@/lib/LanguageContext';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
 
 export default function DocumentAnalyzer() {
   const orgId = useOrganizationId();
+  const { t, locale } = useLanguage();
   const [documentText, setDocumentText] = useState('');
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,14 +68,19 @@ export default function DocumentAnalyzer() {
   const analyze = async () => {
     if (!documentText.trim() || loading) return;
     setLoading(true);
-    setLoadingMsg('Extrayendo datos del documento...');
+    setLoadingMsg(t.documents.extract);
     setError(null);
     setAnalysis(null);
 
-    const t1 = setTimeout(() => setLoadingMsg('Validando contra reglas de negocio...'), 3000);
-    const t2 = setTimeout(() => setLoadingMsg('Verificando broker y carrier...'), 6000);
+    const t1 = setTimeout(() => setLoadingMsg(t.documents.validate), 3000);
+    const t2 = setTimeout(() => setLoadingMsg(t.documents.verifyBroker), 6000);
 
-    const res = await analyzeDocument({ documentText, selectedCarrierId });
+    const res = await base44.functions.invoke('analyzeDocument', {
+      documentText,
+      selectedCarrierId,
+      locale,
+   });
+
     clearTimeout(t1);
     clearTimeout(t2);
 
@@ -96,7 +102,7 @@ export default function DocumentAnalyzer() {
 
     if (['jpg', 'jpeg', 'png', 'pdf'].includes(ext)) {
       setLoading(true);
-      setLoadingMsg('Procesando archivo...');
+      setLoadingMsg(t.documents.process);
       try {
         const { file_url } = await base44.integrations.Core.UploadFile({ file });
         const extracted = await base44.integrations.Core.InvokeLLM({
@@ -105,14 +111,14 @@ export default function DocumentAnalyzer() {
         });
         setDocumentText(typeof extracted === 'string' ? extracted : JSON.stringify(extracted));
       } catch {
-        setError('No se pudo procesar el archivo. Intenta pegar el texto directamente.');
+        setError(t.documents.processError);
       }
       setLoading(false);
     } else if (['txt', 'csv'].includes(ext)) {
       const text = await file.text();
       setDocumentText(text);
     } else {
-      setError('Formato no soportado. Usa PDF, JPG, PNG o TXT.');
+      setError(t.documents.unsupported);
     }
     e.target.value = '';
   };
@@ -125,8 +131,8 @@ export default function DocumentAnalyzer() {
 
   // Badge de modo de análisis
   const roleBadge = userRole === 'carrier'
-    ? { label: 'Modo Carrier — rentabilidad y operación', icon: Truck, color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' }
-    : { label: 'Modo Dispatcher — completitud y asignación', icon: Users, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
+    ? { label: t.documents.carrierMode, icon: Truck, color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' }
+    : { label: t.documents.dispatcherMode, icon: Users, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
@@ -134,10 +140,10 @@ export default function DocumentAnalyzer() {
       <div>
         <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
           <FileSearch className="w-5 h-5 text-primary" />
-          Verificador de Documentos
+          {t.documents.title}
         </h1>
         <p className="text-sm text-muted-foreground mt-0.5">
-          Rate Confirmations · Delivery Orders — análisis operativo, comercial e identidad
+          {t.documents.subtitle}
         </p>
       </div>
 
@@ -160,12 +166,12 @@ export default function DocumentAnalyzer() {
       {/* Input */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <label className="text-sm font-medium text-foreground">Pega el texto o sube el documento</label>
+          <label className="text-sm font-medium text-foreground">{t.documents.pasteOrUpload}</label>
           <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:border-primary/40 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
             <Upload className="w-3.5 h-3.5" />
             {fileName
               ? <span className="text-primary max-w-32 truncate">{fileName}</span>
-              : <span>Subir PDF / JPG / PNG / TXT</span>
+              : <span>{t.documents.upload}</span>
             }
             <input type="file" accept={ACCEPTED_TYPES} className="hidden" onChange={handleFile} />
           </label>
@@ -173,13 +179,13 @@ export default function DocumentAnalyzer() {
 
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           <Image className="w-3 h-3 flex-shrink-0" />
-          <span>Acepta PDF, JPG, PNG, TXT — Solo Rate Confirmations y Delivery Orders</span>
+          <span>{t.documents.accepted}</span>
         </div>
 
         <textarea
           value={documentText}
           onChange={e => setDocumentText(e.target.value)}
-          placeholder={`Pega aquí el texto del Rate Confirmation o Delivery Order...
+          placeholder={`${t.documents.placeholder}
 
 RATE CONFIRMATION
 Broker: XYZ Logistics LLC  MC: 123456
@@ -207,7 +213,7 @@ Equipment: 20ft Dry...`}
           ) : (
             <>
               <FileSearch className="w-4 h-4" />
-              Verificar Documento
+              {t.documents.verify}
             </>
           )}
         </button>
@@ -220,7 +226,7 @@ Equipment: 20ft Dry...`}
           <div>
             <p className="text-sm font-medium text-red-400">{error}</p>
             {error.includes('Solo proceso') && (
-              <p className="text-xs mt-1 text-muted-foreground">Por seguridad, no procesamos información bancaria ni documentos sensibles.</p>
+              <p className="text-xs mt-1 text-muted-foreground">{t.documents.sensitive}</p>
             )}
           </div>
         </div>

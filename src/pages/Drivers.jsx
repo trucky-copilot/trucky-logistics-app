@@ -3,9 +3,11 @@ import { base44 } from '@/api/base44Client';
 import { Users, Plus, X, Pencil, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import { useOrganizationId } from '@/lib/AppStateContext';
+import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 
 function DocAlert({ label, date }) {
+  const { t } = useLanguage();
   if (!date) return null;
   const today = new Date();
   const exp = new Date(date);
@@ -15,12 +17,13 @@ function DocAlert({ label, date }) {
   return (
     <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${expired ? 'bg-red-400/10 text-red-400' : 'bg-yellow-400/10 text-yellow-400'}`}>
       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
-      {label}: {expired ? `VENCIDO ${Math.abs(diff)}d` : `vence en ${diff}d`}
+      {label}: {expired ? `${t.drivers.expired} ${Math.abs(diff)}d` : `${t.drivers.expiresIn} ${diff}d`}
     </div>
   );
 }
 
 function DriverForm({ driver, onSave, onClose }) {
+  const { t } = useLanguage();
   const [form, setForm] = useState({
     nombre: '', apellido: '', telefono: '', licencia_numero: '',
     licencia_vencimiento: '', medico_vencimiento: '', twic_vencimiento: '',
@@ -33,30 +36,30 @@ function DriverForm({ driver, onSave, onClose }) {
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-          <h2 className="text-base font-semibold">{driver ? 'Editar Conductor' : 'Nuevo Conductor'}</h2>
+          <h2 className="text-base font-semibold">{driver ? t.drivers.edit : t.drivers.new}</h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Nombre *</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.name} *</label>
               <input required value={form.nombre} onChange={e => set('nombre', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Apellido</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.lastName}</label>
               <input value={form.apellido} onChange={e => set('apellido', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Teléfono</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.phone}</label>
               <input value={form.telefono} onChange={e => set('telefono', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Estado</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.status}</label>
               <select value={form.estado} onChange={e => set('estado', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
                 {['activo','inactivo','vacaciones','suspension'].map(s => <option key={s} value={s}>{s}</option>)}
@@ -65,46 +68,46 @@ function DriverForm({ driver, onSave, onClose }) {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Licencia CDL #</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.license}</label>
               <input value={form.licencia_numero} onChange={e => set('licencia_numero', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Vencimiento licencia</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.licenseExpiry}</label>
               <input type="date" value={form.licencia_vencimiento} onChange={e => set('licencia_vencimiento', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Médico vence</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.medicalExpiry}</label>
               <input type="date" value={form.medico_vencimiento} onChange={e => set('medico_vencimiento', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">TWIC vence</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.twicExpiry}</label>
               <input type="date" value={form.twic_vencimiento} onChange={e => set('twic_vencimiento', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">HazMat vence</label>
+              <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.hazmatExpiry}</label>
               <input type="date" value={form.hazmat_vencimiento} onChange={e => set('hazmat_vencimiento', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Camión asignado (placa)</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.assignedTruck}</label>
             <input value={form.truck_asignado} onChange={e => set('truck_asignado', e.target.value)}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">Notas</label>
+            <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.notes}</label>
             <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={2}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">Cancelar</button>
-            <button type="submit" className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">Guardar</button>
+            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">{t.drivers.cancel}</button>
+            <button type="submit" className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">{t.drivers.save}</button>
           </div>
         </form>
       </div>
@@ -113,6 +116,7 @@ function DriverForm({ driver, onSave, onClose }) {
 }
 
 export default function Drivers() {
+  const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,12 +140,12 @@ export default function Drivers() {
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-bold text-foreground">Conductores</h1>
-          <p className="text-sm text-muted-foreground">{drivers.length} registrados</p>
+          <h1 className="text-xl font-bold text-foreground">{t.drivers.title}</h1>
+          <p className="text-sm text-muted-foreground">{drivers.length} {t.drivers.registered}</p>
         </div>
         <button onClick={() => { setEditDriver(null); setShowForm(true); }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
-          <Plus className="w-3.5 h-3.5" />Agregar conductor
+          <Plus className="w-3.5 h-3.5" />{t.drivers.add}
         </button>
       </div>
 
@@ -152,7 +156,7 @@ export default function Drivers() {
       ) : drivers.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Users className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">No hay conductores registrados</p>
+          <p className="text-sm">{t.drivers.noDrivers}</p>
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -161,7 +165,7 @@ export default function Drivers() {
               <div className="flex items-start justify-between mb-2">
                 <div>
                   <div className="font-semibold text-foreground">{driver.nombre} {driver.apellido || ''}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">{driver.telefono || 'Sin teléfono'}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{driver.telefono || t.drivers.noPhone}</div>
                 </div>
                 <div className="flex items-center gap-1.5">
                   <StatusBadge status={driver.estado} />
@@ -175,14 +179,14 @@ export default function Drivers() {
                 <div className="text-xs text-muted-foreground mb-2">Camión: <span className="text-foreground font-mono">{driver.truck_asignado}</span></div>
               )}
               <div className="space-y-1">
-                <DocAlert label="Licencia" date={driver.licencia_vencimiento} />
-                <DocAlert label="Médico" date={driver.medico_vencimiento} />
+                <DocAlert label={locale === 'en' ? 'License' : 'Licencia'} date={driver.licencia_vencimiento} />
+                <DocAlert label={locale === 'en' ? 'Medical' : 'Médico'} date={driver.medico_vencimiento} />
                 <DocAlert label="TWIC" date={driver.twic_vencimiento} />
                 <DocAlert label="HazMat" date={driver.hazmat_vencimiento} />
                 {!driver.licencia_vencimiento && !driver.medico_vencimiento && !driver.twic_vencimiento && (
                   <div className="flex items-center gap-1 text-xs text-green-400">
                     <CheckCircle2 className="w-3 h-3" />
-                    Documentos al día
+                    {t.drivers.documentsOk}
                   </div>
                 )}
               </div>

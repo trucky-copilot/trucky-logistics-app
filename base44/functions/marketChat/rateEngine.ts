@@ -391,6 +391,10 @@ export interface FloorTargetInput {
   millasIda: number;
   rpmBase: number | null;
   pagoCamionRpm: number | null;
+  // Fallback de piso: costo propio por milla (CostConfig.costo_por_milla) de
+  // la Calculadora de Costos. Se usa SOLO cuando no hay tabla de piso ni
+  // pagoCamionRpm declarado — da un piso real basado en los costos del usuario.
+  costoPorMillaPropio?: number | null;
   // reglas-v3-multiestado Fase 4: mínimo de tramo corto (v3 §7). Solo se pasa
   // desde el camino que lo admite (resolveGenericQuote); drayage sin tabla NO
   // lo usa — sigue con su propio benchmark, sin cambios de esta tarea.
@@ -423,14 +427,22 @@ export function computeFloorTarget(input: FloorTargetInput): FloorTargetResult {
   let floor: number | null;
   let floorSource: FloorTargetResult['floorSource'];
   if (input.tablaPiso != null) {
+    // 1er prioridad: piso de tabla (Texas)
     floor = input.tablaPiso;
     floorSource = 'tabla';
   } else if (input.pagoCamionRpm != null) {
+    // 2da prioridad: lo que el usuario paga al camión por milla (declarado en chat)
     floor = Math.round(input.pagoCamionRpm * input.millasIda);
     floorSource = 'dato_usuario';
   } else if (tramoCortoAplica) {
+    // 3ra prioridad: mínimo de tramo corto (<100mi)
     floor = input.tramoCorto!.floor;
     floorSource = 'tramo_corto';
+  } else if (input.costoPorMillaPropio != null && isFinite(input.costoPorMillaPropio) && input.costoPorMillaPropio > 0) {
+    // 4ta prioridad: costo por milla propio de la Calculadora (= break-even sin conductor).
+    // Es el piso mínimo real del usuario: cubrir sus costos operativos por esta ruta.
+    floor = Math.round(input.costoPorMillaPropio * input.millasIda);
+    floorSource = 'dato_usuario';
   } else {
     floor = null;
     floorSource = 'sin_dato';
@@ -743,6 +755,11 @@ export interface CalculatedQuote {
   // camión u costo propio); `perfil: 'sin_dato'` con `verdicts: []` en
   // cualquier otro caso — nunca se inventa un costo para completarlo.
   perfilMargen: ProfileMarginResult;
+  // Semáforo — CPM y tarifa objetivo del usuario (de CostConfig). Null cuando
+  // el usuario no tiene la calculadora configurada. Se usan para delimitar
+  // zonas ROJO / AMARILLO / VERDE en buildRateCheckMarkdown.
+  costoPorMillaPropio: number | null;
+  tarifaObjetivaPropia: number | null;
 }
 
 function benchmarkParaTamanoDrayage(tamano: Tamano): Equipment {
@@ -916,10 +933,12 @@ export function resolveDrayageQuote(params: {
           referencias: [],
           referenciasEstadoNombre: null,
           tarifaOfrecida,
-          segundaLectura: null, // drayage nunca la muestra (Decisión 1-A)
+          segundaLectura: null,
           precioIncluyeRegreso: match.precioIncluyeRegreso,
           accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
           perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+          costoPorMillaPropio: null, // drayage usa tabla — semáforo por CPM no aplica aquí
+          tarifaObjetivaPropia: null,
         },
       };
     }
@@ -980,10 +999,12 @@ export function resolveDrayageQuote(params: {
       referencias,
       referenciasEstadoNombre: refState.cercano ? nombreEstado(refState.estado) : null,
       tarifaOfrecida,
-      segundaLectura: null, // drayage nunca la muestra (Decisión 1-A)
-      precioIncluyeRegreso: false, // cálculo por RPM de ida — sin tabla no hay "ya incluye el regreso"
+      segundaLectura: null,
+      precioIncluyeRegreso: false,
       accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+      costoPorMillaPropio: null, // drayage sin tabla — semáforo por CPM no aplica aquí
+      tarifaObjetivaPropia: null,
     },
   };
 }
@@ -1005,10 +1026,12 @@ export function resolveGenericQuote(params: {
   millasIdaDeclaradas: unknown;
   pagoCamionRpm: number | null;
   tarifaOfrecida: number | null;
-  // Fase 6 — opcional: costo propio por milla (CostConfig.costo_por_milla).
+  // Fase 6 — costo propio por milla (CostConfig.costo_por_milla).
   costoPorMillaPropio?: number | null;
+  // Semáforo — tarifa objetivo del usuario (CostConfig.tarifa_objetivo).
+  tarifaObjetivaPropia?: number | null;
 }): GenericQuoteOutcome {
-  const { equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio } = params;
+  const { equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia } = params;
 
   const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
     ? millasIdaDeclaradas
@@ -1029,6 +1052,10 @@ export function resolveGenericQuote(params: {
     millasIda,
     rpmBase: equipment.rpm_target,
     pagoCamionRpm,
+    // Fallback: si no declaró pago_camion_rpm, usar costo_por_milla de la
+    // Calculadora para que el piso nunca salga vacío cuando el usuario
+    // ya configuró sus costos.
+    costoPorMillaPropio: costoPorMillaPropio ?? null,
     tramoCorto: { floor: SHORT_HAUL_FLOOR, target: SHORT_HAUL_TARGET },
   });
 
@@ -1058,6 +1085,8 @@ export function resolveGenericQuote(params: {
       precioIncluyeRegreso: false,
       accesoriales: null,
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+      tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
     },
   };
 }
@@ -1078,16 +1107,108 @@ export function buildAskMilesMarkdown(ciudadConocida: string | null, locale: Loc
 
 export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'): string {
   const m = MESSAGES[locale].rateCheck;
-  const rutaLabel = q.ciudad ? `${q.ciudad}${q.estado ? `, ${q.estado}` : ''}` : m.fallbackRuta;
+  const rutaLabel = q.ciudad
+    ? `${q.ciudad}${q.estado ? `, ${q.estado}` : ''}`
+    : m.fallbackRuta;
   const millasTag = `~${q.millasIda}${m.milesIdaSuffix}${q.fuenteMillas === 'usuario' ? m.userDataTag : ''}`;
+  const equipLabel = q.equipmentLabel;
 
+  // ── SEMÁFORO ──────────────────────────────────────────────────────────────
+  // Si el usuario tiene CostConfig configurado, mostramos tres zonas de precio
+  // (ROJO / AMARILLO / VERDE) calculadas desde su propio CPM y tarifa objetivo.
+  // Si no tiene datos propios, caemos al formato clásico de piso/objetivo.
+  // ──────────────────────────────────────────────────────────────────────────
+  const cpm   = q.costoPorMillaPropio;    // ej: 1.75 — límite inferior (ROJO)
+  const tObj  = q.tarifaObjetivaPropia;   // ej: 3.00 — límite superior (VERDE)
+
+  if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
+    // Límite superior del semáforo: el mayor entre CPM y tarifa objetivo.
+    // Si el usuario tiene cpm > tObj (calculadora con datos que necesitan revisión),
+    // el semáforo igual se muestra usando cpm como referencia real de costos.
+    const limSuperior = Math.max(cpm, tObj);
+    // Totales en dólares para esta ruta
+    const pisoCpm    = Math.round(cpm          * q.millasIda);  // total a tu CPM
+    const totalObj   = Math.round(limSuperior  * q.millasIda);  // total a tu objetivo
+
+    const cpmFmt  = `$${cpm.toFixed(2)}/mi`;
+    const tObjFmt = `$${tObj.toFixed(2)}/mi`;
+
+    const lineas: string[] = [];
+
+    // Encabezado
+    lineas.push(`📍 **${rutaLabel}** · ${millasTag} · ${equipLabel}`);
+    lineas.push(`Te muestro tres escenarios para que decidas si tomar, negociar o declinar este flete según tu CPM.`);
+    lineas.push('');
+
+    // 🔴 ROJO
+    lineas.push(`🔴 **ROJO — Declinar o negociar**  < ${cpmFmt} (< tu CPM)`);
+    lineas.push(`● La tarifa está por debajo de tu costo operativo por milla.`);
+    lineas.push(`● Perderías dinero en este flete.`);
+    lineas.push(`● Considera declinar o pedir una tarifa significativamente más alta.`);
+    lineas.push('');
+
+    // 🟡 AMARILLO
+    lineas.push(`🟡 **AMARILLO — Negociar**  ${cpmFmt} – ${tObjFmt}  ≈ tu CPM`);
+    lineas.push(`● Esta tarifa está alrededor de tu break-even.`);
+    lineas.push(`● Cubre los costos pero deja poco margen de ganancia.`);
+    lineas.push(`● Intenta negociar más alto, especialmente si el regreso está incierto.`);
+    lineas.push('');
+
+    // 🟢 VERDE
+    lineas.push(`🟢 **VERDE — Aceptar**  ${tObjFmt}+ (≥ tu objetivo)`);
+    lineas.push(`● Tarifa rentable.`);
+    lineas.push(`● Cubre tus costos y te deja margen de ganancia.`);
+    lineas.push(`● Buena opción, especialmente si conseguís buen regreso.`);
+    lineas.push('');
+
+    // Detalles de la ruta
+    lineas.push(`---`);
+    lineas.push(`📌 **Detalles de la ruta**`);
+    lineas.push(`- De: ${rutaLabel} · Distancia: ${millasTag}`);
+    lineas.push(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${tObjFmt})`);
+
+    // Accesoriales
+    if (q.accesoriales && q.accesoriales.items.length > 0) {
+      const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
+      lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
+      for (const a of q.accesoriales.items) {
+        lineas.push(render(m.accesorialItemLine, a.concepto, a.monto));
+      }
+      const trajoFuelSurcharge = q.accesoriales.items.some(a => normalizeText(a.concepto).includes('fuel surcharge'));
+      if (trajoFuelSurcharge && q.accesoriales.estado === 'TX' && !q.accesoriales.heredado && q.estado === 'TX') {
+        lineas.push(m.txFuelSurchargeWarning);
+      }
+    }
+
+    // Segunda lectura (regreso vacío)
+    if (q.segundaLectura) {
+      lineas.push('');
+      lineas.push(render(m.segundaLecturaLine, q.segundaLectura.rpmRedondo.toFixed(2), q.segundaLectura.millasRedondo));
+    }
+
+    // Veredicto si hay tarifa ofrecida
+    if (q.tarifaOfrecida != null) {
+      const verdict = computeVerdict(q.tarifaOfrecida, q.piso, q.objetivo, locale);
+      lineas.push(render(m.ofertaVerdictLine, verdict.emoji, formatUSD(q.tarifaOfrecida), verdict.label));
+    }
+
+    // Recomendación final
+    lineas.push('');
+    lineas.push(`---`);
+    lineas.push(`✅ **Recomendación TruckyAI**`);
+    lineas.push(`Apunta a mínimo **${tObjFmt} (${formatUSD(totalObj)} total)** o más para que este flete sea rentable.`);
+    lineas.push(`Si te ofrecen entre ${cpmFmt} y ${tObjFmt}, **negocia** y confirma si incluye el regreso.`);
+
+    lineas.push(...buildMarginVerdictMarkdown(q.perfilMargen, locale));
+    return lineas.join('\n');
+  }
+
+  // ── FORMATO CLÁSICO (sin CostConfig configurado) ──────────────────────────
   const targetLine = q.targetSource === 'tabla'
     ? render(m.targetTabla, formatUSD(q.objetivo))
     : q.targetSource === 'derivado'
       ? render(m.targetDerivadoPrefix, formatUSD(q.objetivo)) + (q.dobleSupuesto ? m.targetDerivadoDobleSupuesto : m.targetDerivadoSimple)
       : q.targetSource === 'tramo_corto'
-        // reglas-v3-multiestado Fase 4 (v3 §7, Decisión 4): a esta distancia el
-        // cálculo por RPM no es defendible; se usa el mínimo de referencia.
         ? render(m.targetTramoCorto, SHORT_HAUL_MILES_THRESHOLD, formatUSD(q.objetivo))
         : render(m.targetCalculo, formatUSD(q.objetivo));
 
@@ -1105,9 +1226,6 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     floorLine,
   ];
 
-  // Fase 4 — segunda lectura (Decisión 1-A, criterio 5). El precio sugerido de
-  // arriba es SIEMPRE de ida; esta es una segunda cifra, HIPÓTESIS del regreso
-  // vacío — nunca se presenta como el número a cobrar.
   if (q.segundaLectura) {
     lineas.push(render(m.segundaLecturaLine, q.segundaLectura.rpmRedondo.toFixed(2), q.segundaLectura.millasRedondo));
   }
@@ -1122,19 +1240,12 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     }
   }
 
-  // Fase 5 — accesoriales del estado consultado (o del vecino, declarado).
-  // Nunca se hereda la tarifa por esta vía, solo el cargo por concepto.
   if (q.accesoriales && q.accesoriales.items.length > 0) {
     const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
     lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
     for (const a of q.accesoriales.items) {
       lineas.push(render(m.accesorialItemLine, a.concepto, a.monto));
     }
-    // Fuel surcharge de Texas (Decisión 13-C): 0-62%, ya incluido en la
-    // tarifa de tabla cuando la tarifa de arriba SÍ viene de esa tabla de TX
-    // — nunca se suma aparte. Si los accesoriales son heredados (un vecino
-    // pidió prestada la tabla de TX), la tarifa de arriba es cálculo, no
-    // tabla de TX, así que esta advertencia específica no aplica.
     const trajoFuelSurcharge = q.accesoriales.items.some(a => normalizeText(a.concepto).includes('fuel surcharge'));
     if (trajoFuelSurcharge && q.accesoriales.estado === 'TX' && !q.accesoriales.heredado && q.estado === 'TX') {
       lineas.push(m.txFuelSurchargeWarning);
@@ -1146,13 +1257,7 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     lineas.push(render(m.ofertaVerdictLine, verdict.emoji, formatUSD(q.tarifaOfrecida), verdict.label));
   }
 
-  // Fase 6 — veredicto por perfil (margen % vs. costo propio declarado,
-  // Decisión 10-B: nunca un umbral en dólares, solo se muestra el monto junto
-  // al porcentaje). Se agrega DESPUÉS del veredicto de piso/objetivo de
-  // arriba — son dos preguntas distintas: "¿esta tarifa respeta el piso de la
-  // ruta?" vs. "¿esta tarifa me deja el margen que necesito?".
   lineas.push(...buildMarginVerdictMarkdown(q.perfilMargen, locale));
-
   return lineas.join('\n');
 }
 

@@ -1,11 +1,9 @@
 import { useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, ChevronDown, ChevronUp, Info } from 'lucide-react';
 
-const SEMAFORO = {
-  verde:    { icon: CheckCircle2,  color: 'text-green-400',  dot: 'bg-green-400',  border: 'border-green-400/25', bg: 'bg-green-400/5',   label: 'OK',       labelBg: 'bg-green-400/10 text-green-400' },
-  amarillo: { icon: AlertTriangle, color: 'text-yellow-400', dot: 'bg-yellow-400', border: 'border-yellow-400/25',bg: 'bg-yellow-400/5',  label: 'Revisar',  labelBg: 'bg-yellow-400/10 text-yellow-400' },
-  rojo:     { icon: XCircle,       color: 'text-red-400',    dot: 'bg-red-400',    border: 'border-red-400/25',   bg: 'bg-red-400/5',     label: 'Crítico',  labelBg: 'bg-red-400/10 text-red-400' },
-};
+import { useLanguage } from '@/lib/LanguageContext';
+
+
 
 function getHallazgoIcon(h) {
   if (h.startsWith('❌')) return { Icon: XCircle, color: 'text-red-400' };
@@ -43,7 +41,15 @@ function DatosExtraidos({ datos }) {
 }
 
 function CategoryCard({ cat, index }) {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(false);
+  
+  const SEMAFORO = {
+    verde: { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/8 border-green-400/20', dot: 'bg-green-400', label: t.documents.ok, labelBg: 'bg-green-400/10 text-green-400' },
+    amarillo: { icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-400/8 border-yellow-400/20', dot: 'bg-yellow-400', label: t.documents.review, labelBg: 'bg-yellow-400/10 text-yellow-400' },
+    rojo: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/8 border-red-400/20', dot: 'bg-red-400', label: t.documents.critical, labelBg: 'bg-red-400/10 text-red-400' },
+  };
+
   const s = SEMAFORO[cat.semaforo] || SEMAFORO.amarillo;
   const principal = getPrincipal(cat.hallazgos);
   const resto = (cat.hallazgos || []).filter(h => h !== principal);
@@ -115,8 +121,8 @@ function CategoryCard({ cat, index }) {
     </div>
   );
 }
-
 export default function CategoryGrid({ categorias }) {
+   const { t } = useLanguage();
   if (!categorias?.length) return null;
 
   const rojos = categorias.filter(c => c.semaforo === 'rojo').length;
@@ -127,7 +133,7 @@ export default function CategoryGrid({ categorias }) {
     <div className="space-y-2">
       {/* Header con resumen de semáforos */}
       <div className="flex items-center justify-between px-0.5">
-        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Análisis por categoría</p>
+        <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.documents.analysisByCategory}</p>
         <div className="flex items-center gap-2">
           {rojos > 0 && (
             <span className="flex items-center gap-1 text-[10px] font-bold text-red-400">
