@@ -78,14 +78,22 @@ export function selectReferenceRoutes(
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const NEIGHBOR_STATE_GROUPS: Record<string, Estado> = {
+  // Vecinos de Florida
   georgia: 'FL',
-  'north carolina': 'FL',
-  'south carolina': 'FL',
+  gorgia: 'FL', // error de tipeo común
+  ga: 'FL',
   alabama: 'FL',
+  al: 'FL',
+
+  // Vecinos de Texas
   oklahoma: 'TX',
+  ok: 'TX',
   'new mexico': 'TX',
+  nm: 'TX',
   louisiana: 'TX',
+  la: 'TX',
   arkansas: 'TX',
+  ar: 'TX',
 };
 
 function normalizeForStateMatch(value: unknown): string {

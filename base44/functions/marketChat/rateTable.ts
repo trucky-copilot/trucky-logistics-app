@@ -88,7 +88,7 @@ const ACCESSORIALS_TX = accessorialsTxRaw as unknown as AccessorialRecord[];
 // edita a mano y el conteo se corrompe, el módulo falla al cargar en vez de
 // servir una tabla incompleta en silencio.
 const EXPECTED_FL_COUNT = 209;
-const EXPECTED_TX_COUNT = 50;
+const EXPECTED_TX_COUNT = 63;
 
 if (ROUTES_FL.length !== EXPECTED_FL_COUNT) {
   throw new Error(`rateTable: se esperaban ${EXPECTED_FL_COUNT} rutas FL, el JSON versionado trae ${ROUTES_FL.length}`);
@@ -124,16 +124,18 @@ function normalizarCiudad(valor: string): string {
     .trim();
 }
 
-export function lookupRoute(estado: Estado, ciudad: string, tamano: Tamano): { route: RouteRecord; precio: RoutePriceEntry } | null {
+export function lookupRoute(estado: Estado, ciudad: string, tamano: Tamano, mercado?: string | null): { route: RouteRecord; precio: RoutePriceEntry } | null {
   const objetivo = normalizarCiudad(ciudad);
   const rutas = loadRoutes(estado);
   for (const route of rutas) {
     if (normalizarCiudad(route.ciudad) !== objetivo) continue;
+    if (mercado && route.mercado !== mercado) continue; // <-- FILTRO NUEVO
     const precio = route.precios.find(p => p.tamano === tamano);
     if (precio) return { route, precio };
   }
   return null;
 }
+
 
 // Busca por `id` exacto (slug estable, ver scripts/convertRateTables.ts). Existe
 // para la resolución por ZIP de Texas (nameResolution.ts, Fase 2): un ZIP
@@ -143,6 +145,32 @@ export function lookupRoute(estado: Estado, ciudad: string, tamano: Tamano): { r
 // llamador decide con qué tamaño (nativo 40' o derivado) trabajar.
 export function findRouteById(estado: Estado, id: string): RouteRecord | null {
   return loadRoutes(estado).find(r => r.id === id) || null;
+}
+
+/**
+ * Busca la ruta con las millas más cercanas a las solicitadas en un estado,
+ * para el tamaño de contenedor especificado. Esto se usa para asignar
+ * tarifas planas (tramos cortos) en estados vecinos fuera de mercado.
+ */
+export function findClosestRouteByMiles(
+  estado: Estado,
+  tamano: Tamano,
+  millasIda: number
+): { route: RouteRecord; precio: RoutePriceEntry } | null {
+  const rutas = loadRoutes(estado);
+  let closest: { route: RouteRecord; precio: RoutePriceEntry; diff: number } | null = null;
+  
+  for (const route of rutas) {
+    const precio = route.precios.find(p => p.tamano === tamano);
+    if (!precio) continue;
+    
+    const diff = Math.abs(route.millas_ida - millasIda);
+    if (!closest || diff < closest.diff) {
+      closest = { route, precio, diff };
+    }
+  }
+  
+  return closest ? { route: closest.route, precio: closest.precio } : null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -167,11 +195,8 @@ export function recordUnmatchedRoute(ciudad: string, estado: Estado | string): v
     if (!ciudad) return; // sin ciudad no hay nada útil que registrar — no se inventa un valor.
     const entry: UnmatchedRouteEntry = { ciudad, estado, timestamp: new Date().toISOString() };
     unmatchedRoutes.push(entry);
-    try {
-      console.error(`[rateTable] ruta no encontrada en tabla: ${JSON.stringify(entry)}`);
-    } catch (_logError) {
-      // El logging nunca debe interrumpir el registro ni la respuesta al usuario.
-    }
+    // El logging en consola fue removido para evitar que se confunda con un error de ejecución,
+    // ya que este evento es un comportamiento esperado que dispara el fallback automático.
   } catch (_error) {
     // Nunca debe interrumpir la respuesta al usuario por un problema de
     // reporting; es una señal de mejora continua, no una ruta crítica.

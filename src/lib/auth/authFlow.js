@@ -208,7 +208,7 @@ function isOtpOperation(operation) {
 /**
  * Traduce un error del SDK a un `{ code, message }` accionable para el usuario.
  *
- * @param {unknown} error      Lo que rechazó la promesa del SDK.
+ * @param {any} error      Lo que rechazó la promesa del SDK.
  * @param {string}  operation  Una de AUTH_OP — da el contexto del default.
  */
 export function classifyAuthError(error, operation) {

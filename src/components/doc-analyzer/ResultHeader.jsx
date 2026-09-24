@@ -16,15 +16,16 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
   };
 
   const RESUMEN_CORTO = {
-    'Aceptar': 'Documento correcto para operar',
-    'Accept': 'Correct document for operations',
-    'Revisar antes de aceptar': 'Requiere revisión antes de aceptar',
-    'Review before accepting': 'Requires review before accepting',
-    'Negociar': 'Hay condiciones que deben ajustarse',
-    'Negotiate': 'There are conditions to adjust',
-    'No aceptar hasta corregir': 'Hay inconsistencias importantes',
-    'Do not accept until corrected': 'There are major inconsistencies',
+    'Aceptar': locale === 'en' ? 'Correct document for operations' : 'Documento correcto para operar',
+    'Accept': locale === 'en' ? 'Correct document for operations' : 'Documento correcto para operar',
+    'Revisar antes de aceptar': locale === 'en' ? 'Requires review before accepting' : 'Requiere revisión antes de aceptar',
+    'Review before accepting': locale === 'en' ? 'Requires review before accepting' : 'Requiere revisión antes de aceptar',
+    'Negociar': locale === 'en' ? 'There are conditions to adjust' : 'Hay condiciones que deben ajustarse',
+    'Negotiate': locale === 'en' ? 'There are conditions to adjust' : 'Hay condiciones que deben ajustarse',
+    'No aceptar hasta corregir': locale === 'en' ? 'There are major inconsistencies' : 'Hay inconsistencias importantes',
+    'Do not accept until corrected': locale === 'en' ? 'There are major inconsistencies' : 'Hay inconsistencias importantes',
   };
+
 
   const DOC_LABEL = {
     rate_confirmation: 'Rate Confirmation',

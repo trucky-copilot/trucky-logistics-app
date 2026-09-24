@@ -25,7 +25,7 @@ export default function CostCalculator() {
         const user = await base44.auth.me();
         const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
         if (configs.length > 0) {
-          setConfig(configs[0]);
+          setConfig(prev => ({ ...prev, ...configs[0] }));
           setConfigId(configs[0].id);
         }
       } catch (e) {

@@ -1,6 +1,6 @@
 import { TrendingUp, TrendingDown } from 'lucide-react';
 
-export default function KpiCard({ titulo, valor, subtitulo, trend, trendLabel, color = 'violet', icon: Icon }) {
+export default function KpiCard({ titulo, valor, subtitulo, trend=null, trendLabel=null, color = 'violet', icon: Icon }) {
   const colorMap = {
     violet: 'text-violet-400 bg-violet-400/10 border-violet-400/20',
     green: 'text-green-400 bg-green-400/10 border-green-400/20',

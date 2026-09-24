@@ -26,13 +26,20 @@ const toggleVariants = cva(
   }
 )
 
-const Toggle = React.forwardRef(({ className, variant, size, ...props }, ref) => (
+/**
+ * @type {React.ForwardRefRenderFunction<HTMLButtonElement, React.ComponentPropsWithoutRef<typeof TogglePrimitive.Root> & import("class-variance-authority").VariantProps<typeof toggleVariants>>}
+ */
+const ToggleRender = ({ className, variant, size, ...props }, ref) => (
   <TogglePrimitive.Root
     ref={ref}
     className={cn(toggleVariants({ variant, size, className }))}
     {...props} />
-))
+)
+
+const Toggle = React.forwardRef(ToggleRender)
+
 
 Toggle.displayName = TogglePrimitive.Root.displayName
 
 export { Toggle, toggleVariants }
+

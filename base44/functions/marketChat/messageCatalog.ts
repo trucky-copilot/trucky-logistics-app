@@ -385,7 +385,7 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
       perDay: '/day',
     },
     extraction: {
-      languageDirective: 'in English',
+      languageDirective: 'ESCRITA OBLIGATORIAMENTE EN INGLÉS',
     },
     // Autorado, NO traducido: se omite el glosario "VOCABULARIO DEL MERCADO"
     // porque para un lector angloparlante fluido drayage/backhaul/detention/

@@ -21,6 +21,9 @@
           },
           "timestamp": {
             "type": "string"
+          },
+          "structuredData": {
+            "type": "object"
           }
         }
       }

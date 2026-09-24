@@ -110,10 +110,10 @@ function validarRate(datos, costConfig, locale) {
   let semaforo = 'verde';
 
   if (!datos.tarifa_total) {
-    hallazgos.push('❌ No se encontró tarifa total en el documento');
+    hallazgos.push(locale === 'en' ? '❌ Total rate not found in the document' : '❌ No se encontró tarifa total en el documento');
     semaforo = 'rojo';
   } else {
-    hallazgos.push(`✓ Tarifa total: $${datos.tarifa_total.toLocaleString()}`);
+    hallazgos.push(locale === 'en' ? `✓ Total rate: $${datos.tarifa_total.toLocaleString()}` : `✓ Tarifa total: $${datos.tarifa_total.toLocaleString()}`);
 
     if (costConfig) {
       // Usar datos de CostConfig directamente — sin IA
@@ -122,26 +122,26 @@ function validarRate(datos, costConfig, locale) {
 
       if (datos.tarifa_por_milla) {
         if (minimo > 0 && datos.tarifa_por_milla < minimo) {
-          hallazgos.push(`❌ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi) — operación en pérdida`);
+          hallazgos.push(locale === 'en' ? `❌ Rate $${datos.tarifa_por_milla.toFixed(2)}/mi below minimum ($${minimo.toFixed(2)}/mi) — loss operation` : `❌ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi) — operación en pérdida`);
           semaforo = 'rojo';
         } else if (datos.tarifa_por_milla < objetivo) {
-          hallazgos.push(`⚠ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del objetivo ($${objetivo}/mi)`);
+          hallazgos.push(locale === 'en' ? `⚠ Rate $${datos.tarifa_por_milla.toFixed(2)}/mi below target ($${objetivo}/mi)` : `⚠ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del objetivo ($${objetivo}/mi)`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
-          hallazgos.push(`✓ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi dentro del objetivo ($${objetivo}/mi)`);
+          hallazgos.push(locale === 'en' ? `✓ Rate $${datos.tarifa_por_milla.toFixed(2)}/mi within target ($${objetivo}/mi)` : `✓ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi dentro del objetivo ($${objetivo}/mi)`);
         }
       } else if (datos.millas && datos.millas > 0) {
         // Calcular tarifa/milla desde tarifa total si no viene explícita
         const calculada = datos.tarifa_total / datos.millas;
         if (minimo > 0 && calculada < minimo) {
-          hallazgos.push(`❌ Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi)`);
+          hallazgos.push(locale === 'en' ? `❌ Calculated rate $${calculada.toFixed(2)}/mi below minimum ($${minimo.toFixed(2)}/mi)` : `❌ Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi)`);
           semaforo = 'rojo';
         } else {
-          hallazgos.push(`✓ Tarifa estimada: $${calculada.toFixed(2)}/mi (${datos.millas} millas)`);
+          hallazgos.push(locale === 'en' ? `✓ Estimated rate: $${calculada.toFixed(2)}/mi (${datos.millas} miles)` : `✓ Tarifa estimada: $${calculada.toFixed(2)}/mi (${datos.millas} millas)`);
         }
       }
     } else {
-      hallazgos.push('⚠ Sin configuración de costos — configura tu Calculadora para comparar tarifas');
+      hallazgos.push(locale === 'en' ? '⚠ No cost configuration — set up your Calculator to compare rates' : '⚠ Sin configuración de costos — configura tu Calculadora para comparar tarifas');
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   }
@@ -237,13 +237,13 @@ function validarCommodity(datos, carrierProfile, locale) {
       const requiere = commLower.includes(keyword) || (datos.commodity_especial || '').toLowerCase().includes(keyword);
       if (requiere) {
         if (carrierProfile && !carrierProfile[campo]) {
-          hallazgos.push(`❌ Commodity requiere ${label} — carrier NO tiene esta capacidad habilitada`);
+          hallazgos.push(locale === 'en' ? `❌ Commodity requires ${label} — carrier does NOT have this capability enabled` : `❌ Commodity requiere ${label} — carrier NO tiene esta capacidad habilitada`);
           semaforo = 'rojo';
         } else if (!carrierProfile) {
-          hallazgos.push(`⚠ Commodity requiere ${label} — verificar capacidad del carrier`);
+          hallazgos.push(locale === 'en' ? `⚠ Commodity requires ${label} — verify carrier capability` : `⚠ Commodity requiere ${label} — verificar capacidad del carrier`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
-          hallazgos.push(`✓ Carrier habilitado para ${label}`);
+          hallazgos.push(locale === 'en' ? `✓ Carrier enabled for ${label}` : `✓ Carrier habilitado para ${label}`);
         }
       }
     });
@@ -254,7 +254,7 @@ function validarCommodity(datos, carrierProfile, locale) {
         commLower.includes(r.toLowerCase()) || r.toLowerCase().includes(commLower)
       );
       if (restringida) {
-        hallazgos.push(`❌ Commodity "${datos.commodity}" está RESTRINGIDA en el perfil del carrier`);
+        hallazgos.push(locale === 'en' ? `❌ Commodity "${datos.commodity}" is RESTRICTED in carrier profile` : `❌ Commodity "${datos.commodity}" está RESTRINGIDA en el perfil del carrier`);
         semaforo = 'rojo';
       }
     }
@@ -262,7 +262,7 @@ function validarCommodity(datos, carrierProfile, locale) {
     if (datos.tipo_equipo) {
       const equLower = datos.tipo_equipo.toLowerCase();
       if (commLower.includes('reefer') && !equLower.includes('reefer')) {
-        hallazgos.push('⚠ Commodity refrigerada pero equipo no parece reefer — verificar');
+        hallazgos.push(locale === 'en' ? '⚠ Refrigerated commodity but equipment does not appear to be reefer — verify' : '⚠ Commodity refrigerada pero equipo no parece reefer — verificar');
         if (semaforo === 'verde') semaforo = 'amarillo';
       }
     }
@@ -288,11 +288,11 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
   let semaforo = 'verde';
 
   if (!datos.tipo_equipo && !datos.tamano_contenedor) {
-    hallazgos.push('⚠ Tipo de equipo/contenedor no especificado en el documento');
+    hallazgos.push(locale === 'en' ? '⚠ Equipment/container type not specified in document' : '⚠ Tipo de equipo/contenedor no especificado en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const equipo = datos.tipo_equipo || datos.tamano_contenedor;
-    hallazgos.push(`✓ Equipo requerido: ${equipo}`);
+    hallazgos.push(locale === 'en' ? `✓ Required equipment: ${equipo}` : `✓ Equipo requerido: ${equipo}`);
 
     // Comparar contra equipment_types del CarrierProfile (onboarding)
     if (carrierProfile?.equipment_types?.length > 0) {
@@ -301,10 +301,10 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
         equipoLower.includes(e.toLowerCase()) || e.toLowerCase().includes(equipoLower.replace(/ft|'/g, ''))
       );
       if (!compatible) {
-        hallazgos.push(`❌ Equipo "${equipo}" no está en los tipos del carrier: ${carrierProfile.equipment_types.join(', ')}`);
+        hallazgos.push(locale === 'en' ? `❌ Equipment "${equipo}" is not in carrier types: ${carrierProfile.equipment_types.join(', ')}` : `❌ Equipo "${equipo}" no está en los tipos del carrier: ${carrierProfile.equipment_types.join(', ')}`);
         semaforo = 'rojo';
       } else {
-        hallazgos.push(`✓ Equipo compatible con perfil del carrier`);
+        hallazgos.push(locale === 'en' ? '✓ Equipment compatible with carrier profile' : '✓ Equipo compatible con perfil del carrier');
       }
     }
   }
@@ -313,36 +313,36 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
     const opLower = datos.operacion_tipo.toLowerCase();
     if (opLower.includes('power only')) {
       if (carrierProfile && !carrierProfile.power_only_allowed) {
-        hallazgos.push('❌ Operación Power Only — carrier no tiene esta opción habilitada');
+        hallazgos.push(locale === 'en' ? '❌ Power Only operation — carrier does not have this option enabled' : '❌ Operación Power Only — carrier no tiene esta opción habilitada');
         semaforo = 'rojo';
       } else {
-        hallazgos.push(`✓ Operación Power Only confirmada`);
+        hallazgos.push(locale === 'en' ? '✓ Power Only operation confirmed' : '✓ Operación Power Only confirmada');
       }
     } else {
-      hallazgos.push(`✓ Tipo de operación: ${datos.operacion_tipo}`);
+      hallazgos.push(locale === 'en' ? `✓ Operation type: ${datos.operacion_tipo}` : `✓ Tipo de operación: ${datos.operacion_tipo}`);
     }
   }
 
   if (datos.chasis_requerido) {
-    const provisto = datos.chasis_provisto_por || 'no especificado';
+    const provisto = datos.chasis_provisto_por || (locale === 'en' ? 'not specified' : 'no especificado');
     if (provisto.toLowerCase().includes('carrier')) {
-      hallazgos.push('⚠ Chasis por cuenta del CARRIER — costo adicional no incluido en tarifa');
+      hallazgos.push(locale === 'en' ? '⚠ Chassis at CARRIER expense — additional cost not included in rate' : '⚠ Chasis por cuenta del CARRIER — costo adicional no incluido en tarifa');
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
-      hallazgos.push(`✓ Chasis provisto por: ${provisto}`);
+      hallazgos.push(locale === 'en' ? `✓ Chassis provided by: ${provisto}` : `✓ Chasis provisto por: ${provisto}`);
     }
     if (carrierProfile?.chassis_types?.length > 0) {
-      hallazgos.push(`✓ Carrier tiene chasis: ${carrierProfile.chassis_types.join(', ')}`);
+      hallazgos.push(locale === 'en' ? `✓ Carrier has chassis: ${carrierProfile.chassis_types.join(', ')}` : `✓ Carrier tiene chasis: ${carrierProfile.chassis_types.join(', ')}`);
     }
   }
 
   if (trucks?.length > 0) {
     const disponibles = trucks.filter(t => t.estado === 'disponible');
     if (disponibles.length === 0) {
-      hallazgos.push('❌ No hay unidades disponibles en la flota actualmente');
+      hallazgos.push(locale === 'en' ? '❌ No units available in the fleet currently' : '❌ No hay unidades disponibles en la flota actualmente');
       semaforo = 'rojo';
     } else {
-      hallazgos.push(`✓ ${disponibles.length} unidad(es) disponible(s) en flota`);
+      hallazgos.push(locale === 'en' ? `✓ ${disponibles.length} unit(s) available in fleet` : `✓ ${disponibles.length} unidad(es) disponible(s) en flota`);
     }
   }
 
@@ -366,11 +366,11 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
   let semaforo = 'verde';
 
   if (!datos.broker_nombre) {
-    hallazgos.push('⚠ Nombre del broker no encontrado en el documento');
+    hallazgos.push(locale === 'en' ? '⚠ Broker name not found in document' : '⚠ Nombre del broker no encontrado en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
   if (!datos.broker_mc) {
-    hallazgos.push('⚠ MC Number del broker no encontrado — verificar en FMCSA.dot.gov');
+    hallazgos.push(locale === 'en' ? '⚠ Broker MC Number not found — verify at FMCSA.dot.gov' : '⚠ MC Number del broker no encontrado — verificar en FMCSA.dot.gov');
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
@@ -423,9 +423,9 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
         hallazgos.push(locale === 'en' ? `⚠ CAUTION Broker: ${legacy.nombre}` : `⚠ Broker en PRECAUCIÓN: ${legacy.nombre}`);
         if (semaforo === 'verde') semaforo = 'amarillo';
       } else {
-        hallazgos.push(`✓ Broker conocido: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} cargas`);
+        hallazgos.push(locale === 'en' ? `✓ Known broker: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} loads` : `✓ Broker conocido: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} cargas`);
         if (legacy.puntaje_confiabilidad && legacy.puntaje_confiabilidad < 5) {
-          hallazgos.push(`⚠ Confiabilidad baja: ${legacy.puntaje_confiabilidad}/10`);
+          hallazgos.push(locale === 'en' ? `⚠ Low reliability: ${legacy.puntaje_confiabilidad}/10` : `⚠ Confiabilidad baja: ${legacy.puntaje_confiabilidad}/10`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         }
       }
@@ -434,7 +434,7 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
     if (datos.broker_mc) {
-      hallazgos.push(`ℹ Sin perfil local para MC ${datos.broker_mc} — verificar en FMCSA`);
+      hallazgos.push(locale === 'en' ? `ℹ No local profile for MC ${datos.broker_mc} — verify at FMCSA` : `ℹ Sin perfil local para MC ${datos.broker_mc} — verificar en FMCSA`);
     }
   }
 
@@ -477,24 +477,24 @@ function validarCarrier(datos, carrierProfile, locale) {
     if (nameMatch && (mcMatch || !datos.carrier_mc)) {
       hallazgos.push(locale === 'en' ? `✓ Carrier verified: ${carrierProfile.company_name}` : `✓ Carrier verificado: ${carrierProfile.company_name}`);
       if (mcMatch) hallazgos.push(locale === 'en' ? `✓ MC matches: ${datos.carrier_mc}` : `✓ MC coincide: ${datos.carrier_mc}`);
-      if (dotMatch) hallazgos.push(`✓ DOT coincide: ${datos.carrier_dot}`);
+      if (dotMatch) hallazgos.push(locale === 'en' ? `✓ DOT matches: ${datos.carrier_dot}` : `✓ DOT coincide: ${datos.carrier_dot}`);
       identity_match = 'matched';
     } else if (nameMatch && datos.carrier_mc && !mcMatch) {
-      hallazgos.push(`❌ Nombre coincide pero MC no: documento=${datos.carrier_mc} vs perfil=${carrierProfile.mc_number}`);
+      hallazgos.push(locale === 'en' ? `❌ Name matches but MC does not: document=${datos.carrier_mc} vs profile=${carrierProfile.mc_number}` : `❌ Nombre coincide pero MC no: documento=${datos.carrier_mc} vs perfil=${carrierProfile.mc_number}`);
       semaforo = 'rojo';
       identity_match = 'mismatch';
     } else {
-      hallazgos.push(`❌ Carrier en documento "${datos.carrier_nombre}" no coincide con "${carrierProfile.company_name}"`);
+      hallazgos.push(locale === 'en' ? `❌ Carrier in document "${datos.carrier_nombre}" does not match "${carrierProfile.company_name}"` : `❌ Carrier en documento "${datos.carrier_nombre}" no coincide con "${carrierProfile.company_name}"`);
       semaforo = 'rojo';
       identity_match = 'mismatch';
     }
 
     if (datos.carrier_dot && carrierProfile.dot_number && !dotMatch) {
-      hallazgos.push(`⚠ DOT documento (${datos.carrier_dot}) vs perfil (${carrierProfile.dot_number})`);
+      hallazgos.push(locale === 'en' ? `⚠ DOT in document (${datos.carrier_dot}) vs profile (${carrierProfile.dot_number})` : `⚠ DOT documento (${datos.carrier_dot}) vs perfil (${carrierProfile.dot_number})`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   } else {
-    hallazgos.push(`⚠ Carrier "${datos.carrier_nombre}" detectado — sin perfil registrado para comparar`);
+    hallazgos.push(locale === 'en' ? `⚠ Carrier "${datos.carrier_nombre}" detected — no registered profile to compare` : `⚠ Carrier "${datos.carrier_nombre}" detectado — sin perfil registrado para comparar`);
     if (semaforo === 'verde') semaforo = 'amarillo';
     identity_match = 'pending';
   }
@@ -623,20 +623,20 @@ function validarClausulas(datos, locale) {
   // Detección de cláusulas abusivas por keywords — sin IA
   const encontradas = CLAUSULAS_ABUSIVAS.filter(c => textoBase.includes(c));
   if (encontradas.length >= 2) {
-    hallazgos.push(`❌ Múltiples cláusulas de riesgo: ${encontradas.join(', ')}`);
+    hallazgos.push(locale === 'en' ? `❌ Multiple risk clauses: ${encontradas.join(', ')}` : `❌ Múltiples cláusulas de riesgo: ${encontradas.join(', ')}`);
     semaforo = 'rojo';
   } else if (encontradas.length === 1) {
-    hallazgos.push(`⚠ Cláusula de riesgo detectada: ${encontradas[0]}`);
+    hallazgos.push(locale === 'en' ? `⚠ Risk clause detected: ${encontradas[0]}` : `⚠ Cláusula de riesgo detectada: ${encontradas[0]}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   if (!datos.detention_rate) {
-    hallazgos.push('⚠ Detention no especificada');
+    hallazgos.push(locale === 'en' ? '⚠ Detention not specified' : '⚠ Detention no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const m = datos.detention_rate.match(/\$?(\d+)/);
     if (m && parseInt(m[1]) < 50) {
-      hallazgos.push(`⚠ Detention baja: ${datos.detention_rate} (estándar: $50-75/hr)`);
+      hallazgos.push(locale === 'en' ? `⚠ Low detention: ${datos.detention_rate} (standard: $50-75/hr)` : `⚠ Detention baja: ${datos.detention_rate} (estándar: $50-75/hr)`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
       hallazgos.push(`✓ Detention: ${datos.detention_rate}${datos.detention_free_time ? ' | Free: ' + datos.detention_free_time : ''}`);
@@ -644,7 +644,7 @@ function validarClausulas(datos, locale) {
   }
 
   if (datos.demurrage) {
-    hallazgos.push(`⚠ Demurrage: ${datos.demurrage} — verificar quién asume el costo`);
+    hallazgos.push(locale === 'en' ? `⚠ Demurrage: ${datos.demurrage} — verify who assumes the cost` : `⚠ Demurrage: ${datos.demurrage} — verificar quién asume el costo`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
@@ -669,10 +669,10 @@ function validarClausulas(datos, locale) {
     const excesiva = ['unlimited', 'unconditional', 'all damage', 'full liability', 'any and all']
       .some(k => datos.responsabilidad_carrier.toLowerCase().includes(k));
     if (excesiva) {
-      hallazgos.push(`❌ Cláusula de responsabilidad excesiva del carrier detectada`);
+      hallazgos.push(locale === 'en' ? '❌ Excessive carrier liability clause detected' : '❌ Cláusula de responsabilidad excesiva del carrier detectada');
       semaforo = 'rojo';
     } else {
-      hallazgos.push(`⚠ Responsabilidad del carrier: ${datos.responsabilidad_carrier} — revisar alcance`);
+      hallazgos.push(locale === 'en' ? `⚠ Carrier liability: ${datos.responsabilidad_carrier} — review scope` : `⚠ Responsabilidad del carrier: ${datos.responsabilidad_carrier} — revisar alcance`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   }
@@ -871,6 +871,7 @@ Deno.serve(async (req) => {
     if (previos.length > 0) {
       const prev = previos[0];
       const cacheValido =
+        (prev.locale || 'es') === locale &&
         prev.verification_summary &&
         prev.recommended_action &&
         prev.rules_version === RULES_VERSION &&

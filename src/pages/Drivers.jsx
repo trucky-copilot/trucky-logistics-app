@@ -11,7 +11,7 @@ function DocAlert({ label, date }) {
   if (!date) return null;
   const today = new Date();
   const exp = new Date(date);
-  const diff = Math.floor((exp - today) / (1000 * 60 * 60 * 24));
+  const diff = Math.floor((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (diff > 60) return null;
   const expired = diff < 0;
   return (

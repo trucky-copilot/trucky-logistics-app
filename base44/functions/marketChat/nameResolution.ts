@@ -98,7 +98,7 @@ export interface FlTerminalMatch {
 
 /** Resuelve un código de terminal/puerto de Florida a su mercado. Nunca adivina. */
 export function resolveFlTerminal(raw: unknown): FlTerminalMatch | null {
-  const clave = normalizeText(raw).replace(/[.\s]/g, '');
+  const clave = normalizeText(raw).replace(/[.,\s]/g, '');
   const mercado = ALIASES.fl.terminales[clave];
   if (!mercado) return null;
   return { mercado, aliasUsado: clave };
@@ -121,17 +121,90 @@ export function resolveTxZip(raw: unknown): TxZipMatch | null {
   return { ciudad: route.ciudad, routeId: route.id, mercado: route.mercado };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// FUZZY MATCHING (Distancia de Levenshtein)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function levenshtein(a: string, b: string): number {
+  const matrix = [];
+  for (let i = 0; i <= b.length; i++) {
+    matrix[i] = [i];
+  }
+  for (let j = 0; j <= a.length; j++) {
+    matrix[0][j] = j;
+  }
+  for (let i = 1; i <= b.length; i++) {
+    for (let j = 1; j <= a.length; j++) {
+      if (b.charAt(i - 1) === a.charAt(j - 1)) {
+        matrix[i][j] = matrix[i - 1][j - 1];
+      } else {
+        matrix[i][j] = Math.min(
+          matrix[i - 1][j - 1] + 1, // sustitución
+          Math.min(
+            matrix[i][j - 1] + 1, // inserción
+            matrix[i - 1][j] + 1  // borrado
+          )
+        );
+      }
+    }
+  }
+  return matrix[b.length][a.length];
+}
+
 export interface CiudadMatch {
   ciudad: string;
 }
 
-/** Match tolerante (acentos + abreviaturas) contra la lista de ciudades de un estado. */
+/** Match tolerante (acentos + abreviaturas + fuzzy) contra la lista de ciudades. */
 export function resolveCiudad(estado: Estado, raw: unknown): CiudadMatch | null {
   const clave = canonicalKey(raw);
   if (!clave) return null;
-  for (const ciudad of ciudadesDe(estado)) {
+  
+  const ciudades = ciudadesDe(estado);
+  
+  // 1. Intento de match exacto (con normalización de acentos/abreviaturas)
+  for (const ciudad of ciudades) {
     if (canonicalKey(ciudad) === clave) return { ciudad };
   }
+  
+  // 2. Intento de match por prefijo (startsWith)
+  // Si el usuario escribió al menos 4 letras y coinciden con el inicio de una ciudad.
+  if (clave.length >= 4) {
+    const prefixMatches = ciudades.filter(c => canonicalKey(c).startsWith(clave));
+    if (prefixMatches.length === 1) {
+      return { ciudad: prefixMatches[0] };
+    }
+  }
+
+  // 3. Fallback: Fuzzy matching con Levenshtein
+  // Para ciudades muy cortas (<= 4) exigimos match exacto (0 errores).
+  // Para 5-8 letras, permitimos 1 error.
+  // Para > 8 letras, permitimos max 2 errores.
+  const maxDistance = clave.length <= 4 ? 0 : (clave.length <= 8 ? 1 : 2);
+  let matches = [];
+  
+  for (const ciudad of ciudades) {
+    const ck = canonicalKey(ciudad);
+    const dist = levenshtein(clave, ck);
+    if (dist <= maxDistance) {
+      matches.push({ ciudad, dist });
+    }
+  }
+  
+  // Si hay exactamente un match que cumple la distancia, lo tomamos.
+  // Si hay empate o múltiples candidatos, rechazamos para evitar adivinanzas peligrosas.
+  if (matches.length === 1) {
+    return { ciudad: matches[0].ciudad };
+  }
+  
+  // Si hay más de un match, verificamos si hay un ÚNICO ganador con la menor distancia
+  if (matches.length > 1) {
+    matches.sort((a, b) => a.dist - b.dist);
+    if (matches[0].dist < matches[1].dist) {
+      return { ciudad: matches[0].ciudad };
+    }
+  }
+  
   return null;
 }
 
@@ -151,27 +224,58 @@ export type LocationResolution =
       matchedVia: 'zip' | 'alias_terminal' | 'ciudad';
     }
   | { status: 'ask' };
-
 export function resolveLocation(raw: unknown): LocationResolution {
-  const zip = resolveTxZip(raw);
+  const rawStr = typeof raw === 'string' ? raw : (raw ? String(raw) : '');
+
+  const zip = resolveTxZip(rawStr);
   if (zip) {
     return { status: 'ok', estado: 'TX', ciudad: zip.ciudad, mercado: zip.mercado, routeId: zip.routeId, matchedVia: 'zip' };
   }
 
-  const terminal = resolveFlTerminal(raw);
+  // NUEVA LÓGICA: Escanear el texto para ver si el usuario mezcló un puerto con la ciudad
+  let extractedMercado: string | null = null;
+  let textSinPuerto = rawStr;
+
+  const terminal = resolveFlTerminal(rawStr);
   if (terminal) {
+    // Si TODO el texto es exactamente un puerto
     return { status: 'ok', estado: 'FL', ciudad: null, mercado: terminal.mercado, routeId: null, matchedVia: 'alias_terminal' };
+  } else {
+    // Buscar palabra por palabra a ver si hay un puerto escondido (ej. "pev")
+    const words = rawStr.split(/\s+/);
+    for (let i = 0; i < words.length; i++) {
+      const matchTerminal = resolveFlTerminal(words[i]);
+      if (matchTerminal) {
+        extractedMercado = matchTerminal.mercado; // Encontramos el puerto (PEV o MIA)
+        words.splice(i, 1); // Quitamos la palabra "pev" del texto
+        textSinPuerto = words.join(' '); // Nos queda solo "miami gardens"
+        break;
+      }
+    }
   }
 
-  const fl = resolveCiudad('FL', raw);
+  // Ahora buscamos la ciudad con el texto ya limpio de puertos
+  // NUEVO: Limpiamos tamaños de contenedor y las referencias al estado (ej. ", FL" o " TX") al final de la cadena
+  textSinPuerto = textSinPuerto
+    .replace(/\b(20|40|45)(ft|'|)?\b/gi, '')
+    .replace(/,?\s*(fl|tx|florida|texas)$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const fl = resolveCiudad('FL', textSinPuerto);
   if (fl) {
-    return { status: 'ok', estado: 'FL', ciudad: fl.ciudad, mercado: null, routeId: null, matchedVia: 'ciudad' };
+    return { status: 'ok', estado: 'FL', ciudad: fl.ciudad, mercado: extractedMercado, routeId: null, matchedVia: 'ciudad' };
   }
 
-  const tx = resolveCiudad('TX', raw);
+  const tx = resolveCiudad('TX', textSinPuerto);
   if (tx) {
-    return { status: 'ok', estado: 'TX', ciudad: tx.ciudad, mercado: null, routeId: null, matchedVia: 'ciudad' };
+    return { status: 'ok', estado: 'TX', ciudad: tx.ciudad, mercado: extractedMercado, routeId: null, matchedVia: 'ciudad' };
+  }
+
+  if (extractedMercado) {
+    return { status: 'ok', estado: 'FL', ciudad: null, mercado: extractedMercado, routeId: null, matchedVia: 'alias_terminal' };
   }
 
   return { status: 'ask' };
 }
+

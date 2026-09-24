@@ -5,6 +5,7 @@ import { useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import ReactMarkdown from 'react-markdown';
+import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 
 const SESSION_KEY = 'trucky_chat_session';
 
@@ -83,6 +84,8 @@ export default function MarketChat() {
   const [sessionDbId, setSessionDbId] = useState(null); // DB record id for upsert
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
+  const [translatingHistory, setTranslatingHistory] = useState(false);
+  const prevLocaleRef = useRef(locale);
   // locale del toggle ES/EN. Fuente inicial: UserProfile.idioma_chat (carga
   // ya hecha por AppStateContext, sin fetch adicional). Default 'es' si el
   // perfil no trae el campo (usuarios previos a este cambio).
@@ -123,6 +126,37 @@ export default function MarketChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  const translateHistory = async (targetLang) => {
+    setTranslatingHistory(true);
+    try {
+      const res = await base44.functions.invoke('translateChat', {
+        messages: messages,
+        targetLang: targetLang
+      });
+      if (res.data?.messages) {
+        setMessages(res.data.messages);
+        await saveSession(res.data.messages, sessionId, sessionDbId);
+      } else if (res.data?.error) {
+        setError(`Error de traducción: ${res.data.error}`);
+      }
+    } catch (err) {
+      console.error('Error translating history:', err?.response?.data || err.message);
+      const backendError = err?.response?.data?.error;
+      setError(`Fallo al contactar traducción: ${backendError || err.message || 'Error desconocido'}`);
+    } finally {
+      setTranslatingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    if (locale !== prevLocaleRef.current) {
+      prevLocaleRef.current = locale;
+      if (messages.length > 0) {
+        translateHistory(locale);
+      }
+    }
+  }, [locale]);
 
   const saveSession = async (updatedMessages, currentSessionId, currentSessionDbId) => {
     const user = await base44.auth.me();
@@ -169,7 +203,13 @@ export default function MarketChat() {
       if (res.data?.error) {
         setError(res.data.error);
       } else if (res.data?.content) {
-        const updatedMessages = [...newMessages, { role: 'assistant', content: res.data.content, timestamp: new Date().toISOString() }];
+        const assistantMsg = { 
+          role: 'assistant', 
+          content: res.data.content, 
+          timestamp: new Date().toISOString(),
+          ...(res.data.structuredData && { structuredData: res.data.structuredData })
+        };
+        const updatedMessages = [...newMessages, assistantMsg];
         setMessages(updatedMessages);
         await saveSession(updatedMessages, sessionId, sessionDbId);
       } else {
@@ -338,9 +378,16 @@ export default function MarketChat() {
                 : 'bg-card border border-border text-foreground'
               }`}>
               {msg.role === 'assistant' ? (
-                <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground">
-                  <ReactMarkdown>{msg.content}</ReactMarkdown>
-                </div>
+                <>
+                  {msg.structuredData?.intent === 'rate_check' && (
+                    <MarketAdvisorCard data={msg.structuredData} />
+                  )}
+                  {(!msg.structuredData || msg.structuredData.intent !== 'rate_check') && (
+                    <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground">
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  )}
+                </>
               ) : (
                 <p>{msg.content}</p>
               )}
@@ -356,6 +403,15 @@ export default function MarketChat() {
             <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-2">
               <Loader2 className="w-4 h-4 text-primary animate-spin" />
               <span className="text-sm text-muted-foreground">{t.loadingLabel}</span>
+            </div>
+          </div>
+        )}
+
+        {translatingHistory && (
+          <div className="flex gap-3 justify-center my-4">
+            <div className="bg-card border border-border rounded-xl px-4 py-2 flex items-center gap-2 shadow-sm">
+              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              <span className="text-sm text-muted-foreground">{locale === 'es' ? 'Traduciendo historial...' : 'Translating history...'}</span>
             </div>
           </div>
         )}

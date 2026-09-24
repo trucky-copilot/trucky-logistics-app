@@ -38,7 +38,6 @@ import {
   DEADHEAD_THRESHOLDS,
   MARGIN_THRESHOLD_STRONG,
   MARGIN_THRESHOLD_ACCEPTABLE,
-  SHORT_HAUL_MILES_THRESHOLD,
   SANITY_MIN_MILES,
   SANITY_MAX_MILES,
   type CalculatedQuote,
@@ -132,14 +131,16 @@ export function buildBoundaryFallbackMarkdown(): string {
 // autoriza como constante de dominio en vez de intentar rastrear cada
 // literal de plantilla.
 const KNOWN_EQUIPMENT_SIZE_NUMBERS = [20, 40, 45, 53];
+// Todas las cifras de las tablas de Tramos Cortos v3 (100mi y 200mi para Van, Reefer, Flatbed)
+const SHORT_HAUL_STATIC_NUMBERS = [100, 200, 150, 250, 500, 650, 750, 1000, 550, 700, 850, 1100, 600, 750, 950, 1200];
+const STATIC_TEMPLATE_NUMBERS = [...SHORT_HAUL_STATIC_NUMBERS, SANITY_MIN_MILES, SANITY_MAX_MILES];
 
-// Constantes de código que aparecen en plantillas fijas de
-// `buildRateCheckMarkdown` independientemente del `CalculatedQuote` puntual
-// (p. ej. "Objetivo de tramo corto (mínimo de referencia bajo 100 mi)").
-const STATIC_TEMPLATE_NUMBERS = [SHORT_HAUL_MILES_THRESHOLD, SANITY_MIN_MILES, SANITY_MAX_MILES];
+export function buildStaticRateCheckNumbers(): number[] {
+  return [...KNOWN_EQUIPMENT_SIZE_NUMBERS, ...STATIC_TEMPLATE_NUMBERS];
+}
 
 export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
-  const numeros: number[] = [q.millasIda, q.objetivo, ...KNOWN_EQUIPMENT_SIZE_NUMBERS, ...STATIC_TEMPLATE_NUMBERS];
+  const numeros: number[] = [q.millasIda, q.objetivo, ...buildStaticRateCheckNumbers()];
   if (q.piso != null) numeros.push(q.piso);
   if (q.tarifaOfrecida != null) numeros.push(q.tarifaOfrecida);
   if (q.segundaLectura) numeros.push(q.segundaLectura.millasRedondo, q.segundaLectura.rpmRedondo);

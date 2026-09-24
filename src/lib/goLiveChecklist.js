@@ -41,7 +41,7 @@ export const READINESS_MESSAGES = {
  * NO persiste en GoLiveChecklist — eso solo lo hace persistChecklist().
  *
  * @param {object} user  — objeto de base44.auth.me()
- * @returns {object}  { ready, profile, organization, operationalReadiness, missingOptional }
+ * @returns {Promise<object>}  { ready, profile, organization, operationalReadiness, missingOptional }
  */
 export async function evaluateChecklist(user) {
   const email = user.email;

@@ -60,6 +60,7 @@
 
 import {
   lookupRoute,
+  findClosestRouteByMiles,
   recordUnmatchedRoute,
   loadAccessorials,
   type Estado,
@@ -324,11 +325,35 @@ export type EquipmentResolution =
 const CONTAINER_WITHOUT_SIZE_TOKENS = ['drayage', 'container', 'contenedor'];
 
 export function resolveEquipment(raw: unknown): EquipmentResolution {
-  const found = EQUIPMENT_BENCHMARKS.find(e => e.id === raw);
-  if (found) return { status: 'ok', equipment: found };
-  if (typeof raw === 'string' && CONTAINER_WITHOUT_SIZE_TOKENS.includes(raw)) {
+  if (typeof raw !== 'string') return { status: 'ask', reason: 'missing' };
+  
+  // Convertimos a minúsculas para comparar fácilmente
+  const text = raw.toLowerCase();
+
+  // Búsqueda inteligente por fragmentos (atrapa casi cualquier error tipográfico)
+  if (text.includes('van')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van')! };
+  }
+  if (text.includes('ref') || text.includes('rif')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'reefer')! };
+  }
+  if (text.includes('flat') || text.includes('fat')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'flatbed')! };
+  }
+  if (text.includes('step') || text.includes('deck') || text.includes('dec')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'step_deck')! };
+  }
+  if (text.includes('power') || text.includes('poer') || text.includes('pwr')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'power_only')! };
+  }
+  if (text.includes('dray') || text.includes('dryage') || text.includes('contain') || text.includes('conten')) {
     return { status: 'ask', reason: 'size' };
   }
+
+  // Búsqueda de respaldo por coincidencia exacta
+  const exact = EQUIPMENT_BENCHMARKS.find(e => e.id === raw);
+  if (exact) return { status: 'ok', equipment: exact };
+
   return { status: 'ask', reason: 'missing' };
 }
 
@@ -398,7 +423,7 @@ export interface FloorTargetInput {
   // reglas-v3-multiestado Fase 4: mínimo de tramo corto (v3 §7). Solo se pasa
   // desde el camino que lo admite (resolveGenericQuote); drayage sin tabla NO
   // lo usa — sigue con su propio benchmark, sin cambios de esta tarea.
-  tramoCorto?: { floor: number; target: number } | null;
+  tramoCorto?: ShortHaulTier | null;
 }
 
 export interface FloorTargetResult {
@@ -409,7 +434,7 @@ export interface FloorTargetResult {
 }
 
 export function computeFloorTarget(input: FloorTargetInput): FloorTargetResult {
-  const tramoCortoAplica = !!input.tramoCorto && input.millasIda < SHORT_HAUL_MILES_THRESHOLD;
+  const tramoCortoAplica = !!input.tramoCorto;
 
   let target: number;
   let targetSource: FloorTargetResult['targetSource'];
@@ -430,22 +455,28 @@ export function computeFloorTarget(input: FloorTargetInput): FloorTargetResult {
     // 1er prioridad: piso de tabla (Texas)
     floor = input.tablaPiso;
     floorSource = 'tabla';
-  } else if (input.pagoCamionRpm != null) {
-    // 2da prioridad: lo que el usuario paga al camión por milla (declarado en chat)
+  } else if (targetSource === 'calculo' && input.pagoCamionRpm != null) {
+    // 2da prioridad: lo que el usuario paga al camión por milla (solo en calculo puro)
     floor = Math.round(input.pagoCamionRpm * input.millasIda);
     floorSource = 'dato_usuario';
   } else if (tramoCortoAplica) {
     // 3ra prioridad: mínimo de tramo corto (<100mi)
     floor = input.tramoCorto!.floor;
     floorSource = 'tramo_corto';
-  } else if (input.costoPorMillaPropio != null && isFinite(input.costoPorMillaPropio) && input.costoPorMillaPropio > 0) {
-    // 4ta prioridad: costo por milla propio de la Calculadora (= break-even sin conductor).
-    // Es el piso mínimo real del usuario: cubrir sus costos operativos por esta ruta.
+  } else if (targetSource === 'calculo' && input.costoPorMillaPropio != null && isFinite(input.costoPorMillaPropio) && input.costoPorMillaPropio > 0) {
+    // 4ta prioridad: costo por milla propio de la Calculadora (solo en calculo puro).
     floor = Math.round(input.costoPorMillaPropio * input.millasIda);
     floorSource = 'dato_usuario';
   } else {
     floor = null;
     floorSource = 'sin_dato';
+  }
+
+  // Sanity check: si el piso (calculado por RPM propio, etc) resulta ser mayor
+  // que el objetivo (benchmark general), igualamos el objetivo al piso para
+  // no mostrar rangos invertidos (ej. $7,098 - $6,825).
+  if (floor != null && target < floor) {
+    target = floor;
   }
 
   return { floor, floorSource, target, targetSource };
@@ -513,9 +544,39 @@ export function buildSanityCapMarkdown(locale: Locale = 'es'): string {
 // entrega mínimos específicos por equipo.
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const SHORT_HAUL_MILES_THRESHOLD = 100;
-export const SHORT_HAUL_FLOOR = 500;
-export const SHORT_HAUL_TARGET = 650;
+export interface ShortHaulTier {
+  floor: number;
+  target: number;
+  threshold: number;
+}
+
+export function resolveShortHaulTier(millasIda: number, equipmentId: string): ShortHaulTier | null {
+  if (millasIda >= 250) return null;
+
+  const is100 = millasIda < 150;
+  const threshold = is100 ? 100 : 200;
+
+  let floor: number;
+  let target: number;
+
+  switch (equipmentId) {
+    case 'reefer':
+      floor = is100 ? 550 : 850;
+      target = is100 ? 700 : 1100;
+      break;
+    case 'flatbed':
+      floor = is100 ? 600 : 950;
+      target = is100 ? 750 : 1200;
+      break;
+    case 'dry_van':
+    default:
+      floor = is100 ? 500 : 750;
+      target = is100 ? 650 : 1000;
+      break;
+  }
+
+  return { floor, target, threshold };
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PAGO AL CAMIÓN — Decisión 9-B. (Sin cambios en esta fase respecto de la
@@ -536,20 +597,32 @@ function esRpmValido(valor: unknown): valor is number {
   return typeof valor === 'number' && isFinite(valor) && valor > 0;
 }
 
+function parseRpm(valor: unknown): number | null {
+  if (typeof valor === 'number' && isFinite(valor) && valor > 0) return valor;
+  if (typeof valor === 'string') {
+    const num = parseFloat(valor);
+    if (isFinite(num) && num > 0) return num;
+  }
+  return null;
+}
+
 export function resolveTruckPayment(
   profile: TruckPaymentProfile | null | undefined,
   declaradoPorUsuario: unknown,
 ): TruckPaymentDecision {
-  const guardado = profile && esRpmValido(profile.pago_camion_rpm) ? profile.pago_camion_rpm : null;
+  // 1. Si el usuario nos dice su RPM en el chat, TIENE PRIORIDAD y lo guardamos
+  const declarado = parseRpm(declaradoPorUsuario);
+  if (declarado != null) {
+    return { needsAsk: false, rpm: declarado, shouldPersist: true };
+  }
 
+  // 2. Si no dijo nada nuevo, usamos lo que esté en la base de datos
+  const guardado = profile ? parseRpm(profile.pago_camion_rpm) : null;
   if (guardado != null) {
     return { needsAsk: false, rpm: guardado, shouldPersist: false };
   }
 
-  if (esRpmValido(declaradoPorUsuario)) {
-    return { needsAsk: false, rpm: declaradoPorUsuario, shouldPersist: true };
-  }
-
+  // 3. Si no tenemos nada, necesitamos preguntar
   return { needsAsk: true, rpm: null, shouldPersist: false };
 }
 
@@ -760,6 +833,8 @@ export interface CalculatedQuote {
   // zonas ROJO / AMARILLO / VERDE en buildRateCheckMarkdown.
   costoPorMillaPropio: number | null;
   tarifaObjetivaPropia: number | null;
+  // Fase 4 — el umbral de millas usado para tramos cortos (~100 o ~200)
+  tramoCortoThreshold: number | null;
 }
 
 function benchmarkParaTamanoDrayage(tamano: Tamano): Equipment {
@@ -796,8 +871,8 @@ interface TableMatch {
   precioIncluyeRegreso: boolean;
 }
 
-function buscarEnTabla(estado: Estado, ciudad: string, tamano: Tamano): TableMatch | null {
-  const directo = lookupRoute(estado, ciudad, tamano);
+function buscarEnTabla(estado: Estado, ciudad: string, tamano: Tamano, mercado?: string | null): TableMatch | null {
+  const directo = lookupRoute(estado, ciudad, tamano, mercado);
   if (directo) {
     return {
       estado,
@@ -881,39 +956,40 @@ export function filterAccessorialsByTriggers(items: AccessorialRecord[], trigger
 }
 
 export function resolveDrayageQuote(params: {
+  origenRaw?: unknown;
   destinoRaw: unknown;
   tamano: Tamano;
   millasIdaDeclaradas: unknown;
   pagoCamionRpm: number | null;
   tarifaOfrecida: number | null;
-  // Fase 5 — opcional: lo que el dispatcher mencionó de accesoriales
-  // (`raw.accessorial_triggers`). Sin esto, `accesoriales` queda en null.
   accessorialTriggers?: unknown;
-  // Fase 6 — opcional: costo propio por milla (CostConfig.costo_por_milla,
-  // ya existía para la Calculadora). Sin esto, el veredicto por perfil solo
-  // puede evaluar la base "despachador" (pagoCamionRpm).
   costoPorMillaPropio?: number | null;
+  tarifaObjetivaPropia?: number | null;
 }): DrayageOutcome {
-  const { destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio } = params;
+  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia } = params;
   const equipmentLabel = tamano === '20' ? "Drayage/Container 20'"
     : tamano === '40' ? "Drayage/Container 40'"
     : tamano === '45' ? "Drayage/Container 45'"
     : "Drayage/Container 20' Heavy";
 
-  const loc = resolveLocation(destinoRaw);
-  const ciudadResuelta = loc.status === 'ok' ? loc.ciudad : null;
-  const estadoResuelto = loc.status === 'ok' ? loc.estado : null;
+  const locDestino = resolveLocation(destinoRaw);
+  const locOrigen = resolveLocation(origenRaw);
+
+  const ciudadResuelta = (locDestino.status === 'ok' ? locDestino.ciudad : null) || (locOrigen.status === 'ok' ? locOrigen.ciudad : null);
+  
+  const mercadoResuelto = (locDestino.status === 'ok' ? locDestino.mercado : null) || (locOrigen.status === 'ok' ? locOrigen.mercado : null);
+  const estadoResuelto = (locDestino.status === 'ok' ? locDestino.estado : null) || (locOrigen.status === 'ok' ? locOrigen.estado : null);
 
   if (estadoResuelto && ciudadResuelta) {
-    const match = buscarEnTabla(estadoResuelto, ciudadResuelta, tamano);
+    const match = buscarEnTabla(estadoResuelto, ciudadResuelta, tamano, mercadoResuelto);
     if (match) {
-      const ft = computeFloorTarget({
+            const ft = computeFloorTarget({
         tablaPiso: match.piso,
         tablaObjetivo: match.objetivo,
         targetEsDerivado: match.esDerivado,
         millasIda: match.millasIda,
         rpmBase: null,
-        pagoCamionRpm,
+        pagoCamionRpm: null, // NO multiplicamos por RPM para rutas de tabla plana
       });
       const accesorialesMatch = resolveAccessorialsForState(match.estado, destinoRaw);
       const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers);
@@ -921,7 +997,7 @@ export function resolveDrayageQuote(params: {
         kind: 'quote',
         calculo: {
           estado: match.estado,
-          ciudad: match.ciudad,
+          ciudad: mercadoResuelto ? `${match.ciudad} ${mercadoResuelto}` : match.ciudad,
           millasIda: match.millasIda,
           fuenteMillas: 'tabla',
           piso: ft.floor,
@@ -938,7 +1014,8 @@ export function resolveDrayageQuote(params: {
           accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
           perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
           costoPorMillaPropio: null, // drayage usa tabla — semáforo por CPM no aplica aquí
-          tarifaObjetivaPropia: null,
+          tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+          tramoCortoThreshold: null, // drayage usa tabla
         },
       };
     }
@@ -961,18 +1038,47 @@ export function resolveDrayageQuote(params: {
     return { kind: 'fuera_de_rango' };
   }
 
-  const benchmark = benchmarkParaTamanoDrayage(tamano);
-  const ft = computeFloorTarget({
-    tablaPiso: null,
-    tablaObjetivo: null,
-    targetEsDerivado: false,
-    millasIda,
-    rpmBase: benchmark.rpm_target,
-    pagoCamionRpm,
-  });
-
   const estadoPropio = detectarEstadoPropioMencionado(destinoRaw);
   const refState = estadoPropio ? { estado: estadoPropio, cercano: true } : resolveReferenceState(destinoRaw);
+
+  let ft = {} as FloorTargetResult;
+  let tramoCortoAplicado = false;
+  let closestPrecioIncluyeRegreso = false;
+
+  // Lógica para rutas que no están en la tabla:
+  // Si estamos en un estado que tiene un vecino con tabla (ej. LA hereda de TX),
+  // buscamos la ruta más parecida en millas en la tabla de ese vecino para
+  // usarla de referencia, en lugar del cálculo genérico por tramos.
+  const closest = refState.cercano ? findClosestRouteByMiles(refState.estado, tamano, millasIda) : null;
+  
+  if (closest) {
+    tramoCortoAplicado = true;
+    closestPrecioIncluyeRegreso = closest.route.semantica_millas.precio_incluye_regreso;
+    ft = computeFloorTarget({
+      tablaPiso: closest.precio.piso_tabla,
+      tablaObjetivo: closest.precio.objetivo,
+      targetEsDerivado: closest.precio.derivado,
+      millasIda,
+      rpmBase: null,
+      pagoCamionRpm: null, // No se usa cálculo genérico
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+    });
+  } else {
+    // Fallback al cálculo genérico por tramos si no se encontró nada cercano o no hay vecino
+    const benchmark = benchmarkParaTamanoDrayage(tamano);
+    const tramoCortoGen = millasIda <= 200 ? resolveShortHaulTier(millasIda, 'drayage') : null;
+    ft = computeFloorTarget({
+      tablaPiso: null,
+      tablaObjetivo: null,
+      targetEsDerivado: false,
+      millasIda,
+      rpmBase: benchmark.rpm_target,
+      pagoCamionRpm,
+      tramoCorto: tramoCortoGen,
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+    });
+  }
+
   const referencias = selectReferenceRoutes(refState.estado, tamano, millasIda, ciudadResuelta);
 
   // Accesoriales sin match de tabla: el propio estado consultado (si se
@@ -987,24 +1093,25 @@ export function resolveDrayageQuote(params: {
     kind: 'quote',
     calculo: {
       estado: estadoResuelto,
-      ciudad: ciudadResuelta,
+      ciudad: ciudadResuelta && mercadoResuelto && !ciudadResuelta.includes(mercadoResuelto) ? `${ciudadResuelta} ${mercadoResuelto}` : ciudadResuelta,
       millasIda,
       fuenteMillas: 'usuario',
       piso: ft.floor,
       floorSource: ft.floorSource,
       objetivo: ft.target,
-      targetSource: 'calculo',
+      targetSource: ft.targetSource,
       dobleSupuesto: false,
       equipmentLabel,
       referencias,
       referenciasEstadoNombre: refState.cercano ? nombreEstado(refState.estado) : null,
       tarifaOfrecida,
       segundaLectura: null,
-      precioIncluyeRegreso: false,
+      precioIncluyeRegreso: tramoCortoAplicado ? closestPrecioIncluyeRegreso : false,
       accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
-      costoPorMillaPropio: null, // drayage sin tabla — semáforo por CPM no aplica aquí
-      tarifaObjetivaPropia: null,
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+      tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+      tramoCortoThreshold: null,
     },
   };
 }
@@ -1042,9 +1149,8 @@ export function resolveGenericQuote(params: {
 
   // Fase 4 — tramos cortos (v3 §7, Decisión 4): por debajo del umbral, el
   // mínimo de referencia manda sobre el cálculo por RPM (que a esa distancia
-  // da cifras sin sentido económico). computeFloorTarget solo lo aplica si NO
-  // hay tabla y millasIda < SHORT_HAUL_MILES_THRESHOLD — a ≥100mi este objeto
-  // simplemente no se usa.
+  // da cifras sin sentido económico).
+  const tramoCorto = resolveShortHaulTier(millasIda, equipment.id);
   const ft = computeFloorTarget({
     tablaPiso: null,
     tablaObjetivo: null,
@@ -1056,7 +1162,7 @@ export function resolveGenericQuote(params: {
     // Calculadora para que el piso nunca salga vacío cuando el usuario
     // ya configuró sus costos.
     costoPorMillaPropio: costoPorMillaPropio ?? null,
-    tramoCorto: { floor: SHORT_HAUL_FLOOR, target: SHORT_HAUL_TARGET },
+    tramoCorto,
   });
 
   // Fase 4 — segunda lectura (Decisión 1-A, criterio 5): SOLO cuando el
@@ -1087,6 +1193,7 @@ export function resolveGenericQuote(params: {
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
       costoPorMillaPropio: costoPorMillaPropio ?? null,
       tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+      tramoCortoThreshold: tramoCorto ? tramoCorto.threshold : null,
     },
   };
 }
@@ -1209,7 +1316,7 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     : q.targetSource === 'derivado'
       ? render(m.targetDerivadoPrefix, formatUSD(q.objetivo)) + (q.dobleSupuesto ? m.targetDerivadoDobleSupuesto : m.targetDerivadoSimple)
       : q.targetSource === 'tramo_corto'
-        ? render(m.targetTramoCorto, SHORT_HAUL_MILES_THRESHOLD, formatUSD(q.objetivo))
+        ? render(m.targetTramoCorto, q.tramoCortoThreshold ?? 100, formatUSD(q.objetivo))
         : render(m.targetCalculo, formatUSD(q.objetivo));
 
   const floorLine = q.floorSource === 'tabla'
@@ -1217,7 +1324,7 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     : q.floorSource === 'dato_usuario'
       ? render(m.floorDatoUsuario, formatUSD(q.piso as number))
       : q.floorSource === 'tramo_corto'
-        ? render(m.floorTramoCorto, SHORT_HAUL_MILES_THRESHOLD, formatUSD(q.piso as number))
+        ? render(m.floorTramoCorto, q.tramoCortoThreshold ?? 100, formatUSD(q.piso as number))
         : m.floorSinDato;
 
   const lineas = [
