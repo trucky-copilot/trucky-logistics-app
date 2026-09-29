@@ -1,0 +1,18 @@
+{
+  "type": "object",
+  "name": "MilesCache",
+  "properties": {
+    "clave": {
+      "type": "string",
+      "description": "El origen y destino unidos por |, en min\u00fasculas"
+    },
+    "millas": {
+      "type": "number",
+      "description": "Las millas devueltas por Google Maps"
+    }
+  },
+  "required": [
+    "clave",
+    "millas"
+  ]
+}
