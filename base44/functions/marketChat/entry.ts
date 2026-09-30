@@ -703,7 +703,7 @@ Deno.serve(async (req) => {
       if (resolvedEquipment.status === 'ask') {
         content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale);
       } else {
-        const stateMarketData = await base44.db.query('StateMarketData').run();
+        const stateMarketData = await base44.entities.StateMarketData.filter({});
         const outcome = resolveGenericQuote({
           origenRaw: raw.origen,
           destinoRaw: raw.destino,
