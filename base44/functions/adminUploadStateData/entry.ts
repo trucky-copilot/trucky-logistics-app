@@ -29,7 +29,7 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
     } catch (e) {
       // ignore
     }
-    if (!user || (user.email !== 'luis.bermudez@ogma.com.co' && user.email !== 'luis.bermudez@ogm.com.co')) {
+    if (!user || (user.email !== 'juan.grau@ogm.com.co' && user.email !== 'luis.bermudez@ogm.com.co')) {
       return new Response('Unauthorized', { status: 403 });
     }
 

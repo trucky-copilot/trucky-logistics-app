@@ -122,7 +122,7 @@ export default function Layout() {
               {isActive(path) && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
             </Link>
           ))}
-          {['luis.bermudez@ogma.com.co', 'luis.bermudez@ogm.com.co'].includes(user?.email) && (
+          {['juan.grau@ogm.com.co', 'luis.bermudez@ogm.com.co'].includes(user?.email) && (
             <Link
               to="/admin"
               onClick={() => setSidebarOpen(false)}
