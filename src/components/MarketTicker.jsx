@@ -7,9 +7,9 @@ function useMarketTickerData() {
 
   useEffect(() => {
     try {
-      base44.entities.GlobalMarketTicker.filter({ id: 'global' }).then(records => {
-        if (records && records.length > 0) {
-          const res = records[0];
+      base44.entities.GlobalMarketTicker.filter().then(records => {
+        const res = records.find(r => r.id === 'global') || records[0];
+        if (res) {
           const newItems = [];
           if (res.diesel) newItems.push({ label: 'DIÉSEL', value: `$${res.diesel.toFixed(2)}/gal`, delta: 0 });
           if (res.dry_van) newItems.push({ label: 'DRY VAN', value: `$${res.dry_van.toFixed(2)}/mi`, delta: 0 });

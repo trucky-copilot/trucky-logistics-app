@@ -15,10 +15,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     // Load existing ticker
     try {
-      base44.entities.GlobalMarketTicker.filter({ id: 'global' })
+      base44.entities.GlobalMarketTicker.filter()
         .then(records => {
-          if (records && records.length > 0) {
-            const res = records[0];
+          const res = records.find(r => r.id === 'global') || records[0];
+          if (res) {
             setTicker({
               dry_van: res.dry_van || '',
               reefer: res.reefer || '',
@@ -69,8 +69,7 @@ export default function AdminDashboard() {
         setStatusMsg(`Datos guardados exitosamente. Se actualizaron ${res.data.statesParsed} estados.`);
         setTextData('');
       } else {
-        const rawResult = res?.data?.raw_result;
-        setStatusMsg('La IA no pudo procesar el documento. ' + (rawResult ? JSON.stringify(rawResult) : ''));
+        setStatusMsg('La IA no pudo procesar el documento.');
       }
     } catch (e) {
       console.error(e);

@@ -507,6 +507,16 @@ Deno.serve(async (req) => {
 - Objetivo: $${objetivo}/mi`;
     }
 
+    const stateMarketData = await base44.entities.StateMarketData.filter({});
+    if (stateMarketData && stateMarketData.length > 0) {
+      let marketText = "\n\nDATOS DE MERCADO ACTUALES POR ESTADO (Promedios RPM base, usa estos valores si preguntan genéricamente por un estado):\n";
+      stateMarketData.forEach((s: any) => {
+        marketText += `- ${s.state_code}: Dry Van $${s.dry_van || 'N/A'}, Reefer $${s.reefer || 'N/A'}, Flatbed $${s.flatbed || 'N/A'}\n`;
+        costConfigValuesShown.push(s.dry_van, s.reefer, s.flatbed);
+      });
+      systemContext += marketText;
+    }
+
     const prompt = buildExtractionPrompt(systemContext, cappedMessages, locale);
     const raw = await extractWithRetry(base44, prompt);
 
@@ -703,7 +713,6 @@ Deno.serve(async (req) => {
       if (resolvedEquipment.status === 'ask') {
         content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale);
       } else {
-        const stateMarketData = await base44.entities.StateMarketData.filter({});
         const outcome = resolveGenericQuote({
           origenRaw: raw.origen,
           destinoRaw: raw.destino,
