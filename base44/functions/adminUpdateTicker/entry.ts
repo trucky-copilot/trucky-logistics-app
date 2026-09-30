@@ -1,7 +1,6 @@
-import type { Context } from '@base44/functions';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-export default async function adminUpdateTicker(req: Request, ctx: Context) {
+export default async function adminUpdateTicker(req: Request, ctx: any) {
   const user = await ctx.auth.getUser();
   if (!user || (user.email !== 'luis.bermudez@ogma.com.co' && user.email !== 'luis.bermudez@ogm.com.co')) {
     return new Response('Unauthorized', { status: 403 });
