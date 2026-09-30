@@ -145,7 +145,7 @@ export default function AdminDashboard() {
             disabled={uploading || !textData.trim()}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
           >
-            <Upload className="w-4 h-4" /> {uploading ? 'Procesando...' : 'Analizar con IA'}
+            <Upload className="w-4 h-4" /> Analizar con IA
           </button>
         </div>
       </div>
