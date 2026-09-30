@@ -3,8 +3,6 @@
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
-    "npm:@base44/sdk@~0.8.51": "0.8.51",
-    "npm:@base44/vite-plugin@^1.0.42": "1.0.42",
     "npm:@eslint/js@^9.19.0": "9.39.5",
     "npm:@hello-pangea/dnd@17": "17.0.0_react@18.3.1_react-dom@18.3.1_@types+react@18.3.31",
     "npm:@hookform/resolvers@^4.1.2": "4.1.3_react-hook-form@7.89.0_@types+react@18.3.31_react@18.3.1",
@@ -4963,8 +4961,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@base44/sdk@~0.8.51",
-        "npm:@base44/vite-plugin@^1.0.42",
+        "npm:@base44/sdk@~0.8.52",
+        "npm:@base44/vite-plugin@^1.0.44",
         "npm:@eslint/js@^9.19.0",
         "npm:@hello-pangea/dnd@17",
         "npm:@hookform/resolvers@^4.1.2",

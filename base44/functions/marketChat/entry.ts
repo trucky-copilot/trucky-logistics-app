@@ -516,6 +516,22 @@ Deno.serve(async (req) => {
 
     const intent = resolveIntent(raw.intent, cappedMessages);
     
+    // --- Validación determinista de presencia ---
+    // Si la IA extrajo un número que no está en el mensaje del usuario (o en el historial reciente para heredados), lo descartamos.
+    const ultimoMsg = ultimoMensajeDelDispatcher(cappedMessages);
+    const msgSinComas = ultimoMsg.replace(/,/g, '');
+    const historialCompletoSinComas = cappedMessages.map(m => m.content).join(' ').replace(/,/g, '');
+
+    if (raw.pago_camion != null && !historialCompletoSinComas.includes(raw.pago_camion.toString())) {
+      raw.pago_camion = null;
+    }
+    if (raw.tarifa_ofrecida != null && !historialCompletoSinComas.includes(raw.tarifa_ofrecida.toString())) {
+      raw.tarifa_ofrecida = null;
+    }
+    if (raw.millas_ida != null && !msgSinComas.includes(raw.millas_ida.toString())) {
+      raw.millas_ida = null; // Descarta las millas inventadas por la IA para que entre Google Maps
+    }
+
     // Si el usuario solo pide millas, omitimos las validaciones de equipo y respondemos de inmediato.
     if (intent === 'ask_miles') {
       if (!raw.millas_ida && raw.origen && raw.destino) {
@@ -586,22 +602,6 @@ Deno.serve(async (req) => {
       }
     }
 
-
-    // --- Validación determinista de presencia ---
-    // Si la IA extrajo un número que no está en el mensaje del usuario (o en el historial reciente para heredados), lo descartamos.
-    const ultimoMsg = ultimoMensajeDelDispatcher(cappedMessages);
-    const msgSinComas = ultimoMsg.replace(/,/g, '');
-    const historialCompletoSinComas = cappedMessages.map(m => m.content).join(' ').replace(/,/g, '');
-
-    if (raw.pago_camion != null && !historialCompletoSinComas.includes(raw.pago_camion.toString())) {
-      raw.pago_camion = null;
-    }
-    if (raw.tarifa_ofrecida != null && !historialCompletoSinComas.includes(raw.tarifa_ofrecida.toString())) {
-      raw.tarifa_ofrecida = null;
-    }
-    if (raw.millas_ida != null && !msgSinComas.includes(raw.millas_ida.toString())) {
-      raw.millas_ida = null; // Descarta las millas inventadas por la IA para que entre Google Maps
-    }
 
     // --------------------------------------------------- 
 

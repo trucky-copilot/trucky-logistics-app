@@ -18,8 +18,8 @@ const normalizeForMap = (loc: string) => {
   if (lower.includes('wando') || lower.includes('wwt')) return `Mount Pleasant, SC`;
   return norm;
 };
-const origin = normalizeForMap('Tampa Port, FL');
-const dest = normalizeForMap('Palmetto, FL');
+const origin = normalizeForMap('Garden City, GA');
+const dest = normalizeForMap('Lakeland 33815, FL');
 const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
 url.searchParams.set('origins', origin);
 url.searchParams.set('destinations', dest);
