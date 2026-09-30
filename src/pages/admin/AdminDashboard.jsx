@@ -65,11 +65,12 @@ export default function AdminDashboard() {
     setStatusMsg('Procesando documento con IA... esto puede tardar un poco.');
     try {
       const res = await base44.functions.invoke('adminUploadStateData', { textData });
-      if (res && res.success) {
-        setStatusMsg(`Datos guardados exitosamente. Se actualizaron ${res.statesParsed} estados.`);
+      if (res && res.data && res.data.success) {
+        setStatusMsg(`Datos guardados exitosamente. Se actualizaron ${res.data.statesParsed} estados.`);
         setTextData('');
       } else {
-        setStatusMsg('La IA no pudo procesar el documento. ' + (res.raw_result ? JSON.stringify(res.raw_result) : ''));
+        const rawResult = res?.data?.raw_result;
+        setStatusMsg('La IA no pudo procesar el documento. ' + (rawResult ? JSON.stringify(rawResult) : ''));
       }
     } catch (e) {
       console.error(e);
