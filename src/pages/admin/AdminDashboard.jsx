@@ -11,6 +11,7 @@ export default function AdminDashboard() {
   const [textData, setTextData] = useState('');
   const [uploading, setUploading] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
+  const [loadingOCR, setLoadingOCR] = useState(false);
   
   useEffect(() => {
     // Load existing ticker
@@ -78,6 +79,37 @@ export default function AdminDashboard() {
     setUploading(false);
   };
 
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const ext = file.name.split('.').pop().toLowerCase();
+    
+    if (['jpg', 'jpeg', 'png', 'pdf'].includes(ext)) {
+      setLoadingOCR(true);
+      setStatusMsg(`Extrayendo texto de ${file.name}...`);
+      try {
+        const { file_url } = await base44.integrations.Core.UploadFile({ file });
+        const extracted = await base44.integrations.Core.InvokeLLM({
+          prompt: 'Extract all text content from this document exactly as it appears. Return only the raw text, no commentary.',
+          file_urls: [file_url],
+        });
+        setTextData(typeof extracted === 'string' ? extracted : JSON.stringify(extracted));
+        setStatusMsg(`Texto extraído de ${file.name}. Revisa y haz clic en Analizar con IA.`);
+      } catch (err) {
+        console.error(err);
+        setStatusMsg(`Error al extraer texto: ${err.message}`);
+      }
+      setLoadingOCR(false);
+    } else if (['txt', 'csv'].includes(ext)) {
+      const text = await file.text();
+      setTextData(text);
+      setStatusMsg(`Texto cargado de ${file.name}.`);
+    } else {
+      setStatusMsg('Formato no soportado. Usa PDF, JPG, PNG o TXT.');
+    }
+    e.target.value = '';
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-8 animate-in fade-in">
       <div className="flex items-center gap-3 border-b border-white/10 pb-4">
@@ -136,13 +168,30 @@ export default function AdminDashboard() {
           value={textData}
           onChange={e => setTextData(e.target.value)}
           placeholder="Pega el texto de DAT o Truckstop aquí..."
-          className="w-full h-40 bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500/50 resize-none"
+          disabled={loadingOCR}
+          className="w-full h-40 bg-white/5 border border-white/10 rounded-xl p-4 text-white focus:outline-none focus:border-amber-500/50 resize-none disabled:opacity-50"
         ></textarea>
         
-        <div className="flex justify-end pt-2">
+        <div className="flex justify-between pt-2">
+          <div className="relative">
+            <input 
+              type="file" 
+              accept=".pdf,.jpg,.jpeg,.png,.txt,.csv" 
+              onChange={handleFileUpload}
+              disabled={loadingOCR || uploading}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+            />
+            <button 
+              disabled={loadingOCR || uploading}
+              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
+            >
+              <Upload className="w-4 h-4" /> {loadingOCR ? 'Extrayendo...' : 'Cargar PDF / Imagen'}
+            </button>
+          </div>
+
           <button 
             onClick={handleStateDataUpload}
-            disabled={uploading || !textData.trim()}
+            disabled={uploading || loadingOCR || !textData.trim()}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
           >
             <Upload className="w-4 h-4" /> Analizar con IA
