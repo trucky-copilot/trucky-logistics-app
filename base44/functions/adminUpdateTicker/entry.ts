@@ -13,13 +13,11 @@ export default async function adminUpdateTicker(req: Request, ctx: any) {
   const body = await req.json();
   const { dry_van, reefer, flatbed, step_deck, power_only, container, diesel } = body;
 
-  const base44 = createClientFromRequest(req);
-  const db = base44.db || ctx.database;
-  
-  const existing = await base44.entities.GlobalMarketTicker.filter({ id: 'global' });
+  const existingRecords = await base44.entities.GlobalMarketTicker.filter();
+  const existing = existingRecords.find((r: any) => r.id === 'global') || existingRecords[0];
 
-  if (existing.length > 0) {
-    await base44.entities.GlobalMarketTicker.update(existing[0].id, {
+  if (existing) {
+    await base44.entities.GlobalMarketTicker.update(existing.id, {
       dry_van: dry_van ?? null,
       reefer: reefer ?? null,
       flatbed: flatbed ?? null,
