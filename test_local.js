@@ -1,0 +1,1 @@
+const textData = "Para el estado de TX, vimos una tarifa de mercado en Dry Van de $2.30/mi"; fetch("http://localhost:4400/api/functions/adminUploadStateData", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ textData }) }).then(r => r.text()).then(console.log);
