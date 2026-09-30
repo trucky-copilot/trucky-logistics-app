@@ -138,11 +138,14 @@ export default function MarketAdvisorCard({ data }) {
                         <span className="text-white font-semibold text-lg">${marketTargetTotal.toLocaleString('en-US')}</span>
                       </>
                     ) : (
-                      <>
-                        <span className="text-white font-semibold text-lg">${userCpm} RPM</span>
-                        <span className="text-muted-foreground">&lt;</span>
-                        <span className="text-white font-semibold text-lg">${((parseFloat(userCpm) + parseFloat(userTarget)) / 2).toFixed(2)} CPM</span>
-                      </>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <span className="text-white font-semibold text-lg">${userCpm} RPM</span>
+                          <span className="text-muted-foreground">&lt;</span>
+                          <span className="text-white font-semibold text-lg">${((parseFloat(userCpm) + parseFloat(userTarget)) / 2).toFixed(2)} CPM</span>
+                        </div>
+                        <span className="text-red-400 font-semibold mt-1">Total &lt; ${marketFloorTotal ? marketFloorTotal.toLocaleString('en-US') : Math.round(parseFloat(userCpm) * millasIda).toLocaleString('en-US')}</span>
+                      </div>
                     )}
                   </div>
                   <ul className="text-sm text-gray-300 space-y-3 mt-2">
@@ -184,7 +187,10 @@ export default function MarketAdvisorCard({ data }) {
                         <span className="text-white font-semibold text-lg">${marketTargetTotal.toLocaleString('en-US')}</span>
                       </>
                     ) : (
-                      <span className="text-white font-semibold text-lg">${((parseFloat(userCpm) + parseFloat(userTarget)) / 2).toFixed(2)} - ${userTarget} RPM</span>
+                      <div className="flex flex-col">
+                        <span className="text-white font-semibold text-lg">${((parseFloat(userCpm) + parseFloat(userTarget)) / 2).toFixed(2)} - ${userTarget} RPM</span>
+                        <span className="text-yellow-400 font-semibold mt-1">Total: ${marketFloorTotal ? marketFloorTotal.toLocaleString('en-US') : Math.round(parseFloat(userCpm) * millasIda).toLocaleString('en-US')} - ${marketTargetTotal.toLocaleString('en-US')}</span>
+                      </div>
                     )}
                   </div>
                   {!calculo.tarifaOfrecida && !isContainer && (
@@ -226,7 +232,10 @@ export default function MarketAdvisorCard({ data }) {
                         <span className="text-white font-semibold text-lg">${marketTargetTotal.toLocaleString('en-US')}</span>
                       </>
                     ) : (
-                      <span className="text-white font-semibold text-lg">${userTarget}+ RPM</span>
+                      <div className="flex flex-col">
+                        <span className="text-white font-semibold text-lg">${userTarget}+ RPM</span>
+                        <span className="text-green-400 font-semibold mt-1">Total: ${marketTargetTotal.toLocaleString('en-US')}+</span>
+                      </div>
                     )}
                   </div>
                   {!calculo.tarifaOfrecida && !isContainer && (
