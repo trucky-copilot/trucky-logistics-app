@@ -53,6 +53,9 @@ export default function AdminDashboard() {
       };
       await base44.functions.invoke('adminUpdateTicker', formatted);
       setStatusMsg('Cinta actualizada exitosamente.');
+      setTicker({
+        dry_van: '', reefer: '', flatbed: '', step_deck: '', power_only: '', container: '', diesel: ''
+      });
     } catch (e) {
       console.error(e);
       setStatusMsg('Error guardando la cinta.');
