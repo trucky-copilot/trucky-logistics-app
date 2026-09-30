@@ -1,0 +1,34 @@
+{
+  "name": "GlobalMarketTicker",
+  "type": "object",
+  "properties": {
+    "dry_van": {
+      "type": "number",
+      "description": "Nacional promedio RPM para Dry Van"
+    },
+    "reefer": {
+      "type": "number",
+      "description": "Nacional promedio RPM para Reefer"
+    },
+    "flatbed": {
+      "type": "number",
+      "description": "Nacional promedio RPM para Flatbed"
+    },
+    "step_deck": {
+      "type": "number",
+      "description": "Nacional promedio RPM para Step Deck"
+    },
+    "power_only": {
+      "type": "number",
+      "description": "Nacional promedio RPM para Power Only"
+    },
+    "container": {
+      "type": "number",
+      "description": "Nacional promedio RPM para Contenedor"
+    },
+    "diesel": {
+      "type": "number",
+      "description": "Precio nacional del Diésel"
+    }
+  }
+}

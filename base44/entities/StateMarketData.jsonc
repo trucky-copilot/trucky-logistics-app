@@ -1,0 +1,22 @@
+{
+  "name": "StateMarketData",
+  "type": "object",
+  "properties": {
+    "state_code": {
+      "type": "string",
+      "description": "Código de 2 letras del estado, ej. FL, TX, GA"
+    },
+    "dry_van": {
+      "type": "number",
+      "description": "Tarifa estimada RPM para Dry Van en este estado"
+    },
+    "reefer": {
+      "type": "number",
+      "description": "Tarifa estimada RPM para Reefer en este estado"
+    },
+    "flatbed": {
+      "type": "number",
+      "description": "Tarifa estimada RPM para Flatbed en este estado"
+    }
+  }
+}

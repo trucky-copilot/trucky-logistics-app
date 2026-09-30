@@ -703,6 +703,7 @@ Deno.serve(async (req) => {
       if (resolvedEquipment.status === 'ask') {
         content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale);
       } else {
+        const stateMarketData = await base44.db.query('StateMarketData').run();
         const outcome = resolveGenericQuote({
           origenRaw: raw.origen,
           destinoRaw: raw.destino,
@@ -713,6 +714,7 @@ Deno.serve(async (req) => {
           tarifaOfrecida,
           costoPorMillaPropio,
           tarifaObjetivaPropia: costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
+          stateMarketData,
         });
         if (outcome.kind === 'ask_miles') {
           content = buildMissingDataMarkdown(locale);

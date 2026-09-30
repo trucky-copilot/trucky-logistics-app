@@ -1206,8 +1206,10 @@ export function resolveGenericQuote(params: {
   costoPorMillaPropio?: number | null;
   // Semáforo — tarifa objetivo del usuario (CostConfig.tarifa_objetivo).
   tarifaObjetivaPropia?: number | null;
+  // Datos de mercado por estado extraídos por IA (Admin panel)
+  stateMarketData?: any[];
 }): GenericQuoteOutcome {
-  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia } = params;
+  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, stateMarketData = [] } = params;
 
   const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
     ? millasIdaDeclaradas
@@ -1216,41 +1218,53 @@ export function resolveGenericQuote(params: {
   if (millasIda == null) return { kind: 'ask_miles' };
   if (!dentroDelRangoDeSanidad(millasIda)) return { kind: 'fuera_de_rango' };
 
-  // Fase 4 — tramos cortos (v3 §7, Decisión 4): por debajo del umbral, el
-  // mínimo de referencia manda sobre el cálculo por RPM (que a esa distancia
-  // da cifras sin sentido económico).
+  const fromPrompt = typeof origenRaw === 'string' ? resolveLocation(origenRaw) : { status: 'no_data' as const };
+  const origenCiudadPura = fromPrompt.status === 'ok' ? fromPrompt.ciudad : null;
+  const destPrompt = typeof destinoRaw === 'string' ? resolveLocation(destinoRaw) : { status: 'no_data' as const };
+  
+  // Determinamos el estado real (FL o TX u otros) a partir del origen o destino
+  let estadoConsultado: Estado | null = null;
+  let estadoDestinoStr: string | null = null;
+  let estadoOrigenStr: string | null = null;
+  
+  if (fromPrompt.status === 'ok') {
+    if (fromPrompt.estado === 'FL' || fromPrompt.estado === 'TX') estadoConsultado = fromPrompt.estado;
+    estadoOrigenStr = fromPrompt.estado;
+  }
+  if (destPrompt.status === 'ok') {
+    if (!estadoConsultado && (destPrompt.estado === 'FL' || destPrompt.estado === 'TX')) estadoConsultado = destPrompt.estado;
+    estadoDestinoStr = destPrompt.estado;
+  }
+  
+  // Buscar en la data del admin
+  let rpmBase = equipment.rpm_target;
+  let notaEstado = '';
+  // Preferimos el estado de destino para la búsqueda de mercado, si no, origen.
+  const estadoBusqueda = estadoDestinoStr || estadoOrigenStr;
+  if (estadoBusqueda && stateMarketData.length > 0) {
+    const dataEstado = stateMarketData.find((s: any) => s.state_code === estadoBusqueda);
+    if (dataEstado && dataEstado[equipment.id]) {
+      rpmBase = dataEstado[equipment.id];
+      notaEstado = ` (Referencia estimada de ${estadoBusqueda})`;
+    }
+  }
+
+  // Fase 4 — tramos cortos (v3 §7, Decisión 4)
   const tramoCorto = resolveShortHaulTier(millasIda, equipment.id);
   const ft = computeFloorTarget({
     tablaPiso: null,
     tablaObjetivo: null,
     targetEsDerivado: false,
     millasIda,
-    rpmBase: equipment.rpm_target,
+    rpmBase,
     pagoCamionRpm,
-    // Fallback: si no declaró pago_camion_rpm, usar costo_por_milla de la
-    // Calculadora para que el piso nunca salga vacío cuando el usuario
-    // ya configuró sus costos.
+    // Fallback: si no declaró pago_camion_rpm, usar costo_por_milla
     costoPorMillaPropio: costoPorMillaPropio ?? null,
     tramoCorto,
   });
 
-  // Fase 4 — segunda lectura (Decisión 1-A, criterio 5): SOLO cuando el
-  // objetivo es puro cálculo por RPM (≥100mi, sin tabla ni tramo corto). El
-  // tramo corto ya declara "no se asume carga de regreso" (spec) — no tiene
-  // una segunda lectura por millas dobladas.
+  // Fase 4 — segunda lectura
   const segundaLectura = ft.targetSource === 'calculo' ? computeSegundaLectura(ft.target, millasIda) : null;
-
-  const fromPrompt = typeof origenRaw === 'string' ? resolveLocation(origenRaw) : { status: 'no_data' as const };
-  const origenCiudadPura = fromPrompt.status === 'ok' ? fromPrompt.ciudad : null;
-  const destPrompt = typeof destinoRaw === 'string' ? resolveLocation(destinoRaw) : { status: 'no_data' as const };
-  
-  // Determinamos el estado real (FL o TX) a partir del origen o destino
-  let estadoConsultado: Estado | null = null;
-  if (fromPrompt.status === 'ok' && (fromPrompt.estado === 'FL' || fromPrompt.estado === 'TX')) {
-    estadoConsultado = fromPrompt.estado;
-  } else if (destPrompt.status === 'ok' && (destPrompt.estado === 'FL' || destPrompt.estado === 'TX')) {
-    estadoConsultado = destPrompt.estado;
-  }
 
   const accesorialesCalc = resolveAccessorialsForState(estadoConsultado, destinoRaw);
   const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
@@ -1267,7 +1281,7 @@ export function resolveGenericQuote(params: {
       objetivo: ft.target,
       targetSource: ft.targetSource,
       dobleSupuesto: false,
-      equipmentLabel: equipment.label,
+      equipmentLabel: equipment.label + notaEstado,
       referencias: [],
       referenciasEstadoNombre: null,
       tarifaOfrecida,

@@ -3,7 +3,7 @@ import { useState } from 'react';
 import {
   LayoutDashboard, MessageSquare, FileSearch, Calculator,
   Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
-  LogOut, ChevronUp
+  LogOut, ChevronUp, ShieldAlert
 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
@@ -122,6 +122,24 @@ export default function Layout() {
               {isActive(path) && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
             </Link>
           ))}
+          {['luis.bermudez@ogma.com.co', 'luis.bermudez@ogm.com.co'].includes(user?.email) && (
+            <Link
+              to="/admin"
+              onClick={() => setSidebarOpen(false)}
+              className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                transition-all duration-150 group
+                ${isActive('/admin')
+                  ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20'
+                  : 'text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10'
+                }
+              `}
+            >
+              <ShieldAlert className={`w-4 h-4 flex-shrink-0 ${isActive('/admin') ? 'text-amber-500' : ''}`} />
+              <span className="flex-1">Panel Admin</span>
+              {isActive('/admin') && <ChevronRight className="w-3 h-3 text-amber-500 opacity-60" />}
+            </Link>
+          )}
         </nav>
         {/* --- NUEVO: Botón de Idioma --- */}
         <div className="px-4 pb-4">

@@ -1,15 +1,34 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
 
-// Valores estáticos de ejemplo — no conectados a ninguna fuente real.
-const TICKER_ITEMS = [
-  { label: 'DIÉSEL FL',    value: '$3.89/gal', delta: -0.04 },
-  { label: 'DRY VAN',      value: '$2.14/mi',  delta: 0.03 },
-  { label: 'REEFER',       value: '$2.51/mi',  delta: 0.05 },
-  { label: 'FLATBED',      value: '$2.62/mi',  delta: -0.02 },
-  { label: 'DRAYAGE MIA',  value: '$4.10/mi',  delta: 0.08 },
-  { label: 'STEP DECK',    value: '$2.78/mi',  delta: 0.01 },
-  { label: 'POWER ONLY',   value: '$1.96/mi',  delta: -0.03 },
-];
+function useMarketTickerData() {
+
+  const [items, setItems] = useState([]);
+
+  useEffect(() => {
+    try {
+      base44.db.query('GlobalMarketTicker').filter('id', 'eq', 'global').first().then(res => {
+        if (res) {
+          const newItems = [];
+          if (res.diesel) newItems.push({ label: 'DIÉSEL', value: `$${res.diesel.toFixed(2)}/gal`, delta: 0 });
+          if (res.dry_van) newItems.push({ label: 'DRY VAN', value: `$${res.dry_van.toFixed(2)}/mi`, delta: 0 });
+          if (res.reefer) newItems.push({ label: 'REEFER', value: `$${res.reefer.toFixed(2)}/mi`, delta: 0 });
+          if (res.flatbed) newItems.push({ label: 'FLATBED', value: `$${res.flatbed.toFixed(2)}/mi`, delta: 0 });
+          if (res.step_deck) newItems.push({ label: 'STEP DECK', value: `$${res.step_deck.toFixed(2)}/mi`, delta: 0 });
+          if (res.power_only) newItems.push({ label: 'POWER ONLY', value: `$${res.power_only.toFixed(2)}/mi`, delta: 0 });
+          if (res.container) newItems.push({ label: 'CONTENEDOR', value: `$${res.container.toFixed(2)}/mi`, delta: 0 });
+          setItems(newItems);
+        }
+      }).catch(err => {
+        console.error('Error fetching ticker:', err);
+      });
+    } catch (e) {
+      console.error('Error in useMarketTickerData:', e);
+    }
+  }, []);
+
+  return items;
+}
 
 function TickerItem({ item }) {
   const up = item.delta >= 0;
@@ -37,6 +56,9 @@ function LiveBadge() {
 
 export default function MarketTicker() {
   const [paused, setPaused] = useState(false);
+  const items = useMarketTickerData();
+
+  if (items.length === 0) return null;
 
   return (
     <div
@@ -45,7 +67,7 @@ export default function MarketTicker() {
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}
       onTouchEnd={() => setPaused(false)}
-      title={paused ? 'Cinta en pausa' : 'Cinta de mercado en vivo (ejemplo)'}
+      title={paused ? 'Cinta en pausa' : 'Cinta de mercado en vivo'}
     >
       <div
         className="flex items-center flex-shrink-0 animate-trucky-ticker"
@@ -55,7 +77,7 @@ export default function MarketTicker() {
         {[0, 1].map((copy) => (
           <div key={copy} className="flex items-center flex-shrink-0">
             <LiveBadge />
-            {TICKER_ITEMS.map((item, i) => (
+            {items.map((item, i) => (
               <TickerItem key={i} item={item} />
             ))}
           </div>
