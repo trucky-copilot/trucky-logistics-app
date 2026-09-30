@@ -13,11 +13,10 @@ export default async function adminUpdateTicker(req: Request, ctx: Context) {
   const base44 = createClientFromRequest(req);
   const db = base44.db || ctx.database;
   
-  // Asumimos que solo hay un registro global (id 'global')
-  const existing = await db.query('GlobalMarketTicker').filter('id', 'eq', 'global').first();
+  const existing = await base44.entities.GlobalMarketTicker.filter({ id: 'global' });
 
-  if (existing) {
-    await db.update('GlobalMarketTicker', 'global', {
+  if (existing.length > 0) {
+    await base44.entities.GlobalMarketTicker.update(existing[0].id, {
       dry_van: dry_van ?? null,
       reefer: reefer ?? null,
       flatbed: flatbed ?? null,
@@ -27,7 +26,7 @@ export default async function adminUpdateTicker(req: Request, ctx: Context) {
       diesel: diesel ?? null
     });
   } else {
-    await db.insert('GlobalMarketTicker', {
+    await base44.entities.GlobalMarketTicker.create({
       id: 'global',
       dry_van: dry_van ?? null,
       reefer: reefer ?? null,

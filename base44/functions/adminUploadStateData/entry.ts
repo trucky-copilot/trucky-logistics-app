@@ -61,22 +61,20 @@ export default async function adminUploadStateData(req: Request, ctx: Context) {
     return new Response('La IA no pudo interpretar el documento.', { status: 422 });
   }
 
-  const db = base44.db || ctx.database;
-  
   // Guardamos o actualizamos cada estado
   for (const s of result.states) {
     if (!s.state_code || s.state_code.length !== 2) continue;
     const code = s.state_code.toUpperCase();
     
-    const existing = await db.query('StateMarketData').filter('state_code', 'eq', code).first();
-    if (existing) {
-      await db.update('StateMarketData', existing.id, {
-        dry_van: s.dry_van ?? existing.dry_van,
-        reefer: s.reefer ?? existing.reefer,
-        flatbed: s.flatbed ?? existing.flatbed
+    const existing = await base44.entities.StateMarketData.filter({ state_code: code });
+    if (existing.length > 0) {
+      await base44.entities.StateMarketData.update(existing[0].id, {
+        dry_van: s.dry_van ?? existing[0].dry_van,
+        reefer: s.reefer ?? existing[0].reefer,
+        flatbed: s.flatbed ?? existing[0].flatbed
       });
     } else {
-      await db.insert('StateMarketData', {
+      await base44.entities.StateMarketData.create({
         state_code: code,
         dry_van: s.dry_van ?? null,
         reefer: s.reefer ?? null,
