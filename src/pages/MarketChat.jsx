@@ -194,7 +194,7 @@ export default function MarketChat() {
     setError(null);
 
     try {
-      const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content }));
+      const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content, ...(m.structuredData && { structuredData: m.structuredData }) }));
       const res = await base44.functions.invoke('marketChat', {
         messages: apiMessages,
         costConfig,

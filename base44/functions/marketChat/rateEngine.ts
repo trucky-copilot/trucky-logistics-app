@@ -295,7 +295,8 @@ export function esFueraDeTema(texto: unknown): boolean {
  *   3. raw === 'off_topic' || esFueraDeTema(último mensaje)   → 'off_topic'   (LLM o blocklist temporal)
  *   4. cualquier otro caso                                    → 'general'     (comportamiento por defecto)
  */
-export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' {
+export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' | 'ask_miles' {
+  if (raw === 'ask_miles') return 'ask_miles';
   if (raw === 'rate_check') return 'rate_check';
   const ultimo = ultimoMensajeDelDispatcher(messages);
   if (esConsultaDeNegocio(ultimo)) return 'general';
@@ -326,7 +327,7 @@ const CONTAINER_WITHOUT_SIZE_TOKENS = ['drayage', 'container', 'contenedor'];
 
 export function resolveEquipment(raw: unknown): EquipmentResolution {
   if (typeof raw !== 'string') return { status: 'ask', reason: 'missing' };
-  
+
   // Convertimos a minúsculas para comparar fácilmente
   const text = raw.toLowerCase();
 
@@ -945,14 +946,48 @@ export function resolveAccessorialsForState(estadoConsultado: Estado | null, tex
  * volcar 20 líneas de accesoriales en cada respuesta de rate_check si nadie
  * preguntó por ninguno.
  */
-export function filterAccessorialsByTriggers(items: AccessorialRecord[], triggers: unknown): AccessorialRecord[] {
+export function filterAccessorialsByTriggers(
+  items: AccessorialRecord[], 
+  triggers: unknown, 
+  origenCiudad?: string | null
+): AccessorialRecord[] {
   if (!Array.isArray(triggers) || triggers.length === 0) return [];
   const normalizados = triggers.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map(normalizeText);
   if (normalizados.length === 0) return [];
-  return items.filter(item => {
+
+  const matched = items.filter(item => {
     const campo = normalizeText(`${item.concepto} ${item.gatillo ?? ''}`);
+    
+    // Si el accesorio es un Pre-Pull, requerimos que el trigger explícitamente mencione "pre" o "pull"
+    // para evitar falsos positivos cuando el usuario solo menciona "PEV" o "Miami" como parte de la ruta.
+    if (campo.includes('pre-pull') || campo.includes('pre pull')) {
+      return normalizados.some(t => (t.includes('pre') || t.includes('pull')) && campo.includes(t));
+    }
+
     return normalizados.some(t => campo.includes(t));
   });
+
+  const finalItems: AccessorialRecord[] = [];
+  let hasPrePull = false;
+
+  const isPEV = origenCiudad ? (normalizeText(origenCiudad).includes('lauderdale') || normalizeText(origenCiudad).includes('everglades') || normalizeText(origenCiudad).includes('pev')) : false;
+  const isMIA = origenCiudad ? normalizeText(origenCiudad).includes('miami') : false;
+
+  for (const item of matched) {
+    const c = normalizeText(item.concepto);
+    if (c.includes('pre-pull')) {
+      if (hasPrePull) continue; // Sólo un pre-pull
+      
+      // Si sabemos el origen, filtramos el incorrecto
+      if (c.includes('mia') && isPEV && !isMIA) continue;
+      if (c.includes('pev') && isMIA && !isPEV) continue;
+
+      hasPrePull = true;
+    }
+    finalItems.push(item);
+  }
+
+  return finalItems;
 }
 
 export function resolveDrayageQuote(params: {
@@ -965,25 +1000,45 @@ export function resolveDrayageQuote(params: {
   accessorialTriggers?: unknown;
   costoPorMillaPropio?: number | null;
   tarifaObjetivaPropia?: number | null;
+  rawPrompt?: string;
 }): DrayageOutcome {
-  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia } = params;
+  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, rawPrompt } = params;
   const equipmentLabel = tamano === '20' ? "Drayage/Container 20'"
     : tamano === '40' ? "Drayage/Container 40'"
-    : tamano === '45' ? "Drayage/Container 45'"
-    : "Drayage/Container 20' Heavy";
+      : tamano === '45' ? "Drayage/Container 45'"
+        : "Drayage/Container 20' Heavy";
 
   const locDestino = resolveLocation(destinoRaw);
   const locOrigen = resolveLocation(origenRaw);
 
   const ciudadResuelta = (locDestino.status === 'ok' ? locDestino.ciudad : null) || (locOrigen.status === 'ok' ? locOrigen.ciudad : null);
-  
+  const origenCiudadPura = locOrigen.status === 'ok' ? (locOrigen.mercado || locOrigen.ciudad) : null;
+
   const mercadoResuelto = (locDestino.status === 'ok' ? locDestino.mercado : null) || (locOrigen.status === 'ok' ? locOrigen.mercado : null);
   const estadoResuelto = (locDestino.status === 'ok' ? locDestino.estado : null) || (locOrigen.status === 'ok' ? locOrigen.estado : null);
 
+  let mercadoFinal = mercadoResuelto;
+  if (!mercadoFinal && rawPrompt) {
+    const fromPrompt = resolveLocation(rawPrompt);
+    if (fromPrompt.status === 'ok' && fromPrompt.mercado) {
+      mercadoFinal = fromPrompt.mercado;
+    }
+  }
+
   if (estadoResuelto && ciudadResuelta) {
-    const match = buscarEnTabla(estadoResuelto, ciudadResuelta, tamano, mercadoResuelto);
-    if (match) {
-            const ft = computeFloorTarget({
+    const match = buscarEnTabla(estadoResuelto, ciudadResuelta, tamano, mercadoFinal);
+    
+    // VALIDACIÓN DE SEGURIDAD: Si las millas declaradas por Google Maps difieren masivamente 
+    // (> 40 millas) de las de la tabla, significa que el usuario está consultando desde un 
+    // origen distinto al mercado base de la tabla (ej. Tampa a Palmetto vs Miami a Palmetto).
+    const millasInvalidanTabla = match != null
+      && typeof millasIdaDeclaradas === 'number' 
+      && isFinite(millasIdaDeclaradas) 
+      && Math.abs(match.millasIda - millasIdaDeclaradas) > 40;
+
+
+    if (match && !millasInvalidanTabla) {
+      const ft = computeFloorTarget({
         tablaPiso: match.piso,
         tablaObjetivo: match.objetivo,
         targetEsDerivado: match.esDerivado,
@@ -992,13 +1047,13 @@ export function resolveDrayageQuote(params: {
         pagoCamionRpm: null, // NO multiplicamos por RPM para rutas de tabla plana
       });
       const accesorialesMatch = resolveAccessorialsForState(match.estado, destinoRaw);
-      const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers);
+      const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers, origenCiudadPura);
       return {
         kind: 'quote',
         calculo: {
           estado: match.estado,
-          ciudad: mercadoResuelto ? `${match.ciudad} ${mercadoResuelto}` : match.ciudad,
-          millasIda: match.millasIda,
+          ciudad: mercadoFinal ? `${match.ciudad} ${mercadoFinal}` : match.ciudad,
+          millasIda: (typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas)) ? millasIdaDeclaradas : match.millasIda,
           fuenteMillas: 'tabla',
           piso: ft.floor,
           floorSource: ft.floorSource,
@@ -1012,8 +1067,8 @@ export function resolveDrayageQuote(params: {
           segundaLectura: null,
           precioIncluyeRegreso: match.precioIncluyeRegreso,
           accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
-          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
-          costoPorMillaPropio: null, // drayage usa tabla — semáforo por CPM no aplica aquí
+          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: (typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas)) ? millasIdaDeclaradas : match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+          costoPorMillaPropio: costoPorMillaPropio ?? null, // Ahora sí lo pasamos para el cálculo dinámico de rangos
           tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
           tramoCortoThreshold: null, // drayage usa tabla
         },
@@ -1038,8 +1093,8 @@ export function resolveDrayageQuote(params: {
     return { kind: 'fuera_de_rango' };
   }
 
-  const estadoPropio = detectarEstadoPropioMencionado(destinoRaw);
-  const refState = estadoPropio ? { estado: estadoPropio, cercano: true } : resolveReferenceState(destinoRaw);
+
+  const refState = resolveReferenceState(destinoRaw); 
 
   let ft = {} as FloorTargetResult;
   let tramoCortoAplicado = false;
@@ -1047,10 +1102,21 @@ export function resolveDrayageQuote(params: {
 
   // Lógica para rutas que no están en la tabla:
   // Si estamos en un estado que tiene un vecino con tabla (ej. LA hereda de TX),
-  // buscamos la ruta más parecida en millas en la tabla de ese vecino para
+  // o si estamos dentro de TX/FL pero la ruta exacta no existe,
+  // buscamos la ruta más parecida en millas en la tabla correspondiente para
   // usarla de referencia, en lugar del cálculo genérico por tramos.
-  const closest = refState.cercano ? findClosestRouteByMiles(refState.estado, tamano, millasIda) : null;
-  
+  const isNeighborFallback = !estadoResuelto && refState.cercano;
+  const fallbackEstado = estadoResuelto || refState.estado;
+  const isIntraStateWithTable = estadoResuelto === 'TX' || estadoResuelto === 'FL';
+
+  const limiteMillas = 200; // Límite estricto de 200 millas para fallback
+
+  // Comparamos millasIda contra el límite de 200 fijo
+  const closest = ((refState.cercano || isIntraStateWithTable) && millasIda <= limiteMillas)
+    ? findClosestRouteByMiles(fallbackEstado, tamano, millasIda, isNeighborFallback)
+    : null;
+
+
   if (closest) {
     tramoCortoAplicado = true;
     closestPrecioIncluyeRegreso = closest.route.semantica_millas.precio_incluye_regreso;
@@ -1086,8 +1152,8 @@ export function resolveDrayageQuote(params: {
   // refState.estado a ciegas (ese sí cae a TX por defecto para referencias de
   // ruta; acá NO: un accesorial "heredado de Texas" sin nombrarlo sería
   // inventar una fuente, ver nota de resolveAccessorialsForState).
-  const accesorialesCalc = resolveAccessorialsForState(estadoResuelto ?? estadoPropio, destinoRaw);
-  const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers);
+  const accesorialesCalc = resolveAccessorialsForState(fallbackEstado, destinoRaw);
+  const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
 
   return {
     kind: 'quote',
@@ -1129,6 +1195,9 @@ export type GenericQuoteOutcome =
   | { kind: 'quote'; calculo: CalculatedQuote };
 
 export function resolveGenericQuote(params: {
+  origenRaw?: unknown;
+  destinoRaw?: unknown;
+  accessorialTriggers?: unknown;
   equipment: Equipment;
   millasIdaDeclaradas: unknown;
   pagoCamionRpm: number | null;
@@ -1138,7 +1207,7 @@ export function resolveGenericQuote(params: {
   // Semáforo — tarifa objetivo del usuario (CostConfig.tarifa_objetivo).
   tarifaObjetivaPropia?: number | null;
 }): GenericQuoteOutcome {
-  const { equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia } = params;
+  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia } = params;
 
   const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
     ? millasIdaDeclaradas
@@ -1171,6 +1240,21 @@ export function resolveGenericQuote(params: {
   // una segunda lectura por millas dobladas.
   const segundaLectura = ft.targetSource === 'calculo' ? computeSegundaLectura(ft.target, millasIda) : null;
 
+  const fromPrompt = typeof origenRaw === 'string' ? resolveLocation(origenRaw) : { status: 'no_data' as const };
+  const origenCiudadPura = fromPrompt.status === 'ok' ? fromPrompt.ciudad : null;
+  const destPrompt = typeof destinoRaw === 'string' ? resolveLocation(destinoRaw) : { status: 'no_data' as const };
+  
+  // Determinamos el estado real (FL o TX) a partir del origen o destino
+  let estadoConsultado: Estado | null = null;
+  if (fromPrompt.status === 'ok' && (fromPrompt.estado === 'FL' || fromPrompt.estado === 'TX')) {
+    estadoConsultado = fromPrompt.estado;
+  } else if (destPrompt.status === 'ok' && (destPrompt.estado === 'FL' || destPrompt.estado === 'TX')) {
+    estadoConsultado = destPrompt.estado;
+  }
+
+  const accesorialesCalc = resolveAccessorialsForState(estadoConsultado, destinoRaw);
+  const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
+
   return {
     kind: 'quote',
     calculo: {
@@ -1189,7 +1273,7 @@ export function resolveGenericQuote(params: {
       tarifaOfrecida,
       segundaLectura,
       precioIncluyeRegreso: false,
-      accesoriales: null,
+      accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
       costoPorMillaPropio: costoPorMillaPropio ?? null,
       tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
@@ -1225,19 +1309,20 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
   // (ROJO / AMARILLO / VERDE) calculadas desde su propio CPM y tarifa objetivo.
   // Si no tiene datos propios, caemos al formato clásico de piso/objetivo.
   // ──────────────────────────────────────────────────────────────────────────
-  const cpm   = q.costoPorMillaPropio;    // ej: 1.75 — límite inferior (ROJO)
-  const tObj  = q.tarifaObjetivaPropia;   // ej: 3.00 — límite superior (VERDE)
+  const cpm = q.costoPorMillaPropio;    // ej: 1.75 — límite inferior (ROJO)
+  const tObj = q.tarifaObjetivaPropia;   // ej: 3.00 — límite superior (VERDE)
+  
 
-  if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
+if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
     // Límite superior del semáforo: el mayor entre CPM y tarifa objetivo.
     // Si el usuario tiene cpm > tObj (calculadora con datos que necesitan revisión),
     // el semáforo igual se muestra usando cpm como referencia real de costos.
     const limSuperior = Math.max(cpm, tObj);
     // Totales en dólares para esta ruta
-    const pisoCpm    = Math.round(cpm          * q.millasIda);  // total a tu CPM
-    const totalObj   = Math.round(limSuperior  * q.millasIda);  // total a tu objetivo
+    const pisoCpm = Math.round(cpm * q.millasIda);  // total a tu CPM
+    const totalObj = Math.round(limSuperior * q.millasIda);  // total a tu objetivo
 
-    const cpmFmt  = `$${cpm.toFixed(2)}/mi`;
+    const cpmFmt = `$${cpm.toFixed(2)}/mi`;
     const tObjFmt = `$${tObj.toFixed(2)}/mi`;
 
     const lineas: string[] = [];
@@ -1275,15 +1360,24 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     lineas.push(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${tObjFmt})`);
 
     // Accesoriales
+    let totalAccesoriales = 0;
     if (q.accesoriales && q.accesoriales.items.length > 0) {
       const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
       lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
       for (const a of q.accesoriales.items) {
         lineas.push(render(m.accesorialItemLine, a.concepto, a.monto));
+        const match = a.monto.match(/\$(\d+(\.\d+)?)/);
+        if (match) {
+          totalAccesoriales += parseFloat(match[1]);
+        }
       }
       const trajoFuelSurcharge = q.accesoriales.items.some(a => normalizeText(a.concepto).includes('fuel surcharge'));
       if (trajoFuelSurcharge && q.accesoriales.estado === 'TX' && !q.accesoriales.heredado && q.estado === 'TX') {
         lineas.push(m.txFuelSurchargeWarning);
+      }
+      
+      if (totalAccesoriales > 0) {
+        lineas.push(`\n**Total sugerido (Objetivo + Accesoriales): ${formatUSD(q.objetivo + totalAccesoriales)}**`);
       }
     }
 
@@ -1347,15 +1441,24 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     }
   }
 
+  let totalAccesorialesClassic = 0;
   if (q.accesoriales && q.accesoriales.items.length > 0) {
     const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
     lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
     for (const a of q.accesoriales.items) {
       lineas.push(render(m.accesorialItemLine, a.concepto, a.monto));
+      const match = a.monto.match(/\$(\d+(\.\d+)?)/);
+      if (match) {
+        totalAccesorialesClassic += parseFloat(match[1]);
+      }
     }
     const trajoFuelSurcharge = q.accesoriales.items.some(a => normalizeText(a.concepto).includes('fuel surcharge'));
     if (trajoFuelSurcharge && q.accesoriales.estado === 'TX' && !q.accesoriales.heredado && q.estado === 'TX') {
       lineas.push(m.txFuelSurchargeWarning);
+    }
+    
+    if (totalAccesorialesClassic > 0) {
+      lineas.push(`\n**Total sugerido (Objetivo + Accesoriales): ${formatUSD(q.objetivo + totalAccesorialesClassic)}**`);
     }
   }
 
@@ -1451,9 +1554,15 @@ export function isValidMessages(messages: unknown): messages is ChatMessage[] {
 export const EXTRACTION_SCHEMA = {
   type: 'object',
   properties: {
-    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic'] },
-    origen: { type: 'string' },
-    destino: { type: 'string' },
+    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic', 'ask_miles'] },
+    origen: {
+      type: 'string',
+      description: "Ciudad y estado de origen (ej. 'Miami, FL')"
+    },
+    destino: {
+      type: 'string',
+      description: "Ciudad y estado de destino (ej. 'Atlanta, GA')"
+    },
     millas_ida: { type: 'number' },
     es_redondo: { type: 'boolean' },
     equipo: {

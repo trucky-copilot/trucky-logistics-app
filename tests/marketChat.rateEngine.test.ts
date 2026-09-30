@@ -41,9 +41,6 @@ import {
   dentroDelRangoDeSanidad,
   SANITY_MIN_MILES,
   SANITY_MAX_MILES,
-  SHORT_HAUL_MILES_THRESHOLD,
-  SHORT_HAUL_FLOOR,
-  SHORT_HAUL_TARGET,
   formatUSD,
   resolveDrayageQuote,
   resolveGenericQuote,
@@ -718,6 +715,9 @@ Deno.test('drayage total redondo: TX NO incluye el regreso — el total se decla
 // sentido económico a esa distancia). Se aplica SOLO al camino genérico (sin
 // tabla): drayage sin tabla usa su propio benchmark, sin cambios en esta tarea.
 // ─────────────────────────────────────────────────────────────────────────────
+const SHORT_HAUL_MILES_THRESHOLD = 100;
+const SHORT_HAUL_FLOOR = 500;
+const SHORT_HAUL_TARGET = 650;
 
 Deno.test('tramo corto: constantes de referencia v3 §7 (bucket 50-100mi, aprobado en la lectura crítica sección E)', () => {
   assertEquals(SHORT_HAUL_MILES_THRESHOLD, 100);
@@ -775,7 +775,7 @@ Deno.test('piso/objetivo: computeFloorTarget con tramoCorto — bajo=piso, alto=
   const r = computeFloorTarget({
     tablaPiso: null, tablaObjetivo: null, targetEsDerivado: false,
     millasIda: 60, rpmBase: 3.01, pagoCamionRpm: null,
-    tramoCorto: { floor: 500, target: 650 },
+    tramoCorto: { floor: 500, target: 650, threshold: 200 },
   });
   assertEquals(r, { floor: 500, floorSource: 'tramo_corto', target: 650, targetSource: 'tramo_corto' });
 });
@@ -784,7 +784,7 @@ Deno.test('piso/objetivo: tramoCorto no aplica si hay tabla (la tabla siempre ma
   const r = computeFloorTarget({
     tablaPiso: 200, tablaObjetivo: 300, targetEsDerivado: false,
     millasIda: 20, rpmBase: null, pagoCamionRpm: null,
-    tramoCorto: { floor: 500, target: 650 },
+    tramoCorto: { floor: 500, target: 650, threshold: 200 },
   });
   assertEquals(r.target, 300);
   assertEquals(r.targetSource, 'tabla');

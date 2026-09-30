@@ -147,8 +147,20 @@ export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
   numeros.push(Math.round(q.objetivo * 2), q.millasIda * 2);
   for (const r of q.referencias) numeros.push(r.millas_ida, r.objetivo);
   if (q.accesoriales) {
+    let totalAccesoriales = 0;
     for (const item of q.accesoriales.items) {
-      numeros.push(...extractNumericTokens(item.monto));
+      const tokens = extractNumericTokens(item.monto);
+      numeros.push(...tokens);
+      const match = typeof item.monto === 'string' ? item.monto.match(/\$(\d+(\.\d+)?)/) : null;
+      if (match) {
+        totalAccesoriales += parseFloat(match[1]);
+      }
+    }
+    if (totalAccesoriales > 0) {
+      numeros.push(q.objetivo + totalAccesoriales);
+      if (q.piso != null) numeros.push(q.piso + totalAccesoriales);
+      if (q.tarifaObjetivaPropia != null) numeros.push(q.tarifaObjetivaPropia * q.millasIda + totalAccesoriales);
+      if (q.costoPorMillaPropio != null) numeros.push(q.costoPorMillaPropio * q.millasIda + totalAccesoriales);
     }
   }
   for (const v of q.perfilMargen.verdicts) {

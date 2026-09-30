@@ -165,6 +165,10 @@ export interface BaseContextInputs {
 
 export type BaseContextBuilder = (inputs: BaseContextInputs) => string;
 
+export interface MissingCostConfigMessages extends CatalogTree {
+  content: string;
+}
+
 export interface LocaleMessages {
   verdict: VerdictMessages;
   rateCheck: RateCheckMessages;
@@ -175,6 +179,7 @@ export interface LocaleMessages {
   equipmentQuestion: EquipmentQuestionMessages;
   offTopic: OffTopicMessages;
   missingData: MissingDataMessages;
+  missingCostConfig: MissingCostConfigMessages;
   safeFallback: SafeFallbackMessages;
   units: UnitsMessages;
   extraction: ExtractionMessages;
@@ -254,6 +259,9 @@ export const MESSAGES: Record<Locale, LocaleMessages> = {
       line1: '📊 Necesito más datos para calcular el piso y el objetivo.',
       line2: 'Dime origen, destino, equipo y millas (de ida) — con eso te doy el número exacto.',
     },
+    missingCostConfig: {
+      content: '⚠️ Debes configurar tus costos en la Calculadora primero para que pueda darte recomendaciones y análisis precisos.',
+    },
     safeFallback: {
       content: '⚠️ No pude procesar la consulta; reintenta. Para tarifas incluye origen, destino, millas y equipo.',
     },
@@ -275,7 +283,7 @@ export const MESSAGES: Record<Locale, LocaleMessages> = {
 [Freight Dispatcher KB v${i.freightKbVersion}]
 
 VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
-- FIT = Florida International Terminal (Medley/Hialeah, zona de PortMiami)
+- FIT = Florida International Terminal (Fort Lauderdale, zona de Port Everglades)
 - POMTOC / SFCT = terminales de PortMiami
 - PET / Broward / Everglades = Port Everglades (Fort Lauderdale)
 - Pompano = Pompano Beach, FL
@@ -378,6 +386,9 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
       line1: '📊 I need more data to calculate the floor and target.',
       line2: "Tell me origin, destination, equipment, and miles (one way) — with that I'll give you the exact number.",
     },
+    missingCostConfig: {
+      content: "⚠️ Please configure your costs in the Calculator first so I can give you accurate analysis and recommendations.",
+    },
     safeFallback: {
       content: "⚠️ I couldn't process the request; please retry. For rates include origin, destination, miles, and equipment.",
     },
@@ -399,7 +410,7 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
 [Freight Dispatcher KB v${i.freightKbVersion}]
 
 KB-SPECIFIC LOCATION CODES:
-- FIT = Florida International Terminal (Medley/Hialeah, PortMiami area)
+- FIT = Florida International Terminal (Fort Lauderdale, Port Everglades area)
 - POMTOC / SFCT = PortMiami terminals
 - PET / Broward / Everglades = Port Everglades (Fort Lauderdale)
 - Pompano = Pompano Beach, FL

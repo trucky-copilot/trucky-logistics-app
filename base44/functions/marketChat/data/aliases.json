@@ -4,7 +4,7 @@
     "terminales": {
       "pomtoc": "MIA",
       "sfct": "MIA",
-      "fit": "MIA",
+      "fit": "PEV",
       "portmiami": "MIA",
       "mia": "MIA",
       "pet": "PEV",
@@ -12,7 +12,7 @@
       "everglades": "PEV",
       "broward": "PEV"
     },
-    "_nota_terminales": "POMTOC (Port of Miami Terminal Operating Co.), SFCT (South Florida Container Terminal) y FIT (Florida International Terminal) son terminales de PortMiami → MIA. PET (Port Everglades Terminal) y Broward (condado donde está Port Everglades / Fort Lauderdale) → PEV. MIA/PortMiami y PEV/Everglades son los propios códigos de mercado usados en routes.fl.json."
+    "_nota_terminales": "POMTOC (Port of Miami Terminal Operating Co.) y SFCT (South Florida Container Terminal) son terminales de PortMiami → MIA. FIT (Florida International Terminal) y PET (Port Everglades Terminal) así como Broward (condado donde está Port Everglades / Fort Lauderdale) → PEV. MIA/PortMiami y PEV/Everglades son los propios códigos de mercado usados en routes.fl.json."
   },
   "tx": {
     "zip_a_ruta": {

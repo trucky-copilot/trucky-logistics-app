@@ -5,7 +5,7 @@
     "monto": "$100 · por contenedor",
     "nota": "No aplica cargo si el movimiento ya es OTR. Evita per diem/demurrage.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 3
     }
   },
@@ -15,7 +15,7 @@
     "monto": "$115 · por contenedor",
     "nota": "No aplica cargo si el movimiento ya es OTR.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 4
     }
   },
@@ -25,7 +25,7 @@
     "monto": "Por contenedor · cotizar",
     "nota": "Cargo por el CONTENEDOR refrigerado, no por el tipo de camión reefer. Requiere generador/genset — sobrecosto según disponibilidad.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 5
     }
   },
@@ -35,7 +35,7 @@
     "monto": "$60 · por contenedor",
     "nota": "Requiere endoso y a veces ruta/tiempo especial.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 6
     }
   },
@@ -45,7 +45,7 @@
     "monto": "Media pierna (half leg)",
     "nota": "Cobra la mitad del tramo.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 7
     }
   },
@@ -55,7 +55,7 @@
     "monto": "Round trip completo",
     "nota": "Cobra la vuelta completa.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 8
     }
   },
@@ -65,7 +65,7 @@
     "monto": "$50",
     "nota": "Parada adicional dentro del mismo viaje.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 9
     }
   },
@@ -75,7 +75,7 @@
     "monto": "Tarifa de pierna (leg)",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 10
     }
   },
@@ -85,7 +85,7 @@
     "monto": "Round trip completo",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 11
     }
   },
@@ -95,7 +95,7 @@
     "monto": "Tarifa de pierna (leg)",
     "nota": "Cliente canceló con camión ya en ruta.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 12
     }
   },
@@ -105,7 +105,7 @@
     "monto": "Round trip completo",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 13
     }
   },
@@ -115,7 +115,7 @@
     "monto": "2 días gratis incluidos · luego per diem",
     "nota": "Después de 2 días libres se cobra per diem diario del chasis.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 14
     }
   },
@@ -125,7 +125,7 @@
     "monto": "$75 · por hora",
     "nota": "Detención. Rango de mercado $50–$100/hora (confirmado en TRUCKY-53). Empieza a correr pasado el tiempo libre.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 15
     }
   },
@@ -135,7 +135,7 @@
     "monto": "$100–$115",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 16
     }
   },
@@ -145,7 +145,7 @@
     "monto": "$250",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 17
     }
   },
@@ -155,7 +155,7 @@
     "monto": "$25 · por pierna",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 18
     }
   },
@@ -165,7 +165,7 @@
     "monto": "Por movimiento · cotizar",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 19
     }
   },
@@ -175,7 +175,7 @@
     "monto": "$0",
     "nota": "Incluido.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 20
     }
   },
@@ -185,7 +185,7 @@
     "monto": "$25 · por contenedor",
     "nota": null,
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 21
     }
   },
@@ -195,7 +195,7 @@
     "monto": "$50",
     "nota": "Congestión portuaria.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_FL_v6.xlsx",
+      "archivo": "Trucky_Rates_Drayage_FL_v9.xlsx",
       "fila": 22
     }
   }

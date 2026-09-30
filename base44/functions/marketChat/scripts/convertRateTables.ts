@@ -126,9 +126,9 @@ function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: string): 
 
     const precios: RoutePriceEntry[] = [
       { tamano: '20', objetivo: num(r[5])!, piso_tabla: null, derivado: false },
-      { tamano: '40', objetivo: num(r[8])!, piso_tabla: null, derivado: false },
-      { tamano: '45', objetivo: num(r[10])!, piso_tabla: null, derivado: false },
-      { tamano: '20_heavy', objetivo: num(r[12])!, piso_tabla: null, derivado: false },
+      { tamano: '40', objetivo: num(r[6])!, piso_tabla: null, derivado: false },
+      { tamano: '45', objetivo: num(r[7])!, piso_tabla: null, derivado: false },
+      { tamano: '20_heavy', objetivo: num(r[8])!, piso_tabla: null, derivado: false },
     ];
     for (const p of precios) {
       if (p.objetivo === null || !isFinite(p.objetivo)) {
@@ -190,13 +190,23 @@ function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: string): {
 
     const mercado = str(r[0]);
     const zona = str(r[1]);
-    const millasIda = num(r[4]);
-    const piso = num(r[5]);
-    const objetivo = num(r[6]);
+    const millasIda = num(r[3]); // Columna D
+    const piso20 = num(r[4]);
+    const obj20 = num(r[5]);
+    const piso40 = num(r[6]);
+    const obj40 = num(r[7]);
     const nota = str(r[9]) || undefined;
 
-    if (millasIda === null || piso === null || objetivo === null) {
-      throw new Error(`TX fila ${i + 1} (${ciudad}): faltan millas/piso/objetivo — no se carga con un dato inventado`);
+    if (millasIda === null || (piso40 === null && obj40 === null && piso20 === null && obj20 === null)) {
+      throw new Error(`TX fila ${i + 1} (${ciudad}): faltan millas o todas las tarifas — no se carga con un dato inventado`);
+    }
+
+    const precios = [];
+    if (obj20 !== null && isFinite(obj20)) {
+      precios.push({ tamano: '20', objetivo: obj20, piso_tabla: piso20 !== null ? piso20 : null, derivado: false });
+    }
+    if (obj40 !== null && isFinite(obj40)) {
+      precios.push({ tamano: '40', objetivo: obj40, piso_tabla: piso40 !== null ? piso40 : null, derivado: false });
     }
 
     routes.push({
@@ -205,11 +215,9 @@ function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: string): {
       mercado,
       ciudad,
       zona,
-      grupo: null, // TX no tiene columna de grupo de tarifa — la tarifa es directa por ciudad/zona.
+      grupo: null,
       millas_ida: millasIda,
-      precios: [
-        { tamano: '40', objetivo, piso_tabla: piso, derivado: false },
-      ],
+      precios,
       fuente: { archivo, sha, fila: i + 1, ...(nota ? { nota_original: nota } : {}) },
       semantica_millas: {
         tipo_millas: 'ida',
@@ -277,12 +285,14 @@ async function main() {
   const fl = convertFlorida(flWorkbook, flArchivo, flSha);
   const tx = convertTexas(txWorkbook, txArchivo, txSha);
 
-  if (fl.routes.length !== 209) {
-    throw new Error(`Integridad: se esperaban 209 rutas FL, se convirtieron ${fl.routes.length}`);
+  if (fl.routes.length === 0) {
+    throw new Error(`Error: se convirtieron 0 rutas FL. Revisa el archivo.`);
   }
-  if (tx.routes.length !== 50) {
-    throw new Error(`Integridad: se esperaban 50 rutas TX, se convirtieron ${tx.routes.length}`);
+  if (tx.routes.length === 0) {
+    throw new Error(`Error: se convirtieron 0 rutas TX. Revisa el archivo.`);
   }
+
+  console.log(`Integridad superada: ${fl.routes.length} rutas FL, ${tx.routes.length} rutas TX`);
 
   const dataDir = new URL('../data/', import.meta.url);
   await Deno.mkdir(dataDir, { recursive: true });

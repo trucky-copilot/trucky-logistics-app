@@ -191,7 +191,8 @@ function validarRate(datos, costConfig, locale) {
   }
 
   return {
-    categoria: 'Rate y Condiciones de Pago',
+    categoriaKey: 'rate',
+    categoria: locale === 'en' ? 'Rate & Payment Conditions' : 'Rate y Condiciones de Pago',
     semaforo,
     hallazgos,
     datos_extraidos: {
@@ -347,7 +348,8 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
   }
 
   return {
-    categoria: 'Equipo y Chasis',
+    categoriaKey: 'equipment',
+    categoria: locale === 'en' ? 'Equipment and Chassis' : 'Equipo y Chasis',
     semaforo,
     hallazgos,
     datos_extraidos: {
@@ -502,7 +504,8 @@ function validarCarrier(datos, carrierProfile, locale) {
   if (!datos.carrier_mc) hallazgos.push(locale === 'en' ? '⚠ Carrier MC not specified in document' : '⚠ MC del carrier no especificado en documento');
 
   return {
-    categoria: 'Carrier / Identidad',
+    categoriaKey: 'carrier',
+    categoria: locale === 'en' ? 'Carrier / Identity' : 'Carrier / Identidad',
     semaforo,
     identity_match,
     hallazgos,
@@ -583,7 +586,8 @@ function validarFechasOperacion(datos, locale) {
   }
 
   return {
-    categoria: 'Fechas y Operación',
+    categoriaKey: 'date',
+    categoria: locale === 'en' ? 'Dates and Operation' : 'Fechas y Operación',
     semaforo,
     hallazgos,
     datos_extraidos: {
@@ -685,7 +689,8 @@ function validarClausulas(datos, locale) {
   if (hallazgos.length === 0) hallazgos.push(locale === 'en' ? '✓ No risk clauses detected' : '✓ Sin cláusulas de riesgo detectadas');
 
   return {
-    categoria: 'Cláusulas y Penalidades',
+    categoriaKey: 'clause',
+    categoria: locale === 'en' ? 'Clauses and Penalties' : 'Cláusulas y Penalidades',
     semaforo,
     hallazgos,
     datos_extraidos: {
@@ -966,13 +971,15 @@ Deno.serve(async (req) => {
     // ── PASO 8: Guardar resultado estructurado (permite caché futura) ─────────
     const catMap = {};
     categorias.forEach(c => {
-      const key = c.categoria.toLowerCase().includes('rate') ? 'rate'
-        : c.categoria.toLowerCase().includes('commodity') ? 'commodity'
-        : c.categoria.toLowerCase().includes('equipo') ? 'equipment'
-        : c.categoria.toLowerCase().includes('broker') ? 'broker'
-        : c.categoria.toLowerCase().includes('carrier') ? 'carrier'
-        : c.categoria.toLowerCase().includes('fecha') ? 'date'
-        : 'clause';
+      const key = c.categoriaKey ? c.categoriaKey
+       : c.categoria.toLowerCase().includes('rate') ? 'rate'
+       : c.categoria.toLowerCase().includes('commodity') ? 'commodity'
+       : c.categoria.toLowerCase().includes('equipo') || c.categoria.toLowerCase().includes('equipment') ? 'equipment'
+       : c.categoria.toLowerCase().includes('broker') ? 'broker'
+       : c.categoria.toLowerCase().includes('carrier') ? 'carrier'
+       : c.categoria.toLowerCase().includes('fecha') || c.categoria.toLowerCase().includes('date') ? 'date'
+       : 'clause';
+
       catMap[key] = c.semaforo;
     });
 

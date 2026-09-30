@@ -1,11 +1,11 @@
 [
   {
-    "concepto": "Fuel Surcharge (FSC)",
+    "concepto": "Recargo de combustible (FSC)",
     "gatillo": null,
-    "monto": "0% – 62%",
-    "nota": "Muy variable; en TX suele ir SEPARADO del line haul (sobre todo en rampas DFW: 53–59%). En FL viene más integrado.",
+    "monto": "INCLUIDO",
+    "nota": "Ya viene dentro de la tarifa all-in de la tabla. Aunque el loadboard lo muestre aparte (0%–72%), NO se suma otra vez.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
       "fila": 3
     }
   },
@@ -13,60 +13,70 @@
     "concepto": "Chasis (Ocean Box)",
     "gatillo": null,
     "monto": "$45 / día",
-    "nota": "Ej.: 'Ocean Box Chassis $90 ($45/día × 2 días)'.",
+    "nota": "Ej.: «Ocean Box Chassis $90 ($45/día × 2 días)».",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
       "fila": 4
     }
   },
   {
-    "concepto": "Chasis (Daily)",
+    "concepto": "Chasis (diario)",
     "gatillo": null,
-    "monto": "$40 / día",
-    "nota": "Ej.: '$40.00 Daily Chassis'.",
+    "monto": "$40–$50 / día",
+    "nota": "Ej.: «$40.00 Daily Chassis» · «Chassis $50/día (si aplica)».",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
       "fila": 5
+    }
+  },
+  {
+    "concepto": "Días de chasis incluidos",
+    "gatillo": null,
+    "monto": "1 a 3 días",
+    "nota": "Varias tarifas ya incluyen 1, 2 o 3 días de chasis. Verificar en la confirmación.",
+    "fuente": {
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
+      "fila": 6
     }
   },
   {
     "concepto": "Split",
     "gatillo": null,
     "monto": "$75",
-    "nota": "'$75.00 Split' — cargo por movimiento dividido.",
+    "nota": "«$75.00 Split» — cargo por movimiento dividido.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
-      "fila": 6
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
+      "fila": 7
     }
   },
   {
     "concepto": "Pre-pull",
     "gatillo": null,
     "monto": "cotizar",
-    "nota": "'accessories chassis 40 daily pre pull' — según días.",
+    "nota": "Según días de anticipación.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
-      "fila": 7
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
+      "fila": 8
     }
   },
   {
     "concepto": "Sobrepeso (overweight)",
     "gatillo": null,
     "monto": "$150",
-    "nota": "'accessories pre pull $150 overweight'.",
+    "nota": "«accessories pre pull $150 overweight».",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
-      "fila": 8
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
+      "fila": 9
     }
   },
   {
-    "concepto": "Días de chasis incluidos",
+    "concepto": "Espera / detención",
     "gatillo": null,
-    "monto": "1–2 días",
-    "nota": "Varias tarifas ya incluyen 1 o 2 días de chasis.",
+    "monto": "$75 / hora",
+    "nota": "Referencia de mercado ($50–$100). Empieza tras el tiempo libre.",
     "fuente": {
-      "archivo": "Trucky_Flat_Rates_Drayage_TX_v1.xlsx",
-      "fila": 9
+      "archivo": "Trucky_Rates_Drayage_TX_v3.xlsx",
+      "fila": 10
     }
   }
 ]

@@ -129,11 +129,9 @@ export default function Onboarding({ onComplete }) {
       diesel_precio: parseFloat(diesel),
       mpg:           parseFloat(mpg),
       pago_conductor_porcentaje: parseFloat(conductor),
-      ...(costos.valido ? {
-        ...FIXED_COST_DEFAULTS,
-        costo_por_milla:   costos.costoPorMilla,
-        tarifa_break_even: costos.tarifaBreakEven,
-      } : {}),
+      // No guardamos costo_por_milla ni gastos fijos predeterminados aquí.
+      // Así el usuario queda "sin configurar" hasta que entre explícitamente 
+      // a la calculadora, disparendo el interceptor del chat si intenta usarlo antes.
     };
     if (existingCosts.length > 0) {
       await base44.entities.CostConfig.update(existingCosts[0].id, costData);

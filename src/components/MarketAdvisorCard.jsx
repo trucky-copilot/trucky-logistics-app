@@ -8,15 +8,43 @@ export default function MarketAdvisorCard({ data }) {
 
   const { origen, destino, calculo } = data;
   const { millasIda, piso, objetivo, costoPorMillaPropio, tarifaObjetivaPropia, equipmentLabel, targetSource } = calculo;
-
+  // --- 1. AGREGA ESTA DETECCIÓN DE ESTADOS VECINOS ---
+  const locOrigen = (origen || '').toLowerCase();
+  const locDestino = (destino || '').toLowerCase();
+  
+  const isNeighborFL = /(?:^|[^a-z])(georgia|ga|alabama|al)(?:[^a-z]|$)/i.test(origen || '') || /(?:^|[^a-z])(georgia|ga|alabama|al)(?:[^a-z]|$)/i.test(destino || '');
+  const isNeighborTX = /(?:^|[^a-z])(oklahoma|ok|new mexico|nm|louisiana|la|arkansas|ar)(?:[^a-z]|$)/i.test(origen || '') || /(?:^|[^a-z])(oklahoma|ok|new mexico|nm|louisiana|la|arkansas|ar)(?:[^a-z]|$)/i.test(destino || '');
+  // --- 2. VALIDA LOS LÍMITES DE MILLAS ---
+  const isWithinNeighborLimit = (isNeighborFL || isNeighborTX) && millasIda <= 200;
   const isDrayage = equipmentLabel && equipmentLabel.toLowerCase().includes("drayage");
-  const isContainer = equipmentLabel && (equipmentLabel.toLowerCase().includes("contenedor") || equipmentLabel.toLowerCase().includes("container") || equipmentLabel.toLowerCase().includes("drayage")) && targetSource !== 'calculo';
-  const isFromTable = targetSource === 'tabla';
+  const isContainer = equipmentLabel && (equipmentLabel.toLowerCase().includes("contenedor") || equipmentLabel.toLowerCase().includes("container") || equipmentLabel.toLowerCase().includes("drayage")) && (targetSource !== 'calculo' || isWithinNeighborLimit) && millasIda <= 200;
+  const isFromTable = targetSource === 'tabla' || isWithinNeighborLimit;
 
-  let marketFloorTotal = piso || null;
-  let marketTargetTotal = (tarifaObjetivaPropia && targetSource === 'calculo') 
+  let marketFloorTotal = (targetSource === 'calculo' && costoPorMillaPropio && !isWithinNeighborLimit)
+  ? Math.round(costoPorMillaPropio * millasIda)
+  : (piso || null);
+  
+  let marketTargetTotal = (tarifaObjetivaPropia && targetSource === 'calculo' && !isWithinNeighborLimit) 
     ? Math.round(tarifaObjetivaPropia * millasIda) 
     : objetivo;
+
+  // Sumar accesoriales si existen
+  let totalAccesoriales = 0;
+  if (calculo.accesoriales && calculo.accesoriales.items && calculo.accesoriales.items.length > 0) {
+    for (const a of calculo.accesoriales.items) {
+      const match = typeof a.monto === 'string' ? a.monto.match(/\$(\d+(\.\d+)?)/) : null;
+      if (match) {
+        totalAccesoriales += parseFloat(match[1]);
+      }
+    }
+  }
+
+  if (totalAccesoriales > 0) {
+    if (marketFloorTotal !== null) marketFloorTotal += totalAccesoriales;
+    marketTargetTotal += totalAccesoriales;
+  }
+
+
 
   // Sanity check visual: evitar rangos invertidos si la meta del usuario es
   // menor que el piso duro de mercado (ej. tramos muy cortos)
@@ -37,6 +65,11 @@ export default function MarketAdvisorCard({ data }) {
 
   const isEs = locale === 'es';
 
+  const accessorialNames = (calculo.accesoriales && calculo.accesoriales.items) 
+    ? calculo.accesoriales.items.map(item => item.concepto).join(", ") 
+    : "";
+  const hasAccessorials = accessorialNames.length > 0;
+
   return (
     <div className="w-full max-w-4xl mx-auto font-sans flex flex-col gap-4 mt-2">
       {/* HEADER */}
@@ -50,7 +83,11 @@ export default function MarketAdvisorCard({ data }) {
           </h2>
         </div>
         <p className={`text-sm text-gray-300 leading-relaxed ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
-          {calculo.tarifaOfrecida ? (
+          {hasAccessorials ? (
+            isEs
+              ? `Mira así quedaría con el ${accessorialNames} adicional, este es el veredicto.`
+              : `Here is how it looks with the additional ${accessorialNames}, this is the verdict.`
+          ) : calculo.tarifaOfrecida ? (
             isEs 
               ? "¡Aquí tienes el resultado de tu oferta! Mira este escenario para saber al instante si la tarifa propuesta es la ideal para tu operación."
               : "Here is the result of your offer! Check this scenario to instantly know if the proposed rate is ideal for your operation."
@@ -86,7 +123,7 @@ export default function MarketAdvisorCard({ data }) {
                     <div className="w-8 h-8 rounded-full bg-red-500 flex-shrink-0"></div>
                     <div className={`flex flex-col ${calculo.tarifaOfrecida ? 'items-center' : ''}`}>
                       <span className="text-white font-bold text-lg leading-tight">{isEs ? "ROJO" : "RED"}</span>
-                      <span className="text-red-400 text-sm">{isEs ? (calculo.tarifaOfrecida ? "Rechaza" : "Rechaza o Negocia") : (calculo.tarifaOfrecida ? "Decline" : "Decline or Negotiate")}</span>
+                      <span className="text-red-400 text-sm">{isEs ? "Rechazar" : "Decline"}</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 mt-2">
@@ -102,9 +139,9 @@ export default function MarketAdvisorCard({ data }) {
                       </>
                     ) : (
                       <>
-                        <span className="text-white font-semibold text-lg">${(parseFloat(marketTargetRpm) * 0.9).toFixed(2)} RPM</span>
+                        <span className="text-white font-semibold text-lg">${userCpm} RPM</span>
                         <span className="text-muted-foreground">&lt;</span>
-                        <span className="text-white font-semibold text-lg">${userCpm} CPM</span>
+                        <span className="text-white font-semibold text-lg">${((parseFloat(userCpm) + parseFloat(userTarget)) / 2).toFixed(2)} CPM</span>
                       </>
                     )}
                   </div>
@@ -147,7 +184,7 @@ export default function MarketAdvisorCard({ data }) {
                         <span className="text-white font-semibold text-lg">${marketTargetTotal.toLocaleString('en-US')}</span>
                       </>
                     ) : (
-                      <span className="text-white font-semibold text-lg">${userCpm} - ${userTarget} RPM</span>
+                      <span className="text-white font-semibold text-lg">${((parseFloat(userCpm) + parseFloat(userTarget)) / 2).toFixed(2)} - ${userTarget} RPM</span>
                     )}
                   </div>
                   {!calculo.tarifaOfrecida && !isContainer && (
@@ -158,10 +195,7 @@ export default function MarketAdvisorCard({ data }) {
                       <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 mt-1.5 flex-shrink-0"></div>
                       <span>{isEs ? (calculo.tarifaOfrecida ? "La tarifa ofrecida está un poco por debajo, pero dentro del rango negociable." : "Esta tarifa ronda tu punto de equilibrio (break-even).") : (calculo.tarifaOfrecida ? "The offered rate is slightly below target but within negotiable range." : "This rate is around your break-even point.")}</span>
                     </li>
-                    <li className="flex items-start gap-2">
-                      <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 mt-1.5 flex-shrink-0"></div>
-                      <span>{isEs ? "Considera si solo incluye las millas cargadas o ida y vuelta." : "Consider if it includes only the loaded miles or round trip."}</span>
-                    </li>
+
                     <li className="flex items-start gap-2">
                       <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 mt-1.5 flex-shrink-0"></div>
                       <span>{isEs ? "Intenta negociar una tarifa mayor para llegar al objetivo." : "Try to negotiate for a higher rate to reach the target."}</span>
@@ -237,10 +271,12 @@ export default function MarketAdvisorCard({ data }) {
             <p>{isEs ? "Distancia (cargado)" : "Distance (loaded)"}: {millasIda} {isEs ? "millas (aprox.)" : "miles (approx.)"}</p>
             {marketFloorTotal ? (
               <p>{isEs ? "Tarifa típica de mercado" : "Typical market rate"}: ${marketFloorTotal.toLocaleString('en-US')} - ${marketTargetTotal.toLocaleString('en-US')} total</p>
-            ) : (
+            ) : isContainer ? (
               <p>{isEs ? "Tarifa típica de mercado" : "Typical market rate"}: ${marketTargetTotal.toLocaleString('en-US')} total</p>
+            ) : (
+              <p>{isEs ? "Tarifa típica de mercado" : "Typical market rate"}: ${Math.round(parseFloat(userCpm) * millasIda).toLocaleString('en-US')} - ${Math.round(parseFloat(userTarget) * millasIda).toLocaleString('en-US')} total</p>
             )}
-            {!isFromTable && millasIda >= 200 && (
+            {millasIda >= 200 && (
               <p>
                 {costoPorMillaPropio 
                   ? (isEs ? "Tu rango RPM (Costo - Objetivo)" : "Your RPM range (Cost - Target)") 
@@ -260,7 +296,7 @@ export default function MarketAdvisorCard({ data }) {
             <h3 className="text-white font-semibold text-base">{isEs ? "Ten en cuenta:" : "Keep in mind:"}</h3>
           </div>
           <ul className="text-sm text-gray-300 space-y-3 ml-11 list-disc pl-2">
-            {!isDrayage && (
+            {!isContainer && (
               <li>{isEs ? "Verifica si la tarifa es solo por millas cargadas o ida y vuelta (incluyendo vacías)." : "Verify if the rate is for loaded miles only or round trip (including deadhead)."}</li>
             )}
             <li>{isEs ? "Considera peajes, combustible y cualquier costo adicional." : "Consider tolls, fuel, and any additional costs."}</li>
@@ -297,3 +333,4 @@ export default function MarketAdvisorCard({ data }) {
     </div>
   );
 }
+

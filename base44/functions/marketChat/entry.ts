@@ -8,9 +8,9 @@ try {
   const envText = await Deno.readTextFile(new URL('./.env', import.meta.url));
   for (const line of envText.split('\n')) {
     const m = line.match(/^\s*([^#=\s][^=]*?)\s*=\s*(.*)\s*$/);
-    if (m) Deno.env.set(m[1], m[2].trim()); 
+    if (m) Deno.env.set(m[1], m[2].trim());
   }
-} catch (_) {}
+} catch (_) { }
 
 // El dominio puro (datos de tarifas, cálculo de piso/objetivo/veredicto, la
 // resolución de equipo y el armado de la respuesta) vive en ./rateEngine.ts
@@ -56,6 +56,7 @@ import {
   buildGeneralIntentAllowedNumbers,
   buildStaticRateCheckNumbers,
   buildAllowedNumbersSet,
+  extractNumericTokens,
 } from './llmDataBoundary.ts';
 import { resolveLocation } from './nameResolution.ts';
 
@@ -113,7 +114,16 @@ async function extractWithRetry(base44, prompt) {
 
 function buildExtractionPrompt(systemContext, cappedMessages, locale: Locale) {
   const conversationHistory = cappedMessages
-    .map(m => `${m.role === 'user' ? 'Dispatcher' : 'TruckyAI'}: ${m.content}`)
+    .map(m => {
+      let text = `${m.role === 'user' ? 'Dispatcher' : 'TruckyAI'}: ${m.content}`;
+      if (m.role === 'assistant' && m.structuredData && m.structuredData.origen && m.structuredData.destino) {
+        const tarifaOferta = m.structuredData.calculo && m.structuredData.calculo.tarifaOfrecida != null 
+          ? `, Tarifa ofrecida original: ${m.structuredData.calculo.tarifaOfrecida}` 
+          : '';
+        text += `\n[Metadatos internos ocultos al usuario - Origen original: ${m.structuredData.origen}, Destino original: ${m.structuredData.destino}${tarifaOferta}]`;
+      }
+      return text;
+    })
     .join('\n\n');
 
   return `${systemContext}
@@ -123,20 +133,20 @@ ${conversationHistory}
 
 === INSTRUCCIONES DE EXTRACCIÓN ===
 Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversación y extrae los datos según el schema. Reglas:
-- intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, un camión, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades!
+- intent="ask_miles" si el dispatcher explícitamente pide SOLO la distancia o las millas de una ruta (ej. "solo dame las millas", "cuantas millas hay", "millas de x a y"). Si pide esto, NO asumas "rate_check".
+- intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, un camión, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades, a menos que solo pida millas! También asume "rate_check" OBLIGATORIAMENTE si el mensaje modifica o pregunta sobre cómo quedaría una cotización previa (ej. "¿y si le sumo hazmat?", "¿cómo quedaría con pre pull?", "¿sería conveniente cobrar hazmat?"). ¡Incluso si pide consejo, si está sobre una cotización activa y pregunta "cómo quedaría", DEBE ser rate_check!
 - intent="off_topic" solo si el mensaje NO tiene relación con freight, dispatch u operación de carriers — por ejemplo: programación, clima, deportes, recetas, política, traducción, chistes, o aritmética sin referencia a freight, consejos personales, u otras industrias.
 - intent="general" en cualquier otro caso. ¡NUNCA repitas mensajes de error del historial como "Necesito más datos..."! Tu respuesta_general debe responder a la pregunta, no simular un error del sistema.
 - Ante la duda usa "general". Nunca uses "off_topic" si el mensaje menciona algún término de la KB.
 - Ejemplos de off_topic: "¿cómo escribo un for loop en Python?" · "¿cómo está el clima en Miami hoy?" · "¿quién ganó el partido de fútbol de ayer?" · "dame una receta de arroz con pollo" · "¿qué opinas de las elecciones?" · "¿cuánto es 15% de 2400?" · "traduce 'hello' al español" · "cuéntame un chiste".
 - Ejemplos que SÍ son general aunque suenen genéricos: "¿cuánto está el diésel?" · "¿qué es TWIC?" · "¿qué es un chasis?" · "¿cuánto es 15% de una carga de $2,400?" (tiene referente de freight).
-- origen/destino: EXTRAE TEXTUALMENTE la ciudad origen y destino. Si el usuario envía un mensaje corto continuando una cotización anterior, DEBES BUSCAR en el historial y COPIAR EXACTAMENTE el mismo origen y el mismo destino. Nunca dejes origen/destino en null si se trata de una continuación. IMPORTANTE: Si el usuario menciona un puerto (ej. "MIA", "PEV", "Mega Rail"), INCLÚYELO EXACTAMENTE como lo escribió junto al nombre de la ciudad (ej. "Florida City PEV"). NUNCA traduzcas siglas como "PEV" a "Port Everglades" ni "MIA" a "Miami". NO incluyas tamaños ni medidas. Siempre que sea posible, AÑADE LA ABREVIATURA DEL ESTADO (ej. "Rincon, GA" o "Tampa, FL") al final del nombre.
-- millas_ida: SOLO si el dispatcher las dice explícitamente, en millas de SOLO IDA (una dirección); null si no las dice — nunca estimes.
+- origen/destino: Extrae la ciudad. REGLA CRÍTICA Y OBLIGATORIA: Adjunta SIEMPRE la abreviatura del estado de 2 letras al final, separada por una coma (ej. "Rincon, GA", "Atlanta, GA", "Tampa, FL"). Si el usuario proporciona un código postal (zip code), MANTENLO en la ciudad extraída antes del estado (ej. "Miami 33186, FL"). Si el usuario omite el estado o lo escribe mal, DEBES inferir el estado correcto y agregarlo. Si el usuario envía un mensaje corto continuando una cotización anterior, copia exactamente origen y destino del historial. REGLA DE TERMINALES: Si el usuario menciona "NS Rossville", extrae EXACTAMENTE "Rossville, TN" (nunca GA). Si menciona "UP", "UP RAIL" o "Union Pacific", DEBES extraer EXACTAMENTE "Dallas UP, TX". Si menciona "O083", extrae "Atlanta O083, GA". Si menciona "BNSF", extrae "Atlanta BNSF, GA". Si menciona "h572", extrae "Chicago h572, IL". Si menciona "mega rail", "garden city", o la palabra "Port" o "Puerto" sola y el otro punto está en Georgia (GA), extrae EXACTAMENTE "Garden City, GA", INCLUSO si el usuario añade la palabra "Savannah" (ej. si dice "Garden City Terminal Savannah", igual extrae "Garden City, GA"). Para terminales de Florida: si menciona "FIT" o "PET" extrae "Fort Lauderdale FIT, FL" o "Fort Lauderdale PET, FL" respectivamente. Para otras terminales de FL ("MIA", "PEV", "POMTOC", "SFCT", "Port Everglades", "M669", "Port Tampa Bay"), mantén el nombre EXACTO de la terminal que el usuario haya escrito junto a la ciudad correcta (ej. si el usuario escribe "PEV" debes extraer "Miami PEV, FL", si escribe "POMTOC" extrae "Miami POMTOC, FL", si escribe "M669" extrae "Tampa M669, FL"). En general, si se menciona una terminal (puerto, NS, rieles), asocia el estado correctamente según el contexto y no lo confundas con otra ciudad del mismo nombre. NO uses la palabra "Unknown". NO incluyas tamaños.
 - es_redondo: true por defecto; usa false solo si el dispatcher dice explícitamente "solo ida" o "one way".
-- equipo: uno de dry_van, reefer, flatbed, step_deck, drayage, power_only. Si es continuación de cotización, usa el del historial. IMPORTANTE: Si NO se especifica explícitamente el equipo y la ciudad está en Florida (ej. Miami, Tampa, Cutler Bay, Hollywood, etc.), asume equipo="drayage"; de lo contrario usa "unknown".
-- equipo="drayage": si el dispatcher menciona "drayage", "contenedor", o tamaños como "20", "40", "45", usa "drayage" (el tamaño va en "tamano").
+- equipo: uno de dry_van, reefer, flatbed, step_deck, drayage, power_only. Si es continuación de cotización, usa el del historial. REGLA DE ORO: Si el usuario menciona EXPLÍCITAMENTE "dryvan", "reefer", "flatbed", etc., ese equipo tiene PRIORIDAD ABSOLUTA. NUNCA lo cambies a drayage ni pidas tamaño de contenedor, incluso si el usuario menciona un puerto.
+- equipo="drayage": asúmelo SOLO si el dispatcher menciona explícitamente "drayage", "contenedor" (sin que sea otro equipo), o tamaños como "20", "40", "45". ¡El solo hecho de mencionar un puerto o terminal NO hace que sea drayage! Si no especifica NINGÚN equipo, devuelve obligatoriamente "unknown".
 - equipo, distinción reefer vs. contenedor: "reefer" es trailer (RPM); un contenedor refrigerado de puerto es "drayage", nunca "reefer".
 - tamano: uno de 20, 40, 45, 20_heavy — SOLO si el dispatcher menciona el tamaño (ej. "20 pies", "45", "mia 40") o si hereda de la cotización anterior; de lo contrario usa "unknown".
-- tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece; null si no se menciona.
+- tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece. ¡SOLO extráelo si el usuario menciona explícitamente un monto ofrecido en ESTE mensaje! NO heredes tarifas de cotizaciones anteriores a menos que el usuario pregunte explícitamente por ellas (ej. "¿y con la tarifa que te dije?"). Ante la duda o si es una cotización nueva, pon null.
 - pago_camion: el RPM (dólares por milla) que el dispatcher dice que le paga al camión, SOLO si lo menciona explícitamente en este mensaje; null si no.
 - accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis"); arreglo vacío si no menciona ninguno.
 - respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
@@ -182,25 +192,22 @@ async function getRegisteredEquipment(base44, userEmail) {
       user_email: userEmail,
       active: true,
     });
-
     const organizationId = memberships?.[0]?.organization_id;
     if (!organizationId) return null;
 
-    const trucks = await base44.entities.Truck.filter(
-      {
-        organization_id: organizationId,
-        estado: 'disponible',
-      },
-      'created_date',
-      1
-    );
+    // Traemos toda la flota sin límite
+    const trucks = await base44.entities.Truck.filter({
+      organization_id: organizationId,
+      estado: 'disponible',
+    });
 
-    const equipment = trucks?.[0]?.equipment_type;
-    return equipment || null;
+    if (!trucks || trucks.length === 0) return null;
+    return trucks; // Retornamos la lista completa de camiones
   } catch (_error) {
     return null;
   }
 }
+
 
 // Lee el registro CRUDO de CostConfig del usuario (o null). Separado de
 // getCostConfig para poder reutilizarlo también en la resolución del pago al
@@ -261,66 +268,79 @@ async function persistPagoCamion(base44, userEmail, record, rpm) {
 // (wrap de respuesta_general) → siempre { content: string }.
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchDrivingMiles(
+  base44: any,
   origin: string,
   destination: string,
 ): Promise<number | null> {
   try {
-    // --- NUEVO: Leer el archivo .env localmente de forma segura ---
-    try {
-      const envText = Deno.readTextFileSync('./.env');
-      envText.split('\n').forEach(line => {
-        const [key, ...val] = line.split('=');
-        if (key && val.length) Deno.env.set(key.trim(), val.join('=').trim());
-      });
-    } catch (_) {
-      // Si el archivo .env no existe (ej. en la nube), lo ignora sin fallar
-    }
-    // --------------------------------------------------------------
-
-    const apiKey = Deno.env.get('GOOGLE_MAPS_API_KEY') || 'AIzaSyAjsTFlMbPi8QYwV6kbHXBGeTOv0ShYRS0';
-    if (!apiKey) {
-      console.log('[fetchDrivingMiles] ERROR: API key is missing. Check .env loading.');
-      return null;
-    }
-
-    const estadosComunes = ['illinois', 'il', 'georgia', 'gorgia', 'ga', 'florida', 'fl', 'texas', 'tx', 'south carolina', 'sc', 'north carolina', 'nc', 'alabama', 'al', 'mississippi', 'ms', 'tennessee', 'tn', 'oklahoma', 'ok', 'new mexico', 'nm', 'louisiana', 'la', 'arkansas', 'ar', 'california', 'ca', 'arizona', 'az', 'nevada', 'nv'];
-    let estadoDetectado = '';
-    const textoCombinado = `${origin} ${destination}`.toLowerCase();
-    for (const st of estadosComunes) {
-      const re = new RegExp(`\\b${st}\\b`, 'i');
-      if (re.test(textoCombinado)) {
-        estadoDetectado = st;
-        break;
-      }
-    }
-    
-    // Regla genérica solicitada: si dice Chicago y no detectamos estado, asumimos IL
-    if (!estadoDetectado && textoCombinado.includes('chicago')) {
-      estadoDetectado = 'il';
-    }
 
     const normalizeForMap = (loc: string) => {
       let norm = loc;
       const lower = loc.toLowerCase();
-      // Si el usuario da la pista del estado en uno, se lo prestamos al otro
-      if (estadoDetectado && !new RegExp(`\\b${estadoDetectado}\\b`, 'i').test(lower)) {
-        norm = `${loc}, ${estadoDetectado.toUpperCase()}`;
-      }
       // Casos críticos de puertos que igual necesitan ciudad para que Maps no falle
-      if (lower.includes('mega rail') || lower.includes('garden city')) return `${norm}, Savannah`;
+      if (lower.includes('mega rail') || lower.includes('garden city') || lower.includes('savannah port')) return `Georgia Ports Authority - Garden City Terminal, Savannah, GA`;
+      if (lower.includes('ns rossville')) return `Norfolk Southern - Rossville Intermodal Facility, 2515 Highway 72, Rossville, TN`;
+      if (lower.includes('m669') || lower.includes('port tampa bay')) return `Port Tampa Bay, 2999 Guy N Verger Blvd, Tampa, FL 33605`;
+      if (lower.includes('fit') && (lower.includes('terminal') || lower.includes('lauderdale'))) return `Florida International Terminal, 4100 McIntosh Rd, Fort Lauderdale, FL 33316`;
+      if ((lower.includes('pet') || lower.includes('port everglades') || lower.includes('pev')) && lower.includes('lauderdale')) return `Port Everglades, Fort Lauderdale, FL`;
       if (lower.includes('pomtoc') || lower.includes('sfct')) return `${norm}, Miami`;
       // Diccionario de Parques Logísticos y Terminales
+      if (lower.includes('o083') || (lower.includes('bnsf') && lower.includes('atlanta'))) return `Austell, GA`;
+      if (lower === 'up' || lower === 'up rail' || lower === 'up, tx' || lower.includes('union pacific') || (lower.includes('up') && lower.includes('dallas'))) return `Wilmer, TX`;
       if (lower.includes('h572')) return `Elwood, IL`;
+      if (lower.includes('wando') || lower.includes('wwt')) return `Mount Pleasant, SC`;
       return norm;
     };
 
-    const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
     const normOrigin = normalizeForMap(origin);
     const normDest = normalizeForMap(destination);
+
+    const cacheKey = `${normOrigin.toLowerCase().trim()}|${normDest.toLowerCase().trim()}`;
+    try {
+      const cached = await base44.entities.MilesCache.filter({ clave: cacheKey });
+      if (cached.length > 0) {
+        console.log(`[fetchDrivingMiles] Cache hit! ${cacheKey} = ${cached[0].millas} millas`);
+        return cached[0].millas;
+      }
+    } catch (e) {
+      console.log(`[fetchDrivingMiles] Error leyendo cache: ${e}`);
+    }
+    // --- NUEVO: Leer el archivo .env localmente de forma segura ---
+    const envGetters = [
+      () => Deno.readTextFileSync('./base44/functions/marketChat/.env'),
+      () => Deno.readTextFileSync('./.env'),
+      () => Deno.readTextFileSync('../.env'),
+      () => Deno.readTextFileSync('../../.env'),
+    ];
+    let envLoaded = false;
+    for (const getter of envGetters) {
+      try {
+        if (typeof Deno !== "undefined" && typeof Deno.readTextFileSync === "function") {
+          const envText = getter();
+          envText.split('\n').forEach((line: string) => {
+            const [key, ...val] = line.split('=');
+            if (key && val.length && typeof Deno !== "undefined" && Deno.env) {
+                Deno.env.set(key.trim(), val.join('=').trim());
+            }
+          });
+          envLoaded = true;
+          break; // Éxito, no seguir probando
+        }
+      } catch (_) { }
+    }
+    console.log(`[fetchDrivingMiles] Env loaded manually: ${envLoaded}`);
+    // --------------------------------------------------------------
+
+    // Compatibilidad para leer la llave ya sea en Deno o en Node
+    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") || process.env.GOOGLE_MAPS_API_KEY;
+    console.log(`[fetchDrivingMiles] apiKey exists: ${!!apiKey}`);
+
+    const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
+
     url.searchParams.set('origins', normOrigin);
     url.searchParams.set('destinations', normDest);
     url.searchParams.set('units', 'imperial');
-    url.searchParams.set('key', apiKey);
+    if (apiKey) url.searchParams.set('key', apiKey);
 
     console.log(`[fetchDrivingMiles] Calling GMaps with origins=${normOrigin}, destinations=${normDest}`);
 
@@ -331,20 +351,38 @@ async function fetchDrivingMiles(
     }
 
     const data = await res.json();
+    console.log(`[fetchDrivingMiles] GMaps Root Status: ${data.status}`);
+    if (data.error_message) {
+      console.log(`[fetchDrivingMiles] GMaps Error Message: ${data.error_message}`);
+    }
+
     const element = data?.rows?.[0]?.elements?.[0];
-    console.log(`[fetchDrivingMiles] GMaps Status: ${element?.status}`);
-    
+    console.log(`[fetchDrivingMiles] GMaps Element Status: ${element?.status}`);
+
     if (element?.status !== 'OK') return null;
 
-        // Extraer exactamente el texto de millas que arroja Google Maps en su UI
+    // Extraer exactamente el texto de millas que arroja Google Maps en su UI
     if (element.distance.text) {
       const match = element.distance.text.match(/[\d,.]+/);
       if (match) {
-        return Math.round(parseFloat(match[0].replace(/,/g, '')));
+        const millasCalculadas = Math.round(parseFloat(match[0].replace(/,/g, '')));
+        try {
+          await base44.entities.MilesCache.create({ clave: cacheKey, millas: millasCalculadas });
+        } catch (e) {
+          console.log(`[fetchDrivingMiles] Error guardando cache: ${e}`);
+        }
+        return millasCalculadas;
       }
     }
 
-    return Math.round(element.distance.value / 1609);
+    const millasCalculadasFallback = Math.round(element.distance.value / 1609);
+    try {
+      await base44.entities.MilesCache.create({ clave: cacheKey, millas: millasCalculadasFallback });
+    } catch (e) {
+      console.log(`[fetchDrivingMiles] Error guardando cache: ${e}`);
+    }
+    return millasCalculadasFallback;
+
 
   } catch (error) {
     console.log(`[fetchDrivingMiles] Exception: ${error}`);
@@ -444,17 +482,24 @@ Deno.serve(async (req) => {
     // Google Maps: si hay origen y destino pero no millas → calculamos automático
     let costConfigValuesShown: Array<number | null | undefined> = [];
     let costoPorMillaPropio: number | null = null;
-    
+
     // Parseamos explícitamente porque desde el frontend a veces llega como string "3.38"
     const parsedCpm = costConfig?.costo_por_milla != null ? Number(costConfig.costo_por_milla) : NaN;
-    
+
+    // INTERCEPTOR: Si el usuario no ha configurado sus costos en la calculadora,
+    // bloqueamos el chat y le devolvemos el mensaje indicándole que lo haga.
+    console.log(`[DEBUG] interceptor - parsedCpm:`, parsedCpm, `costConfig:`, costConfig);
+    if (isNaN(parsedCpm) || parsedCpm <= 0) {
+      return Response.json({ content: MESSAGES[locale].missingCostConfig.content });
+    }
+
     if (costConfig && !isNaN(parsedCpm)) {
       costoPorMillaPropio = parsedCpm;
       const diesel = costConfig.diesel_precio != null ? Number(costConfig.diesel_precio) : COSTCONFIG_DEFAULTS.diesel_precio;
       const mpg = costConfig.mpg != null ? Number(costConfig.mpg) : COSTCONFIG_DEFAULTS.mpg;
       const objetivo = costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : COSTCONFIG_DEFAULTS.tarifa_objetivo;
       const breakEven = costConfig.tarifa_break_even != null ? Number(costConfig.tarifa_break_even) : null;
-      
+
       costConfigValuesShown = [diesel, mpg, parsedCpm, breakEven, objetivo];
       systemContext += `\n\nCOSTOS PERSONALIZADOS DEL USUARIO (solo contexto de rentabilidad para respuestas generales; el piso de rate_check usa "pago_camion_rpm" cuando la tabla no lo trae — ver Decisión 9-B):
 - Diésel: $${diesel}/gal | MPG: ${mpg}
@@ -468,34 +513,103 @@ Deno.serve(async (req) => {
     if (!raw) {
       return Response.json({ content: safeFallbackContent(locale) });
     }
-    console.log(`[entry] Extracted: intent=${raw.intent}, origen=${raw.origen}, destino=${raw.destino}, millas=${raw.millas_ida}`);
-    // Guardarraíl: Forzar drayage si la ruta existe en BD y el usuario no especificó equipo explícitamente
-    const ultimoMensajeLower = ultimoMensajeDelDispatcher(cappedMessages).toLowerCase();
-    const mencionoEquipo = ['van', 'reefer', 'flat', 'step', 'power'].some(e => ultimoMensajeLower.includes(e));
-    
-    if (!mencionoEquipo) {
-      const locDestino = raw.destino ? resolveLocation(raw.destino) : { status: 'ask' };
-      const locOrigen = raw.origen ? resolveLocation(raw.origen) : { status: 'ask' };
-      
-      if (locDestino.status === 'ok' || locOrigen.status === 'ok') {
-        raw.equipo = 'drayage';
-      }
-    }
 
-    if (!raw.equipo || raw.equipo === 'unknown') {
-      if (defaultEquipment) {
-        raw.equipo = defaultEquipment;
-      }
-    }
-
-    // Guardarraíl de tema (Decisión 1): decide el intent en código, no confía
-    // ciegamente en lo que devolvió el LLM. Va antes de cualquier cálculo.
     const intent = resolveIntent(raw.intent, cappedMessages);
+    
+    // Si el usuario solo pide millas, omitimos las validaciones de equipo y respondemos de inmediato.
+    if (intent === 'ask_miles') {
+      if (!raw.millas_ida && raw.origen && raw.destino) {
+        raw.millas_ida = await fetchDrivingMiles(base44, raw.origen, raw.destino);
+      }
+      
+      const permitidasMiles = new Set<number>();
+      let responseText = '';
+      if (raw.millas_ida != null) {
+        responseText = `📍 **De ${raw.origen} a ${raw.destino}**\nDistancia: **${raw.millas_ida} millas** aproximadamente.`;
+        permitidasMiles.add(raw.millas_ida);
+      } else {
+        responseText = `No pude calcular las millas para esa ruta. Por favor, verifica las ciudades o incluye el estado.`;
+      }
+      
+      const conFronteraVerificada = (texto: string, permitidas: Set<number>): string => {
+        const userNumbers = extractNumericTokens(ultimoMensajeDelDispatcher(cappedMessages));
+        for (const n of userNumbers) permitidas.add(n);
+        const chequeo = assertNoInventedFigures(texto, permitidas);
+        return chequeo.ok ? texto : buildBoundaryFallbackMarkdown();
+      };
+      
+      return Response.json({ content: conFronteraVerificada(responseText, permitidasMiles) });
+    }
+
+    console.log(`[entry] Extracted: intent=${intent}, origen=${raw.origen}, destino=${raw.destino}, millas=${raw.millas_ida}`);
+    // Guardarraíl: Forzar drayage si la ruta existe en BD y el usuario no especificó equipo explícitamente
+        const ultimoMensajeLower = ultimoMensajeDelDispatcher(cappedMessages).toLowerCase();
+    
+    if (intent === 'rate_check') {
+      // Verificamos si mencionó un tipo de equipo explícito ("van", "reefer", etc.)
+      const mencionoTipo = ['van', 'reefer', 'flat', 'step', 'power','dryage','drayage','contenedor'].some(e => ultimoMensajeLower.includes(e));
+      // Verificamos si mencionó la placa de alguno de sus camiones registrados
+      const mencionoPlaca = defaultEquipment ? defaultEquipment.some((t: any) => ultimoMensajeLower.includes(t.placa.toLowerCase())) : false;
+      const mencionoEquipoEnUltimoMensaje = mencionoTipo || mencionoPlaca;
+      
+      const equipoYaResuelto = raw.equipo && raw.equipo !== 'unknown';
+      const tenemosEquipo = mencionoEquipoEnUltimoMensaje || equipoYaResuelto;
+
+      // Si mencionó la placa, le asignamos el tipo de equipo de esa placa
+      if (mencionoPlaca && !mencionoTipo && defaultEquipment) {
+        const camionElegido = defaultEquipment.find((t: any) => ultimoMensajeLower.includes(t.placa.toLowerCase()));
+        if (camionElegido && camionElegido.equipment_type) {
+          raw.equipo = camionElegido.equipment_type.toLowerCase().replace(' ', '_');
+        }
+      }
+
+      if (!tenemosEquipo) {
+        if (defaultEquipment && defaultEquipment.length > 1) {
+          // Tiene MÁS DE 1 equipo y no especificó: La IA pregunta y detiene el flujo
+          const listaEquipos = defaultEquipment.map((t: any) => `- ${t.placa} (${t.equipment_type || 'Desconocido'})`).join('\n');
+          return Response.json({
+            content: `Mira, tenemos estos equipos registrados en tu cuenta:\n${listaEquipos}\n\n¿Cuál de estos equipos deseas usar para esta ruta?`
+          });
+        } else if (defaultEquipment && defaultEquipment.length === 1) {
+          // Tiene EXACTAMENTE 1 equipo: Lo toma automático sin preguntar
+          const equipoUnico = defaultEquipment[0].equipment_type || 'unknown';
+          raw.equipo = equipoUnico.toLowerCase().replace(' ', '_');
+        } else {
+          // NO tiene flota registrada: preguntamos qué equipo es.
+          return Response.json({
+            content: `Para darte un cálculo preciso, ¿qué tipo de camión estás buscando (Dry Van, Reefer, Flatbed, Drayage...)?`
+          });
+        }
+      } else if (raw.equipo) {
+        // Normalizar texto por si el LLM extrajo "Dry Van" en lugar de "dry_van"
+        raw.equipo = raw.equipo.toLowerCase().replace(' ', '_');
+      }
+    }
+
+
+    // --- Validación determinista de presencia ---
+    // Si la IA extrajo un número que no está en el mensaje del usuario (o en el historial reciente para heredados), lo descartamos.
+    const ultimoMsg = ultimoMensajeDelDispatcher(cappedMessages);
+    const msgSinComas = ultimoMsg.replace(/,/g, '');
+    const historialCompletoSinComas = cappedMessages.map(m => m.content).join(' ').replace(/,/g, '');
+
+    if (raw.pago_camion != null && !historialCompletoSinComas.includes(raw.pago_camion.toString())) {
+      raw.pago_camion = null;
+    }
+    if (raw.tarifa_ofrecida != null && !historialCompletoSinComas.includes(raw.tarifa_ofrecida.toString())) {
+      raw.tarifa_ofrecida = null;
+    }
+    if (raw.millas_ida != null && !msgSinComas.includes(raw.millas_ida.toString())) {
+      raw.millas_ida = null; // Descarta las millas inventadas por la IA para que entre Google Maps
+    }
+
+    // --------------------------------------------------- 
+
     // Google Maps: si hay origen y destino pero no millas → calculamos automático.
     // Va aquí porque necesita que `raw` e `intent` ya estén declarados.
     // Usamos !raw.millas_ida para cubrir null, undefined, y 0 (que a veces el LLM arroja si no sabe).
     if (intent === 'rate_check' && !raw.millas_ida && raw.origen && raw.destino) {
-      raw.millas_ida = await fetchDrivingMiles(raw.origen, raw.destino);
+      raw.millas_ida = await fetchDrivingMiles(base44, raw.origen, raw.destino);
     }
 
     // reglas-v3-multiestado Fase 7 (criterio 4): validador automático de la
@@ -504,6 +618,10 @@ Deno.serve(async (req) => {
     // fuera del conjunto autorizado, la respuesta NUNCA sale cruda: se
     // reemplaza por `buildBoundaryFallbackMarkdown()`.
     const conFronteraVerificada = (texto: string, permitidas: Set<number>): string => {
+      // Los números tipeados por el usuario siempre están autorizados a repetirse.
+      const userNumbers = extractNumericTokens(ultimoMsg);
+      for (const n of userNumbers) permitidas.add(n);
+      
       const chequeo = assertNoInventedFigures(texto, permitidas);
       return chequeo.ok ? texto : buildBoundaryFallbackMarkdown();
     };
@@ -528,20 +646,12 @@ Deno.serve(async (req) => {
 
     // Pago al camión (Decisión 9-B): se resuelve antes del cálculo porque
     // computeFloorTarget lo usa como piso cuando no hay piso de tabla.
-    
-       // --- NUEVO: Validación determinista de presencia ---
+
+    // --- NUEVO: Validación determinista de presencia ---
     // Si la IA extrajo un número que no está en el mensaje del usuario, lo descartamos.
-    const ultimoMsg = ultimoMensajeDelDispatcher(cappedMessages);
-    const msgSinComas = ultimoMsg.replace(/,/g, '');
-    
-    if (raw.pago_camion != null && !msgSinComas.includes(raw.pago_camion.toString())) {
-      raw.pago_camion = null;
-    }
-    if (raw.tarifa_ofrecida != null && !msgSinComas.includes(raw.tarifa_ofrecida.toString())) {
-      raw.tarifa_ofrecida = null;
-    }
-    // --------------------------------------------------- 
-    
+
+    // (La validación determinista de presencia se movió arriba, antes de Google Maps)
+
     const truckPayment = resolveTruckPayment(costConfigRecord, raw.pago_camion);
     if (truckPayment.shouldPersist && truckPayment.rpm != null) {
       await persistPagoCamion(base44, user.email, costConfigRecord, truckPayment.rpm);
@@ -569,6 +679,7 @@ Deno.serve(async (req) => {
           accessorialTriggers: raw.accessorial_triggers,
           costoPorMillaPropio,
           tarifaObjetivaPropia: costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
+          rawPrompt: msgSinComas,
         });
         if (outcome.kind === 'ask_miles') {
           content = raw.destino ? buildAskMilesMarkdown(outcome.ciudadConocida, locale) : buildMissingDataMarkdown(locale);
@@ -593,6 +704,9 @@ Deno.serve(async (req) => {
         content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale);
       } else {
         const outcome = resolveGenericQuote({
+          origenRaw: raw.origen,
+          destinoRaw: raw.destino,
+          accessorialTriggers: raw.accessorial_triggers,
           equipment: resolvedEquipment.equipment,
           millasIdaDeclaradas: raw.millas_ida,
           pagoCamionRpm: truckPayment.rpm,
@@ -616,7 +730,7 @@ Deno.serve(async (req) => {
     // tope de sanidad, pedir equipo/tamaño), esas respuestas son estáticas y
     // no traen ninguna cifra — el conjunto vacío las deja pasar tal cual.
     const permitidasRateCheck = calculo ? buildRateCheckAllowedNumbers(calculo) : buildAllowedNumbersSet(buildStaticRateCheckNumbers());
-    
+
     // Ya no se inyecta el origen/destino como comentario HTML, ya que el 
     // frontend lo estaba renderizando visiblemente en algunos casos.
 

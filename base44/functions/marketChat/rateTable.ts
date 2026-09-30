@@ -155,11 +155,14 @@ export function findRouteById(estado: Estado, id: string): RouteRecord | null {
 export function findClosestRouteByMiles(
   estado: Estado,
   tamano: Tamano,
-  millasIda: number
+  millasIda: number,
+  isNeighborFallback: boolean = false
 ): { route: RouteRecord; precio: RoutePriceEntry } | null {
-  const rutas = loadRoutes(estado);
+  let rutas = loadRoutes(estado);
+  if (isNeighborFallback && estado === 'FL') {
+    rutas = rutas.filter(r => r.mercado === 'MIA' || r.mercado === 'MIA/PEV' || r.mercado === 'Ambos');
+  }
   let closest: { route: RouteRecord; precio: RoutePriceEntry; diff: number } | null = null;
-  
   for (const route of rutas) {
     const precio = route.precios.find(p => p.tamano === tamano);
     if (!precio) continue;
