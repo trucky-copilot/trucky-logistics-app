@@ -1,0 +1,1 @@
+const textData = "Para el estado de TX, vimos una tarifa de mercado en Dry Van de $2.30/mi"; fetch("https://trucky-17a283d5.base44.app/api/functions/adminUploadStateData", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ textData }) }).then(r => r.text()).then(console.log);

@@ -62,7 +62,7 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
     }
 
     if (!result || !result.states || !Array.isArray(result.states)) {
-      return new Response('La IA no pudo interpretar el documento.', { status: 422 });
+      return Response.json({ success: false, raw_result: result || 'null' });
     }
 
     // Guardamos o actualizamos cada estado

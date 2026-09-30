@@ -69,7 +69,7 @@ export default function AdminDashboard() {
         setStatusMsg(`Datos guardados exitosamente. Se actualizaron ${res.statesParsed} estados.`);
         setTextData('');
       } else {
-        setStatusMsg('La IA no pudo procesar el documento.');
+        setStatusMsg('La IA no pudo procesar el documento. ' + (res.raw_result ? JSON.stringify(res.raw_result) : ''));
       }
     } catch (e) {
       console.error(e);
