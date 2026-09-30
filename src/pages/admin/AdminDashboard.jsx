@@ -15,9 +15,10 @@ export default function AdminDashboard() {
   useEffect(() => {
     // Load existing ticker
     try {
-      base44.db.query('GlobalMarketTicker').filter('id', 'eq', 'global').first()
-        .then(res => {
-          if (res) {
+      base44.entities.GlobalMarketTicker.filter({ id: 'global' })
+        .then(records => {
+          if (records && records.length > 0) {
+            const res = records[0];
             setTicker({
               dry_van: res.dry_van || '',
               reefer: res.reefer || '',

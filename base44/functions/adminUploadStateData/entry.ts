@@ -22,7 +22,13 @@ const SCHEMA = {
 
 export default async function adminUploadStateData(req: Request, ctx: any) {
   try {
-    const user = await ctx.auth.getUser();
+    const base44 = createClientFromRequest(req);
+    let user;
+    try {
+      user = await base44.auth.me();
+    } catch (e) {
+      // ignore
+    }
     if (!user || (user.email !== 'luis.bermudez@ogma.com.co' && user.email !== 'luis.bermudez@ogm.com.co')) {
       return new Response('Unauthorized', { status: 403 });
     }
@@ -44,8 +50,6 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
       TEXTO A ANALIZAR:
       ${textData}
     `;
-
-    const base44 = createClientFromRequest(req);
     let result;
     try {
       result = await base44.integrations.Core.InvokeLLM({
@@ -85,6 +89,7 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
 
     return Response.json({ success: true, statesParsed: result.states.length });
   } catch (e: any) {
+    console.error("CRITICAL BACKEND ERROR:", e);
     return new Response(JSON.stringify({ error: String(e), stack: e.stack }), { status: 500 });
   }
 }
