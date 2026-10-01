@@ -52,10 +52,11 @@ export default function AdminDashboard() {
         diesel: parseFloat(ticker.diesel) || null
       };
       await base44.functions.invoke('adminUpdateTicker', formatted);
+      // Notifica al MarketTicker para actualizar la cinta al instante sin recargar
+      window.dispatchEvent(new CustomEvent('tickerUpdated', { detail: formatted }));
       setStatusMsg('Cinta actualizada exitosamente.');
-      setTicker({
-        dry_van: '', reefer: '', flatbed: '', step_deck: '', power_only: '', container: '', diesel: ''
-      });
+      // Borra los campos después de guardar
+      setTicker({ dry_van: '', reefer: '', flatbed: '', step_deck: '', power_only: '', container: '', diesel: '' });
     } catch (e) {
       console.error(e);
       setStatusMsg('Error guardando la cinta.');
@@ -157,7 +158,7 @@ export default function AdminDashboard() {
             disabled={savingTicker}
             className="flex items-center gap-2 bg-amber-500 hover:bg-amber-600 text-black px-4 py-2 rounded-xl font-medium transition-colors"
           >
-            <Save className="w-4 h-4" /> {savingTicker ? 'Guardando...' : 'Guardar Cinta'}
+            <Save className="w-4 h-4" /> Guardar Cinta
           </button>
         </div>
       </div>

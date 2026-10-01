@@ -1053,7 +1053,7 @@ export function resolveDrayageQuote(params: {
         calculo: {
           estado: match.estado,
           ciudad: mercadoFinal ? `${match.ciudad} ${mercadoFinal}` : match.ciudad,
-          millasIda: (typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas)) ? millasIdaDeclaradas : match.millasIda,
+          millasIda: match.millasIda,
           fuenteMillas: 'tabla',
           piso: ft.floor,
           floorSource: ft.floorSource,
@@ -1067,7 +1067,7 @@ export function resolveDrayageQuote(params: {
           segundaLectura: null,
           precioIncluyeRegreso: match.precioIncluyeRegreso,
           accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
-          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: (typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas)) ? millasIdaDeclaradas : match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
           costoPorMillaPropio: costoPorMillaPropio ?? null, // Ahora sí lo pasamos para el cálculo dinámico de rangos
           tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
           tramoCortoThreshold: null, // drayage usa tabla
@@ -1592,6 +1592,11 @@ export const EXTRACTION_SCHEMA = {
     accessorial_triggers: {
       type: 'array',
       items: { type: 'string' },
+    },
+    accessorial_query_mode: {
+      type: 'string',
+      enum: ['price_only', 'include_in_rate', 'none'],
+      description: "Determina el modo de consulta de accesorial. 'price_only' cuando el usuario SOLO quiere saber cuánto vale ese cargo accesorial (ej: '¿cuánto vale el pre-pull?', '¿qué cobra el hazmat?'). 'include_in_rate' cuando el usuario quiere saber el total de una ruta CON ese cargo incluido (ej: 'cuánto queda con el pre-pull', 'si me cobran pre-pull cuánto sería el total'). 'none' si no se menciona ningún accesorial."
     },
     respuesta_general: { type: 'string' },
   },

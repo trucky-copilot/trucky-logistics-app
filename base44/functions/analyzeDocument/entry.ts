@@ -455,7 +455,7 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
   };
 }
 
-function validarCarrier(datos, carrierProfile, locale) {
+function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarrierProfiles = []) {
   const hallazgos = [];
   let semaforo = 'verde';
   let identity_match = 'not_found';
@@ -496,8 +496,16 @@ function validarCarrier(datos, carrierProfile, locale) {
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   } else {
-    hallazgos.push(locale === 'en' ? `⚠ Carrier "${datos.carrier_nombre}" detected — no registered profile to compare` : `⚠ Carrier "${datos.carrier_nombre}" detectado — sin perfil registrado para comparar`);
-    if (semaforo === 'verde') semaforo = 'amarillo';
+    // Sin perfil registrado = riesgo crítico de suplantación de identidad.
+    // Mostramos el nombre de la empresa registrada (o la cuenta) para comparar.
+    const nombreEmpresa = allCarrierProfiles[0]?.company_name
+      || userInfo?.full_name
+      || userInfo?.email
+      || 'empresa no identificada';
+    hallazgos.push(locale === 'en'
+      ? `❌ Carrier "${datos.carrier_nombre}" detected — your company: "${nombreEmpresa}" — Identity theft risk.`
+      : `❌ Carrier "${datos.carrier_nombre}" detectado — tu empresa: "${nombreEmpresa}" — Riesgo de suplantación de identidad.`);
+    semaforo = 'rojo';
     identity_match = 'pending';
   }
 
@@ -944,7 +952,7 @@ Deno.serve(async (req) => {
       // Carrier: prioridad en rentabilidad, compatibilidad operativa y cláusulas
       categorias = [
         validarRate(datos, costConfig, locale),          // ← más crítico: ¿es rentable?
-        validarCarrier(datos, carrierProfile, locale),   // ← ¿está correcto mi nombre/MC?
+        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles),   // ← ¿está correcto mi nombre/MC?
         validarEquipo(datos, trucks, carrierProfile, locale), // ← ¿tengo el equipo?
         validarCommodity(datos, carrierProfile, locale), // ← ¿puedo mover esta carga?
         validarClausulas(datos, locale),                 // ← ¿qué riesgos contractuales hay?
@@ -955,7 +963,7 @@ Deno.serve(async (req) => {
       // Dispatcher: prioridad en completitud, broker correcto, carrier asignado y readiness
       categorias = [
         validarBroker(datos, brokers, brokerProfiles, locale), // ← ¿broker verificado?
-        validarCarrier(datos, carrierProfile, locale),         // ← ¿carrier correcto asignado?
+        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles),         // ← ¿carrier correcto asignado?
         validarFechasOperacion(datos, locale),                 // ← ¿está completo para operar?
         validarEquipo(datos, trucks, carrierProfile, locale),  // ← ¿compatible con el carrier?
         validarCommodity(datos, carrierProfile, locale),       // ← ¿commodity OK para el carrier?

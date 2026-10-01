@@ -1,31 +1,34 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 
-function useMarketTickerData() {
+function buildItems(res) {
+  const items = [];
+  if (res.diesel) items.push({ label: 'DIÉSEL', value: `$${parseFloat(res.diesel).toFixed(2)}/gal`, delta: 0 });
+  if (res.dry_van) items.push({ label: 'DRY VAN', value: `$${parseFloat(res.dry_van).toFixed(2)}/mi`, delta: 0 });
+  if (res.reefer) items.push({ label: 'REEFER', value: `$${parseFloat(res.reefer).toFixed(2)}/mi`, delta: 0 });
+  if (res.flatbed) items.push({ label: 'FLATBED', value: `$${parseFloat(res.flatbed).toFixed(2)}/mi`, delta: 0 });
+  if (res.step_deck) items.push({ label: 'STEP DECK', value: `$${parseFloat(res.step_deck).toFixed(2)}/mi`, delta: 0 });
+  if (res.power_only) items.push({ label: 'POWER ONLY', value: `$${parseFloat(res.power_only).toFixed(2)}/mi`, delta: 0 });
+  if (res.container) items.push({ label: 'CONTENEDOR', value: `$${parseFloat(res.container).toFixed(2)}/mi`, delta: 0 });
+  return items;
+}
 
+function useMarketTickerData() {
   const [items, setItems] = useState([]);
 
   useEffect(() => {
-    try {
-      base44.entities.GlobalMarketTicker.filter().then(records => {
-        const res = records.find(r => r.id === 'global') || records[0];
-        if (res) {
-          const newItems = [];
-          if (res.diesel) newItems.push({ label: 'DIÉSEL', value: `$${res.diesel.toFixed(2)}/gal`, delta: 0 });
-          if (res.dry_van) newItems.push({ label: 'DRY VAN', value: `$${res.dry_van.toFixed(2)}/mi`, delta: 0 });
-          if (res.reefer) newItems.push({ label: 'REEFER', value: `$${res.reefer.toFixed(2)}/mi`, delta: 0 });
-          if (res.flatbed) newItems.push({ label: 'FLATBED', value: `$${res.flatbed.toFixed(2)}/mi`, delta: 0 });
-          if (res.step_deck) newItems.push({ label: 'STEP DECK', value: `$${res.step_deck.toFixed(2)}/mi`, delta: 0 });
-          if (res.power_only) newItems.push({ label: 'POWER ONLY', value: `$${res.power_only.toFixed(2)}/mi`, delta: 0 });
-          if (res.container) newItems.push({ label: 'CONTENEDOR', value: `$${res.container.toFixed(2)}/mi`, delta: 0 });
-          setItems(newItems);
-        }
-      }).catch(err => {
-        console.error('Error fetching ticker:', err);
-      });
-    } catch (e) {
-      console.error('Error in useMarketTickerData:', e);
-    }
+    // Carga inicial desde BD
+    base44.entities.GlobalMarketTicker.filter().then(records => {
+      const res = records.find(r => r.id === 'global') || records[0];
+      if (res) setItems(buildItems(res));
+    }).catch(err => console.error('[MarketTicker] fetch error:', err));
+
+    // Escucha el evento del AdminDashboard para actualizar al instante
+    const onUpdated = (e) => {
+      if (e.detail) setItems(buildItems(e.detail));
+    };
+    window.addEventListener('tickerUpdated', onUpdated);
+    return () => window.removeEventListener('tickerUpdated', onUpdated);
   }, []);
 
   return items;

@@ -45,10 +45,11 @@ import {
   ultimoMensajeDelDispatcher,
   preguntaPorTotalRedondo,
   buildDrayageRoundTripMarkdown,
+  filterAccessorialsByTriggers,
   type Tamano,
   type CalculatedQuote,
 } from './rateEngine.ts';
-import { getRouteCounts } from './rateTable.ts';
+import { getRouteCounts, loadAccessorials } from './rateTable.ts';
 import {
   assertNoInventedFigures,
   buildBoundaryFallbackMarkdown,
@@ -486,10 +487,10 @@ Deno.serve(async (req) => {
     // Parseamos explícitamente porque desde el frontend a veces llega como string "3.38"
     const parsedCpm = costConfig?.costo_por_milla != null ? Number(costConfig.costo_por_milla) : NaN;
 
-    // REGLA SIMPLE: si no hay registro guardado en BD, el usuario no ha configurado la calculadora.
-    // Una cuenta nueva nunca tendrá costConfigRecord → se muestra el mensaje.
-    // Si guardó aunque sea una vez → costConfigRecord existe → no se muestra.
-    const isCalculatorConfigured = costConfigRecord != null;
+    // REGLA CORREGIDA: el registro debe existir Y tener costo_por_milla configurado.
+    // Un registro vacío (creado en onboarding con solo defaults) NO cuenta como configurado.
+    const isCalculatorConfigured = costConfigRecord != null && costConfigRecord.costo_por_milla != null;
+    console.log(`[DEBUG] user=${user.email} | costo_por_milla=${costConfigRecord?.costo_por_milla} | isCalculatorConfigured=${isCalculatorConfigured}`);
 
 
     if (costConfig && !isNaN(parsedCpm)) {
@@ -572,6 +573,44 @@ Deno.serve(async (req) => {
       
       return Response.json({ content: conFronteraVerificada(responseText, permitidasMiles) });
     }
+
+    // ── CONSULTA PURA DE ACCESORIAL ────────────────────────────────────────────
+    // Si el usuario pregunta el precio de un accesorial (pre-pull, hazmat, etc.)
+    // SIN mencionar una ruta específica → responde solo con el valor en texto.
+    // Si menciona una ruta + accesorial → deja que fluya al rate_check normal
+    // para que aparezca la tarjeta con el total sumado.
+    const triggers = Array.isArray(raw.accessorial_triggers) ? raw.accessorial_triggers : [];
+
+    // La IA decide el modo: 'price_only' → solo precio del accesorial en texto,
+    // 'include_in_rate' → calcular tarifa + accesorial y mostrar tarjeta de veredicto.
+    // Este campo evita los regex frágiles: la IA interpreta cualquier variante natural del usuario.
+    const accessorialMode = typeof raw.accessorial_query_mode === 'string'
+      ? raw.accessorial_query_mode
+      : 'none';
+
+    console.log(`[DEBUG accesorial] triggers=${JSON.stringify(triggers)} | mode=${accessorialMode} | intent=${intent} | tarifa_ofrecida=${raw.tarifa_ofrecida}`);
+
+    const esConsultaPuraAccesorial = triggers.length > 0 && accessorialMode === 'price_only';
+
+    if (esConsultaPuraAccesorial) {
+      const itemsFL = loadAccessorials('FL' as any);
+      const matchedFL = filterAccessorialsByTriggers(itemsFL, triggers);
+
+      const lineas: string[] = [];
+      lineas.push(`💰 **Cargos accesoriales para: ${triggers.join(', ')}**\n`);
+
+      if (matchedFL.length > 0) {
+        for (const a of matchedFL) {
+          lineas.push(`- ${a.concepto}: **${a.monto}**`);
+        }
+      } else {
+        lineas.push(`No tengo una tarifa estándar registrada para ese cargo en mi base de datos.`);
+        lineas.push(`Te recomiendo confirmar el monto con tu broker directamente.`);
+      }
+
+      return Response.json({ content: lineas.join('\n') });
+    }
+
 
     console.log(`[entry] Extracted: intent=${intent}, origen=${raw.origen}, destino=${raw.destino}, millas=${raw.millas_ida}`);
     // Guardarraíl: Forzar drayage si la ruta existe en BD y el usuario no especificó equipo explícitamente
