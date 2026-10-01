@@ -486,12 +486,11 @@ Deno.serve(async (req) => {
     // Parseamos explícitamente porque desde el frontend a veces llega como string "3.38"
     const parsedCpm = costConfig?.costo_por_milla != null ? Number(costConfig.costo_por_milla) : NaN;
 
-    // INTERCEPTOR: Si el usuario no ha configurado sus costos en la calculadora,
-    // bloqueamos el chat y le devolvemos el mensaje indicándole que lo haga.
-    console.log(`[DEBUG] interceptor - parsedCpm:`, parsedCpm, `costConfig:`, costConfig);
-    if (isNaN(parsedCpm) || parsedCpm <= 0) {
-      return Response.json({ content: MESSAGES[locale].missingCostConfig.content });
-    }
+    // REGLA SIMPLE: si no hay registro guardado en BD, el usuario no ha configurado la calculadora.
+    // Una cuenta nueva nunca tendrá costConfigRecord → se muestra el mensaje.
+    // Si guardó aunque sea una vez → costConfigRecord existe → no se muestra.
+    const isCalculatorConfigured = costConfigRecord != null;
+
 
     if (costConfig && !isNaN(parsedCpm)) {
       costoPorMillaPropio = parsedCpm;
@@ -525,6 +524,13 @@ Deno.serve(async (req) => {
     }
 
     const intent = resolveIntent(raw.intent, cappedMessages);
+
+    // INTERCEPTOR: Si el usuario no ha configurado sus costos en la calculadora (ha dejado
+    // los valores predeterminados y no tiene costo por milla) y NO es una consulta de millas,
+    // bloqueamos el chat y le devolvemos el mensaje indicándole que lo haga.
+    if (intent !== 'ask_miles' && !isCalculatorConfigured) {
+      return Response.json({ content: MESSAGES[locale].missingCostConfig.content });
+    }
     
     // --- Validación determinista de presencia ---
     // Si la IA extrajo un número que no está en el mensaje del usuario (o en el historial reciente para heredados), lo descartamos.

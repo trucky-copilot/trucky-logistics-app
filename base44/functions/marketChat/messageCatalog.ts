@@ -260,7 +260,7 @@ export const MESSAGES: Record<Locale, LocaleMessages> = {
       line2: 'Dime origen, destino, equipo y millas (de ida) — con eso te doy el número exacto.',
     },
     missingCostConfig: {
-      content: '⚠️ Debes configurar tus costos en la Calculadora primero para que pueda darte recomendaciones y análisis precisos.',
+      content: '⚠️ Debes configurar tus costos en la calculdora primero para que pueda darte recomendaciones y análisis precisos.',
     },
     safeFallback: {
       content: '⚠️ No pude procesar la consulta; reintenta. Para tarifas incluye origen, destino, millas y equipo.',
