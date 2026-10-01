@@ -9,17 +9,43 @@ import { Link } from 'react-router-dom';
 import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg } from '@/lib/orgScope';
+import { useProfile } from '@/lib/ProfileContext';
 
 export default function Dashboard() {
   const orgId = useOrganizationId();
   const { organization } = useAppState();
   const { t, locale } = useLanguage();
+  const { activeProfileId } = useProfile();
   const [trucks, setTrucks] = useState([]);
   const [loads, setLoads] = useState([]);
   const [brokers, setBrokers] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  /**
+   * Obtiene los IDs guardados en localStorage para el perfil activo.
+   * Mismo mecanismo que usan Fleet, Drivers, Loads y Brokers.
+   */
+  const getProfileIds = (entity) => {
+    const key = `profile_${entity}_${orgId}_${activeProfileId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  };
+
+  const filterByProfile = (data, entity) => {
+    const profileIds = getProfileIds(entity);
+    if (activeProfileId === '1' && profileIds === null) {
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_${entity}_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
+      }
+      return data.filter(item => !usedIds.includes(item.id));
+    }
+    if (profileIds !== null) return data.filter(item => profileIds.includes(item.id));
+    return []; // Perfil nuevo sin datos
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -29,18 +55,18 @@ export default function Dashboard() {
       listByOrg(base44.entities.Load, orgId, '-created_date', 50),
       listByOrg(base44.entities.Broker, orgId),
       listByOrg(base44.entities.Driver, orgId),
-    ]).then(([t, l, b, d]) => {
-      setTrucks(t);
-      setLoads(l);
-      setBrokers(b);
-      setDrivers(d);
+    ]).then(([rawTrucks, rawLoads, rawBrokers, rawDrivers]) => {
+      setTrucks(filterByProfile(rawTrucks, 'trucks'));
+      setLoads(filterByProfile(rawLoads, 'loads'));
+      setBrokers(filterByProfile(rawBrokers, 'brokers'));
+      setDrivers(filterByProfile(rawDrivers, 'drivers'));
     }).catch((err) => {
       console.error('Dashboard: error al cargar datos', err);
       setError(t.dashboard.error);
     }).finally(() => {
       setLoading(false);
     });
-  }, [orgId]);
+  }, [orgId, activeProfileId]);
 
   // KPI calculations
   const thisWeek = loads.filter(l => {

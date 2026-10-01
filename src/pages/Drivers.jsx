@@ -4,6 +4,7 @@ import { Users, Plus, X, Pencil, AlertTriangle, CheckCircle2 } from 'lucide-reac
 import StatusBadge from '@/components/StatusBadge';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useProfile } from '@/lib/ProfileContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 
 function DocAlert({ label, date }) {
@@ -24,12 +25,21 @@ function DocAlert({ label, date }) {
 
 function DriverForm({ driver, onSave, onClose }) {
   const { t } = useLanguage();
-  const [form, setForm] = useState({
+  const { setUnsavedChanges } = useProfile();
+  const initialState = {
     nombre: '', apellido: '', telefono: '', licencia_numero: '',
     licencia_vencimiento: '', medico_vencimiento: '', twic_vencimiento: '',
     hazmat_vencimiento: '', estado: 'activo', truck_asignado: '', notas: '',
     ...driver
-  });
+  };
+  const [form, setForm] = useState(initialState);
+  
+  useEffect(() => {
+    const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
+    setUnsavedChanges('DriverForm', isUnsaved);
+    return () => setUnsavedChanges('DriverForm', false);
+  }, [form, driver, setUnsavedChanges]);
+
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
   return (
@@ -118,22 +128,72 @@ function DriverForm({ driver, onSave, onClose }) {
 export default function Drivers() {
   const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
+  const { activeProfileId } = useProfile();
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editDriver, setEditDriver] = useState(null);
 
+  /**
+   * Obtener los IDs de conductores que pertenecen al perfil activo,
+   * desde el localStorage (no tocamos el schema de base44 en Fase 1).
+   */
+  const getProfileDriverIds = () => {
+    const key = `profile_drivers_${orgId}_${activeProfileId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null; // null = perfil sin restricciones todavía (Perfil 1 heredado)
+  };
+
+  const addDriverToProfile = (driverId) => {
+    const key = `profile_drivers_${orgId}_${activeProfileId}`;
+    const current = getProfileDriverIds() || [];
+    localStorage.setItem(key, JSON.stringify([...current, driverId]));
+  };
+
   const loadData = async () => {
+    setLoading(true);
     const data = await listByOrg(base44.entities.Driver, orgId);
-    setDrivers(data);
+    const profileIds = getProfileDriverIds();
+    
+    let filtered;
+    if (activeProfileId === '1' && profileIds === null) {
+      // Perfil 1 sin lista: inicializamos su lista con todos los IDs que NO pertenezcan a otros perfiles
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_drivers_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
+      }
+      const unclaimedIds = data.map(d => d.id).filter(id => !usedIds.includes(id));
+      const key = `profile_drivers_${orgId}_1`;
+      localStorage.setItem(key, JSON.stringify(unclaimedIds));
+      filtered = data.filter(d => unclaimedIds.includes(d.id));
+    } else if (profileIds !== null) {
+      filtered = data.filter(d => profileIds.includes(d.id));
+    } else {
+      filtered = [];
+    }
+    
+    setDrivers(filtered);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, [orgId]);
+  useEffect(() => { loadData(); }, [orgId, activeProfileId]);
 
   const handleSave = async (data) => {
-    if (editDriver) await base44.entities.Driver.update(editDriver.id, data);
-    else await base44.entities.Driver.create(withOrg(orgId, data));
-    setShowForm(false); setEditDriver(null); loadData();
+    try {
+      // Quitamos profile_id del payload para no romper el schema de base44
+      const { profile_id: _, ...cleanData } = data;
+      if (editDriver) {
+        await base44.entities.Driver.update(editDriver.id, cleanData);
+      } else {
+        const created = await base44.entities.Driver.create(withOrg(orgId, cleanData));
+        // Guardamos el nuevo ID en el perfil activo
+        addDriverToProfile(created.id);
+      }
+      setShowForm(false); setEditDriver(null); loadData();
+    } catch (err) {
+      console.error('Error guardando conductor:', err);
+      alert('Error al guardar: ' + (err?.message || 'intente de nuevo'));
+    }
   };
 
   return (

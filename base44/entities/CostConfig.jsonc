@@ -10,6 +10,10 @@
       "type": "string",
       "description": "Email del usuario"
     },
+    "profile_id": {
+      "type": "string",
+      "description": "ID del perfil de simulacion"
+    },
     "diesel_precio": {
       "type": "number",
       "default": 5.5

@@ -5,6 +5,7 @@ import StatusBadge from '@/components/StatusBadge';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
+import { useProfile } from '@/lib/ProfileContext';
 
 function ScoreDots({ score, max = 10 }) {
   const filled = Math.round((score || 0));
@@ -20,12 +21,21 @@ function ScoreDots({ score, max = 10 }) {
 
 function BrokerForm({ broker, onSave, onClose }) {
   const { t } = useLanguage();
-  const [form, setForm] = useState({
+  const { setUnsavedChanges } = useProfile();
+  const initialState = {
     nombre: '', mc_number: '', contacto: '', telefono: '', email: '',
     tarifa_promedio: '', dias_pago: 30, puntaje_confiabilidad: 7,
     puntaje_pago: 7, clausulas_frecuentes: '', notas: '', estado: 'activo',
     ...broker
-  });
+  };
+  const [form, setForm] = useState(initialState);
+
+  useEffect(() => {
+    const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
+    setUnsavedChanges('BrokerForm', isUnsaved);
+    return () => setUnsavedChanges('BrokerForm', false);
+  }, [form, broker, setUnsavedChanges]);
+
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
   return (
@@ -63,12 +73,12 @@ function BrokerForm({ broker, onSave, onClose }) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.brokers.avgRate}</label>
-              <input type="number" step="0.01" value={form.tarifa_promedio} onChange={e => set('tarifa_promedio', e.target.value)}
+              <input type="number" step="0.01" value={form.tarifa_promedio} onChange={e => set('tarifa_promedio', Number(e.target.value))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.brokers.paymentDays}</label>
-              <input type="number" value={form.dias_pago} onChange={e => set('dias_pago', e.target.value)}
+              <input type="number" value={form.dias_pago} onChange={e => set('dias_pago', Number(e.target.value))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
@@ -114,22 +124,63 @@ function BrokerForm({ broker, onSave, onClose }) {
 export default function Brokers() {
   const { t } = useLanguage();
   const orgId = useOrganizationId();
+  const { activeProfileId } = useProfile();
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editBroker, setEditBroker] = useState(null);
 
+  const getProfileBrokerIds = () => {
+    const key = `profile_brokers_${orgId}_${activeProfileId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  };
+
+  const addBrokerToProfile = (brokerId) => {
+    const key = `profile_brokers_${orgId}_${activeProfileId}`;
+    const current = getProfileBrokerIds() || [];
+    localStorage.setItem(key, JSON.stringify([...current, brokerId]));
+  };
+
   const loadData = async () => {
+    setLoading(true);
     const data = await listByOrg(base44.entities.Broker, orgId);
-    setBrokers(data);
+    const profileIds = getProfileBrokerIds();
+
+    let filtered;
+    if (activeProfileId === '1' && profileIds === null) {
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_brokers_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
+      }
+      const unclaimedIds = data.map(b => b.id).filter(id => !usedIds.includes(id));
+      localStorage.setItem(`profile_brokers_${orgId}_1`, JSON.stringify(unclaimedIds));
+      filtered = data.filter(b => unclaimedIds.includes(b.id));
+    } else if (profileIds !== null) {
+      filtered = data.filter(b => profileIds.includes(b.id));
+    } else {
+      filtered = [];
+    }
+
+    setBrokers(filtered);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, [orgId]);
+  useEffect(() => { loadData(); }, [orgId, activeProfileId]);
 
   const handleSave = async (data) => {
-    if (editBroker) await base44.entities.Broker.update(editBroker.id, data);
-    else await base44.entities.Broker.create(withOrg(orgId, data));
-    setShowForm(false); setEditBroker(null); loadData();
+    try {
+      if (editBroker) {
+        await base44.entities.Broker.update(editBroker.id, data);
+      } else {
+        const created = await base44.entities.Broker.create(withOrg(orgId, data));
+        addBrokerToProfile(created.id);
+      }
+      setShowForm(false); setEditBroker(null); loadData();
+    } catch (err) {
+      console.error('Error guardando broker:', err);
+      alert('Error al guardar: ' + (err?.message || 'intente de nuevo'));
+    }
   };
 
   return (

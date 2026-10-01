@@ -4,6 +4,7 @@ import { Truck, Plus, X, Pencil } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useProfile } from '@/lib/ProfileContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 
 const ESTADOS = ['disponible', 'en_ruta', 'en_yarda', 'mantenimiento'];
@@ -17,12 +18,20 @@ const EQUIPMENT_TYPES = [
 ];
 function TruckForm({ truck, onSave, onClose }) {
   const { t } = useLanguage();
-  const [form, setForm] = useState({
+  const { setUnsavedChanges } = useProfile();
+  const initialState = {
     placa: '', modelo: '', año: '', estado: 'disponible',
     equipment_type: 'dry_van',
     conductor_nombre: '', chasis_disponible: true, chasis_numero: '', notas: '',
     ...truck
-  });
+  };
+  const [form, setForm] = useState(initialState);
+  
+  useEffect(() => {
+    const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
+    setUnsavedChanges('FleetForm', isUnsaved);
+    return () => setUnsavedChanges('FleetForm', false);
+  }, [form, truck, setUnsavedChanges]);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
 
@@ -113,22 +122,66 @@ function TruckForm({ truck, onSave, onClose }) {
 export default function Fleet() {
   const { t } = useLanguage();
   const orgId = useOrganizationId();
+  const { activeProfileId } = useProfile();
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editTruck, setEditTruck] = useState(null);
 
+  const getProfileTruckIds = () => {
+    const key = `profile_trucks_${orgId}_${activeProfileId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  };
+
+  const addTruckToProfile = (truckId) => {
+    const key = `profile_trucks_${orgId}_${activeProfileId}`;
+    const current = getProfileTruckIds() || [];
+    localStorage.setItem(key, JSON.stringify([...current, truckId]));
+  };
+
   const loadData = async () => {
+    setLoading(true);
     const data = await listByOrg(base44.entities.Truck, orgId);
-    setTrucks(data);
+    const profileIds = getProfileTruckIds();
+    
+    let filtered;
+    if (activeProfileId === '1' && profileIds === null) {
+      // Perfil 1 sin lista: inicializamos con todos los IDs que NO pertenezcan a otros perfiles
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_trucks_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
+      }
+      const unclaimedIds = data.map(t => t.id).filter(id => !usedIds.includes(id));
+      const key = `profile_trucks_${orgId}_1`;
+      localStorage.setItem(key, JSON.stringify(unclaimedIds));
+      filtered = data.filter(t => unclaimedIds.includes(t.id));
+    } else if (profileIds !== null) {
+      filtered = data.filter(t => profileIds.includes(t.id));
+    } else {
+      filtered = [];
+    }
+    
+    setTrucks(filtered);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, [orgId]);
+  useEffect(() => { loadData(); }, [orgId, activeProfileId]);
 
   const handleSave = async (data) => {
-    if (editTruck) await base44.entities.Truck.update(editTruck.id, data);
-    else await base44.entities.Truck.create(withOrg(orgId, data));
-    setShowForm(false); setEditTruck(null); loadData();
+    try {
+      const { profile_id: _, ...cleanData } = data;
+      if (editTruck) {
+        await base44.entities.Truck.update(editTruck.id, cleanData);
+      } else {
+        const created = await base44.entities.Truck.create(withOrg(orgId, cleanData));
+        addTruckToProfile(created.id);
+      }
+      setShowForm(false); setEditTruck(null); loadData();
+    } catch (err) {
+      console.error('Error guardando camión:', err);
+      alert('Error al guardar: ' + (err?.message || 'intente de nuevo'));
+    }
   };
 
   const statusCount = (s) => trucks.filter(t => t.estado === s).length;

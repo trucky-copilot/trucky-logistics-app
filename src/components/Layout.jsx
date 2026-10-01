@@ -18,6 +18,7 @@ import {
 import NotificationBell from './NotificationBell';
 import OperationalReadinessBanner from './OperationalReadinessBanner';
 import MarketTicker from './MarketTicker';
+import ProfileSelector from './ProfileSelector';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { base44 } from '@/api/base44Client';
 const NAV_ITEMS = [
@@ -211,7 +212,8 @@ export default function Layout() {
             {t.nav[NAV_ITEMS.find(item => isActive(item.path))?.label] || 'Trucky'}
           </div>
           {!isChat && <MarketTicker />}
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-3">
+            <ProfileSelector />
             <NotificationBell />
           </div>
         </header>
