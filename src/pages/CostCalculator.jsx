@@ -53,8 +53,14 @@ export default function CostCalculator() {
   const quickloadStatus = quickloadProfit > 0.1 ? 'ganancia' : quickloadProfit > -0.1 ? 'break_even' : 'perdida';
 
   const saveConfig = async () => {
-    // Guardar refusado si los valores derivados no son finitos — nunca se
-    // reporta éxito con un costo_por_milla/tarifa_break_even inválido.
+    // Si hay algún valor en 0 o negativo, mostrar la alerta
+    const hasZeroOrNegative = Object.values(config).some(v => Number(v) <= 0);
+    if (hasZeroOrNegative) {
+      alert("No se pueden guardar valores en 0 o negativos");
+      return;
+    }
+    
+    // Si el cálculo sigue siendo inválido por alguna otra razón
     if (!costos.valido) return;
     setSaving(true);
     const user = await base44.auth.me();
@@ -193,13 +199,7 @@ export default function CostCalculator() {
 
       </div>
 
-      {!costos.valido && (
-        <p className="text-xs text-red-400 text-center">
-          {t.calculator.missing} {CAMPO_LABEL[costos.faltante] || t.calculator.cannotCalculate}
-        </p>
-      )}
-
-      <button onClick={saveConfig} disabled={saving || !costos.valido}
+      <button onClick={saveConfig} disabled={saving}
         className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
         {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
         {saved ? `✓ ${t.calculator.saved}` : t.calculator.save}
