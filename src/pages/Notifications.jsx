@@ -4,6 +4,7 @@ import { Bell, Plus, X, CheckCheck, AlertTriangle, Info, Zap, Truck, FileWarning
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useProfile } from '@/lib/ProfileContext';
 
 const TIPO_ICONS = {
   cambio_asignacion: Truck,
@@ -31,7 +32,16 @@ const TIPO_LABELS = {
 
 function NotifForm({ onSave, onClose }) {
   const { t, locale } = useLanguage();
-  const [form, setForm] = useState({ titulo: '', mensaje: '', tipo: 'general', prioridad: 'media' });
+  const { setUnsavedChanges } = useProfile();
+  const initialState = { titulo: '', mensaje: '', tipo: 'general', prioridad: 'media' };
+  const [form, setForm] = useState(initialState);
+  
+  useEffect(() => {
+    const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
+    setUnsavedChanges('NotifForm', isUnsaved);
+    return () => setUnsavedChanges('NotifForm', false);
+  }, [form, setUnsavedChanges]);
+
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
   const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
   return (
@@ -83,6 +93,7 @@ function NotifForm({ onSave, onClose }) {
 export default function Notifications() {
   const orgId = useOrganizationId();
   const { t, locale } = useLanguage();
+  const { activeProfileId } = useProfile();
   const typeLabels = {
     cambio_asignacion: t.notifications.assignment,
     retraso_ruta: t.notifications.delay,
@@ -96,17 +107,54 @@ export default function Notifications() {
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState('all');
 
+  const getProfileNotifIds = () => {
+    const key = `profile_notifs_${orgId}_${activeProfileId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  };
+
+  const addNotifToProfile = (notifId) => {
+    const key = `profile_notifs_${orgId}_${activeProfileId}`;
+    const current = getProfileNotifIds() || [];
+    localStorage.setItem(key, JSON.stringify([...current, notifId]));
+  };
+
   const loadData = async () => {
+    setLoading(true);
     const data = await listByOrg(base44.entities.Notification, orgId, '-created_date', 100);
-    setNotifications(data);
+    const profileIds = getProfileNotifIds();
+
+    let profileFiltered;
+    if (activeProfileId === '1' && profileIds === null) {
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_notifs_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
+      }
+      const unclaimedIds = data.map(n => n.id).filter(id => !usedIds.includes(id));
+      localStorage.setItem(`profile_notifs_${orgId}_1`, JSON.stringify(unclaimedIds));
+      profileFiltered = data.filter(n => unclaimedIds.includes(n.id));
+    } else if (profileIds !== null) {
+      profileFiltered = data.filter(n => profileIds.includes(n.id));
+    } else {
+      profileFiltered = [];
+    }
+
+    setNotifications(profileFiltered);
     setLoading(false);
   };
-  useEffect(() => { loadData(); }, [orgId]);
+  useEffect(() => { loadData(); }, [orgId, activeProfileId]);
 
   const handleSave = async (data) => {
-    await base44.entities.Notification.create(withOrg(orgId, data));
-    setShowForm(false);
-    loadData();
+    try {
+      const created = await base44.entities.Notification.create(withOrg(orgId, data));
+      addNotifToProfile(created.id);
+      setShowForm(false);
+      loadData();
+    } catch (err) {
+      console.error('Error guardando notificación:', err);
+      alert('Error al guardar: ' + (err?.message || 'intente de nuevo'));
+    }
   };
 
   const markRead = async (id) => {

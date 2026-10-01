@@ -8,6 +8,9 @@
     "usuario": {
       "type": "string"
     },
+    "profile_id": {
+      "type": "string"
+    },
     "messages": {
       "type": "array",
       "items": {

@@ -6,6 +6,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
+import { useProfile } from '@/lib/ProfileContext';
 
 const SESSION_KEY = 'trucky_chat_session';
 
@@ -75,6 +76,7 @@ const UI_STRINGS = {
 export default function MarketChat() {
   const { userProfile } = useAppState();
   const { locale, setLocale } = useLanguage();
+  const { activeProfileId } = useProfile();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -103,25 +105,68 @@ export default function MarketChat() {
     const init = async () => {
       const user = await base44.auth.me();
 
-      // Load cost config
-      const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
-      if (configs.length > 0) setCostConfig(configs[0]);
+      // Limpiar pantalla al cambiar de perfil
+      setMessages([]);
+      setSessionId(null);
+      setSessionDbId(null);
 
-      // Load existing session for this user (1 session per user)
-      const sessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 1);
-      if (sessions.length > 0) {
-        const session = sessions[0];
-        setSessionId(session.session_id);
-        setSessionDbId(session.id);
-        setMessages(session.messages || []);
-      } else {
-        // Create a new session ID but don't save to DB until first message
-        const newId = `session_${user.email}_${Date.now()}`;
-        setSessionId(newId);
+      // Load cost config del perfil activo
+      const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
+      if (configs.length > 0) {
+        const profileConfig = configs.find(c => (c.profile_id || '1') === activeProfileId) || configs[0];
+        setCostConfig(profileConfig);
       }
+
+      // localStorage guarda qué sessionDbId pertenece a cada perfil
+      const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
+      const savedDbId = localStorage.getItem(lsKey);
+
+      if (savedDbId) {
+        try {
+          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
+          const session = allSessions.find(s => s.id === savedDbId);
+          if (session) {
+            setSessionId(session.session_id);
+            setSessionDbId(session.id);
+            setMessages(session.messages || []);
+            return;
+          }
+        } catch (e) { /* ignora errores de carga */ }
+      }
+
+      // Perfil 1 sin entrada en localStorage: buscar sesión heredada (sin profile_id en DB)
+      if (activeProfileId === '1') {
+        try {
+          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
+          
+          // Obtener los IDs que ya fueron reclamados por otros perfiles
+          const usedSessionIds = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const k = localStorage.key(i);
+            if (k && k.startsWith(`chat_session_profile_${user.email}_`)) {
+              usedSessionIds.push(localStorage.getItem(k));
+            }
+          }
+          
+          // Adoptar la sesión más reciente que NO sea de otro perfil
+          const legacySession = allSessions.find(s => !usedSessionIds.includes(s.id));
+
+          if (legacySession) {
+            localStorage.setItem(lsKey, legacySession.id);
+            setSessionId(legacySession.session_id);
+            setSessionDbId(legacySession.id);
+            setMessages(legacySession.messages || []);
+            return;
+          }
+        } catch (e) { /* ignora */ }
+      }
+
+      // Nuevo perfil sin historial
+      const newId = `session_${user.email}_${activeProfileId}_${Date.now()}`;
+      setSessionId(newId);
     };
-    init();
-  }, []);
+    if (activeProfileId) init();
+  }, [activeProfileId]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -165,20 +210,24 @@ export default function MarketChat() {
       ? (firstUserMsg.content.length > 50 ? firstUserMsg.content.slice(0, 50) + '...' : firstUserMsg.content)
       : t.defaultTitle;
 
+    const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
+
     if (currentSessionDbId) {
-      // Update existing record
       await base44.entities.ChatHistory.update(currentSessionDbId, {
         messages: updatedMessages,
         titulo,
+        profile_id: activeProfileId,
       });
     } else {
-      // Create new record
+      // Crear nueva sesión y guardar referencia en localStorage para este perfil
       const created = await base44.entities.ChatHistory.create({
         session_id: currentSessionId,
         usuario: user.email,
+        profile_id: activeProfileId,
         messages: updatedMessages,
         titulo,
       });
+      localStorage.setItem(lsKey, created.id);
       setSessionDbId(created.id);
     }
   };
@@ -270,8 +319,10 @@ export default function MarketChat() {
 
   const openHistory = async () => {
     const user = await base44.auth.me();
-    const sessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 20);
-    setHistory(sessions);
+    const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
+    // Filtrar por el perfil activo (los viejos sin profile_id se asumen del Perfil 1)
+    const profileSessions = allSessions.filter(s => (s.profile_id || '1') === activeProfileId);
+    setHistory(profileSessions.slice(0, 20));
     setShowHistory(true);
   };
 
