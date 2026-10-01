@@ -455,7 +455,7 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
   };
 }
 
-function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarrierProfiles = []) {
+function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarrierProfiles = [], orgName = null) {
   const hallazgos = [];
   let semaforo = 'verde';
   let identity_match = 'not_found';
@@ -497,8 +497,9 @@ function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarri
     }
   } else {
     // Sin perfil registrado = riesgo crítico de suplantación de identidad.
-    // Mostramos el nombre de la empresa registrada (o la cuenta) para comparar.
-    const nombreEmpresa = allCarrierProfiles[0]?.company_name
+    // Orden de prioridad: nombre de org > company_name del carrier > full_name del usuario > email
+    const nombreEmpresa = orgName
+      || allCarrierProfiles[0]?.company_name
       || userInfo?.full_name
       || userInfo?.email
       || 'empresa no identificada';
@@ -844,10 +845,12 @@ Deno.serve(async (req) => {
         orgId ? base44.entities.CarrierProfile.filter({ organization_id: orgId, active: true }) : Promise.resolve([]),
         base44.entities.DispatcherProfile.filter({ user_id: user.email }),
         orgId ? base44.entities.BrokerProfile.filter({ organization_id: orgId, active: true }) : Promise.resolve([]),
+        orgId ? base44.entities.Organization.filter({ id: orgId }) : Promise.resolve([]),
       ])
     ]);
 
-    const [profiles, costConfigs, trucks, brokers, carrierProfiles, dispatcherProfiles, brokerProfiles] = contextData;
+    const [profiles, costConfigs, trucks, brokers, carrierProfiles, dispatcherProfiles, brokerProfiles, orgRecords] = contextData;
+    const orgName = orgRecords?.[0]?.name || null; // Nombre de la empresa registrada (ej. "Pruebas")
 
     // ── PASO 3: Resolver contexto del usuario ─────────────────────────────────
     const userProfile = profiles[0] || null;
@@ -952,7 +955,7 @@ Deno.serve(async (req) => {
       // Carrier: prioridad en rentabilidad, compatibilidad operativa y cláusulas
       categorias = [
         validarRate(datos, costConfig, locale),          // ← más crítico: ¿es rentable?
-        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles),   // ← ¿está correcto mi nombre/MC?
+        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles, orgName),   // ← ¿está correcto mi nombre/MC?
         validarEquipo(datos, trucks, carrierProfile, locale), // ← ¿tengo el equipo?
         validarCommodity(datos, carrierProfile, locale), // ← ¿puedo mover esta carga?
         validarClausulas(datos, locale),                 // ← ¿qué riesgos contractuales hay?
@@ -963,7 +966,7 @@ Deno.serve(async (req) => {
       // Dispatcher: prioridad en completitud, broker correcto, carrier asignado y readiness
       categorias = [
         validarBroker(datos, brokers, brokerProfiles, locale), // ← ¿broker verificado?
-        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles),         // ← ¿carrier correcto asignado?
+        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles, orgName),         // ← ¿carrier correcto asignado?
         validarFechasOperacion(datos, locale),                 // ← ¿está completo para operar?
         validarEquipo(datos, trucks, carrierProfile, locale),  // ← ¿compatible con el carrier?
         validarCommodity(datos, carrierProfile, locale),       // ← ¿commodity OK para el carrier?
