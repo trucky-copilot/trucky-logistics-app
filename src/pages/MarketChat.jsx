@@ -200,7 +200,9 @@ export default function MarketChat() {
         costConfig,
         locale,
       });
+      console.log('[DEBUG marketChat] raw res:', JSON.stringify(res?.data));
       if (res.data?.error) {
+        console.log('[DEBUG marketChat] error en respuesta:', res.data.error);
         setError(res.data.error);
       } else if (res.data?.content) {
         const assistantMsg = { 
@@ -211,8 +213,13 @@ export default function MarketChat() {
         };
         const updatedMessages = [...newMessages, assistantMsg];
         setMessages(updatedMessages);
-        await saveSession(updatedMessages, sessionId, sessionDbId);
+        try {
+          await saveSession(updatedMessages, sessionId, sessionDbId);
+        } catch (saveErr) {
+          console.error('[DEBUG marketChat] saveSession falló (ignorado):', saveErr);
+        }
       } else {
+        console.log('[DEBUG marketChat] sin content ni error. res.data:', res?.data);
         setError(t.errorNoResponse);
       }
     } catch (err) {
