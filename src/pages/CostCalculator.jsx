@@ -3,17 +3,20 @@ import { base44 } from '@/api/base44Client';
 import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
 import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useProfile } from '@/lib/ProfileContext';
 
 const QUICKLOAD_RATE = 2.20;
 const TARGET_RATE = 3.00;
 
 export default function CostCalculator() {
   const { t } = useLanguage();
+  const { activeProfileId, setUnsavedChanges } = useProfile();
   const [config, setConfig] = useState({
     diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
     lease_semanal: 1200, pago_conductor_porcentaje: 25,
     otros_gastos_semanales: 300, millas_semana_promedio: 2500, tarifa_objetivo: 3.0,
   });
+  const [originalConfig, setOriginalConfig] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [configId, setConfigId] = useState(null);
@@ -21,21 +24,82 @@ export default function CostCalculator() {
 
   useEffect(() => {
     const load = async () => {
+      setLoading(true);
       try {
         const user = await base44.auth.me();
+        
+        // Cargar mapa de IDs por perfil desde localStorage (Patrón de Aislamiento Fase 1)
+        const storageKey = `profile_costconfig_${user.email}`;
+        const configMap = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        const expectedConfigId = configMap[activeProfileId];
+
         const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
-        if (configs.length > 0) {
-          setConfig(prev => ({ ...prev, ...configs[0] }));
-          setConfigId(configs[0].id);
+        
+        let targetConfig = null;
+        
+        if (expectedConfigId) {
+          targetConfig = configs.find(c => c.id === expectedConfigId);
+        } else if (activeProfileId === '1') {
+          // Si es Perfil 1 y no hay mapa, adoptamos la configuración más antigua que NO esté asignada a otro perfil.
+          const usedIds = Object.values(configMap);
+          // Assuming the oldest config is the last one or first one, we just avoid used IDs
+          targetConfig = configs.find(c => !usedIds.includes(c.id));
+          
+          if (targetConfig) {
+            configMap['1'] = targetConfig.id;
+            localStorage.setItem(storageKey, JSON.stringify(configMap));
+          }
+        }
+
+        if (targetConfig) {
+          setConfig(prev => ({ ...prev, ...targetConfig }));
+          setOriginalConfig({ ...targetConfig });
+          setConfigId(targetConfig.id);
+        } else {
+          // Reset to default if new profile has no data
+          const def = {
+            diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
+            lease_semanal: 1200, pago_conductor_porcentaje: 25,
+            otros_gastos_semanales: 300, millas_semana_promedio: 2500, tarifa_objetivo: 3.0,
+          };
+          setConfig(def);
+          setOriginalConfig(def);
+          setConfigId(null);
         }
       } catch (e) {
-        // mantener valores por defecto si falla la carga
+        console.error("Error cargando CostConfig:", e);
       } finally {
         setLoading(false);
       }
     };
-    load();
-  }, []);
+    if (activeProfileId) load();
+  }, [activeProfileId]);
+
+  useEffect(() => {
+    if (originalConfig) {
+      const keysToCheck = ['diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal', 'pago_conductor_porcentaje', 'otros_gastos_semanales', 'millas_semana_promedio', 'tarifa_objetivo'];
+      const isUnsaved = keysToCheck.some(key => {
+        // Obtenemos los valores; si es undefined o string vacío, lo tratamos como 0 para la comparación.
+        const currentVal = Number(config[key] || 0);
+        
+        // Si el original no tiene la key (ej. DB vieja), usamos el default de la UI
+        let originalVal = originalConfig[key];
+        if (originalVal === undefined) {
+           const def = {
+            diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
+            lease_semanal: 1200, pago_conductor_porcentaje: 25,
+            otros_gastos_semanales: 300, millas_semana_promedio: 2500, tarifa_objetivo: 3.0,
+          };
+          originalVal = def[key];
+        }
+        
+        return currentVal !== Number(originalVal);
+      });
+      
+      setUnsavedChanges('CostCalculator', isUnsaved);
+    }
+    return () => setUnsavedChanges('CostCalculator', false);
+  }, [config, originalConfig, setUnsavedChanges]);
 
   const set = (key, val) => setConfig(prev => ({ ...prev, [key]: val }));
 
@@ -67,18 +131,33 @@ export default function CostCalculator() {
     const data = {
       ...config,
       usuario: user.email,
+      profile_id: activeProfileId,
       costo_por_milla: costos.costoPorMilla,
       tarifa_break_even: costos.tarifaBreakEven,
     };
-    if (configId) {
-      await base44.entities.CostConfig.update(configId, data);
-    } else {
-      const created = await base44.entities.CostConfig.create(data);
-      setConfigId(created.id);
+    
+    try {
+      if (configId) {
+        await base44.entities.CostConfig.update(configId, data);
+      } else {
+        const created = await base44.entities.CostConfig.create(data);
+        setConfigId(created.id);
+        
+        // Actualizar el mapa local de perfiles
+        const storageKey = `profile_costconfig_${user.email}`;
+        const configMap = JSON.parse(localStorage.getItem(storageKey) || '{}');
+        configMap[activeProfileId] = created.id;
+        localStorage.setItem(storageKey, JSON.stringify(configMap));
+      }
+      setOriginalConfig({ ...data });
+      setUnsavedChanges('CostCalculator', false);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      console.error("Error guardando CostConfig:", e);
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   };
 
   const barSegments = [
@@ -206,4 +285,4 @@ export default function CostCalculator() {
       </button>
     </div>
   );
-}
+} 

@@ -6,43 +6,83 @@ import LoadForm from '@/components/LoadForm';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
+import { useProfile } from '@/lib/ProfileContext';
 
 export default function Loads() {
   const orgId = useOrganizationId();
   const { t } = useLanguage();
+  const { activeProfileId } = useProfile();
   const [loads, setLoads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editLoad, setEditLoad] = useState(null);
   const [filter, setFilter] = useState('all');
 
+  const getProfileLoadIds = () => {
+    const key = `profile_loads_${orgId}_${activeProfileId}`;
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : null;
+  };
+
+  const addLoadToProfile = (loadId) => {
+    const key = `profile_loads_${orgId}_${activeProfileId}`;
+    const current = getProfileLoadIds() || [];
+    localStorage.setItem(key, JSON.stringify([...current, loadId]));
+  };
+
   const loadData = async () => {
+    setLoading(true);
     const data = await listByOrg(base44.entities.Load, orgId, '-created_date', 100);
-    setLoads(data);
+    const profileIds = getProfileLoadIds();
+
+    let filtered;
+    if (activeProfileId === '1' && profileIds === null) {
+      // Perfil 1 sin lista: inicializamos con todos los IDs que NO pertenezcan a otros perfiles
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_loads_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
+      }
+      const unclaimedIds = data.map(l => l.id).filter(id => !usedIds.includes(id));
+      localStorage.setItem(`profile_loads_${orgId}_1`, JSON.stringify(unclaimedIds));
+      filtered = data.filter(l => unclaimedIds.includes(l.id));
+    } else if (profileIds !== null) {
+      filtered = data.filter(l => profileIds.includes(l.id));
+    } else {
+      filtered = [];
+    }
+
+    setLoads(filtered);
     setLoading(false);
   };
 
-  useEffect(() => { loadData(); }, [orgId]);
+  useEffect(() => { loadData(); }, [orgId, activeProfileId]);
 
   const filtered = filter === 'all' ? loads : loads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
 
   const handleSave = async (data) => {
-    // Calculate derived fields
-    const rpm = data.millas > 0 && data.tarifa_negociada > 0 ? data.tarifa_negociada / data.millas : 0;
-    const dieselCost = data.millas > 0 && data.diesel_precio_dia > 0 ? (data.millas / 6.5) * data.diesel_precio_dia : 0;
-    const profit = data.tarifa_negociada - dieselCost - (data.tarifa_negociada * 0.25);
-    const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
+    try {
+      // Calculamos campos derivados
+      const rpm = data.millas > 0 && data.tarifa_negociada > 0 ? data.tarifa_negociada / data.millas : 0;
+      const dieselCost = data.millas > 0 && data.diesel_precio_dia > 0 ? (data.millas / 6.5) * data.diesel_precio_dia : 0;
+      const profit = data.tarifa_negociada - dieselCost - (data.tarifa_negociada * 0.25);
+      const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
 
-    const payload = { ...data, revenue_por_milla: rpm, costo_estimado: dieselCost, ganancia_estimada: profit, resultado };
+      const payload = { ...data, revenue_por_milla: rpm, costo_estimado: dieselCost, ganancia_estimada: profit, resultado };
 
-    if (editLoad) {
-      await base44.entities.Load.update(editLoad.id, payload);
-    } else {
-      await base44.entities.Load.create(withOrg(orgId, payload));
+      if (editLoad) {
+        await base44.entities.Load.update(editLoad.id, payload);
+      } else {
+        const created = await base44.entities.Load.create(withOrg(orgId, payload));
+        addLoadToProfile(created.id);
+      }
+      setShowForm(false);
+      setEditLoad(null);
+      loadData();
+    } catch (err) {
+      console.error('Error guardando carga:', err);
+      alert('Error al guardar la carga: ' + (err?.message || 'intente de nuevo'));
     }
-    setShowForm(false);
-    setEditLoad(null);
-    loadData();
   };
 
   const handleEdit = (load) => {

@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
+import { useProfile } from '@/lib/ProfileContext';
 
 const TIPO_OPTIONS = [
   { value: 'broker_directo', label: 'Broker Directo' },
@@ -14,13 +15,22 @@ const ESTADO_OPTIONS = [
 ];
 
 export default function LoadForm({ load, onSave, onClose }) {
-  const [form, setForm] = useState({
+  const { setUnsavedChanges } = useProfile();
+  const initialState = {
     origen: '', destino: '', millas: '', broker_nombre: '', tipo_cliente: 'broker_directo',
     tarifa_ofrecida: '', tarifa_negociada: '', diesel_precio_dia: 5.40,
     fecha_carga: '', fecha_entrega: '', truck_placa: '', conductor_nombre: '',
     estado: 'pendiente', notas: '', numero_referencia: '',
     ...load
-  });
+  };
+  
+  const [form, setForm] = useState(initialState);
+
+  useEffect(() => {
+    const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
+    setUnsavedChanges('LoadForm', isUnsaved);
+    return () => setUnsavedChanges('LoadForm', false);
+  }, [form, load, setUnsavedChanges]);
 
   const set = (key, val) => setForm(prev => ({ ...prev, [key]: val }));
 
@@ -92,17 +102,17 @@ export default function LoadForm({ load, onSave, onClose }) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Millas</label>
-              <input type="number" value={form.millas} onChange={e => set('millas', e.target.value)}
+              <input type="number" value={form.millas} onChange={e => set('millas', Number(e.target.value))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder="275" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Tarifa ofrecida $</label>
-              <input type="number" step="0.01" value={form.tarifa_ofrecida} onChange={e => set('tarifa_ofrecida', e.target.value)}
+              <input type="number" step="0.01" value={form.tarifa_ofrecida} onChange={e => set('tarifa_ofrecida', Number(e.target.value))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder="600" />
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Tarifa negociada $</label>
-              <input type="number" step="0.01" value={form.tarifa_negociada} onChange={e => set('tarifa_negociada', e.target.value)}
+              <input type="number" step="0.01" value={form.tarifa_negociada} onChange={e => set('tarifa_negociada', Number(e.target.value))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder="750" />
             </div>
           </div>
@@ -110,7 +120,7 @@ export default function LoadForm({ load, onSave, onClose }) {
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">Precio diesel hoy $</label>
-              <input type="number" step="0.01" value={form.diesel_precio_dia} onChange={e => set('diesel_precio_dia', e.target.value)}
+              <input type="number" step="0.01" value={form.diesel_precio_dia} onChange={e => set('diesel_precio_dia', Number(e.target.value))}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
