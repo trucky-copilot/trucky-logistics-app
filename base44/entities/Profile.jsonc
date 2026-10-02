@@ -1,6 +1,6 @@
 {
-  "name": "Profile",
   "type": "object",
+  "name": "Profile",
   "properties": {
     "name": {
       "type": "string"
