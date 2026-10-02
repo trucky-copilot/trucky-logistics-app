@@ -16,8 +16,13 @@ export default function ProfileSelector() {
   // We'll use window.prompt for simple rename/add in Fase 1 local.
   // We could use full Dialog component, but let's keep it lightweight first to demo the state.
 
-  if (!activeProfile) return null;
-
+  if (!activeProfile) {
+    return (
+      <div className="bg-red-500 text-white px-2 py-1 text-xs font-bold rounded">
+        Cargando Perfil...
+      </div>
+    );
+  }
   const handleAdd = () => {
     if (profiles.length >= MAX_PROFILES) {
       alert(`Límite máximo de ${MAX_PROFILES} perfiles alcanzado.`);
