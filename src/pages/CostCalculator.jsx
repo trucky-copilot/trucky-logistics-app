@@ -28,28 +28,10 @@ export default function CostCalculator() {
       try {
         const user = await base44.auth.me();
         
-        // Cargar mapa de IDs por perfil desde localStorage (Patrón de Aislamiento Fase 1)
-        const storageKey = `profile_costconfig_${user.email}`;
-        const configMap = JSON.parse(localStorage.getItem(storageKey) || '{}');
-        const expectedConfigId = configMap[activeProfileId];
-
         const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
         
-        let targetConfig = null;
-        
-        if (expectedConfigId) {
-          targetConfig = configs.find(c => c.id === expectedConfigId);
-        } else if (activeProfileId === '1') {
-          // Si es Perfil 1 y no hay mapa, adoptamos la configuración más antigua que NO esté asignada a otro perfil.
-          const usedIds = Object.values(configMap);
-          // Assuming the oldest config is the last one or first one, we just avoid used IDs
-          targetConfig = configs.find(c => !usedIds.includes(c.id));
-          
-          if (targetConfig) {
-            configMap['1'] = targetConfig.id;
-            localStorage.setItem(storageKey, JSON.stringify(configMap));
-          }
-        }
+        // Fase 2 de Aislamiento: Buscar estrictamente por profile_id en la nube (ignorar localStorage)
+        let targetConfig = configs.find(c => (c.profile_id || '1') === activeProfileId);
 
         if (targetConfig) {
           setConfig(prev => ({ ...prev, ...targetConfig }));
@@ -143,12 +125,6 @@ export default function CostCalculator() {
       } else {
         const created = await base44.entities.CostConfig.create(data);
         setConfigId(created.id);
-        
-        // Actualizar el mapa local de perfiles
-        const storageKey = `profile_costconfig_${user.email}`;
-        const configMap = JSON.parse(localStorage.getItem(storageKey) || '{}');
-        configMap[activeProfileId] = created.id;
-        localStorage.setItem(storageKey, JSON.stringify(configMap));
       }
       setOriginalConfig({ ...data });
       setUnsavedChanges('CostCalculator', false);
