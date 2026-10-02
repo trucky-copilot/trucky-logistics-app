@@ -117,8 +117,9 @@ export default function CostCalculator() {
   const quickloadStatus = quickloadProfit > 0.1 ? 'ganancia' : quickloadProfit > -0.1 ? 'break_even' : 'perdida';
 
   const saveConfig = async () => {
-    // Si hay algún valor en 0 o negativo, mostrar la alerta
-    const hasZeroOrNegative = Object.values(config).some(v => Number(v) <= 0);
+    // Si hay algún valor en 0 o negativo en los campos de entrada, mostrar la alerta
+    const keysToValidate = ['diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal', 'pago_conductor_porcentaje', 'otros_gastos_semanales', 'millas_semana_promedio', 'tarifa_objetivo'];
+    const hasZeroOrNegative = keysToValidate.some(key => Number(config[key]) <= 0);
     if (hasZeroOrNegative) {
       alert("No se pueden guardar valores en 0 o negativos");
       return;
