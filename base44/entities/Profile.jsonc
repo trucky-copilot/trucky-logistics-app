@@ -1,0 +1,32 @@
+{
+  "type": "object",
+  "name": "Profile",
+  "properties": {
+    "name": {
+      "type": "string"
+    },
+    "usuario": {
+      "type": "string"
+    },
+    "organization_id": {
+      "type": "string"
+    },
+    "profile_key": {
+      "type": "string"
+    },
+    "is_default": {
+      "type": "boolean",
+      "default": false
+    },
+    "color": {
+      "type": "string",
+      "default": "blue"
+    }
+  },
+  "required": [
+    "name",
+    "usuario",
+    "organization_id",
+    "profile_key"
+  ]
+}
