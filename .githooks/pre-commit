@@ -1,2 +1,15 @@
 #!/usr/bin/env bash
+# Corre las pruebas del motor de tarifas antes de cada commit.
+#
+# Por qué un hook y no CI: el repo no tiene pipeline, y hoy una sola persona
+# manda commits. Un hook local cubre el 100% de esos commits sin montar
+# infraestructura.
+#
+# LÍMITE CONOCIDO: el bot de Base44 (base44-builder) commitea directo por la API
+# de GitHub cuando alguien edita desde el Builder. Esos commits NO pasan por acá.
+# Si en algún momento el Builder vuelve a ser una vía de cambio real, esto ya no
+# alcanza y hace falta CI.
+#
+# Se activa con:  git config core.hooksPath .githooks
+# (el script "prepare" de package.json lo hace solo al correr npm install)
 exit 0
