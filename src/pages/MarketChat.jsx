@@ -112,9 +112,11 @@ export default function MarketChat() {
 
       // Load cost config del perfil activo
       const configs = await base44.entities.CostConfig.filter({ usuario: user.email });
-      if (configs.length > 0) {
-        const profileConfig = configs.find(c => (c.profile_id || '1') === activeProfileId) || configs[0];
+      const profileConfig = configs.find(c => (c.profile_id || '1') === activeProfileId);
+      if (profileConfig) {
         setCostConfig(profileConfig);
+      } else {
+        setCostConfig(null);
       }
 
       // localStorage guarda qué sessionDbId pertenece a cada perfil
@@ -248,6 +250,7 @@ export default function MarketChat() {
         messages: apiMessages,
         costConfig,
         locale,
+        activeProfileId,
       });
       console.log('[DEBUG marketChat] raw res:', JSON.stringify(res?.data));
       if (res.data?.error) {

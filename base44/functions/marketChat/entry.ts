@@ -213,10 +213,15 @@ async function getRegisteredEquipment(base44, userEmail) {
 // Lee el registro CRUDO de CostConfig del usuario (o null). Separado de
 // getCostConfig para poder reutilizarlo también en la resolución del pago al
 // camión (Decisión 9-B) sin duplicar el fetch.
-async function fetchCostConfigRecord(base44, userEmail) {
+async function fetchCostConfigRecord(base44, userEmail, activeProfileId) {
   try {
     const registros = await base44.entities.CostConfig.filter({ usuario: userEmail });
-    if (registros.length > 0) return registros[0];
+    if (registros.length > 0) {
+      const targetProfileId = activeProfileId || '1';
+      const exactMatch = registros.find((r: any) => (r.profile_id || '1') === targetProfileId);
+      if (exactMatch) return exactMatch;
+      // Do not fallback to registros[0] to maintain profile isolation
+    }
   } catch (_error) {
     // si el fetch falla, se sigue sin registro en vez de romper la respuesta
   }
@@ -247,12 +252,16 @@ function getCostConfig(record, clientCostConfig) {
 // usuario lo declara (resolveTruckPayment.shouldPersist); las siguientes
 // veces se reutiliza desde el perfil y esta función no vuelve a escribir.
 // ─────────────────────────────────────────────────────────────────────────────
-async function persistPagoCamion(base44, userEmail, record, rpm) {
+async function persistPagoCamion(base44, userEmail, record, rpm, activeProfileId) {
   try {
     if (record && record.id) {
       await base44.entities.CostConfig.update(record.id, { pago_camion_rpm: rpm });
     } else {
-      await base44.entities.CostConfig.create({ usuario: userEmail, pago_camion_rpm: rpm });
+      await base44.entities.CostConfig.create({ 
+        usuario: userEmail, 
+        pago_camion_rpm: rpm,
+        profile_id: activeProfileId || '1'
+      });
     }
   } catch (_error) {
     // Si falla el guardado, la respuesta de este turno sigue adelante con el
@@ -411,7 +420,7 @@ Deno.serve(async (req) => {
     return Response.json({ error: 'Cuerpo de la petición inválido' }, { status: 400 });
   }
 
-  const { messages, costConfig: clientCostConfig, locale: rawLocale } = body || {};
+  const { messages, costConfig: clientCostConfig, locale: rawLocale, activeProfileId } = body || {};
   // Resuelto ANTES del try/catch externo (L~263) a propósito: si algo dentro
   // de ese bloque revienta, el catch-all (safeFallbackContent) ya tiene un
   // locale seguro en scope — nunca cae en undefined. Payload aditivo: si
@@ -428,12 +437,12 @@ Deno.serve(async (req) => {
   try {
     const cappedMessages = capHistory(messages, HISTORY_CAP);
     const costConfigRecord = user
-      ? await fetchCostConfigRecord(base44, user.email)
+      ? await fetchCostConfigRecord(base44, user.email, activeProfileId)
       : null;
 
     // --- AUTO-FIX: Limpiar valores corruptos (como el 1838) del perfil ---
     if (user && costConfigRecord && costConfigRecord.pago_camion_rpm > 100) {
-      await persistPagoCamion(base44, user.email, costConfigRecord, null);
+      await persistPagoCamion(base44, user.email, costConfigRecord, null, activeProfileId);
       costConfigRecord.pago_camion_rpm = null;
     }
     // ----------------------------------------------------------------------
@@ -709,7 +718,7 @@ Deno.serve(async (req) => {
 
     const truckPayment = resolveTruckPayment(costConfigRecord, raw.pago_camion);
     if (truckPayment.shouldPersist && truckPayment.rpm != null) {
-      await persistPagoCamion(base44, user.email, costConfigRecord, truckPayment.rpm);
+      await persistPagoCamion(base44, user.email, costConfigRecord, truckPayment.rpm, activeProfileId);
     }
 
     const tarifaOfrecida = typeof raw.tarifa_ofrecida === 'number' && isFinite(raw.tarifa_ofrecida) && raw.tarifa_ofrecida > 0
