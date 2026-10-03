@@ -295,7 +295,8 @@ export function esFueraDeTema(texto: unknown): boolean {
  *   3. raw === 'off_topic' || esFueraDeTema(último mensaje)   → 'off_topic'   (LLM o blocklist temporal)
  *   4. cualquier otro caso                                    → 'general'     (comportamiento por defecto)
  */
-export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' | 'ask_miles' {
+export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' | 'ask_miles' | 'draft_email' {
+  if (raw === 'draft_email') return 'draft_email';
   if (raw === 'ask_miles') return 'ask_miles';
   if (raw === 'rate_check') return 'rate_check';
   const ultimo = ultimoMensajeDelDispatcher(messages);
@@ -1568,7 +1569,7 @@ export function isValidMessages(messages: unknown): messages is ChatMessage[] {
 export const EXTRACTION_SCHEMA = {
   type: 'object',
   properties: {
-    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic', 'ask_miles'] },
+    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic', 'ask_miles', 'draft_email'] },
     origen: {
       type: 'string',
       description: "Ciudad y estado de origen (ej. 'Miami, FL')"
@@ -1587,8 +1588,8 @@ export const EXTRACTION_SCHEMA = {
       type: 'string',
       enum: ['20', '40', '45', '20_heavy', 'unknown'],
     },
-    tarifa_ofrecida: { type: 'number' },
-    pago_camion: { type: 'number' },
+    tarifa_ofrecida: { type: 'number', description: "La tarifa total ofrecida por el broker para la ruta ACTUAL. Extraer SOLO si aplica al viaje que se está discutiendo ahora. null si pertenece a un viaje/ruta anterior." },
+    pago_camion: { type: 'number', description: "El pago por milla al camión (RPM). Extraer SOLO si aplica al contexto actual. null si pertenece a un contexto anterior." },
     accessorial_triggers: {
       type: 'array',
       items: { type: 'string' },
@@ -1598,7 +1599,9 @@ export const EXTRACTION_SCHEMA = {
       enum: ['price_only', 'include_in_rate', 'none'],
       description: "Determina el modo de consulta de accesorial. 'price_only' cuando el usuario SOLO quiere saber cuánto vale ese cargo accesorial (ej: '¿cuánto vale el pre-pull?', '¿qué cobra el hazmat?'). 'include_in_rate' cuando el usuario quiere saber el total de una ruta CON ese cargo incluido (ej: 'cuánto queda con el pre-pull', 'si me cobran pre-pull cuánto sería el total'). 'none' si no se menciona ningún accesorial."
     },
-    respuesta_general: { type: 'string' },
+    respuesta_general: { type: 'string', description: "Tu respuesta general. Si el intent es draft_email, no redactes el correo aquí, simplemente pon un mensaje genérico de 'Redactando correo...' porque se hará en un segundo paso." },
+    broker_name: { type: 'string', description: "El nombre del broker mencionado en el chat (ej. 'CH Robinson', 'TQL'). null si no se menciona." },
+    driver_name: { type: 'string', description: "El nombre del conductor mencionado en el chat. null si no se menciona." }
   },
 };
 

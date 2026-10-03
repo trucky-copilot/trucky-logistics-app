@@ -60,6 +60,7 @@ import {
   extractNumericTokens,
 } from './llmDataBoundary.ts';
 import { resolveLocation } from './nameResolution.ts';
+import emailTemplates from './plantillas_correo.json' with { type: 'json' };
 
 // chat-idioma-toggle Fase 2 (re-aplicado en la reconciliación con
 // reglas-v3-multiestado): `locale` viaja desde el payload hasta cada builder
@@ -144,7 +145,7 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - origen/destino: Extrae la ciudad. REGLA CRÍTICA Y OBLIGATORIA: Adjunta SIEMPRE la abreviatura del estado de 2 letras al final, separada por una coma (ej. "Rincon, GA", "Atlanta, GA", "Tampa, FL"). Si el usuario proporciona un código postal (zip code), MANTENLO en la ciudad extraída antes del estado (ej. "Miami 33186, FL"). Si el usuario omite el estado o lo escribe mal, DEBES inferir el estado correcto y agregarlo. Si el usuario envía un mensaje corto continuando una cotización anterior, copia exactamente origen y destino del historial. REGLA DE TERMINALES: Si el usuario menciona "NS Rossville", extrae EXACTAMENTE "Rossville, TN" (nunca GA). Si menciona "UP", "UP RAIL" o "Union Pacific", DEBES extraer EXACTAMENTE "Dallas UP, TX". Si menciona "O083", extrae "Atlanta O083, GA". Si menciona "BNSF", extrae "Atlanta BNSF, GA". Si menciona "h572", extrae "Chicago h572, IL". Si menciona "mega rail", "garden city", o la palabra "Port" o "Puerto" sola y el otro punto está en Georgia (GA), extrae EXACTAMENTE "Garden City, GA", INCLUSO si el usuario añade la palabra "Savannah" (ej. si dice "Garden City Terminal Savannah", igual extrae "Garden City, GA"). Para terminales de Florida: si menciona "FIT" o "PET" extrae "Fort Lauderdale FIT, FL" o "Fort Lauderdale PET, FL" respectivamente. Para otras terminales de FL ("MIA", "PEV", "POMTOC", "SFCT", "Port Everglades", "M669", "Port Tampa Bay"), mantén el nombre EXACTO de la terminal que el usuario haya escrito junto a la ciudad correcta (ej. si el usuario escribe "PEV" debes extraer "Miami PEV, FL", si escribe "POMTOC" extrae "Miami POMTOC, FL", si escribe "M669" extrae "Tampa M669, FL"). En general, si se menciona una terminal (puerto, NS, rieles), asocia el estado correctamente según el contexto y no lo confundas con otra ciudad del mismo nombre. NO uses la palabra "Unknown". NO incluyas tamaños.
 - es_redondo: true por defecto; usa false solo si el dispatcher dice explícitamente "solo ida" o "one way".
 - equipo: uno de dry_van, reefer, flatbed, step_deck, drayage, power_only. Si es continuación de cotización, usa el del historial. REGLA DE ORO: Si el usuario menciona EXPLÍCITAMENTE "dryvan", "reefer", "flatbed", etc., ese equipo tiene PRIORIDAD ABSOLUTA. NUNCA lo cambies a drayage ni pidas tamaño de contenedor, incluso si el usuario menciona un puerto.
-- equipo="drayage": asúmelo SOLO si el dispatcher menciona explícitamente "drayage", "contenedor" (sin que sea otro equipo), o tamaños como "20", "40", "45". ¡El solo hecho de mencionar un puerto o terminal NO hace que sea drayage! Si no especifica NINGÚN equipo, devuelve obligatoriamente "unknown".
+- equipo="drayage": asúmelo SOLO si el dispatcher menciona explícitamente "drayage", "contenedor", "chasis" o tamaños como "20", "40", "45". ¡REGLA CRÍTICA: NUNCA asumas drayage solo por leer la palabra "puerto", "port", "terminal" o el nombre de una terminal (ej. Garden City, NS)! Si el usuario no menciona el equipo explícitamente, devuelve obligatoriamente "unknown" a menos que haya una REGLA ESTRICTA al final del prompt.
 - equipo, distinción reefer vs. contenedor: "reefer" es trailer (RPM); un contenedor refrigerado de puerto es "drayage", nunca "reefer".
 - tamano: uno de 20, 40, 45, 20_heavy — SOLO si el dispatcher menciona el tamaño (ej. "20 pies", "45", "mia 40") o si hereda de la cotización anterior; de lo contrario usa "unknown".
 - tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece. ¡SOLO extráelo si el usuario menciona explícitamente un monto ofrecido en ESTE mensaje! NO heredes tarifas de cotizaciones anteriores a menos que el usuario pregunte explícitamente por ellas (ej. "¿y con la tarifa que te dije?"). Ante la duda o si es una cotización nueva, pon null.
@@ -479,9 +480,12 @@ Deno.serve(async (req) => {
     if (organizationName) {
       systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
     }
-    if (defaultEquipment) {
-      systemContext += `\n\nEQUIPO PREDETERMINADO DEL VEHÍCULO DEL USUARIO: ${defaultEquipment}
-     Si el dispatcher no menciona otro equipo, usa este equipo como valor de equipo.`;
+    if (defaultEquipment && defaultEquipment.length > 0) {
+      const equipNames = defaultEquipment.map((t: any) => t.equipment_type).filter(Boolean);
+      systemContext += `\n\nEQUIPOS REGISTRADOS DEL USUARIO: ${equipNames.join(', ')}.`;
+      if (equipNames.length === 1) {
+         systemContext += `\nREGLA ESTRICTA: El usuario SOLO tiene un camión tipo "${equipNames[0]}". Si el usuario NO menciona explícitamente "drayage", "contenedor", "chasis" ni un tamaño (20/40/45), DEBES extraer "${equipNames[0]}" como equipo, INCLUSO si menciona un puerto o terminal.`;
+      }
     }
     // reglas-v3-multiestado Fase 6: costo_por_milla YA existía en CostConfig
     // (Calculadora) como contexto de rentabilidad; ahora ADEMÁS alimenta la
@@ -553,6 +557,20 @@ Deno.serve(async (req) => {
     }
     if (raw.tarifa_ofrecida != null && !historialCompletoSinComas.includes(raw.tarifa_ofrecida.toString())) {
       raw.tarifa_ofrecida = null;
+    }
+
+    // Prevenir el arrastre ("leak") de precios de rutas anteriores si el usuario ingresó una ruta nueva.
+    if (raw.tarifa_ofrecida != null && !msgSinComas.includes(raw.tarifa_ofrecida.toString())) {
+       const isRouteQuery = /\b(a|to|de|from|-)\b/i.test(ultimoMsg) || ultimoMsg.trim().split(/\s+/).length > 3;
+       if (isRouteQuery) {
+          raw.tarifa_ofrecida = null;
+       }
+    }
+    if (raw.pago_camion != null && !msgSinComas.includes(raw.pago_camion.toString())) {
+       const isRouteQuery = /\b(a|to|de|from|-)\b/i.test(ultimoMsg) || ultimoMsg.trim().split(/\s+/).length > 3;
+       if (isRouteQuery) {
+          raw.pago_camion = null;
+       }
     }
     if (raw.millas_ida != null && !msgSinComas.includes(raw.millas_ida.toString())) {
       raw.millas_ida = null; // Descarta las millas inventadas por la IA para que entre Google Maps
@@ -701,6 +719,168 @@ Deno.serve(async (req) => {
       return Response.json({ content: conFronteraVerificada(buildGeneralMarkdown(raw.respuesta_general, locale), permitidasGeneral) });
     }
 
+    if (intent === 'draft_email') {
+      const formattedTemplates = emailTemplates.templates.map(t => 
+        `Plantilla ID: ${t.id}\nNombre: ${t.name}\nCuándo usarla: ${t.description}\nCuerpo exacto a copiar:\n${t.body}\n-----------------------------------\n`
+      ).join('');
+
+      let organizationName = 'Desconocido';
+      let carrierProfile = null;
+      let brokers: any[] = [];
+      let drivers: any[] = [];
+      let debugOrgId = '';
+      let debugProfilesLength = 0;
+      let debugAllBrokersLength = 0;
+
+      try {
+        const memberships = await base44.entities.OrganizationMember.filter({ user_email: user.email, active: true });
+        if (memberships && memberships.length > 0) {
+          const orgId = memberships[0].organization_id;
+          debugOrgId = orgId;
+          
+          try {
+             const org = await base44.entities.Organization.get(orgId);
+             if (org) organizationName = org.name;
+          } catch(err) {
+             console.error('Error fetching org:', err);
+          }
+          
+          let profiles = await base44.entities.CarrierProfile.filter({ organization_id: orgId });
+          if (!profiles || profiles.length === 0) {
+            profiles = await base44.entities.CarrierProfile.filter({});
+          }
+          debugProfilesLength = profiles ? profiles.length : 0;
+          if (profiles && profiles.length > 0) {
+            carrierProfile = profiles[0];
+          }
+
+          let allBrokers = await base44.entities.Broker.filter({ organization_id: orgId });
+          if (!allBrokers || allBrokers.length === 0) {
+            allBrokers = await base44.entities.Broker.filter({});
+          }
+          debugAllBrokersLength = allBrokers ? allBrokers.length : 0;
+          brokers = allBrokers.filter((b: any) => !b.profile_id || b.profile_id === activeProfileId);
+          
+          let allDrivers = await base44.entities.Driver.filter({ organization_id: orgId });
+          if (!allDrivers || allDrivers.length === 0) {
+            allDrivers = await base44.entities.Driver.filter({});
+          }
+          drivers = allDrivers.filter((d: any) => !d.profile_id || d.profile_id === activeProfileId);
+        }
+      } catch(e) {
+         console.error('[draft_email] Error fetching organization info:', e);
+      }
+
+      let brokerInfoText = '';
+      let rawBroker = (raw.broker_name && raw.broker_name !== 'unknown') ? raw.broker_name : null;
+      if (rawBroker) {
+         const found = brokers.find(b => b.nombre.toLowerCase().includes(rawBroker.toLowerCase()));
+         if (found) {
+             brokerInfoText = JSON.stringify({ nombre: found.nombre, mc: found.mc_number });
+         } else if (brokers.length === 1) {
+             brokerInfoText = JSON.stringify({ nombre: brokers[0].nombre, mc: brokers[0].mc_number });
+         } else {
+             brokerInfoText = `Broker "${rawBroker}" no encontrado. Usa "Team" y omite el MC.`;
+         }
+      } else {
+         if (brokers.length === 0) {
+            brokerInfoText = JSON.stringify({ nombre: 'Team', mc: '' });
+         } else if (brokers.length === 1) {
+            brokerInfoText = JSON.stringify({ nombre: brokers[0].nombre, mc: brokers[0].mc_number });
+         } else {
+            const list = brokers.map(b => b.nombre).join(', ');
+            brokerInfoText = `MULTIPLE_BROKERS: El usuario no especificó el broker. Dile textualmente: "Mira, tenemos estos brokers registrados: ${list}. ¿Cuál de todos escoges?"`;
+         }
+      }
+
+      let driverInfoText = '';
+      let rawDriver = (raw.driver_name && raw.driver_name !== 'unknown') ? raw.driver_name : null;
+      if (rawDriver) {
+         const foundD = drivers.find(d => (d.nombre + ' ' + (d.apellido||'')).toLowerCase().includes(rawDriver.toLowerCase()));
+         if (foundD) {
+             driverInfoText = JSON.stringify({ nombre: foundD.nombre + ' ' + (foundD.apellido || ''), telefono: foundD.telefono });
+         } else if (drivers.length === 1) {
+             driverInfoText = JSON.stringify({ nombre: drivers[0].nombre + ' ' + (drivers[0].apellido || ''), telefono: drivers[0].telefono });
+         } else {
+             driverInfoText = `Conductor "${rawDriver}" no encontrado. Deja los datos en blanco.`;
+         }
+      } else {
+         if (drivers.length === 0) {
+            driverInfoText = 'No se encontraron conductores. Deja el campo en blanco.';
+         } else if (drivers.length === 1) {
+            driverInfoText = JSON.stringify({ nombre: drivers[0].nombre + ' ' + (drivers[0].apellido || ''), telefono: drivers[0].telefono });
+         } else {
+            const listD = drivers.map(d => d.nombre).join(', ');
+            driverInfoText = `MULTIPLE_DRIVERS: El usuario no especificó conductor. Dile textualmente: "Mira, tenemos estos conductores registrados: ${listD}. ¿A quién asignamos?"`;
+         }
+      }
+
+      let myCompany = carrierProfile?.company_name || organizationName || 'Desconocido';
+      let myMC = carrierProfile?.mc_number;
+      let myDOT = carrierProfile?.dot_number;
+      
+      // Si el usuario puso su MC en el campo de "Nombre de la empresa" durante el registro
+      if (!myMC && myCompany.toUpperCase().startsWith('MC')) {
+         myMC = myCompany;
+      }
+
+      const draftingPrompt = `Eres Trucky, asistente de Dispatch. El usuario te ha pedido redactar o responder un correo.
+Usa EXACTAMENTE alguna de las siguientes plantillas para generar tu respuesta:
+
+${formattedTemplates}
+
+Información específica del contexto extraída de la base de datos para este correo:
+- Tu nombre de Dispatcher y correo: ${user.email} (Úsalo para la firma donde dice [email]).
+- Nombre de tu empresa (Carrier): ${myCompany}
+- MC de tu empresa: ${myMC || '(Configura tu Carrier Profile)'}
+- DOT de tu empresa: ${myDOT || '(Configura tu Carrier Profile)'}
+- Broker detectado: ${brokerInfoText}
+- Conductor detectado: ${driverInfoText}
+- Ruta mencionada: ${raw.origen || 'No detectado'} a ${raw.destino || 'No detectado'}
+- Equipo: ${raw.equipo !== 'unknown' ? raw.equipo : 'No detectado'}
+- Tarifa ofrecida en la discusión: ${raw.tarifa_ofrecida || 'No detectada'}
+
+Instrucciones:
+1. Elige la plantilla que mejor se adapte a la intención del usuario.
+2. Los correos SIEMPRE tienen que ser en inglés.
+3. Rellena los campos de la firma ([Your name], [Company], [MC], [DOT], [phone], [email]) con los datos de tu empresa y usuario provistos arriba. Si dice "(Configura tu Carrier Profile)", escríbelo así literal en el correo para que el usuario sepa que le falta configurar eso en su app.
+4. Rellena [Broker name] con el nombre del broker. ¡REGLA CRÍTICA!: Si el campo "Broker detectado" empieza con "MULTIPLE_BROKERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí (en español) para que el usuario elija. Si el broker es "Team", pon "Team" y elimina la línea del MC del broker en el correo si la plantilla la tiene.
+5. ¡REGLA CRÍTICA PARA CONDUCTOR!: Si el campo "Conductor detectado" empieza con "MULTIPLE_DRIVERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí.
+6. ¡REGLA CRÍTICA PARA TARIFA!: Si el usuario te pide cotizar pero NO especifica un número exacto en su mensaje, NO ADIVINES. En ese caso NO REDACTES EL CORREO y devuelve ÚNICAMENTE la pregunta: "¿Qué tarifa exacta quieres que ponga en el correo?".
+7. ¡REGLA CRÍTICA DE REDACCIÓN!: ESTÁ ESTRICTAMENTE PROHIBIDO redactar tu propio correo. DEBES COPIAR Y PEGAR el 'Cuerpo exacto a copiar' de la plantilla palabra por palabra, reemplazando ÚNICAMENTE los campos entre corchetes [...]. No agregues ni quites oraciones. 
+8. ¡REGLAS PARA LLENAR LOS CAMPOS (ADAPTABILIDAD AL TIPO DE CARGA)!:
+   - [Broker name]: Usa EXACTAMENTE el valor de "nombre" que viene en el JSON del "Broker detectado". NO uses "Team" a menos que el nombre sea literalmente "Team".
+   - [Empty Return: ...]: Si el equipo es OTR (dry van, reefer, flatbed), ELIMINA COMPLETAMENTE ESTA LÍNEA DEL CORREO (no dejes espacios en blanco ni pongas N/A). Solo aplica y se llena si es drayage (puerto).
+   - [Includes]: Si es dry van, pon "LH + FSC". Si es reefer, pon "LH + FSC + genset". Si es flatbed, pon "LH + FSC + tarps". Si es drayage (puerto/contenedor), pon "LH + FSC + Chassis".
+   - MC#: [MC] (el que está en la mitad del correo): Llena este con el MC del BROKER (sácalo del JSON "Broker detectado").
+   - [phone]: Reemplázalo EXACTAMENTE con el valor de "telefono" del JSON "Conductor detectado". Si no hay datos, está vacío, o dice "No se encontraron conductores", pon "(Configura tu número)".
+   - MC# [MC] | DOT# [DOT] (el que está en tu firma al final): Llena este con TU MC y DOT de Carrier (sácalo de la información de tu empresa arriba). NUNCA uses el MC del broker aquí.
+9. ¡REGLA CRÍTICA DE FORMATO!: El correo debe mantener su estructura de párrafos. Utiliza saltos de línea estándar (el carácter "\\n") para separar los párrafos y las líneas de la firma. NO uses entidades HTML como "&#10;" ni "<br>".
+
+Conversación reciente:
+${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
+`;
+
+      const draftResult = await base44.integrations.Core.InvokeLLM({
+        prompt: draftingPrompt,
+        response_json_schema: {
+          type: "object",
+          properties: {
+            correo: { type: "string" }
+          },
+          required: ["correo"]
+        }
+      });
+
+      let respuesta = draftResult?.correo || 'Error redactando el correo. Por favor, intenta de nuevo.';
+      
+      if (!respuesta.includes('¿') && !respuesta.startsWith('\`\`\`')) {
+        respuesta = '\`\`\`text\n' + respuesta + '\n\`\`\`';
+      }
+      
+      return Response.json({ content: respuesta });
+    }
+
     // intent === 'rate_check'
     //
     // reglas-v3-multiestado Fase 3: ya NO hay guardarraíl geográfico que
@@ -810,7 +990,8 @@ Deno.serve(async (req) => {
     }
     return Response.json(responsePayload);
 
-  } catch (_error) {
+  } catch (error) {
+    console.error('[entry.ts] Unhandled Exception:', error);
     // Cualquier falla inesperada retorna respuesta segura, nunca 500 con stack trace.
     return Response.json({ content: safeFallbackContent(locale) });
   }

@@ -1,0 +1,67 @@
+{
+  "templates": [
+    {
+      "id": "cotizar_tarifa",
+      "name": "1. Cotizar tarifa (responder a una solicitud del broker)",
+      "description": "Cuándo la usa Trucky: el broker pide capacidad/tarifa y Trucky ya calculó el número. Cotiza con el layout completo.",
+      "subject": "[Origin] -> [Delivery] - [Equipment] - Rate",
+      "body": "Hi [Broker name],  \n  \nThank you for reaching out. Please see our rate below:  \n  \nPickup: [origin / port + terminal]  \nDelivery: [delivery address]  \n[Empty Return: [depot] - drayage only]  \n[Equipment]: [size/type] - $[rate] All-In  \nIncludes: [LH + FSC + Chassis / LH + FSC]  \nMC#: [MC]  \nAvailability: [Immediate / date]  \n  \nBefore confirming, we wanted to clarify [operation / timing / accessorials]. Please confirm so we can proceed accordingly.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "aceptar",
+      "name": "2. ACEPTAR - 'We can make it work at $X All-In'",
+      "description": "Cuándo la usa Trucky: veredicto ACEPTAR: el usuario toma la carga y pide confirmación para cerrar.",
+      "subject": "[Origin] -> [Delivery] - Confirming",
+      "body": "Hello [Broker name],  \n  \nThank you for the update. We can make it work at $[rate] All-In.  \n  \nIf possible, we would appreciate a confirmation today so we can get everything locked in and take it from there on our end.  \n  \n[Also, could you clarify [dispatch frequency / appointment / accessorial]?]  \n  \nLooking forward to hearing from you.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "negociar",
+      "name": "3. NEGOCIAR - Contraoferta",
+      "description": "Cuándo la usa Trucky: veredicto NEGOCIAR: pedir un número por encima de lo ofrecido.",
+      "subject": "Re: [Origin] -> [Delivery]",
+      "body": "Hi [Broker name],  \n  \nThank you for the details. To make this one work on our end, our rate would be $[rate] All-In. We can commit today and keep you posted through delivery.  \n  \nPlease let us know if that works and we'll get everything locked in.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "renegociar_timing",
+      "name": "4. No se puede el timing - ofrecer alternativa y renegociar",
+      "description": "Cuándo la usa Trucky: no se puede cumplir la fecha/operación pedida; se ofrece alternativa y disposición a ajustar rate.",
+      "subject": "Re: [Origin] -> [Delivery]",
+      "body": "Hi [Broker name],  \n  \nUnfortunately, [same-day delivery today / the requested timeline] is not possible on our end. We apologize for the inconvenience.  \n  \n[Please also note that [ports are closed Monday / constraint], so the earliest we could pick up and deliver would be [date].]  \n  \nThat said, we understand this may not be the ideal timeline, and we are happy to negotiate the rate if that helps move forward.  \n  \nPlease let us know how you'd like to proceed.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "rechazar",
+      "name": "5. RECHAZAR - pasar la carga (rate bajo el piso)",
+      "description": "Cuándo la usa Trucky: veredicto RECHAZAR: el rate no cubre; se declina dejando la puerta abierta.",
+      "subject": "Re: [Origin] -> [Delivery]",
+      "body": "Hi [Broker name],  \n  \nThank you for the offer on [lane]. Unfortunately, we can't make it work at $[offered] - our minimum on this run is $[floor] given [miles / deadhead / detention risk]. If anything opens up closer to that, please keep us in mind for future loads.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "pedir_informacion",
+      "name": "6. Pedir información antes de cotizar",
+      "description": "Cuándo la usa Trucky: faltan datos para que Trucky calcule (commodity, citas, accesoriales, retorno).",
+      "subject": "[Origin] -> [Delivery] - a few details",
+      "body": "Hi [Broker name],  \n  \nThank you for reaching out. Before we send our rate, could you confirm:  \n• Commodity & weight  \n• Pickup & delivery appointment times  \n• [Live load or drop / Empty return location - drayage]  \n• Any accessorials (detention, layover[, per diem / chassis])  \n• Your target All-In  \n  \nWe'll get you our rate right back.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "observaciones_rc",
+      "name": "7. Observaciones al Rate Confirmation (Verificador)",
+      "description": "Cuándo la usa Trucky: el Verificador marcó algo en el RC antes de firmar (detención, cláusula, fecha imposible).",
+      "subject": "Re: Rate confirmation - [load ref]",
+      "body": "Hi [Broker name],  \n  \nThank you for the rate confirmation. Before signing, we wanted to confirm a couple of items:  \n• Detention terms: [X] hrs free, then $[Y]/hr  \n• [TONU / delivery window / accessorial] isn't reflected  \n  \nOnce we align on [item], we'll sign and send it right back.  \n  \nBest regards,  \n[Your name]  \n[Company]  \nMC# [MC] | DOT# [DOT]  \nPhone: [phone]  \nEmail: [email]"
+    },
+    {
+      "id": "seguimiento",
+      "name": "8. Seguimiento - pago / detención / POD",
+      "description": "Cuándo la usa Trucky: carga entregada: seguimiento a pago, detención o envío del POD.",
+      "subject": "[Load ref] - [POD / Detention / Invoice]",
+      "body": "Hi [Broker name],  \n  \nFollowing up on [load ref], delivered [date]. [POD attached.] [Detention accrued [X] hrs at [location] on [date] = $[amount] per the rate confirmation.] Please advise on processing.  \n  \nThank you,  \n[Your name]  \n[Company] · MC# [MC]"
+    },
+    {
+      "id": "cotizacion_es",
+      "name": "Cotización - versión en español",
+      "description": "Cuándo la usa Trucky: mismo caso de cotizar tarifa, cuando el broker habla español.",
+      "subject": "[Origen] -> [Entrega] - [Equipo] - Tarifa",
+      "body": "Hola [Broker],  \n  \nGracias por escribirnos. Le compartimos nuestra tarifa:  \n  \nRecogida: [origen / puerto + terminal]  \nEntrega: [dirección de entrega]  \n[Devolución de vacío: [depot] - solo drayage]  \n[Equipo]: [tamaño/tipo] - $[tarifa] All-In  \nIncluye: [LH + FSC + Chasis / LH + FSC]  \nMC#: [MC]  \nDisponibilidad: [Inmediata / fecha]  \n  \nAntes de confirmar, quisiéramos aclarar [operación / tiempos]. Por favor confírmenos para proceder.  \n  \nSaludos cordiales,  \n[Nombre] - [Empresa] · MC# [MC] | DOT# [DOT]  \nTel: [teléfono] · Email: [email]"
+    }
+  ]
+}

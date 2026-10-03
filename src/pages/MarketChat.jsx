@@ -444,7 +444,7 @@ export default function MarketChat() {
                     <MarketAdvisorCard data={msg.structuredData} />
                   )}
                   {(!msg.structuredData || msg.structuredData.intent !== 'rate_check') && (
-                    <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground">
+                    <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground [&>pre]:whitespace-pre-wrap [&>pre]:break-words">
                       <ReactMarkdown>{msg.content}</ReactMarkdown>
                     </div>
                   )}

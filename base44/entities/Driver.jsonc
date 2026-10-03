@@ -4,7 +4,11 @@
   "properties": {
     "organization_id": {
       "type": "string",
-      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
+      "description": "ID de la organización a la que pertenece este registro"
+    },
+    "profile_id": {
+      "type": "string",
+      "description": "Opcional: ID del perfil específico al que pertenece este conductor"
     },
     "nombre": {
       "type": "string"

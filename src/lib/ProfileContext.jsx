@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 import { withOrg } from '@/lib/orgScope';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
 const ProfileContext = createContext(null);
 
@@ -16,6 +17,10 @@ export function ProfileProvider({ children }) {
   const [activeProfileId, setActiveProfileId] = useState(null);
   const [unsavedBlockers, setUnsavedBlockers] = useState({}); // { [componentId]: boolean }
   const [loading, setLoading] = useState(true);
+
+  // Unsaved changes confirmation state
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pendingProfileId, setPendingProfileId] = useState(null);
 
   // Load from backend on mount or when user changes
   useEffect(() => {
@@ -165,12 +170,20 @@ export function ProfileProvider({ children }) {
   const switchProfile = (id) => {
     const hasUnsaved = Object.values(unsavedBlockers).some(isBlocked => isBlocked);
     if (hasUnsaved) {
-      if (!window.confirm("Tienes cambios sin guardar en esta página. Si cambias de perfil, se perderán. ¿Quieres continuar y descartarlos?")) {
-        return false;
-      }
+      setPendingProfileId(id);
+      setConfirmOpen(true);
+      return false; // Indicamos que NO se cambió sincrónicamente
     }
     setActiveProfileId(id);
     return true;
+  };
+
+  const handleConfirmSwitch = () => {
+    if (pendingProfileId) {
+      setActiveProfileId(pendingProfileId);
+    }
+    setConfirmOpen(false);
+    setPendingProfileId(null);
   };
 
   const setUnsavedChanges = (componentId, isUnsaved) => {
@@ -195,6 +208,20 @@ export function ProfileProvider({ children }) {
   return (
     <ProfileContext.Provider value={value}>
       {children}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cambios sin guardar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tienes cambios sin guardar en esta página. Si cambias de perfil, se perderán. ¿Quieres continuar y descartarlos?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setConfirmOpen(false)}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSwitch} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Descartar Cambios</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ProfileContext.Provider>
   );
 }
