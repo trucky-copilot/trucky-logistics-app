@@ -930,15 +930,70 @@ export interface AccessorialResolution {
   items: AccessorialRecord[];
 }
 
-export function resolveAccessorialsForState(estadoConsultado: Estado | null, textoDestino: unknown): AccessorialResolution {
+export interface CustomAccessorial {
+  concepto: string;
+  monto: string;
+}
+
+export function parseCustomAccessorials(text: string): CustomAccessorial[] {
+  if (!text) return [];
+  return text.split('\n').map(line => {
+    const match = line.match(/^([^:$]+)[:\s]+(.+)$/);
+    if (match) {
+      return { concepto: match[1].trim(), monto: match[2].trim() };
+    }
+    return null;
+  }).filter(Boolean) as CustomAccessorial[];
+}
+
+export function applyCustomAccessorials(
+  defaults: AccessorialRecord[],
+  customText: string | null | undefined
+): AccessorialRecord[] {
+  if (!customText) return defaults.map(d => ({ ...d, isCustom: false }));
+
+  const customs = parseCustomAccessorials(customText);
+  if (!customs.length) return defaults.map(d => ({ ...d, isCustom: false }));
+
+  const merged = [...defaults.map(d => ({ ...d, isCustom: false }))];
+
+  for (const c of customs) {
+    const cNorm = normalizeText(c.concepto);
+    const existingIndex = merged.findIndex(d => {
+      const dNormConcept = normalizeText(d.concepto);
+      return dNormConcept.includes(cNorm) || cNorm.includes(dNormConcept);
+    });
+
+    if (existingIndex >= 0) {
+      merged[existingIndex] = {
+        ...merged[existingIndex],
+        monto: c.monto,
+        isCustom: true
+      };
+    } else {
+      merged.push({
+        concepto: c.concepto,
+        gatillo: c.concepto,
+        monto: c.monto,
+        nota: "Custom",
+        fuente: { archivo: "user", fila: 0 },
+        isCustom: true
+      });
+    }
+  }
+
+  return merged;
+}
+
+export function resolveAccessorialsForState(estadoConsultado: Estado | null, textoDestino: unknown, customAccessorialsText?: string | null): AccessorialResolution {
   if (estadoConsultado) {
-    return { estado: estadoConsultado, heredado: false, items: loadAccessorials(estadoConsultado) };
+    return { estado: estadoConsultado, heredado: false, items: applyCustomAccessorials(loadAccessorials(estadoConsultado), customAccessorialsText) };
   }
   const vecino = detectNeighborState(textoDestino);
   if (vecino) {
-    return { estado: vecino, heredado: true, items: loadAccessorials(vecino) };
+    return { estado: vecino, heredado: true, items: applyCustomAccessorials(loadAccessorials(vecino), customAccessorialsText) };
   }
-  return { estado: null, heredado: false, items: [] };
+  return { estado: null, heredado: false, items: applyCustomAccessorials([], customAccessorialsText) };
 }
 
 /**
@@ -1002,8 +1057,9 @@ export function resolveDrayageQuote(params: {
   costoPorMillaPropio?: number | null;
   tarifaObjetivaPropia?: number | null;
   rawPrompt?: string;
+  customAccessorialsText?: string | null;
 }): DrayageOutcome {
-  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, rawPrompt } = params;
+  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, rawPrompt, customAccessorialsText } = params;
   const equipmentLabel = tamano === '20' ? "Drayage/Container 20'"
     : tamano === '40' ? "Drayage/Container 40'"
       : tamano === '45' ? "Drayage/Container 45'"
@@ -1047,7 +1103,7 @@ export function resolveDrayageQuote(params: {
         rpmBase: null,
         pagoCamionRpm: null, // NO multiplicamos por RPM para rutas de tabla plana
       });
-      const accesorialesMatch = resolveAccessorialsForState(match.estado, destinoRaw);
+      const accesorialesMatch = resolveAccessorialsForState(match.estado, destinoRaw, customAccessorialsText);
       const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers, origenCiudadPura);
       return {
         kind: 'quote',
@@ -1153,7 +1209,7 @@ export function resolveDrayageQuote(params: {
   // refState.estado a ciegas (ese sí cae a TX por defecto para referencias de
   // ruta; acá NO: un accesorial "heredado de Texas" sin nombrarlo sería
   // inventar una fuente, ver nota de resolveAccessorialsForState).
-  const accesorialesCalc = resolveAccessorialsForState(fallbackEstado, destinoRaw);
+  const accesorialesCalc = resolveAccessorialsForState(fallbackEstado, destinoRaw, customAccessorialsText);
   const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
 
   return {
@@ -1209,8 +1265,9 @@ export function resolveGenericQuote(params: {
   tarifaObjetivaPropia?: number | null;
   // Datos de mercado por estado extraídos por IA (Admin panel)
   stateMarketData?: any[];
+  customAccessorialsText?: string | null;
 }): GenericQuoteOutcome {
-  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, stateMarketData = [] } = params;
+  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, stateMarketData = [], customAccessorialsText } = params;
 
   const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
     ? millasIdaDeclaradas
@@ -1267,7 +1324,7 @@ export function resolveGenericQuote(params: {
   // Fase 4 — segunda lectura
   const segundaLectura = ft.targetSource === 'calculo' ? computeSegundaLectura(ft.target, millasIda) : null;
 
-  const accesorialesCalc = resolveAccessorialsForState(estadoConsultado, destinoRaw);
+  const accesorialesCalc = resolveAccessorialsForState(estadoConsultado, destinoRaw, customAccessorialsText);
   const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
 
   return {
@@ -1380,7 +1437,8 @@ if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
       const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
       lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
       for (const a of q.accesoriales.items) {
-        lineas.push(render(m.accesorialItemLine, a.concepto, a.monto));
+        const customFlag = a.isCustom ? " *(Personalizado)*" : "";
+        lineas.push(render(m.accesorialItemLine, a.concepto + customFlag, a.monto));
         const match = a.monto.match(/\$(\d+(\.\d+)?)/);
         if (match) {
           totalAccesoriales += parseFloat(match[1]);
@@ -1461,7 +1519,8 @@ if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
     const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
     lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
     for (const a of q.accesoriales.items) {
-      lineas.push(render(m.accesorialItemLine, a.concepto, a.monto));
+      const customFlag = a.isCustom ? " *(Personalizado)*" : "";
+      lineas.push(render(m.accesorialItemLine, a.concepto + customFlag, a.monto));
       const match = a.monto.match(/\$(\d+(\.\d+)?)/);
       if (match) {
         totalAccesorialesClassic += parseFloat(match[1]);

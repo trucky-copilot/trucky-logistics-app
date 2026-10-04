@@ -46,6 +46,7 @@ import {
   preguntaPorTotalRedondo,
   buildDrayageRoundTripMarkdown,
   filterAccessorialsByTriggers,
+  applyCustomAccessorials,
   type Tamano,
   type CalculatedQuote,
 } from './rateEngine.ts';
@@ -621,14 +622,18 @@ Deno.serve(async (req) => {
 
     if (esConsultaPuraAccesorial) {
       const itemsFL = loadAccessorials('FL' as any);
-      const matchedFL = filterAccessorialsByTriggers(itemsFL, triggers);
+      const customAccessorialsText = costConfigRecord?.custom_accessorials_active ? costConfigRecord.custom_accessorials_text : null;
+      
+      const mergedItems = customAccessorialsText ? applyCustomAccessorials(itemsFL, customAccessorialsText) : itemsFL;
+      const matchedItems = filterAccessorialsByTriggers(mergedItems, triggers);
 
       const lineas: string[] = [];
       lineas.push(`💰 **Cargos accesoriales para: ${triggers.join(', ')}**\n`);
 
-      if (matchedFL.length > 0) {
-        for (const a of matchedFL) {
-          lineas.push(`- ${a.concepto}: **${a.monto}**`);
+      if (matchedItems.length > 0) {
+        for (const a of matchedItems) {
+          const customFlag = a.isCustom ? " *(Personalizado)*" : "";
+          lineas.push(`- ${a.concepto}${customFlag}: **${a.monto}**`);
         }
       } else {
         lineas.push(`No tengo una tarifa estándar registrada para ese cargo en mi base de datos.`);
@@ -908,6 +913,8 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
     let content: string;
     let calculo: CalculatedQuote | null = null;
 
+    const customAccessorialsText = costConfigRecord?.custom_accessorials_active ? costConfigRecord.custom_accessorials_text : null;
+
     if (raw.equipo === 'drayage') {
       const tamano: Tamano | null = ['20', '40', '45', '20_heavy'].includes(raw.tamano) ? (raw.tamano as Tamano) : null;
       if (!tamano) {
@@ -924,6 +931,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           costoPorMillaPropio,
           tarifaObjetivaPropia: costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
           rawPrompt: msgSinComas,
+          customAccessorialsText,
         });
         if (outcome.kind === 'ask_miles') {
           content = raw.destino ? buildAskMilesMarkdown(outcome.ciudadConocida, locale) : buildMissingDataMarkdown(locale);
@@ -958,6 +966,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           costoPorMillaPropio,
           tarifaObjetivaPropia: costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
           stateMarketData,
+          customAccessorialsText,
         });
         if (outcome.kind === 'ask_miles') {
           content = buildMissingDataMarkdown(locale);

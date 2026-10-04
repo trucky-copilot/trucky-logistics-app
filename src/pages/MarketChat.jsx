@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle } from 'lucide-react';
+import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, Check } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -71,6 +71,43 @@ const UI_STRINGS = {
     errorStatus: (status) => `The advisor couldn't respond (error ${status}). Try again in a few seconds.`,
     errorNetwork: 'Could not send the message. Check your connection and try again.',
   },
+};
+
+const CodeBlock = ({ node, ...props }) => {
+  const [copied, setCopied] = useState(false);
+  
+  const getText = (children) => {
+    if (typeof children === 'string') return children;
+    if (Array.isArray(children)) return children.map(getText).join('');
+    if (children && children.props && children.props.children) return getText(children.props.children);
+    return '';
+  };
+  
+  const textToCopy = getText(props.children);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(textToCopy);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="my-4 rounded-xl bg-[#1e1e24] border border-[#2b2b36] overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#18181b] border-b border-[#2b2b36]">
+        <span className="text-xs font-semibold text-zinc-400">Trucky Email Draft</span>
+        <button 
+          onClick={handleCopy}
+          className="text-xs text-primary hover:text-primary/80 flex items-center gap-1.5 transition-colors font-medium"
+        >
+          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+          {copied ? 'Copied!' : 'Copy'}
+        </button>
+      </div>
+      <div className="p-4 overflow-x-auto">
+        <pre className="text-[13px] text-zinc-300 font-mono leading-relaxed m-0 whitespace-pre-wrap break-words" {...props} />
+      </div>
+    </div>
+  );
 };
 
 export default function MarketChat() {
@@ -445,7 +482,17 @@ export default function MarketChat() {
                   )}
                   {(!msg.structuredData || msg.structuredData.intent !== 'rate_check') && (
                     <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground [&>pre]:whitespace-pre-wrap [&>pre]:break-words">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown
+                        components={{
+                          pre: CodeBlock,
+                          code: ({ node, inline, ...props }) =>
+                            inline
+                              ? <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs" {...props} />
+                              : <code {...props} />
+                        }}
+                      >
+                        {msg.content}
+                      </ReactMarkdown>
                     </div>
                   )}
                 </>

@@ -15,6 +15,7 @@ export default function CostCalculator() {
     diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
     lease_semanal: 1200, pago_conductor_porcentaje: 25,
     otros_gastos_semanales: 300, millas_semana_promedio: 2500, tarifa_objetivo: 3.0,
+    custom_accessorials_active: false, custom_accessorials_text: ''
   });
   const [originalConfig, setOriginalConfig] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -43,6 +44,7 @@ export default function CostCalculator() {
             diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
             lease_semanal: 1200, pago_conductor_porcentaje: 25,
             otros_gastos_semanales: 300, millas_semana_promedio: 2500, tarifa_objetivo: 3.0,
+            custom_accessorials_active: false, custom_accessorials_text: ''
           };
           setConfig(def);
           setOriginalConfig(def);
@@ -59,23 +61,23 @@ export default function CostCalculator() {
 
   useEffect(() => {
     if (originalConfig) {
-      const keysToCheck = ['diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal', 'pago_conductor_porcentaje', 'otros_gastos_semanales', 'millas_semana_promedio', 'tarifa_objetivo'];
+      const keysToCheck = ['diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal', 'pago_conductor_porcentaje', 'otros_gastos_semanales', 'millas_semana_promedio', 'tarifa_objetivo', 'custom_accessorials_active', 'custom_accessorials_text'];
       const isUnsaved = keysToCheck.some(key => {
-        // Obtenemos los valores; si es undefined o string vacío, lo tratamos como 0 para la comparación.
-        const currentVal = Number(config[key] || 0);
-        
-        // Si el original no tiene la key (ej. DB vieja), usamos el default de la UI
         let originalVal = originalConfig[key];
         if (originalVal === undefined) {
            const def = {
             diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
             lease_semanal: 1200, pago_conductor_porcentaje: 25,
             otros_gastos_semanales: 300, millas_semana_promedio: 2500, tarifa_objetivo: 3.0,
+            custom_accessorials_active: false, custom_accessorials_text: ''
           };
           originalVal = def[key];
         }
         
-        return currentVal !== Number(originalVal);
+        if (key === 'custom_accessorials_active' || key === 'custom_accessorials_text') {
+           return config[key] !== originalVal;
+        }
+        return Number(config[key] || 0) !== Number(originalVal);
       });
       
       setUnsavedChanges('CostCalculator', isUnsaved);
@@ -211,6 +213,35 @@ export default function CostCalculator() {
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
         </div>
+      </div>
+
+      {/* Cargos Adicionales (Accessorials) */}
+      <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-foreground">Cargos Adicionales / Accesoriales</h2>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <span className="text-xs text-muted-foreground">Activar personalizados</span>
+            <div className="relative inline-flex items-center">
+              <input type="checkbox" className="sr-only peer" checked={config.custom_accessorials_active} onChange={e => set('custom_accessorials_active', e.target.checked)} />
+              <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+            </div>
+          </label>
+        </div>
+        
+        {config.custom_accessorials_active && (
+          <div className="space-y-2">
+            <p className="text-xs text-muted-foreground">
+              Ingresa tus cargos adicionales (uno por línea). El chat priorizará estos valores sobre los de mercado.<br/>
+              Formato sugerido: <code>Concepto: $Monto</code> (Ej: <code>Pre-pull: $150</code>)
+            </p>
+            <textarea 
+              value={config.custom_accessorials_text}
+              onChange={e => set('custom_accessorials_text', e.target.value)}
+              placeholder="Pre-pull: $150&#10;Chasis: $50 / día&#10;TONU: $200"
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 min-h-[100px] resize-y"
+            />
+          </div>
+        )}
       </div>
 
       {/* Results */}

@@ -54,6 +54,7 @@ export interface AccessorialRecord {
   monto: string;
   nota: string | null;
   fuente: { archivo: string; fila: number };
+  isCustom?: boolean;
 }
 
 export interface RouteCounts {
