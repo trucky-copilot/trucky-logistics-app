@@ -958,19 +958,23 @@ export function applyCustomAccessorials(
   const merged = [...defaults.map(d => ({ ...d, isCustom: false }))];
 
   for (const c of customs) {
-    const cNorm = normalizeText(c.concepto);
-    const existingIndex = merged.findIndex(d => {
-      const dNormConcept = normalizeText(d.concepto);
-      return dNormConcept.includes(cNorm) || cNorm.includes(dNormConcept);
-    });
+    const cNorm = normalizeText(c.concepto).replace(/[-\s]+/g, '');
+    let replaced = false;
+    
+    for (let i = 0; i < merged.length; i++) {
+      const dNormConcept = normalizeText(merged[i].concepto).replace(/[-\s]+/g, '');
+      if (dNormConcept.includes(cNorm) || cNorm.includes(dNormConcept)) {
+        merged[i] = {
+          ...merged[i],
+          concepto: merged[i].concepto.replace(/\s*\([A-Z]+\)/i, ''),
+          monto: c.monto,
+          isCustom: true
+        };
+        replaced = true;
+      }
+    }
 
-    if (existingIndex >= 0) {
-      merged[existingIndex] = {
-        ...merged[existingIndex],
-        monto: c.monto,
-        isCustom: true
-      };
-    } else {
+    if (!replaced) {
       merged.push({
         concepto: c.concepto,
         gatillo: c.concepto,
@@ -1012,15 +1016,17 @@ export function filterAccessorialsByTriggers(
   if (normalizados.length === 0) return [];
 
   const matched = items.filter(item => {
-    const campo = normalizeText(`${item.concepto} ${item.gatillo ?? ''}`);
+    const campo = normalizeText(`${item.concepto} ${item.gatillo ?? ''}`).replace(/[-\s]+/g, '');
     
     // Si el accesorio es un Pre-Pull, requerimos que el trigger explícitamente mencione "pre" o "pull"
-    // para evitar falsos positivos cuando el usuario solo menciona "PEV" o "Miami" como parte de la ruta.
-    if (campo.includes('pre-pull') || campo.includes('pre pull')) {
-      return normalizados.some(t => (t.includes('pre') || t.includes('pull')) && campo.includes(t));
+    if (campo.includes('prepull')) {
+      return normalizados.some(t => {
+        const tNorm = t.replace(/[-\s]+/g, '');
+        return (tNorm.includes('pre') || tNorm.includes('pull')) && campo.includes(tNorm);
+      });
     }
 
-    return normalizados.some(t => campo.includes(t));
+    return normalizados.some(t => campo.includes(t.replace(/[-\s]+/g, '')));
   });
 
   const finalItems: AccessorialRecord[] = [];
@@ -1030,8 +1036,8 @@ export function filterAccessorialsByTriggers(
   const isMIA = origenCiudad ? normalizeText(origenCiudad).includes('miami') : false;
 
   for (const item of matched) {
-    const c = normalizeText(item.concepto);
-    if (c.includes('pre-pull')) {
+    const c = normalizeText(item.concepto).replace(/[-\s]+/g, '');
+    if (c.includes('prepull')) {
       if (hasPrePull) continue; // Sólo un pre-pull
       
       // Si sabemos el origen, filtramos el incorrecto
@@ -1082,19 +1088,54 @@ export function resolveDrayageQuote(params: {
     }
   }
 
-  if (estadoResuelto && ciudadResuelta) {
-    const match = buscarEnTabla(estadoResuelto, ciudadResuelta, tamano, mercadoFinal);
-    
-    // VALIDACIÓN DE SEGURIDAD: Si las millas declaradas por Google Maps difieren masivamente 
-    // (> 40 millas) de las de la tabla, significa que el usuario está consultando desde un 
-    // origen distinto al mercado base de la tabla (ej. Tampa a Palmetto vs Miami a Palmetto).
-    const millasInvalidanTabla = match != null
-      && typeof millasIdaDeclaradas === 'number' 
-      && isFinite(millasIdaDeclaradas) 
-      && Math.abs(match.millasIda - millasIdaDeclaradas) > 40;
+  if (estadoResuelto && (estadoResuelto === 'FL' || estadoResuelto === 'TX')) {
+    let match: TableMatch | null = null;
+    let isMilesFallback = false;
+    const hasGoogleMiles = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0;
 
+    // NUEVA LÓGICA: Si tenemos las millas de Google Maps, buscamos el registro en la base
+    // de datos que tenga las millas más cercanas a lo solicitado, independientemente de la ciudad.
+    if (hasGoogleMiles) {
+      const tamanoBusqueda = estadoResuelto === 'TX' ? '40' : tamano;
+      const closest = findClosestRouteByMiles(estadoResuelto as Estado, tamanoBusqueda, millasIdaDeclaradas as number);
+      
+      if (closest) {
+        if (estadoResuelto === 'FL') {
+          match = {
+            estado: estadoResuelto,
+            ciudad: ciudadResuelta || closest.route.ciudad,
+            millasIda: closest.route.millas_ida,
+            piso: closest.precio.piso_tabla,
+            objetivo: closest.precio.objetivo,
+            esDerivado: false,
+            dobleSupuesto: false,
+            precioIncluyeRegreso: closest.route.semantica_millas.precio_incluye_regreso,
+          };
+        } else { // TX
+          const objetivoDerivado = deriveTxPrice(closest.precio.objetivo, tamano);
+          const pisoDerivado = closest.precio.piso_tabla != null ? deriveTxPrice(closest.precio.piso_tabla, tamano) : null;
+          match = {
+            estado: estadoResuelto,
+            ciudad: ciudadResuelta || closest.route.ciudad,
+            millasIda: closest.route.millas_ida,
+            piso: pisoDerivado ? pisoDerivado.valor : null,
+            objetivo: objetivoDerivado.valor,
+            esDerivado: objetivoDerivado.derivado,
+            dobleSupuesto: TX_SIZE_FACTORS[tamano].dobleSupuesto,
+            precioIncluyeRegreso: closest.route.semantica_millas.precio_incluye_regreso,
+          };
+        }
+      }
+    }
 
-    if (match && !millasInvalidanTabla) {
+    // Si por alguna razón no pudimos encontrar por millas o no había millas declaradas,
+    // usamos la lógica exacta por ciudad.
+    if (!match && ciudadResuelta) {
+      match = buscarEnTabla(estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
+      isMilesFallback = true;
+    }
+
+    if (match) {
       const ft = computeFloorTarget({
         tablaPiso: match.piso,
         tablaObjetivo: match.objetivo,
@@ -1103,15 +1144,15 @@ export function resolveDrayageQuote(params: {
         rpmBase: null,
         pagoCamionRpm: null, // NO multiplicamos por RPM para rutas de tabla plana
       });
-      const accesorialesMatch = resolveAccessorialsForState(match.estado, destinoRaw, customAccessorialsText);
+      const accesorialesMatch = resolveAccessorialsForState(match.estado as Estado, destinoRaw, customAccessorialsText);
       const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers, origenCiudadPura);
       return {
         kind: 'quote',
         calculo: {
-          estado: match.estado,
+          estado: match.estado as Estado,
           ciudad: mercadoFinal ? `${match.ciudad} ${mercadoFinal}` : match.ciudad,
-          millasIda: match.millasIda,
-          fuenteMillas: 'tabla',
+          millasIda: hasGoogleMiles ? (millasIdaDeclaradas as number) : match.millasIda,
+          fuenteMillas: hasGoogleMiles ? 'usuario' : 'tabla',
           piso: ft.floor,
           floorSource: ft.floorSource,
           objetivo: ft.target,
@@ -1125,7 +1166,7 @@ export function resolveDrayageQuote(params: {
           precioIncluyeRegreso: match.precioIncluyeRegreso,
           accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
           perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
-          costoPorMillaPropio: costoPorMillaPropio ?? null, // Ahora sí lo pasamos para el cálculo dinámico de rangos
+          costoPorMillaPropio: costoPorMillaPropio ?? null,
           tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
           tramoCortoThreshold: null, // drayage usa tabla
         },

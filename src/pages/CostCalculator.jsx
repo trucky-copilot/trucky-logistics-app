@@ -100,16 +100,12 @@ export default function CostCalculator() {
   const quickloadProfit = QUICKLOAD_RATE - breakEvenRate;
   const quickloadStatus = quickloadProfit > 0.1 ? 'ganancia' : quickloadProfit > -0.1 ? 'break_even' : 'perdida';
 
+  const keysToValidate = ['diesel_precio', 'mpg', 'millas_semana_promedio'];
+  const hasZeroOrNegative = keysToValidate.some(key => Number(config[key]) <= 0);
+
   const saveConfig = async () => {
-    // Si hay algún valor en 0 o negativo en los campos de entrada, mostrar la alerta
-    const keysToValidate = ['diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal', 'pago_conductor_porcentaje', 'otros_gastos_semanales', 'millas_semana_promedio', 'tarifa_objetivo'];
-    const hasZeroOrNegative = keysToValidate.some(key => Number(config[key]) <= 0);
-    if (hasZeroOrNegative) {
-      alert("No se pueden guardar valores en 0 o negativos");
-      return;
-    }
-    
     // Si el cálculo sigue siendo inválido por alguna otra razón
+    if (hasZeroOrNegative || !costos.valido) return;
     if (!costos.valido) return;
     setSaving(true);
     const user = await base44.auth.me();
@@ -286,11 +282,18 @@ export default function CostCalculator() {
 
       </div>
 
-      <button onClick={saveConfig} disabled={saving}
-        className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
-        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-        {saved ? `✓ ${t.calculator.saved}` : t.calculator.save}
-      </button>
+      <div className="space-y-3">
+        {hasZeroOrNegative && (
+          <p className="text-sm text-red-500 font-medium text-center">
+            Campos obligatorios
+          </p>
+        )}
+        <button onClick={saveConfig} disabled={saving || hasZeroOrNegative}
+          className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+          {saved ? `✓ ${t.calculator.saved}` : t.calculator.save}
+        </button>
+      </div>
     </div>
   );
 } 

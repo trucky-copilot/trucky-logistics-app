@@ -78,22 +78,18 @@ export function deriveCosts(i) {
   const fijo = fixedCostPerMile(i);
   const share = num(i.pago_conductor_porcentaje) / 100; // % de la tarifa, no un costo
   const costoPorMilla = fuel + fijo;
-  const tarifaBreakEven = costoPorMilla / (1 - share);
+  
+  // Evitar división por cero o negativo si el share es >= 100%
+  const divisor = (1 - share) > 0 ? (1 - share) : 1;
+  const tarifaBreakEven = costoPorMilla / divisor;
 
   const faltante = !(num(i.diesel_precio) > 0)
     ? 'diesel_precio'
     : !(num(i.mpg) > 0)
       ? 'mpg'
-      // Antes: un ternario silencioso ponía el costo fijo en 0 cuando
-      // millas_semana_promedio era 0 — cambio deliberado: ahora es inválido y
-      // se nombra, porque un costo fijo en $0 es una mentira, no un default.
       : !(num(i.millas_semana_promedio) > 0)
         ? 'millas_semana_promedio'
-        : !(share >= 0 && share < 1)
-          ? 'pago_conductor_porcentaje'
-          : !(Number.isFinite(costoPorMilla) && Number.isFinite(tarifaBreakEven))
-            ? 'diesel_precio'
-            : null;
+        : null;
 
   return { costoPorMilla, tarifaBreakEven, valido: faltante === null, faltante };
 }
