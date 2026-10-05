@@ -13,13 +13,14 @@ import { useProfile } from '@/lib/ProfileContext';
 
 export default function Dashboard() {
   const orgId = useOrganizationId();
-  const { organization } = useAppState();
+  const { organization, currentUser } = useAppState();
   const { t, locale } = useLanguage();
   const { activeProfileId } = useProfile();
   const [trucks, setTrucks] = useState([]);
   const [loads, setLoads] = useState([]);
   const [brokers, setBrokers] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [costConfig, setCostConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -55,11 +56,17 @@ export default function Dashboard() {
       listByOrg(base44.entities.Load, orgId, '-created_date', 50),
       listByOrg(base44.entities.Broker, orgId),
       listByOrg(base44.entities.Driver, orgId),
-    ]).then(([rawTrucks, rawLoads, rawBrokers, rawDrivers]) => {
+      currentUser?.email ? base44.entities.CostConfig.filter({ usuario: currentUser.email }) : Promise.resolve([]),
+    ]).then(([rawTrucks, rawLoads, rawBrokers, rawDrivers, configs]) => {
       setTrucks(filterByProfile(rawTrucks, 'trucks'));
       setLoads(filterByProfile(rawLoads, 'loads'));
       setBrokers(filterByProfile(rawBrokers, 'brokers'));
       setDrivers(filterByProfile(rawDrivers, 'drivers'));
+      if (configs && configs.length > 0) {
+        setCostConfig(configs[0]);
+      } else {
+        setCostConfig(null);
+      }
     }).catch((err) => {
       console.error('Dashboard: error al cargar datos', err);
       setError(t.dashboard.error);
@@ -78,9 +85,8 @@ export default function Dashboard() {
 
   const totalRevenue = thisWeek.reduce((s, l) => s + (l.tarifa_negociada || 0), 0);
   const totalProfit = thisWeek.reduce((s, l) => s + (l.ganancia_estimada || 0), 0);
-  const avgRatePerMile = thisWeek.length > 0
-    ? thisWeek.reduce((s, l) => s + (l.revenue_por_milla || 0), 0) / thisWeek.filter(l => l.revenue_por_milla).length
-    : 0;
+  const totalMilesThisWeek = thisWeek.reduce((s, l) => s + (l.millas || 0), 0);
+  const avgRatePerMile = totalMilesThisWeek > 0 ? totalRevenue / totalMilesThisWeek : 0;
   // Expiring documents
   const today = new Date();
   const sevenDays = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -149,9 +155,13 @@ export default function Dashboard() {
         <KpiCard
           titulo={t.dashboard.averageRate}
           valor={avgRatePerMile > 0 ? `$${avgRatePerMile.toFixed(2)}` : '--'}
-          subtitulo={t.dashboard.target}
+          subtitulo={costConfig?.tarifa_objetivo ? `meta: $${costConfig.tarifa_objetivo.toFixed(2)}/milla` : t.dashboard.target}
           icon={Package}
-          color={avgRatePerMile >= 3 ? 'green' : avgRatePerMile >= 2.6 ? 'yellow' : 'red'}
+          color={
+            costConfig?.tarifa_objetivo
+              ? (avgRatePerMile >= costConfig.tarifa_objetivo ? 'green' : avgRatePerMile >= costConfig.tarifa_objetivo * 0.9 ? 'yellow' : 'red')
+              : (avgRatePerMile >= 3 ? 'green' : avgRatePerMile >= 2.6 ? 'yellow' : 'red')
+          }
         />
         <KpiCard
           titulo={t.dashboard.weeklyTrips}

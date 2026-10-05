@@ -92,6 +92,8 @@ export default function Loads() {
 
   const totalRevenue = filtered.reduce((s, l) => s + (l.tarifa_negociada || 0), 0);
   const totalProfit = filtered.reduce((s, l) => s + (l.ganancia_estimada || 0), 0);
+  const totalMiles = filtered.reduce((s, l) => s + (l.millas || 0), 0);
+  const avgRate = totalMiles > 0 ? totalRevenue / totalMiles : 0;
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -115,7 +117,7 @@ export default function Loads() {
           { label: t.loadsPage.revenue, value: `$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
           { label: t.loadsPage.profit, value: `$${totalProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}`, color: totalProfit >= 0 ? 'text-green-400' : 'text-red-400' },
           { label: t.loadsPage.shown, value: filtered.length },
-          { label: t.loadsPage.avgRate, value: filtered.length > 0 ? `$${(filtered.reduce((s, l) => s + (l.revenue_por_milla || 0), 0) / filtered.filter(l => l.revenue_por_milla).length || 0).toFixed(2)}` : '--' },
+          { label: t.loadsPage.avgRate, value: totalMiles > 0 ? `$${avgRate.toFixed(2)}` : '--' },
         ].map((item, i) => (
           <div key={i} className="bg-card border border-border rounded-xl p-3">
             <p className="text-xs text-muted-foreground">{item.label}</p>
