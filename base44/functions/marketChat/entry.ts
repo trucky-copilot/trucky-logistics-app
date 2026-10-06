@@ -138,6 +138,7 @@ ${conversationHistory}
 Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversación y extrae los datos según el schema. Reglas:
 - intent="ask_miles" si el dispatcher explícitamente pide SOLO la distancia o las millas de una ruta (ej. "solo dame las millas", "cuantas millas hay", "millas de x a y"). Si pide esto, NO asumas "rate_check".
 - intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, un camión, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades, a menos que solo pida millas! También asume "rate_check" OBLIGATORIAMENTE si el mensaje modifica o pregunta sobre cómo quedaría una cotización previa (ej. "¿y si le sumo hazmat?", "¿cómo quedaría con pre pull?", "¿sería conveniente cobrar hazmat?"). ¡Incluso si pide consejo, si está sobre una cotización activa y pregunta "cómo quedaría", DEBE ser rate_check!
+- intent="draft_email" si el dispatcher pide explícitamente redactar, crear, escribir o responder un correo electrónico, email, plantilla o mensaje para un broker/shipper (ej. "hazme un correo", "redacta un email", "necesito que escribas un correo", "ahora para pedir información un correo", "qué correo le mando"). ¡Usa esto siempre que el usuario mencione la palabra correo, email o plantilla!
 - intent="off_topic" solo si el mensaje NO tiene relación con freight, dispatch u operación de carriers — por ejemplo: programación, clima, deportes, recetas, política, traducción, chistes, o aritmética sin referencia a freight, consejos personales, u otras industrias.
 - intent="general" en cualquier otro caso. ¡NUNCA repitas mensajes de error del historial como "Necesito más datos..."! Tu respuesta_general debe responder a la pregunta, no simular un error del sistema.
 - Ante la duda usa "general". Nunca uses "off_topic" si el mensaje menciona algún término de la KB.
@@ -151,6 +152,8 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - tamano: uno de 20, 40, 45, 20_heavy — SOLO si el dispatcher menciona el tamaño (ej. "20 pies", "45", "mia 40") o si hereda de la cotización anterior; de lo contrario usa "unknown".
 - tarifa_ofrecida: el monto en dólares que el broker/shipper ofrece. ¡SOLO extráelo si el usuario menciona explícitamente un monto ofrecido en ESTE mensaje! NO heredes tarifas de cotizaciones anteriores a menos que el usuario pregunte explícitamente por ellas (ej. "¿y con la tarifa que te dije?"). Ante la duda o si es una cotización nueva, pon null.
 - pago_camion: el RPM (dólares por milla) que el dispatcher dice que le paga al camión, SOLO si lo menciona explícitamente en este mensaje; null si no.
+- broker_name: el nombre de la compañía broker. ¡SOLO extráelo si el usuario menciona explícitamente al broker en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
+- driver_name: el nombre del conductor o chofer. ¡SOLO extráelo si el usuario lo menciona explícitamente en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
 - accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis"); arreglo vacío si no menciona ninguno.
 - respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
 }
@@ -782,20 +785,12 @@ Deno.serve(async (req) => {
          const found = brokers.find(b => b.nombre.toLowerCase().includes(rawBroker.toLowerCase()));
          if (found) {
              brokerInfoText = JSON.stringify({ nombre: found.nombre, mc: found.mc_number });
-         } else if (brokers.length === 1) {
-             brokerInfoText = JSON.stringify({ nombre: brokers[0].nombre, mc: brokers[0].mc_number });
          } else {
-             brokerInfoText = `Broker "${rawBroker}" no encontrado. Usa "Team" y omite el MC.`;
+             brokerInfoText = JSON.stringify({ nombre: rawBroker, mc: '' });
          }
       } else {
-         if (brokers.length === 0) {
-            brokerInfoText = JSON.stringify({ nombre: 'Team', mc: '' });
-         } else if (brokers.length === 1) {
-            brokerInfoText = JSON.stringify({ nombre: brokers[0].nombre, mc: brokers[0].mc_number });
-         } else {
-            const list = brokers.map(b => b.nombre).join(', ');
-            brokerInfoText = `MULTIPLE_BROKERS: El usuario no especificó el broker. Dile textualmente: "Mira, tenemos estos brokers registrados: ${list}. ¿Cuál de todos escoges?"`;
-         }
+         // Si el usuario no especificó el broker explícitamente, siempre usa Team
+         brokerInfoText = JSON.stringify({ nombre: 'Team', mc: '' });
       }
 
       let driverInfoText = '';
@@ -804,20 +799,12 @@ Deno.serve(async (req) => {
          const foundD = drivers.find(d => (d.nombre + ' ' + (d.apellido||'')).toLowerCase().includes(rawDriver.toLowerCase()));
          if (foundD) {
              driverInfoText = JSON.stringify({ nombre: foundD.nombre + ' ' + (foundD.apellido || ''), telefono: foundD.telefono });
-         } else if (drivers.length === 1) {
-             driverInfoText = JSON.stringify({ nombre: drivers[0].nombre + ' ' + (drivers[0].apellido || ''), telefono: drivers[0].telefono });
          } else {
-             driverInfoText = `Conductor "${rawDriver}" no encontrado. Deja los datos en blanco.`;
+             driverInfoText = `Conductor "${rawDriver}" no encontrado en DB. Pon su nombre pero deja el teléfono como [Phone]. NUNCA inventes números.`;
          }
       } else {
-         if (drivers.length === 0) {
-            driverInfoText = 'No se encontraron conductores. Deja el campo en blanco.';
-         } else if (drivers.length === 1) {
-            driverInfoText = JSON.stringify({ nombre: drivers[0].nombre + ' ' + (drivers[0].apellido || ''), telefono: drivers[0].telefono });
-         } else {
-            const listD = drivers.map(d => d.nombre).join(', ');
-            driverInfoText = `MULTIPLE_DRIVERS: El usuario no especificó conductor. Dile textualmente: "Mira, tenemos estos conductores registrados: ${listD}. ¿A quién asignamos?"`;
-         }
+         // Si el usuario no especificó conductor explícitamente, no lo adivines.
+         driverInfoText = 'No se proporcionó conductor explícitamente. Deja el espacio en blanco o pon [Phone]. NUNCA inventes números.';
       }
 
       let myCompany = carrierProfile?.company_name || organizationName || 'Desconocido';
@@ -827,6 +814,11 @@ Deno.serve(async (req) => {
       // Si el usuario puso su MC en el campo de "Nombre de la empresa" durante el registro
       if (!myMC && myCompany.toUpperCase().startsWith('MC')) {
          myMC = myCompany;
+      }
+      
+      if (myMC) {
+         // Mantener solo los números para que no se duplique el prefijo "MC"
+         myMC = myMC.replace(/\D/g, '');
       }
 
       const draftingPrompt = `Eres Trucky, asistente de Dispatch. El usuario te ha pedido redactar o responder un correo.
@@ -838,7 +830,7 @@ Información específica del contexto extraída de la base de datos para este co
 - Tu nombre de Dispatcher y correo: ${user.email} (Úsalo para la firma donde dice [email]).
 - Nombre de tu empresa (Carrier): ${myCompany}
 - MC de tu empresa: ${myMC || '(Configura tu Carrier Profile)'}
-- DOT de tu empresa: ${myDOT || '(Configura tu Carrier Profile)'}
+- DOT de tu empresa: ${myDOT || '[DOT]'}
 - Broker detectado: ${brokerInfoText}
 - Conductor detectado: ${driverInfoText}
 - Ruta mencionada: ${raw.origen || 'No detectado'} a ${raw.destino || 'No detectado'}
@@ -848,17 +840,17 @@ Información específica del contexto extraída de la base de datos para este co
 Instrucciones:
 1. Elige la plantilla que mejor se adapte a la intención del usuario.
 2. Los correos SIEMPRE tienen que ser en inglés.
-3. Rellena los campos de la firma ([Your name], [Company], [MC], [DOT], [phone], [email]) con los datos de tu empresa y usuario provistos arriba. Si dice "(Configura tu Carrier Profile)", escríbelo así literal en el correo para que el usuario sepa que le falta configurar eso en su app.
+3. Rellena los campos de la firma ([Your name], [Company], [MC], [DOT], [phone], [email]) con los datos de tu empresa y usuario provistos arriba. Si dice "(Configura tu Carrier Profile)" o "[DOT]", escríbelo así literal en el correo. No inventes números.
 4. Rellena [Broker name] con el nombre del broker. ¡REGLA CRÍTICA!: Si el campo "Broker detectado" empieza con "MULTIPLE_BROKERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí (en español) para que el usuario elija. Si el broker es "Team", pon "Team" y elimina la línea del MC del broker en el correo si la plantilla la tiene.
 5. ¡REGLA CRÍTICA PARA CONDUCTOR!: Si el campo "Conductor detectado" empieza con "MULTIPLE_DRIVERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí.
-6. ¡REGLA CRÍTICA PARA TARIFA!: Si el usuario te pide cotizar pero NO especifica un número exacto en su mensaje, NO ADIVINES. En ese caso NO REDACTES EL CORREO y devuelve ÚNICAMENTE la pregunta: "¿Qué tarifa exacta quieres que ponga en el correo?".
+6. ¡REGLA CRÍTICA PARA TARIFA!: Si el usuario te pide cotizar pero NO especifica un número exacto en su mensaje, simplemente mantén el espacio de la tarifa entre corchetes (ej. $[offered] o $[rate]) en el correo para que el usuario lo llene manualmente después. NO interrumpas el flujo para preguntarle.
 7. ¡REGLA CRÍTICA DE REDACCIÓN!: ESTÁ ESTRICTAMENTE PROHIBIDO redactar tu propio correo. DEBES COPIAR Y PEGAR el 'Cuerpo exacto a copiar' de la plantilla palabra por palabra, reemplazando ÚNICAMENTE los campos entre corchetes [...]. No agregues ni quites oraciones. 
 8. ¡REGLAS PARA LLENAR LOS CAMPOS (ADAPTABILIDAD AL TIPO DE CARGA)!:
    - [Broker name]: Usa EXACTAMENTE el valor de "nombre" que viene en el JSON del "Broker detectado". NO uses "Team" a menos que el nombre sea literalmente "Team".
    - [Empty Return: ...]: Si el equipo es OTR (dry van, reefer, flatbed), ELIMINA COMPLETAMENTE ESTA LÍNEA DEL CORREO (no dejes espacios en blanco ni pongas N/A). Solo aplica y se llena si es drayage (puerto).
    - [Includes]: Si es dry van, pon "LH + FSC". Si es reefer, pon "LH + FSC + genset". Si es flatbed, pon "LH + FSC + tarps". Si es drayage (puerto/contenedor), pon "LH + FSC + Chassis".
    - MC#: [MC] (el que está en la mitad del correo): Llena este con el MC del BROKER (sácalo del JSON "Broker detectado").
-   - [phone]: Reemplázalo EXACTAMENTE con el valor de "telefono" del JSON "Conductor detectado". Si no hay datos, está vacío, o dice "No se encontraron conductores", pon "(Configura tu número)".
+   - [phone]: Reemplázalo EXACTAMENTE con el valor de "telefono" del JSON "Conductor detectado". Si no hay datos, está vacío, o dice "No se proporcionó...", déjalo simplemente como "[Phone]". NUNCA INVENTES UN NÚMERO.
    - MC# [MC] | DOT# [DOT] (el que está en tu firma al final): Llena este con TU MC y DOT de Carrier (sácalo de la información de tu empresa arriba). NUNCA uses el MC del broker aquí.
 9. ¡REGLA CRÍTICA DE FORMATO!: El correo debe mantener su estructura de párrafos. Utiliza saltos de línea estándar (el carácter "\\n") para separar los párrafos y las líneas de la firma. NO uses entidades HTML como "&#10;" ni "<br>".
 
