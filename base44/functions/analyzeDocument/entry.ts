@@ -40,20 +40,28 @@ function detectarTipoDocumento(text) {
 // EXTRACCIÓN CON IA — Solo se llama una vez; resultado se cachea por hash
 // ═══════════════════════════════════════════════════════════════════════════════
 
-async function extractDocumentData(base44, documentText) {
-  return await base44.integrations.Core.InvokeLLM({
-    prompt: `You are a data extractor for US intermodal trucking documents (Rate Confirmations and Delivery Orders).
-Extract ALL available fields from the document below.
+function cleanDocumentText(text) {
+  if (typeof text !== 'string') return '';
+  return text
+    .replace(/\s+/g, ' ') // reemplaza múltiples espacios, tabulaciones y saltos de línea por un solo espacio
+    .trim()
+    .slice(0, 3000); // cortamos a 3000 caracteres como máximo para asegurar que el LLM sea rápido
+}
+
+const BASE_PROMPT = `You are a data extractor for US intermodal trucking documents (Rate Confirmations and Delivery Orders).
+Extract ALL available fields from the document below according to the JSON schema.
 Return null for any field not found. Respond ONLY with valid JSON.
 
 Document:
 ---
-${documentText.slice(0, 4000)}
----`,
+`;
+
+async function extractFinancials(base44, cleanedText) {
+  return await base44.integrations.Core.InvokeLLM({
+    prompt: BASE_PROMPT + cleanedText + "\n---",
     response_json_schema: {
       type: "object",
       properties: {
-        tipo_documento:          { type: "string" },
         tarifa_total:            { type: "number" },
         tarifa_por_milla:        { type: "number" },
         terminos_pago:           { type: "string" },
@@ -61,32 +69,6 @@ ${documentText.slice(0, 4000)}
         factoring_mencionado:    { type: "boolean" },
         deducciones:             { type: "string" },
         descuentos:              { type: "string" },
-        commodity:               { type: "string" },
-        peso:                    { type: "string" },
-        commodity_especial:      { type: "string" },
-        tipo_equipo:             { type: "string" },
-        tamano_contenedor:       { type: "string" },
-        chasis_requerido:        { type: "boolean" },
-        chasis_provisto_por:     { type: "string" },
-        operacion_tipo:          { type: "string" },
-        broker_nombre:           { type: "string" },
-        broker_mc:               { type: "string" },
-        broker_dot:              { type: "string" },
-        broker_telefono:         { type: "string" },
-        carrier_nombre:          { type: "string" },
-        carrier_mc:              { type: "string" },
-        carrier_dot:             { type: "string" },
-        pickup_fecha:            { type: "string" },
-        pickup_hora:             { type: "string" },
-        delivery_fecha:          { type: "string" },
-        delivery_hora:           { type: "string" },
-        appointment_window:      { type: "string" },
-        origen:                  { type: "string" },
-        destino:                 { type: "string" },
-        millas:                  { type: "number" },
-        load_number:             { type: "string" },
-        reference_number:        { type: "string" },
-        delivery_order_number:   { type: "string" },
         clausulas_detectadas:    { type: "array", items: { type: "string" } },
         detention_rate:          { type: "string" },
         detention_free_time:     { type: "string" },
@@ -96,6 +78,55 @@ ${documentText.slice(0, 4000)}
         penalidades:             { type: "string" },
         fee_deductions:          { type: "string" },
         responsabilidad_carrier: { type: "string" },
+      }
+    }
+  });
+}
+
+async function extractLogistics(base44, cleanedText) {
+  return await base44.integrations.Core.InvokeLLM({
+    prompt: BASE_PROMPT + cleanedText + "\n---",
+    response_json_schema: {
+      type: "object",
+      properties: {
+        tipo_documento:          { type: "string" },
+        commodity:               { type: "string" },
+        peso:                    { type: "string" },
+        commodity_especial:      { type: "string" },
+        tipo_equipo:             { type: "string" },
+        tamano_contenedor:       { type: "string" },
+        chasis_requerido:        { type: "boolean" },
+        chasis_provisto_por:     { type: "string" },
+        operacion_tipo:          { type: "string" },
+        pickup_fecha:            { type: "string" },
+        pickup_hora:             { type: "string" },
+        delivery_fecha:          { type: "string" },
+        delivery_hora:           { type: "string" },
+        appointment_window:      { type: "string" },
+        origen:                  { type: "string" },
+        destino:                 { type: "string" },
+        millas:                  { type: "number" },
+      }
+    }
+  });
+}
+
+async function extractIdentities(base44, cleanedText) {
+  return await base44.integrations.Core.InvokeLLM({
+    prompt: BASE_PROMPT + cleanedText + "\n---",
+    response_json_schema: {
+      type: "object",
+      properties: {
+        broker_nombre:           { type: "string" },
+        broker_mc:               { type: "string" },
+        broker_dot:              { type: "string" },
+        broker_telefono:         { type: "string" },
+        carrier_nombre:          { type: "string" },
+        carrier_mc:              { type: "string" },
+        carrier_dot:             { type: "string" },
+        load_number:             { type: "string" },
+        reference_number:        { type: "string" },
+        delivery_order_number:   { type: "string" },
       }
     }
   });
@@ -896,17 +927,16 @@ Deno.serve(async (req) => {
         prev.broker_profile_version === brokerVer;
 
       if (cacheValido) {
-        return Response.json({
-          cached: true,
-          cache_reason: 'Documento ya procesado con la configuración actual',
-          analysis: {
-            resumen_ejecutivo: prev.verification_summary,
-            semaforo_general: prev.overall_risk,
-            veredicto: prev.recommended_action,
-            alertas_criticas: [],
-            puntos_negociar: [],
-            categorias: [],
-            datos_extraidos: {
+        let reconstructedDatos = null;
+        if (prev.raw_extracted_data) {
+          try {
+            reconstructedDatos = JSON.parse(prev.raw_extracted_data);
+          } catch (e) {}
+        }
+        
+        // Si no hay raw (caché antiguo), reconstruimos lo que podamos
+        if (!reconstructedDatos) {
+            reconstructedDatos = {
               broker_nombre: prev.broker_name_detected,
               broker_mc: prev.broker_mc_detected,
               carrier_nombre: prev.carrier_name_detected,
@@ -920,7 +950,46 @@ Deno.serve(async (req) => {
               reference_number: prev.reference_number_detected,
               load_number: prev.load_number_detected,
               tipo_documento: prev.document_type,
-            },
+            };
+        }
+
+        // Re-generamos las alertas instantáneamente
+        let categoriasCache = [];
+        if (userRole === 'carrier') {
+          categoriasCache = [
+            validarRate(reconstructedDatos, costConfig, locale),
+            validarCarrier(reconstructedDatos, carrierProfile, locale, user, carrierProfiles, orgName),
+            validarEquipo(reconstructedDatos, trucks, carrierProfile, locale),
+            validarCommodity(reconstructedDatos, carrierProfile, locale),
+            validarClausulas(reconstructedDatos, locale),
+            validarFechasOperacion(reconstructedDatos, locale),
+            validarBroker(reconstructedDatos, brokers, brokerProfiles, locale),
+          ];
+        } else {
+          categoriasCache = [
+            validarBroker(reconstructedDatos, brokers, brokerProfiles, locale),
+            validarCarrier(reconstructedDatos, carrierProfile, locale, user, carrierProfiles, orgName),
+            validarFechasOperacion(reconstructedDatos, locale),
+            validarEquipo(reconstructedDatos, trucks, carrierProfile, locale),
+            validarCommodity(reconstructedDatos, carrierProfile, locale),
+            validarClausulas(reconstructedDatos, locale),
+            validarRate(reconstructedDatos, costConfig, locale),
+          ];
+        }
+
+        const { veredicto: veredictoC, semaforo_general: semaforoC, resumen_ejecutivo: resumenC, alertas_criticas: alertasC, puntos_negociar: puntosC } = calcularVeredicto(categoriasCache, userRole, locale);
+
+        return Response.json({
+          cached: true,
+          cache_reason: 'Documento ya procesado con la configuración actual',
+          analysis: {
+            resumen_ejecutivo: resumenC,
+            semaforo_general: semaforoC,
+            veredicto: veredictoC,
+            alertas_criticas: alertasC,
+            puntos_negociar: puntosC,
+            categorias: categoriasCache,
+            datos_extraidos: reconstructedDatos,
             user_role: userRole,
             confidence_score: prev.confidence_score,
             carrier_profile_used: carrierProfile?.company_name || null,
@@ -945,8 +1014,21 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ── PASO 5: Extracción estructurada con IA (única llamada de extracción) ───
-    const datos = await extractDocumentData(base44, documentText);
+    // ── PASO 5: Extracción estructurada con IA (paralelizada en 3 llamadas) ───
+    const cleanedText = cleanDocumentText(documentText);
+    const [financials, logistics, identities] = await Promise.all([
+      extractFinancials(base44, cleanedText),
+      extractLogistics(base44, cleanedText),
+      extractIdentities(base44, cleanedText)
+    ]);
+    
+    // Si alguna petición falla por desconexión temporal de la IA y devuelve string en vez de JSON,
+    // garantizamos que sea un objeto para no romper el merge.
+    const datos = {
+      ...(typeof financials === 'object' && financials !== null ? financials : {}),
+      ...(typeof logistics === 'object' && logistics !== null ? logistics : {}),
+      ...(typeof identities === 'object' && identities !== null ? identities : {})
+    };
 
     // ── PASO 6: Validar con reglas puras — sin IA adicional ───────────────────
     // El orden y peso de categorías cambia según el rol del usuario
@@ -1037,6 +1119,7 @@ Deno.serve(async (req) => {
       verification_summary: resumen_ejecutivo,
       recommended_action: veredicto,
       confidence_score,
+      raw_extracted_data: JSON.stringify(datos),
     });
 
     const foco_analisis = userRole === 'carrier'

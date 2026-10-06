@@ -196,6 +196,10 @@
     },
     "confidence_score": {
       "type": "number"
+    },
+    "raw_extracted_data": {
+      "type": "string",
+      "description": "JSON completo con todos los datos extraídos para reconstruir categorias."
     }
   },
   "required": [
