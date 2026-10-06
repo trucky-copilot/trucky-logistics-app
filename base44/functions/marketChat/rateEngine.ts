@@ -946,6 +946,15 @@ export function parseCustomAccessorials(text: string): CustomAccessorial[] {
   }).filter(Boolean) as CustomAccessorial[];
 }
 
+function mapCustomToCanonical(cNorm: string): string {
+  if (/hmat|ahsmat|hasmat|hazmat|hazzmat/i.test(cNorm)) return 'hazmat';
+  if (/prepull|pre.*pull/i.test(cNorm)) return 'prepull';
+  if (/over.*weight|sobrepeso|overw/i.test(cNorm)) return 'overweight';
+  if (/detention|detencion/i.test(cNorm)) return 'detention';
+  if (/chasis|chassis/i.test(cNorm)) return 'chassis';
+  return cNorm;
+}
+
 export function applyCustomAccessorials(
   defaults: AccessorialRecord[],
   customText: string | null | undefined
@@ -959,11 +968,13 @@ export function applyCustomAccessorials(
 
   for (const c of customs) {
     const cNorm = normalizeText(c.concepto).replace(/[-\s]+/g, '');
+    const cCanonical = mapCustomToCanonical(cNorm);
     let replaced = false;
     
     for (let i = 0; i < merged.length; i++) {
       const dNormConcept = normalizeText(merged[i].concepto).replace(/[-\s]+/g, '');
-      if (dNormConcept.includes(cNorm) || cNorm.includes(dNormConcept)) {
+      const dCanonical = mapCustomToCanonical(dNormConcept);
+      if (dCanonical.includes(cCanonical) || cCanonical.includes(dCanonical)) {
         merged[i] = {
           ...merged[i],
           concepto: merged[i].concepto.replace(/\s*\([A-Z]+\)/i, ''),

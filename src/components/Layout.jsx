@@ -213,7 +213,7 @@ export default function Layout() {
           </div>
           {!isChat && <MarketTicker />}
           <div className="ml-auto flex items-center gap-3">
-            <ProfileSelector />
+            {!['juan.grau@ogm.com.co', 'luis.bermudez@ogm.com.co'].includes(user?.email) && <ProfileSelector />}
             <NotificationBell />
           </div>
         </header>

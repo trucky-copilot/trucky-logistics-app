@@ -135,6 +135,35 @@ export default function CostCalculator() {
     }
   };
 
+  const parsedFields = (() => {
+    const fields = { prepull: '', hazmat: '', detention: '', overweight: '' };
+    if (!config.custom_accessorials_text) return fields;
+    config.custom_accessorials_text.split('\n').forEach(line => {
+       const match = line.match(/^([^:$]+)[:\s]+(.+)$/);
+       if (match) {
+         const rawConcept = match[1].trim();
+         const concept = rawConcept.toLowerCase();
+         const mount = match[2].trim();
+         if (concept.includes('prepull') || concept.includes('pre-pull')) fields.prepull = mount;
+         else if (concept.includes('hazmat') || concept.includes('hmat')) fields.hazmat = mount;
+         else if (concept.includes('detention') || concept.includes('detencion')) fields.detention = mount;
+         else if (concept.includes('overweight') || concept.includes('sobrepeso')) fields.overweight = mount;
+       }
+    });
+    return fields;
+  })();
+
+  const handleCustomFieldChange = (key, value) => {
+    const newFields = { ...parsedFields, [key]: value };
+    const lines = [];
+    if (newFields.prepull) lines.push(`prepull: ${newFields.prepull}`);
+    if (newFields.hazmat) lines.push(`hazmat: ${newFields.hazmat}`);
+    if (newFields.detention) lines.push(`detention: ${newFields.detention}`);
+    if (newFields.overweight) lines.push(`overweight: ${newFields.overweight}`);
+    
+    set('custom_accessorials_text', lines.join('\n'));
+  };
+
   const barSegments = [
     { label: t.calculator.breakEvenLabel, rate: breakEvenRate, color: '#facc15' },
     { label: t.calculator.targetLabel, rate: Number(config.tarifa_objetivo), color: '#8b5cf6' },
@@ -225,17 +254,28 @@ export default function CostCalculator() {
         </div>
         
         {config.custom_accessorials_active && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             <p className="text-xs text-muted-foreground">
-              Ingresa tus cargos adicionales (uno por línea). El chat priorizará estos valores sobre los de mercado.<br/>
-              Formato sugerido: <code>Concepto: $Monto</code> (Ej: <code>Pre-pull: $150</code>)
+              Ingresa tus montos para cada cargo. El chat priorizará estos valores sobre los de mercado.
             </p>
-            <textarea 
-              value={config.custom_accessorials_text}
-              onChange={e => set('custom_accessorials_text', e.target.value)}
-              placeholder="Pre-pull: $150&#10;Chasis: $50 / día&#10;TONU: $200"
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50 min-h-[100px] resize-y"
-            />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Pre-pull</label>
+                <input type="text" placeholder="$150" value={parsedFields.prepull} onChange={e => handleCustomFieldChange('prepull', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Hazmat</label>
+                <input type="text" placeholder="$250" value={parsedFields.hazmat} onChange={e => handleCustomFieldChange('hazmat', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Detention</label>
+                <input type="text" placeholder="$50/hr" value={parsedFields.detention} onChange={e => handleCustomFieldChange('detention', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Overweight</label>
+                <input type="text" placeholder="$200" value={parsedFields.overweight} onChange={e => handleCustomFieldChange('overweight', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              </div>
+            </div>
           </div>
         )}
       </div>

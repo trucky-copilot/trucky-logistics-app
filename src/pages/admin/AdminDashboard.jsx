@@ -88,9 +88,31 @@ export default function AdminDashboard() {
     if (!file) return;
     const ext = file.name.split('.').pop().toLowerCase();
     
-    if (['jpg', 'jpeg', 'png', 'pdf'].includes(ext)) {
+    if (ext === 'pdf') {
       setLoadingOCR(true);
-      setStatusMsg(`Extrayendo texto de ${file.name}...`);
+      setStatusMsg(`Extrayendo texto de PDF localmente: ${file.name}...`);
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map(item => item.str).join(' ') + '\n';
+        }
+        setTextData(text);
+        setStatusMsg(`Texto extraído de ${file.name} (PDF). Revisa y haz clic en Analizar con IA.`);
+      } catch (err) {
+        console.error(err);
+        setStatusMsg(`Error al leer PDF localmente: ${err.message}`);
+      }
+      setLoadingOCR(false);
+    } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
+      setLoadingOCR(true);
+      setStatusMsg(`Extrayendo texto de imagen ${file.name}...`);
       try {
         const { file_url } = await base44.integrations.Core.UploadFile({ file });
         const extracted = await base44.integrations.Core.InvokeLLM({
@@ -101,7 +123,7 @@ export default function AdminDashboard() {
         setStatusMsg(`Texto extraído de ${file.name}. Revisa y haz clic en Analizar con IA.`);
       } catch (err) {
         console.error(err);
-        setStatusMsg(`Error al extraer texto: ${err.message}`);
+        setStatusMsg(`Error al extraer texto de imagen: ${err.message}`);
       }
       setLoadingOCR(false);
     } else if (['txt', 'csv'].includes(ext)) {

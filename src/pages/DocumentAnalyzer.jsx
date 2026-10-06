@@ -100,7 +100,27 @@ export default function DocumentAnalyzer() {
     setError(null);
     setAnalysis(null);
 
-    if (['jpg', 'jpeg', 'png', 'pdf'].includes(ext)) {
+    if (ext === 'pdf') {
+      setLoading(true);
+      setLoadingMsg("Extrayendo texto de PDF localmente...");
+      try {
+        const pdfjsLib = await import('pdfjs-dist');
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+        
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        let text = '';
+        for (let i = 1; i <= pdf.numPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          text += content.items.map(item => item.str).join(' ') + '\n';
+        }
+        setDocumentText(text);
+      } catch (err) {
+        setError(`Error al leer PDF localmente: ${err.message}`);
+      }
+      setLoading(false);
+    } else if (['jpg', 'jpeg', 'png'].includes(ext)) {
       setLoading(true);
       setLoadingMsg(t.documents.process);
       try {
