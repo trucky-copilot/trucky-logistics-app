@@ -830,7 +830,7 @@ Información específica del contexto extraída de la base de datos para este co
 - Tu nombre de Dispatcher y correo: ${user.email} (Úsalo para la firma donde dice [email]).
 - Nombre de tu empresa (Carrier): ${myCompany}
 - MC de tu empresa: ${myMC || '(Configura tu Carrier Profile)'}
-- DOT de tu empresa: ${myDOT || '[DOT]'}
+- DOT de tu empresa: ${myDOT || 'NO_DISPONIBLE'}
 - Broker detectado: ${brokerInfoText}
 - Conductor detectado: ${driverInfoText}
 - Ruta mencionada: ${raw.origen || 'No detectado'} a ${raw.destino || 'No detectado'}
@@ -840,7 +840,7 @@ Información específica del contexto extraída de la base de datos para este co
 Instrucciones:
 1. Elige la plantilla que mejor se adapte a la intención del usuario.
 2. Los correos SIEMPRE tienen que ser en inglés.
-3. Rellena los campos de la firma ([Your name], [Company], [MC], [DOT], [phone], [email]) con los datos de tu empresa y usuario provistos arriba. Si dice "(Configura tu Carrier Profile)" o "[DOT]", escríbelo así literal en el correo. No inventes números.
+3. Rellena los campos de la firma ([Your name], [Company], [MC], [DOT], [phone], [email]) con los datos de tu empresa y usuario provistos arriba. Si dice "NO_DISPONIBLE", "(Configura tu Carrier Profile)" o "[DOT]", DEJA LOS CORCHETES tal cual en el correo. NUNCA inventes números.
 4. Rellena [Broker name] con el nombre del broker. ¡REGLA CRÍTICA!: Si el campo "Broker detectado" empieza con "MULTIPLE_BROKERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí (en español) para que el usuario elija. Si el broker es "Team", pon "Team" y elimina la línea del MC del broker en el correo si la plantilla la tiene.
 5. ¡REGLA CRÍTICA PARA CONDUCTOR!: Si el campo "Conductor detectado" empieza con "MULTIPLE_DRIVERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí.
 6. ¡REGLA CRÍTICA PARA TARIFA!: Si el usuario te pide cotizar pero NO especifica un número exacto en su mensaje, simplemente mantén el espacio de la tarifa entre corchetes (ej. $[offered] o $[rate]) en el correo para que el usuario lo llene manualmente después. NO interrumpas el flujo para preguntarle.
@@ -851,7 +851,7 @@ Instrucciones:
    - [Includes]: Si es dry van, pon "LH + FSC". Si es reefer, pon "LH + FSC + genset". Si es flatbed, pon "LH + FSC + tarps". Si es drayage (puerto/contenedor), pon "LH + FSC + Chassis".
    - MC#: [MC] (el que está en la mitad del correo): Llena este con el MC del BROKER (sácalo del JSON "Broker detectado").
    - [phone]: Reemplázalo EXACTAMENTE con el valor de "telefono" del JSON "Conductor detectado". Si no hay datos, está vacío, o dice "No se proporcionó...", déjalo simplemente como "[Phone]". NUNCA INVENTES UN NÚMERO.
-   - MC# [MC] | DOT# [DOT] (el que está en tu firma al final): Llena este con TU MC y DOT de Carrier (sácalo de la información de tu empresa arriba). NUNCA uses el MC del broker aquí.
+   - MC# [MC] | DOT# [DOT] (el que está en tu firma al final): Llena este con TU MC y DOT de Carrier. Si tu DOT dice "NO_DISPONIBLE", escribe exactamente "[DOT]". NUNCA INVENTES UN NÚMERO (ej. nunca pongas DOT-654321 o similares).
 9. ¡REGLA CRÍTICA DE FORMATO!: El correo debe mantener su estructura de párrafos. Utiliza saltos de línea estándar (el carácter "\\n") para separar los párrafos y las líneas de la firma. NO uses entidades HTML como "&#10;" ni "<br>".
 
 Conversación reciente:
