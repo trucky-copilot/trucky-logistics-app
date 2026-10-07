@@ -62,15 +62,15 @@ async function extractFinancials(base44, cleanedText) {
     response_json_schema: {
       type: "object",
       properties: {
-        tarifa_total:            { type: "number" },
-        tarifa_por_milla:        { type: "number" },
-        terminos_pago:           { type: "string" },
-        dias_pago:               { type: "number" },
+        tarifa_total:            { type: "number", description: "The total flat rate or total pay for the load" },
+        tarifa_por_milla:        { type: "number", description: "The explicit rate per mile if present (e.g. $2.50/mi). If not present, return null." },
+        terminos_pago:           { type: "string", description: "Payment terms text, e.g. 'Net 30', 'Quickpay 2%'" },
+        dias_pago:               { type: "number", description: "The number of days to pay, e.g. for 'Net 45' this should be 45" },
         factoring_mencionado:    { type: "boolean" },
         deducciones:             { type: "string" },
         descuentos:              { type: "string" },
         clausulas_detectadas:    { type: "array", items: { type: "string" } },
-        detention_rate:          { type: "string" },
+        detention_rate:          { type: "string", description: "The detention pay rate, e.g. '$25/hr after 3 hours'" },
         detention_free_time:     { type: "string" },
         tonu_rate:               { type: "string" },
         demurrage:               { type: "string" },
@@ -105,7 +105,7 @@ async function extractLogistics(base44, cleanedText) {
         appointment_window:      { type: "string" },
         origen:                  { type: "string" },
         destino:                 { type: "string" },
-        millas:                  { type: "number" },
+        millas:                  { type: "number", description: "The total distance in loaded miles. Look for words like 'Miles', 'Distance', or 'Loaded Miles'." },
       }
     }
   });
@@ -144,7 +144,8 @@ function validarRate(datos, costConfig, locale) {
     hallazgos.push(locale === 'en' ? '❌ Total rate not found in the document' : '❌ No se encontró tarifa total en el documento');
     semaforo = 'rojo';
   } else {
-    hallazgos.push(locale === 'en' ? `✓ Total rate: $${datos.tarifa_total.toLocaleString()}` : `✓ Tarifa total: $${datos.tarifa_total.toLocaleString()}`);
+    const tBaseEn = `Total rate: $${datos.tarifa_total.toLocaleString()}`;
+    const tBaseEs = `Tarifa total: $${datos.tarifa_total.toLocaleString()}`;
 
     if (costConfig) {
       // Usar datos de CostConfig directamente — sin IA
@@ -153,70 +154,72 @@ function validarRate(datos, costConfig, locale) {
 
       if (datos.tarifa_por_milla) {
         if (minimo > 0 && datos.tarifa_por_milla < minimo) {
-          hallazgos.push(locale === 'en' ? `❌ Rate $${datos.tarifa_por_milla.toFixed(2)}/mi below minimum ($${minimo.toFixed(2)}/mi) — loss operation` : `❌ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi) — operación en pérdida`);
+          const lossPerMile = minimo - datos.tarifa_por_milla;
+          const lossTotal = datos.millas ? ` (total: $${(lossPerMile * datos.millas).toFixed(2)})` : '';
+          hallazgos.push(locale === 'en' ? `❌ ${tBaseEn} — Rate $${datos.tarifa_por_milla.toFixed(2)}/mi is below minimum ($${minimo.toFixed(2)}/mi). You lose $${lossPerMile.toFixed(2)}/mi${lossTotal}` : `❌ ${tBaseEs} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi). Pierdes $${lossPerMile.toFixed(2)}/mi${lossTotal}`);
           semaforo = 'rojo';
         } else if (datos.tarifa_por_milla < objetivo) {
-          hallazgos.push(locale === 'en' ? `⚠ Rate $${datos.tarifa_por_milla.toFixed(2)}/mi below target ($${objetivo}/mi)` : `⚠ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del objetivo ($${objetivo}/mi)`);
+          const delta = objetivo - datos.tarifa_por_milla;
+          hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — Rate $${datos.tarifa_por_milla.toFixed(2)}/mi below target ($${objetivo.toFixed(2)}/mi)` : `⚠ ${tBaseEs} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del objetivo ($${objetivo.toFixed(2)}/mi)`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
-          hallazgos.push(locale === 'en' ? `✓ Rate $${datos.tarifa_por_milla.toFixed(2)}/mi within target ($${objetivo}/mi)` : `✓ Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi dentro del objetivo ($${objetivo}/mi)`);
+          const profit = datos.tarifa_por_milla - minimo;
+          const profitTotal = datos.millas ? ` (total: $${(profit * datos.millas).toFixed(2)})` : '';
+          hallazgos.push(locale === 'en' ? `✓ ${tBaseEn} — Rate $${datos.tarifa_por_milla.toFixed(2)}/mi is profitable. Profit: $${profit.toFixed(2)}/mi${profitTotal}` : `✓ ${tBaseEs} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi rentable. Ganas $${profit.toFixed(2)}/mi${profitTotal}`);
         }
       } else if (datos.millas && datos.millas > 0) {
         // Calcular tarifa/milla desde tarifa total si no viene explícita
         const calculada = datos.tarifa_total / datos.millas;
         if (minimo > 0 && calculada < minimo) {
-          hallazgos.push(locale === 'en' ? `❌ Calculated rate $${calculada.toFixed(2)}/mi below minimum ($${minimo.toFixed(2)}/mi)` : `❌ Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi)`);
+          const lossPerMile = minimo - calculada;
+          const lossTotal = ` (total: $${(lossPerMile * datos.millas).toFixed(2)})`;
+          hallazgos.push(locale === 'en' ? `❌ ${tBaseEn} — Calculated rate $${calculada.toFixed(2)}/mi is below minimum ($${minimo.toFixed(2)}/mi). You lose $${lossPerMile.toFixed(2)}/mi${lossTotal}` : `❌ ${tBaseEs} — Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi). Pierdes $${lossPerMile.toFixed(2)}/mi${lossTotal}`);
           semaforo = 'rojo';
+        } else if (calculada < objetivo) {
+          const delta = objetivo - calculada;
+          hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — Calculated rate $${calculada.toFixed(2)}/mi below target ($${objetivo.toFixed(2)}/mi)` : `⚠ ${tBaseEs} — Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del objetivo ($${objetivo.toFixed(2)}/mi)`);
+          if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
-          hallazgos.push(locale === 'en' ? `✓ Estimated rate: $${calculada.toFixed(2)}/mi (${datos.millas} miles)` : `✓ Tarifa estimada: $${calculada.toFixed(2)}/mi (${datos.millas} millas)`);
+          const profit = calculada - minimo;
+          const profitTotal = ` (total: $${(profit * datos.millas).toFixed(2)})`;
+          hallazgos.push(locale === 'en' ? `✓ ${tBaseEn} — Estimated rate: $${calculada.toFixed(2)}/mi (${datos.millas} miles). Profit: $${profit.toFixed(2)}/mi${profitTotal}` : `✓ ${tBaseEs} — Tarifa estimada $${calculada.toFixed(2)}/mi (${datos.millas} millas). Ganas $${profit.toFixed(2)}/mi${profitTotal}`);
         }
+      } else {
+        // No hay tarifa_por_milla ni millas: no se puede calcular rentabilidad.
+        hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — Distance (miles) not found in PDF, cannot calculate profitability` : `⚠ ${tBaseEs} — Distancia (millas) no encontrada en el documento, no se puede calcular rentabilidad`);
+        if (semaforo === 'verde') semaforo = 'amarillo';
       }
     } else {
-      hallazgos.push(locale === 'en' ? '⚠ No cost configuration — set up your Calculator to compare rates' : '⚠ Sin configuración de costos — configura tu Calculadora para comparar tarifas');
+      hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — No cost configuration, go to Calculator to set up your profile` : `⚠ ${tBaseEs} — Sin configuración de costos, ve a la Calculadora para configurar tu perfil`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   }
 
   if (!datos.terminos_pago) {
     hallazgos.push(locale === 'en' ? '⚠ Payment terms not specified' : '⚠ Términos de pago no especificados');
-    if (semaforo === 'verde') semaforo = 'amarillo';
-  } else {
-    const dias = datos.dias_pago;
-    if (dias && dias > 45) {
-      hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days — cash flow risk` : `⚠ Pago a ${dias} días — riesgo de flujo de caja`);
-      if (semaforo === 'verde') semaforo = 'amarillo';
-    } else if (dias && dias > 30) {
-      hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days — consider factoring` : `⚠ Pago a ${dias} días — considerar factoring`);
-      if (semaforo === 'verde') semaforo = 'amarillo';
-    } else {
-      hallazgos.push(locale === 'en' ? `✓ Payment terms: ${datos.terminos_pago}` : `✓ Términos de pago: ${datos.terminos_pago}`);
-    }
-    if (datos.factoring_mencionado) {
-      hallazgos.push(locale === 'en' ? '⚠ Factoring mentioned — verify applied discount' : '⚠ Factoring mencionado — verificar descuento aplicado');
-    }
   }
 
-  if (!datos.detention_rate) {
-    hallazgos.push(locale === 'en' ? '⚠ Detention rate not specified — risk of uncompensated waiting time' : '⚠ Detention rate no especificada — riesgo de tiempo sin compensación');
-    if (semaforo === 'verde') semaforo = 'amarillo';
-  } else {
-    const m = datos.detention_rate.match(/\$?(\d+)/);
-    if (m && parseInt(m[1]) < 50) {
-      hallazgos.push(locale === 'en' ? `⚠ Detention too low: ${datos.detention_rate} (recommended min: $50-75/hr)` : `⚠ Detention muy baja: ${datos.detention_rate} (mínimo recomendado: $50-75/hr)`);
-      if (semaforo === 'verde') semaforo = 'amarillo';
-    } else {
-      hallazgos.push(`✓ Detention: ${datos.detention_rate}`);
+  const isMeaningful = (val) => {
+    if (val == null) return false;
+    if (Array.isArray(val)) {
+      if (val.length === 0) return false;
+      return isMeaningful(val[0]);
     }
-  }
-
-  if (!datos.tonu_rate) {
-    hallazgos.push(locale === 'en' ? '⚠ TONU not specified — no cancellation protection' : '⚠ TONU no especificado — sin protección por cancelación');
-    if (semaforo === 'verde') semaforo = 'amarillo';
-  } else {
-    hallazgos.push(`✓ TONU: ${datos.tonu_rate}`);
-  }
-
-  if (datos.deducciones || datos.descuentos) {
+    if (typeof val === 'object') return false;
+    if (typeof val === 'string') {
+      const s = val.toLowerCase().trim();
+      if (['null', 'n/a', 'none', 'not specified', 'no', 'false', '-', '--'].includes(s) || s === '') return false;
+      const digits = s.replace(/[^0-9.]/g, '');
+      if (digits !== '' && parseFloat(digits) === 0) return false;
+      if (s.replace(/[^a-z0-9]/g, '') === '') return false; // solo símbolos
+      return true;
+    }
+    if (typeof val === 'number' && val === 0) return false;
+    if (typeof val === 'boolean' && val === false) return false;
+    return true;
+  };
+  
+  if (isMeaningful(datos.deducciones) || isMeaningful(datos.descuentos)) {
     hallazgos.push(locale === 'en' ? `⚠ Discounts/deductions detected: ${datos.deducciones || datos.descuentos} — review impact` : `⚠ Descuentos/deducciones detectados: ${datos.deducciones || datos.descuentos} — revisar impacto`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
@@ -528,20 +531,46 @@ function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarri
     }
   } else {
     // Sin perfil registrado = riesgo crítico de suplantación de identidad.
-    // Orden de prioridad: nombre de org > company_name del carrier > full_name del usuario > email
-    const nombreEmpresa = orgName
-      || allCarrierProfiles[0]?.company_name
-      || userInfo?.full_name
-      || userInfo?.email
-      || 'empresa no identificada';
-    hallazgos.push(locale === 'en'
-      ? `❌ Carrier "${datos.carrier_nombre}" detected — your company: "${nombreEmpresa}" — Identity theft risk.`
-      : `❌ Carrier "${datos.carrier_nombre}" detectado — tu empresa: "${nombreEmpresa}" — Riesgo de suplantación de identidad.`);
-    semaforo = 'rojo';
-    identity_match = 'pending';
+    const isMeaningful = (val) => {
+      if (val == null) return false;
+      if (Array.isArray(val)) {
+        if (val.length === 0) return false;
+        return isMeaningful(val[0]);
+      }
+      if (typeof val === 'object') return false;
+      if (typeof val === 'string') {
+        const s = val.toLowerCase().trim();
+        if (['null', 'n/a', 'none', 'not specified', 'no', 'false', '-', '--'].includes(s) || s === '') return false;
+        const digits = s.replace(/[^0-9.]/g, '');
+        if (digits !== '' && parseFloat(digits) === 0) return false;
+        if (s.replace(/[^a-z0-9]/g, '') === '') return false;
+        return true;
+      }
+      if (typeof val === 'number' && val === 0) return false;
+      if (typeof val === 'boolean' && val === false) return false;
+      return true;
+    };
+
+    if (!isMeaningful(datos.carrier_nombre) && !isMeaningful(datos.carrier_mc)) {
+      hallazgos.push(locale === 'en' ? '⚠ Carrier identity not specified in document' : '⚠ Identidad del carrier no especificada en el documento');
+      if (semaforo === 'verde') semaforo = 'amarillo';
+    } else {
+      const nombreEmpresa = orgName
+        || allCarrierProfiles[0]?.company_name
+        || userInfo?.full_name
+        || userInfo?.email
+        || 'empresa no identificada';
+      hallazgos.push(locale === 'en'
+        ? `❌ Carrier "${datos.carrier_nombre || datos.carrier_mc}" detected — your company: "${nombreEmpresa}" — Identity theft risk.`
+        : `❌ Carrier "${datos.carrier_nombre || datos.carrier_mc}" detectado — tu empresa: "${nombreEmpresa}" — Riesgo de suplantación de identidad.`);
+      semaforo = 'rojo';
+      identity_match = 'pending';
+    }
   }
 
-  if (!datos.carrier_mc) hallazgos.push(locale === 'en' ? '⚠ Carrier MC not specified in document' : '⚠ MC del carrier no especificado en documento');
+  if (!datos.carrier_mc || datos.carrier_mc === 'null' || datos.carrier_mc.toLowerCase() === 'n/a') {
+    hallazgos.push(locale === 'en' ? '⚠ Carrier MC not specified in document' : '⚠ MC del carrier no especificado en documento');
+  }
 
   return {
     categoriaKey: 'carrier',
@@ -674,25 +703,60 @@ function validarClausulas(datos, locale) {
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
+  const dias = datos.dias_pago;
+  if (dias && dias > 45) {
+    hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days. Explanation: Term is too long. Recommendation: Consider factoring or request Net 30.` : `⚠ Pago a ${dias} días (Net ${dias}). Explicación: Plazo de pago muy largo. Recomendación: Considerar factoring o solicitar Net 30.`);
+    if (semaforo === 'verde') semaforo = 'amarillo';
+  } else if (dias && dias > 30) {
+    hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days. Explanation: Consider factoring.` : `⚠ Pago a ${dias} días. Explicación: Plazo extendido. Recomendación: Considerar factoring.`);
+    if (semaforo === 'verde') semaforo = 'amarillo';
+  } else if (datos.terminos_pago) {
+    hallazgos.push(locale === 'en' ? `✓ Payment terms: ${datos.terminos_pago}` : `✓ Términos de pago: ${datos.terminos_pago}`);
+  }
+
+  if (datos.factoring_mencionado) {
+    hallazgos.push(locale === 'en' ? '⚠ Factoring mentioned — verify applied discount' : '⚠ Factoring mencionado — verificar descuento aplicado');
+  }
+
   if (!datos.detention_rate) {
     hallazgos.push(locale === 'en' ? '⚠ Detention not specified' : '⚠ Detention no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const m = datos.detention_rate.match(/\$?(\d+)/);
     if (m && parseInt(m[1]) < 50) {
-      hallazgos.push(locale === 'en' ? `⚠ Low detention: ${datos.detention_rate} (standard: $50-75/hr)` : `⚠ Detention baja: ${datos.detention_rate} (estándar: $50-75/hr)`);
+      hallazgos.push(locale === 'en' ? `⚠ Unacceptable detention: ${datos.detention_rate}. Explanation: Industry standard is $75/hr ($50-100). Recommendation: Do not accept, negotiate higher rate.` : `⚠ Detention inaceptable: ${datos.detention_rate}. Explicación: El estándar de la industria es $75/hr ($50-100). Recomendación: No aceptar, negociar aumento.`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
       hallazgos.push(`✓ Detention: ${datos.detention_rate}${datos.detention_free_time ? ' | Free: ' + datos.detention_free_time : ''}`);
     }
   }
 
-  if (datos.demurrage) {
+  const isMeaningful = (val) => {
+    if (val == null) return false;
+    if (Array.isArray(val)) {
+      if (val.length === 0) return false;
+      return isMeaningful(val[0]);
+    }
+    if (typeof val === 'object') return false;
+    if (typeof val === 'string') {
+      const s = val.toLowerCase().trim();
+      if (['null', 'n/a', 'none', 'not specified', 'no', 'false', '-', '--'].includes(s) || s === '') return false;
+      const digits = s.replace(/[^0-9.]/g, '');
+      if (digits !== '' && parseFloat(digits) === 0) return false;
+      if (s.replace(/[^a-z0-9]/g, '') === '') return false; // solo símbolos
+      return true;
+    }
+    if (typeof val === 'number' && val === 0) return false;
+    if (typeof val === 'boolean' && val === false) return false;
+    return true;
+  };
+
+  if (isMeaningful(datos.demurrage)) {
     hallazgos.push(locale === 'en' ? `⚠ Demurrage: ${datos.demurrage} — verify who assumes the cost` : `⚠ Demurrage: ${datos.demurrage} — verificar quién asume el costo`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
-  if (datos.per_diem) {
+  if (isMeaningful(datos.per_diem)) {
     hallazgos.push(locale === 'en' ? `⚠ Per diem: ${datos.per_diem} — review responsibility` : `⚠ Per diem: ${datos.per_diem} — revisar responsabilidad`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
@@ -704,12 +768,12 @@ function validarClausulas(datos, locale) {
     hallazgos.push(`✓ TONU: ${datos.tonu_rate}`);
   }
 
-  if (datos.fee_deductions) {
+  if (isMeaningful(datos.fee_deductions)) {
     hallazgos.push(locale === 'en' ? `⚠ Fee deductions detected: ${datos.fee_deductions}` : `⚠ Fee deductions detectadas: ${datos.fee_deductions}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
-  if (datos.responsabilidad_carrier) {
+  if (isMeaningful(datos.responsabilidad_carrier)) {
     const excesiva = ['unlimited', 'unconditional', 'all damage', 'full liability', 'any and all']
       .some(k => datos.responsabilidad_carrier.toLowerCase().includes(k));
     if (excesiva) {
@@ -721,7 +785,7 @@ function validarClausulas(datos, locale) {
     }
   }
 
-  if (datos.penalidades) {
+  if (isMeaningful(datos.penalidades)) {
     hallazgos.push(locale === 'en' ? `⚠ Penalties: ${datos.penalidades}` : `⚠ Penalidades: ${datos.penalidades}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
@@ -802,7 +866,7 @@ function calcularVeredicto(categorias, userRole, locale) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Versión del motor de reglas — incrementar manualmente cuando cambien las reglas de validación
-const RULES_VERSION = '2.0.0';
+const RULES_VERSION = '2.0.13';
 
 async function hashText(text) {
   const encoder = new TextEncoder();
@@ -885,7 +949,6 @@ Deno.serve(async (req) => {
 
     // ── PASO 3: Resolver contexto del usuario ─────────────────────────────────
     const userProfile = profiles[0] || null;
-    const costConfig = costConfigs[0] || null;
     const userRole = userProfile?.rol || 'dispatcher';
     const dispatcherProfile = dispatcherProfiles[0] || null;
 
@@ -900,6 +963,19 @@ Deno.serve(async (req) => {
     if (!carrierProfile && dispatcherProfile?.default_carrier) {
       carrierProfile = carrierProfiles.find(c => c.id === dispatcherProfile.default_carrier) || null;
     }
+    
+    let costConfig = null;
+    if (carrierProfile) {
+      costConfig = costConfigs.find(c => c.carrier_profile_id === carrierProfile.id) || costConfigs.find(c => !c.carrier_profile_id) || null;
+    } else {
+      costConfig = costConfigs.find(c => !c.carrier_profile_id) || costConfigs[0] || null;
+    }
+    
+    // Validar que realmente tenga costos configurados
+    if (costConfig && costConfig.costo_por_milla == null && costConfig.tarifa_break_even == null) {
+      costConfig = null;
+    }
+
     // Sin fallback cross-tenant: si no hay match explícito (selectedCarrierId ni
     // default_carrier), carrierProfile queda null. validarCarrier() ya maneja
     // ese caso con un mensaje neutro ("sin perfil registrado para comparar"),
