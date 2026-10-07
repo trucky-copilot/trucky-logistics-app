@@ -112,9 +112,9 @@ export interface ChatMessage {
 // step_deck/drayage_20/drayage_40/power_only NO cambian — el kickoff no los
 // menciona.
 export const EQUIPMENT_BENCHMARKS: Equipment[] = [
-  { id: 'dry_van', label: "53' Dry Van", rpm_min: 3.01, rpm_target: 3.01 },
-  { id: 'reefer', label: 'Reefer', rpm_min: 3.42, rpm_target: 3.42 },
-  { id: 'flatbed', label: 'Flatbed', rpm_min: 3.64, rpm_target: 3.64 },
+  { id: 'dry_van', label: "53' Dry Van", rpm_min: 3.12, rpm_target: 3.12 },
+  { id: 'reefer', label: 'Reefer', rpm_min: 3.66, rpm_target: 3.66 },
+  { id: 'flatbed', label: 'Flatbed', rpm_min: 3.65, rpm_target: 3.65 },
   { id: 'step_deck', label: 'Step Deck', rpm_min: 2.75, rpm_target: 3.25 },
   { id: 'drayage_20', label: "Drayage/Container 20'", rpm_min: 2.75, rpm_target: 3.50 },
   { id: 'drayage_40', label: "Drayage/Container 40'", rpm_min: 2.50, rpm_target: 3.25 },

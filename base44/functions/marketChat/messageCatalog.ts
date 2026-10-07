@@ -297,7 +297,7 @@ VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
 - void check = cheque anulado para configurar pago ACH/EFT con broker
 - TONU = Truck Order Not Used (cuando el broker cancela después de confirmar)
 
-MERCADOS CUBIERTOS POR TABLA REAL DE TARIFAS: Florida (${i.routeCountFl} rutas de drayage) y Texas (${i.routeCountTx} rutas de drayage, Houston/Dallas-Ft Worth/El Paso). Para cualquier otro estado, o para cualquier equipo que no sea drayage, NO hay tabla: se calcula por RPM y se declara como cálculo — nunca se rechaza por falta de tabla.
+MERCADOS CUBIERTOS POR TABLA REAL DE TARIFAS: Florida (${i.routeCountFl} rutas de drayage) y Texas (${i.routeCountTx} rutas de drayage, Houston/Dallas-Ft Worth/El Paso). Para cualquier otro estado, o para cualquier equipo que no sea drayage, o promedios nacionales, USA LOS DATOS INYECTADOS EN EL CONTEXTO (como la tarifa nacional promedio o promedios de estado). NUNCA digas que tu base de datos está limitada a Florida y Texas si te preguntan un promedio nacional, simplemente da la cifra.
 
 RPM BASE POR EQUIPO (7 tipos — usa estos IDs exactos al extraer "equipo"; el número de piso/objetivo real lo calcula el código, no lo inventes):
 ${i.equipmentLines}
