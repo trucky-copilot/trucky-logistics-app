@@ -155,7 +155,7 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - broker_name: el nombre de la compañía broker. ¡SOLO extráelo si el usuario menciona explícitamente al broker en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
 - driver_name: el nombre del conductor o chofer. ¡SOLO extráelo si el usuario lo menciona explícitamente en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
 - accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis"); arreglo vacío si no menciona ninguno.
-- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto.`;
+- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto. NO menciones los costos personalizados del usuario (break-even, costo por milla, objetivo) a menos que pregunte explícitamente por ellos o por rentabilidad.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -518,7 +518,7 @@ Deno.serve(async (req) => {
       const breakEven = costConfig.tarifa_break_even != null ? Number(costConfig.tarifa_break_even) : null;
 
       costConfigValuesShown = [diesel, mpg, parsedCpm, breakEven, objetivo];
-      systemContext += `\n\nCOSTOS PERSONALIZADOS DEL USUARIO (solo contexto de rentabilidad para respuestas generales; el piso de rate_check usa "pago_camion_rpm" cuando la tabla no lo trae — ver Decisión 9-B):
+      systemContext += `\n\nCOSTOS PERSONALIZADOS DEL USUARIO (solo contexto de rentabilidad para respuestas generales, NO los menciones a menos que el usuario pregunte por ellos; el piso de rate_check usa "pago_camion_rpm" cuando la tabla no lo trae — ver Decisión 9-B):
 - Diésel: $${diesel}/gal | MPG: ${mpg}
 - Costo/milla: $${parsedCpm.toFixed(2)} | Break-even: $${breakEven ? breakEven.toFixed(2) : 'N/A'}/mi
 - Objetivo: $${objetivo}/mi`;
@@ -821,6 +821,10 @@ Deno.serve(async (req) => {
          myMC = myMC.replace(/\D/g, '');
       }
 
+      const ultimoCalculoMsg = cappedMessages.slice().reverse().find(m => m.structuredData && m.structuredData.calculo);
+      const ultimoPiso = ultimoCalculoMsg?.structuredData?.calculo?.piso;
+      const pisoStr = ultimoPiso != null ? `$${ultimoPiso}` : 'No detectado';
+
       const draftingPrompt = `Eres Trucky, asistente de Dispatch. El usuario te ha pedido redactar o responder un correo.
 Usa EXACTAMENTE alguna de las siguientes plantillas para generar tu respuesta:
 
@@ -836,6 +840,7 @@ Información específica del contexto extraída de la base de datos para este co
 - Ruta mencionada: ${raw.origen || 'No detectado'} a ${raw.destino || 'No detectado'}
 - Equipo: ${raw.equipo !== 'unknown' ? raw.equipo : 'No detectado'}
 - Tarifa ofrecida en la discusión: ${raw.tarifa_ofrecida || 'No detectada'}
+- Piso o tarifa mínima requerida (calculado previamente): ${pisoStr}
 
 Instrucciones:
 1. Elige la plantilla que mejor se adapte a la intención del usuario.

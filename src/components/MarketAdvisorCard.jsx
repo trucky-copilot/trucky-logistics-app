@@ -35,16 +35,22 @@ export default function MarketAdvisorCard({ data }) {
       const match = typeof a.monto === 'string' ? a.monto.match(/\$(\d+(\.\d+)?)/) : null;
       if (match) {
         totalAccesoriales += parseFloat(match[1]);
+      } else if (typeof a.monto === 'number') {
+        totalAccesoriales += a.monto;
       }
     }
   }
 
-  if (totalAccesoriales > 0) {
-    if (marketFloorTotal !== null) marketFloorTotal += totalAccesoriales;
-    marketTargetTotal += totalAccesoriales;
+  // 1. Resolver el fallback de piso si es null (antes de sumar accesoriales)
+  if (marketFloorTotal === null) {
+    marketFloorTotal = Math.round((costoPorMillaPropio || 1.75) * millasIda);
   }
 
-
+  // 2. Sumar los accesoriales
+  if (totalAccesoriales > 0) {
+    marketFloorTotal += totalAccesoriales;
+    marketTargetTotal += totalAccesoriales;
+  }
 
   // Sanity check visual: evitar rangos invertidos si la meta del usuario es
   // menor que el piso duro de mercado (ej. tramos muy cortos)
@@ -66,7 +72,7 @@ export default function MarketAdvisorCard({ data }) {
   const isEs = locale === 'es';
 
   const accessorialNames = (calculo.accesoriales && calculo.accesoriales.items) 
-    ? calculo.accesoriales.items.map(item => item.concepto).join(", ") 
+    ? calculo.accesoriales.items.map(item => item.concepto.replace(/\s*\([A-Z]+\)/i, '')).join(", ") 
     : "";
   const hasAccessorials = accessorialNames.length > 0;
 
@@ -85,8 +91,8 @@ export default function MarketAdvisorCard({ data }) {
         <p className={`text-sm text-gray-300 leading-relaxed ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
           {hasAccessorials ? (
             isEs
-              ? `Mira así quedaría con el ${accessorialNames} adicional, este es el veredicto.`
-              : `Here is how it looks with the additional ${accessorialNames}, this is the verdict.`
+              ? `Mira el valor del ${accessorialNames} es de $${totalAccesoriales.toLocaleString('en-US')} y con el semáforo quedaría así:`
+              : `Look, the value for ${accessorialNames} is $${totalAccesoriales.toLocaleString('en-US')} and the traffic light looks like this:`
           ) : calculo.tarifaOfrecida ? (
             isEs 
               ? "¡Aquí tienes el resultado de tu oferta! Mira este escenario para saber al instante si la tarifa propuesta es la ideal para tu operación."

@@ -1001,14 +1001,32 @@ export function applyCustomAccessorials(
 }
 
 export function resolveAccessorialsForState(estadoConsultado: Estado | null, textoDestino: unknown, customAccessorialsText?: string | null): AccessorialResolution {
-  if (estadoConsultado) {
-    return { estado: estadoConsultado, heredado: false, items: applyCustomAccessorials(loadAccessorials(estadoConsultado), customAccessorialsText) };
+  let baseState = estadoConsultado;
+  let heredado = false;
+  if (!baseState) {
+    baseState = detectNeighborState(textoDestino);
+    heredado = !!baseState;
   }
-  const vecino = detectNeighborState(textoDestino);
-  if (vecino) {
-    return { estado: vecino, heredado: true, items: applyCustomAccessorials(loadAccessorials(vecino), customAccessorialsText) };
-  }
-  return { estado: null, heredado: false, items: applyCustomAccessorials([], customAccessorialsText) };
+
+  let items = baseState ? loadAccessorials(baseState) : [];
+  
+  // El usuario requiere que el Pre-pull y el Hazmat SIEMPRE se extraigan de la base
+  // de datos de Florida, incluso si estamos en Texas, porque esos son los valores base a usar.
+  const flItems = loadAccessorials('FL');
+  const flPrePull = flItems.filter(i => /prepull|pre.*pull/i.test(i.concepto));
+  const flHazmat = flItems.filter(i => /hmat|ahsmat|hasmat|hazmat|hazzmat/i.test(i.concepto));
+  
+  // Removemos los prepull/hazmat originales del estado (ej. TX "cotizar")
+  items = items.filter(i => !/prepull|pre.*pull/i.test(i.concepto) && !/hmat|ahsmat|hasmat|hazmat|hazzmat/i.test(i.concepto));
+  
+  // Insertamos los de Florida
+  items = [...items, ...flPrePull, ...flHazmat];
+
+  return { 
+    estado: baseState, 
+    heredado, 
+    items: applyCustomAccessorials(items, customAccessorialsText) 
+  };
 }
 
 /**
@@ -1034,6 +1052,14 @@ export function filterAccessorialsByTriggers(
       return normalizados.some(t => {
         const tNorm = t.replace(/[-\s]+/g, '');
         return (tNorm.includes('pre') || tNorm.includes('pull')) && campo.includes(tNorm);
+      });
+    }
+
+    // Regla especial para Waiting Time (ahora Detention)
+    if (campo.includes('detention')) {
+      return normalizados.some(t => {
+        const tNorm = t.replace(/[-\s]+/g, '');
+        return tNorm.includes('detention') || tNorm.includes('detetion') || tNorm.includes('wait') || campo.includes(tNorm);
       });
     }
 

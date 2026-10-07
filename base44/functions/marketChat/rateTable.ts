@@ -103,7 +103,14 @@ export function loadRoutes(estado: Estado): RouteRecord[] {
 }
 
 export function loadAccessorials(estado: Estado): AccessorialRecord[] {
-  return estado === 'FL' ? ACCESSORIALS_FL : ACCESSORIALS_TX;
+  const items = estado === 'FL' ? ACCESSORIALS_FL : ACCESSORIALS_TX;
+  // Renombrar 'Waiting Time' a 'Detention' para que se muestre así en la UI (según preferencia del usuario)
+  return items.map(item => {
+    if (item.concepto === 'Waiting Time') {
+      return { ...item, concepto: 'Detention' };
+    }
+    return item;
+  });
 }
 
 export function getRouteCounts(): RouteCounts {

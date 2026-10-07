@@ -190,13 +190,24 @@ export default function CostCalculator() {
         
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block"><Fuel className="w-3 h-3" />{t.calculator.diesel}</label>
+            <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block">
+              <Fuel className="w-3 h-3" />
+              {t.calculator.diesel}
+              {Number(config.diesel_precio) <= 0 && (
+                <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
+              )}
+            </label>
             <input type="number" step="0.01" value={config.diesel_precio}
               onChange={e => set('diesel_precio', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.mpg}</label>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              {t.calculator.mpg}
+              {Number(config.mpg) <= 0 && (
+                <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
+              )}
+            </label>
             <input type="number" step="0.1" value={config.mpg}
               onChange={e => set('mpg', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
@@ -226,7 +237,12 @@ export default function CostCalculator() {
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
           </div>
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.weeklyMiles}</label>
+            <label className="text-xs text-muted-foreground mb-1 block">
+              {t.calculator.weeklyMiles}
+              {Number(config.millas_semana_promedio) <= 0 && (
+                <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
+              )}
+            </label>
             <input type="number" value={config.millas_semana_promedio}
               onChange={e => set('millas_semana_promedio', Number(e.target.value))}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
@@ -323,11 +339,6 @@ export default function CostCalculator() {
       </div>
 
       <div className="space-y-3">
-        {hasZeroOrNegative && (
-          <p className="text-sm text-red-500 font-medium text-center">
-            Campos obligatorios
-          </p>
-        )}
         <button onClick={saveConfig} disabled={saving || hasZeroOrNegative}
           className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
