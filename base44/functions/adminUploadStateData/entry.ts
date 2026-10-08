@@ -44,6 +44,7 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
       Eres un analista de tarifas de transporte de carga. 
       Se te proporciona el siguiente texto extraído de un reporte (PDF, imagen o texto libre).
       Por favor, extrae las tarifas promedio por milla (RPM) para cada estado que encuentres.
+      IMPORTANTE: Si el documento menciona promedios "Nacionales" (National Average), extráelos asignándoles el state_code "US".
       Clasifícalas en dry_van, reefer y flatbed.
       Si algún dato falta, devuélvelo como nulo, pero no omitas el estado si tienes datos de al menos un equipo.
       

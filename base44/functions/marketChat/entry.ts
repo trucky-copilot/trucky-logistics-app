@@ -524,18 +524,21 @@ Deno.serve(async (req) => {
 - Objetivo: $${objetivo}/mi`;
     }
 
+    let marketText = "\n\nDATOS DE MERCADO ACTUALES (Promedios RPM base, usa estos valores si preguntan genéricamente):\n";
+
     const stateMarketData = await base44.entities.StateMarketData.filter({});
     if (stateMarketData && stateMarketData.length > 0) {
-      let marketText = "\n\nDATOS DE MERCADO ACTUALES (Promedios RPM base, usa estos valores si preguntan genéricamente):\n";
-      marketText += "- TARIFA NACIONAL (USA): Dry Van $3.12, Flatbed $3.65, Reefer $3.66\n";
-      costConfigValuesShown.push(3.12, 3.65, 3.66);
       
       stateMarketData.forEach((s: any) => {
         marketText += `- ${s.state_code}: Dry Van $${s.dry_van || 'N/A'}, Reefer $${s.reefer || 'N/A'}, Flatbed $${s.flatbed || 'N/A'}\n`;
-        costConfigValuesShown.push(s.dry_van, s.reefer, s.flatbed);
+        costConfigValuesShown.push(
+          s.dry_van != null ? Number(s.dry_van) : null,
+          s.reefer != null ? Number(s.reefer) : null,
+          s.flatbed != null ? Number(s.flatbed) : null
+        );
       });
-      systemContext += marketText;
     }
+    systemContext += marketText;
 
     const prompt = buildExtractionPrompt(systemContext, cappedMessages, locale);
     const raw = await extractWithRetry(base44, prompt);

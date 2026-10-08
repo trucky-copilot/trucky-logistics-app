@@ -1599,7 +1599,7 @@ if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
     for (const a of q.accesoriales.items) {
       const customFlag = a.isCustom ? " *(Personalizado)*" : "";
       lineas.push(render(m.accesorialItemLine, a.concepto + customFlag, a.monto));
-      const match = a.monto.match(/\$(\d+(\.\d+)?)/);
+      const match = a.monto.match(/\$?\s*(\d+(\.\d+)?)/);
       if (match) {
         totalAccesorialesClassic += parseFloat(match[1]);
       }

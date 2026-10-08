@@ -32,7 +32,7 @@ export default function MarketAdvisorCard({ data }) {
   let totalAccesoriales = 0;
   if (calculo.accesoriales && calculo.accesoriales.items && calculo.accesoriales.items.length > 0) {
     for (const a of calculo.accesoriales.items) {
-      const match = typeof a.monto === 'string' ? a.monto.match(/\$(\d+(\.\d+)?)/) : null;
+      const match = typeof a.monto === 'string' ? a.monto.match(/\$?\s*(\d+(\.\d+)?)/) : null;
       if (match) {
         totalAccesoriales += parseFloat(match[1]);
       } else if (typeof a.monto === 'number') {

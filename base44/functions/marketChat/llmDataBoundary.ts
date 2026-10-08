@@ -76,9 +76,11 @@ function roundForCompare(n: number): number {
 
 export function buildAllowedNumbersSet(values: Array<number | null | undefined>): Set<number> {
   const set = new Set<number>();
-  for (const v of values) {
-    if (v == null || !Number.isFinite(v)) continue;
-    set.add(roundForCompare(v));
+  for (let v of values) {
+    if (v == null) continue;
+    if (typeof v === 'string') v = Number(v);
+    if (!Number.isFinite(v)) continue;
+    set.add(roundForCompare(v as number));
   }
   return set;
 }
@@ -101,6 +103,9 @@ export function assertNoInventedFigures(finalText: unknown, allowedNumbers: Set<
     return !permitidas.some(p => Math.abs(p - r) <= COMPARE_TOLERANCE);
   });
   const unicas = Array.from(new Set(inventadas));
+  if (unicas.length > 0) {
+    console.log(`[BOUNDARY] Fallback triggered! Invented: ${unicas.join(', ')} | Text: ${finalText}`);
+  }
   return { ok: unicas.length === 0, invented: unicas };
 }
 
