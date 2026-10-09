@@ -137,7 +137,7 @@ ${conversationHistory}
 === INSTRUCCIONES DE EXTRACCIÓN ===
 Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversación y extrae los datos según el schema. Reglas:
 - intent="ask_miles" si el dispatcher explícitamente pide SOLO la distancia o las millas de una ruta (ej. "solo dame las millas", "cuantas millas hay", "millas de x a y"). Si pide esto, NO asumas "rate_check".
-- intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades, a menos que solo pida millas! También asume "rate_check" OBLIGATORIAMENTE si el mensaje modifica o pregunta sobre cómo quedaría una cotización previa (ej. "¿y si le sumo hazmat?", "¿cómo quedaría con pre pull?"). EXCEPCIÓN CRÍTICA: Si el usuario pregunta por un PROMEDIO nacional o general de un estado sin especificar ruta (ej. "tarifa promedio nacional de dryvan", "promedio en florida"), DEBES usar intent="general" y NUNCA "rate_check". ¡ESTO APLICA INCLUSO SI HAY ERRORES ORTOGRÁFICOS EN LAS PALABRAS (ej. "atrifa", "nacionl", "promedo")! Debes ser inteligente y deducir la intención general.
+- intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades, a menos que solo pida millas! También asume "rate_check" OBLIGATORIAMENTE si el mensaje modifica o pregunta sobre cómo quedaría una cotización previa (ej. "¿y si le sumo hazmat?", "¿cómo quedaría con pre pull?"). INCLUSO si el usuario pregunta por un PROMEDIO nacional o general de un estado/ciudad sin especificar destino (ej. "tarifa nacional dryvan", "promedio en florida", "tampa dry van rate", "wisconsin rate dryvan"), DEBES usar intent="rate_check" y extraer el estado o ciudad en el origen, dejando el destino vacío.
 - intent="draft_email" si el dispatcher pide explícitamente redactar, crear, escribir o responder un correo electrónico, email, plantilla o mensaje para un broker/shipper (ej. "hazme un correo", "redacta un email", "necesito que escribas un correo", "ahora para pedir información un correo", "qué correo le mando"). ¡Usa esto siempre que el usuario mencione la palabra correo, email o plantilla!
 - intent="off_topic" solo si el mensaje NO tiene relación con freight, dispatch u operación de carriers — por ejemplo: programación, clima, deportes, recetas, política, traducción, chistes, o aritmética sin referencia a freight, consejos personales, u otras industrias.
 - intent="general" en cualquier otro caso. ¡NUNCA repitas mensajes de error del historial como "Necesito más datos..."! Tu respuesta_general debe responder a la pregunta, no simular un error del sistema.
@@ -154,7 +154,7 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - pago_camion: el RPM (dólares por milla) que el dispatcher dice que le paga al camión, SOLO si lo menciona explícitamente en este mensaje; null si no.
 - broker_name: el nombre de la compañía broker. ¡SOLO extráelo si el usuario menciona explícitamente al broker en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
 - driver_name: el nombre del conductor o chofer. ¡SOLO extráelo si el usuario lo menciona explícitamente en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
-- accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis"); arreglo vacío si no menciona ninguno.
+- accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis", "extra stop", "extra top"). Extrae el término exacto o la aproximación ortográfica que use el usuario; arreglo vacío si no menciona ninguno.
 - respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto. NO menciones los costos personalizados del usuario (break-even, costo por milla, objetivo) a menos que pregunte explícitamente por ellos o por rentabilidad.`;
 }
 
@@ -435,12 +435,14 @@ Deno.serve(async (req) => {
   if (!isValidMessages(messages)) {
     return Response.json({ error: 'messages debe ser un array no vacío de objetos { role, content } con valores string' }, { status: 400 });
   }
-  if (JSON.stringify(messages).length > MAX_REQUEST_CHARS) {
+
+  const cappedMessages = capHistory(messages, HISTORY_CAP);
+
+  if (JSON.stringify(cappedMessages).length > MAX_REQUEST_CHARS) {
     return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400 });
   }
 
   try {
-    const cappedMessages = capHistory(messages, HISTORY_CAP);
     const costConfigRecord = user
       ? await fetchCostConfigRecord(base44, user.email, activeProfileId)
       : null;
@@ -539,6 +541,14 @@ Deno.serve(async (req) => {
       });
     }
     systemContext += marketText;
+    
+    // Agregamos los accesoriales por defecto de FL para preguntas generales
+    const defaultAccFL = loadAccessorials('FL');
+    systemContext += `\n\nCARGOS ACCESORIALES ESTÁNDAR (Base de datos): \nFlorida: ${defaultAccFL.map(a => `${a.concepto}: ${a.monto}`).join(' | ')}`;
+
+    if (costConfigRecord && costConfigRecord.custom_accessorials_active && costConfigRecord.custom_accessorials_text) {
+      systemContext += `\n\nCARGOS ACCESORIALES PERSONALIZADOS DEL USUARIO (si el usuario te pregunta por el valor de un cargo, responde usando ESTOS datos prioritariamente):\n${costConfigRecord.custom_accessorials_text}`;
+    }
 
     const prompt = buildExtractionPrompt(systemContext, cappedMessages, locale);
     const raw = await extractWithRetry(base44, prompt);
@@ -565,23 +575,20 @@ Deno.serve(async (req) => {
     if (raw.pago_camion != null && !historialCompletoSinComas.includes(raw.pago_camion.toString())) {
       raw.pago_camion = null;
     }
-    if (raw.tarifa_ofrecida != null && !historialCompletoSinComas.includes(raw.tarifa_ofrecida.toString())) {
+    // Solo preservar la tarifa ofrecida si el usuario la MENCIONÓ EXPLÍCITAMENTE en este ÚLTIMO mensaje.
+    // Esto asegura que si el usuario añade un accesorial ("add pre pull") sin repetir la tarifa,
+    // se le muestre la tarjeta con los 3 escenarios (tarjeta de veredicto) en lugar de un solo semáforo.
+    if (raw.tarifa_ofrecida != null && !msgSinComas.includes(raw.tarifa_ofrecida.toString())) {
       raw.tarifa_ofrecida = null;
     }
 
-    // Prevenir el arrastre ("leak") de precios de rutas anteriores si el usuario ingresó una ruta nueva.
-    if (raw.tarifa_ofrecida != null && !msgSinComas.includes(raw.tarifa_ofrecida.toString())) {
-       const isRouteQuery = /\b(a|to|de|from|-)\b/i.test(ultimoMsg) || ultimoMsg.trim().split(/\s+/).length > 3;
-       if (isRouteQuery) {
-          raw.tarifa_ofrecida = null;
-       }
+    // INTERCEPTOR EXPLICITO: Si el usuario pide "semáforo", forzamos anular la oferta
+    // para que la interfaz renderice los 3 escenarios generales en lugar de evaluar una oferta puntual.
+    if (ultimoMsg.toLowerCase().includes('semaforo') || ultimoMsg.toLowerCase().includes('semáforo')) {
+      raw.tarifa_ofrecida = null;
     }
-    if (raw.pago_camion != null && !msgSinComas.includes(raw.pago_camion.toString())) {
-       const isRouteQuery = /\b(a|to|de|from|-)\b/i.test(ultimoMsg) || ultimoMsg.trim().split(/\s+/).length > 3;
-       if (isRouteQuery) {
-          raw.pago_camion = null;
-       }
-    }
+
+
     if (raw.millas_ida != null && !msgSinComas.includes(raw.millas_ida.toString())) {
       raw.millas_ida = null; // Descarta las millas inventadas por la IA para que entre Google Maps
     }
@@ -640,7 +647,17 @@ Deno.serve(async (req) => {
       lineas.push(`💰 **Cargos accesoriales para: ${triggers.join(', ')}**\n`);
 
       if (matchedItems.length > 0) {
+        const uniqueItems: typeof matchedItems = [];
+        const seen = new Set<string>();
         for (const a of matchedItems) {
+          const key = `${a.concepto}|${a.monto}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueItems.push(a);
+          }
+        }
+        
+        for (const a of uniqueItems) {
           const customFlag = a.isCustom ? " *(Personalizado)*" : "";
           lineas.push(`- ${a.concepto}${customFlag}: **${a.monto}**`);
         }
@@ -915,6 +932,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 
     let content: string;
     let calculo: CalculatedQuote | null = null;
+    let rpmPermitido: number | null = null;
 
     const customAccessorialsText = costConfigRecord?.custom_accessorials_active ? costConfigRecord.custom_accessorials_text : null;
 
@@ -943,17 +961,12 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
         } else {
           calculo = outcome.calculo;
           content = buildRateCheckMarkdown(outcome.calculo, locale);
-          // reglas-v3-multiestado Fase 4 (Decisión 2-A): en drayage la doble
-          // lectura NUNCA aparece por defecto — solo si el dispatcher pregunta
-          // explícitamente por el total de ida y vuelta.
           if (preguntaPorTotalRedondo(ultimoMensajeDelDispatcher(cappedMessages))) {
             content += `\n\n${buildDrayageRoundTripMarkdown(outcome.calculo, locale)}`;
           }
         }
       }
     } else {
-      // Guardarraíl de equipo (TRUCKY-48 parcial): resolveEquipment nunca
-      // sustituye un tipo de camión: si no está claro, se pregunta.
       const resolvedEquipment = resolveEquipment(raw.equipo);
       if (resolvedEquipment.status === 'ask') {
         content = buildEquipmentQuestionMarkdown(resolvedEquipment.reason, locale);
@@ -971,7 +984,18 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           stateMarketData,
           customAccessorialsText,
         });
-        if (outcome.kind === 'ask_miles') {
+        if (outcome.kind === 'national_rpm_only') {
+          rpmPermitido = outcome.rpm;
+          const locName = outcome.estadoBusqueda === 'US' 
+            ? (locale === 'en' ? 'National' : 'Nacional') 
+            : outcome.estadoBusqueda;
+          const equipName = outcome.equipmentLabel.replace("53' ", "");
+          if (locale === 'en') {
+            content = `📍 **Reference Rate (${locName})**\nFor **${equipName}**, the current average rate is **$${outcome.rpm} per mile**.`;
+          } else {
+            content = `📍 **Tarifa de Referencia (${locName})**\nPara el equipo **${equipName}**, la tarifa promedio actual es de **$${outcome.rpm} por milla**.`;
+          }
+        } else if (outcome.kind === 'ask_miles') {
           content = buildMissingDataMarkdown(locale);
         } else if (outcome.kind === 'fuera_de_rango') {
           content = buildSanityCapMarkdown(locale);
@@ -982,11 +1006,10 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
       }
     }
 
-    // El conjunto autorizado de un rate_check es EXACTAMENTE lo que trae el
-    // bloque calculado; sin bloque calculado (preguntas de dato faltante,
-    // tope de sanidad, pedir equipo/tamaño), esas respuestas son estáticas y
-    // no traen ninguna cifra — el conjunto vacío las deja pasar tal cual.
     const permitidasRateCheck = calculo ? buildRateCheckAllowedNumbers(calculo) : buildAllowedNumbersSet(buildStaticRateCheckNumbers());
+    if (rpmPermitido !== null) {
+      permitidasRateCheck.add(rpmPermitido);
+    }
 
     // Ya no se inyecta el origen/destino como comentario HTML, ya que el 
     // frontend lo estaba renderizando visiblemente en algunos casos.

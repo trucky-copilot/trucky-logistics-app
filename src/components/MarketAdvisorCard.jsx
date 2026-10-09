@@ -42,13 +42,16 @@ export default function MarketAdvisorCard({ data }) {
   }
 
   // 1. Resolver el fallback de piso si es null (antes de sumar accesoriales)
-  if (marketFloorTotal === null) {
+  // No creamos un piso falso para contenedores (ej. Florida) para que muestre solo la tarifa objetivo
+  if (marketFloorTotal === null && !isContainer) {
     marketFloorTotal = Math.round((costoPorMillaPropio || 1.75) * millasIda);
   }
 
   // 2. Sumar los accesoriales
   if (totalAccesoriales > 0) {
-    marketFloorTotal += totalAccesoriales;
+    if (marketFloorTotal !== null) {
+      marketFloorTotal += totalAccesoriales;
+    }
     marketTargetTotal += totalAccesoriales;
   }
 
@@ -89,18 +92,26 @@ export default function MarketAdvisorCard({ data }) {
           </h2>
         </div>
         <p className={`text-sm text-gray-300 leading-relaxed ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
-          {hasAccessorials ? (
-            isEs
-              ? `Mira el valor del ${accessorialNames} es de $${totalAccesoriales.toLocaleString('en-US')} y con el semáforo quedaría así:`
-              : `Look, the value for ${accessorialNames} is $${totalAccesoriales.toLocaleString('en-US')} and the traffic light looks like this:`
-          ) : calculo.tarifaOfrecida ? (
-            isEs 
-              ? "¡Aquí tienes el resultado de tu oferta! Mira este escenario para saber al instante si la tarifa propuesta es la ideal para tu operación."
-              : "Here is the result of your offer! Check this scenario to instantly know if the proposed rate is ideal for your operation."
+          {calculo.tarifaOfrecida ? (
+            hasAccessorials ? (
+              isEs
+                ? `El valor del ${accessorialNames} es de $${totalAccesoriales.toLocaleString('en-US')}. Sumándolo a la meta, el veredicto de tu oferta queda así:`
+                : `The value for ${accessorialNames} is $${totalAccesoriales.toLocaleString('en-US')}. Added to the target, the verdict for your offer looks like this:`
+            ) : (
+              isEs 
+                ? "¡Aquí tienes el resultado de tu oferta! Mira este escenario para saber al instante si la tarifa propuesta es la ideal para tu operación."
+                : "Here is the result of your offer! Check this scenario to instantly know if the proposed rate is ideal for your operation."
+            )
           ) : (
-            isEs 
-              ? `Te muestro tres escenarios para que puedas ver rápidamente si te conviene aceptar, negociar o rechazar la carga${isContainer ? '.' : ' basándote en tu costo por milla (CPM).'}` 
-              : `I'm showing three scenarios so you can quickly see if you should take, negotiate or decline the load${isContainer ? '.' : ' based on your cost per mile (CPM).'}`
+            hasAccessorials ? (
+              isEs
+                ? `Mira el valor del ${accessorialNames} es de $${totalAccesoriales.toLocaleString('en-US')} y con el semáforo quedaría así:`
+                : `Look, the value for ${accessorialNames} is $${totalAccesoriales.toLocaleString('en-US')} and the traffic light looks like this:`
+            ) : (
+              isEs 
+                ? `Te muestro tres escenarios para que puedas ver rápidamente si te conviene aceptar, negociar o rechazar la carga${isContainer ? '.' : ' basándote en tu costo por milla (CPM).'}` 
+                : `I'm showing three scenarios so you can quickly see if you should take, negotiate or decline the load${isContainer ? '.' : ' based on your cost per mile (CPM).'}`
+            )
           )}
         </p>
       </div>

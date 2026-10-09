@@ -1,6 +1,15 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { DollarSign, Truck, Package, TrendingUp, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
+import { DollarSign, Truck, Package, TrendingUp, AlertTriangle, CheckCircle2, XCircle, Bell, Info, Zap, FileWarning } from 'lucide-react';
+
+const TIPO_ICONS = {
+  cambio_asignacion: Truck,
+  retraso_ruta: AlertTriangle,
+  mensaje_despacho: Zap,
+  documento_vencido: FileWarning,
+  alerta_tarifa: Info,
+  general: Bell,
+};
 import KpiCard from '@/components/KpiCard';
 import StatusBadge from '@/components/StatusBadge';
 import OperationalStatusCard from '@/components/OperationalStatusCard';
@@ -20,6 +29,7 @@ export default function Dashboard() {
   const [loads, setLoads] = useState([]);
   const [brokers, setBrokers] = useState([]);
   const [drivers, setDrivers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [costConfig, setCostConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -56,12 +66,20 @@ export default function Dashboard() {
       listByOrg(base44.entities.Load, orgId, '-created_date', 50),
       listByOrg(base44.entities.Broker, orgId),
       listByOrg(base44.entities.Driver, orgId),
+      listByOrg(base44.entities.Notification, orgId, '-created_date', 10),
       currentUser?.email ? base44.entities.CostConfig.filter({ usuario: currentUser.email }) : Promise.resolve([]),
-    ]).then(([rawTrucks, rawLoads, rawBrokers, rawDrivers, configs]) => {
+    ]).then(([rawTrucks, rawLoads, rawBrokers, rawDrivers, rawNotifs, configs]) => {
       setTrucks(filterByProfile(rawTrucks, 'trucks'));
       setLoads(filterByProfile(rawLoads, 'loads'));
       setBrokers(filterByProfile(rawBrokers, 'brokers'));
       setDrivers(filterByProfile(rawDrivers, 'drivers'));
+      
+      const notifIds = getProfileIds('notifs') || [];
+      const filteredNotifs = activeProfileId === '1' && notifIds.length === 0 
+        ? rawNotifs // Perfil 1 hereda todo si no tiene reclamos
+        : rawNotifs.filter(n => notifIds.includes(n.id));
+      setNotifications(filteredNotifs);
+
       if (configs && configs.length > 0) {
         setCostConfig(configs[0]);
       } else {
@@ -199,29 +217,48 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Document Alerts */}
-        <div className={`rounded-xl p-4 border ${expiringDocs.some(a => a.urgent || a.expired) ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
+        {/* Document Alerts and Notifications */}
+        <div className={`rounded-xl p-4 border ${expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta') ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-sm font-semibold ${expiringDocs.some(a => a.urgent || a.expired) ? 'text-red-400' : 'text-foreground'}`}>
-              {expiringDocs.some(a => a.urgent || a.expired) ? `🔴 ${t.dashboard.documentAlerts}` : t.dashboard.documentAlerts}
+            <h2 className={`text-sm font-semibold ${(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? 'text-red-400' : 'text-foreground'}`}>
+              {(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? '🔴 Alertas y Notificaciones' : 'Alertas y Notificaciones'}
             </h2>
-            <span className="text-xs text-muted-foreground">{t.dashboard.next30Days}</span>
+            <Link to="/notificaciones" className="text-xs text-primary hover:underline">{t.dashboard.viewAll}</Link>
           </div>
-          {expiringDocs.length === 0 ? (
+          {expiringDocs.length === 0 && notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle2 className="w-8 h-8 text-green-400 mb-2" />
-              <p className="text-sm text-muted-foreground">{t.dashboard.allDocumentsOk}</p>
+              <p className="text-sm text-muted-foreground">Todo está en orden</p>
             </div>
           ) : (
             <div className="space-y-2">
-              {expiringDocs.map((alert, i) => (
-                <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-lg border ${alert.expired || alert.urgent ? 'bg-red-400/10 border-red-400/30' : 'bg-yellow-400/5 border-yellow-400/20'}`}>
-                  {alert.expired
-                    ? <XCircle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                    : alert.urgent
-                    ? <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
-                    : <AlertTriangle className="w-4 h-4 text-yellow-400 mt-0.5 flex-shrink-0" />
-                  }
+              {/* Notificaciones */}
+              {notifications.slice(0, 4).map((notif) => {
+                const isError = notif.prioridad === 'Alta' || notif.tipo === 'Documento vencido' || notif.tipo === 'Alerta de tarifa' || notif.prioridad === 'alta';
+                const isWarning = notif.prioridad === 'Media' || notif.tipo === 'Retraso en ruta' || notif.prioridad === 'media';
+                const Icon = TIPO_ICONS[notif.tipo] || Bell;
+                return (
+                  <div key={notif.id} className={`flex items-start gap-3 p-3 rounded-xl border-l-4 border border-border transition-all ${isError ? 'border-l-red-400 bg-red-400/5' : isWarning ? 'border-l-yellow-400 bg-yellow-400/5' : 'border-l-border bg-muted/20'} ${!notif.leido ? 'ring-1 ring-primary/20' : 'opacity-80'}`}>
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${isError ? 'bg-red-400/20' : isWarning ? 'bg-yellow-400/20' : 'bg-muted'}`}>
+                      <Icon className={`w-4 h-4 ${isError ? 'text-red-400' : isWarning ? 'text-yellow-400' : 'text-muted-foreground'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <p className={`text-xs font-semibold ${!notif.leido ? 'text-foreground' : 'text-muted-foreground'}`}>{notif.titulo}</p>
+                        {!notif.leido && <div className="w-2 h-2 rounded-full bg-primary flex-shrink-0" />}
+                      </div>
+                      <p className="text-xs text-muted-foreground line-clamp-2">{notif.mensaje}</p>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {/* Alertas de Documentos */}
+              {expiringDocs.slice(0, 4).map((alert, i) => (
+                <div key={`doc-${i}`} className={`flex items-start gap-3 p-3 rounded-xl border-l-4 border border-border transition-all ${alert.expired || alert.urgent ? 'border-l-red-400 bg-red-400/5 opacity-80' : 'border-l-yellow-400 bg-yellow-400/5 opacity-80'}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${alert.expired || alert.urgent ? 'bg-red-400/20' : 'bg-yellow-400/20'}`}>
+                    <FileWarning className={`w-4 h-4 ${alert.expired || alert.urgent ? 'text-red-400' : 'text-yellow-400'}`} />
+                  </div>
                   <div>
                     <p className="text-xs font-semibold text-foreground">{alert.driver}</p>
                     <p className="text-xs text-muted-foreground">{alert.doc} — {alert.expired ? `🔴 ${t.dashboard.expired}` : alert.urgent ? `🔴 ${t.dashboard.expires}: ${alert.date}` : `⚠ ${t.dashboard.expires}: ${alert.date}`}</p>
@@ -261,6 +298,8 @@ export default function Dashboard() {
           )}
         </div>
       </div>
+
+
 
       {/* Recent Loads Table */}
       <div className="bg-card border border-border rounded-xl p-4">

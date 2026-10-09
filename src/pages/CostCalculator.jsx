@@ -22,6 +22,7 @@ export default function CostCalculator() {
   const [saved, setSaved] = useState(false);
   const [configId, setConfigId] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Dropdown state saved below using localStorage
 
   useEffect(() => {
     const load = async () => {
@@ -38,6 +39,37 @@ export default function CostCalculator() {
           setConfig(prev => ({ ...prev, ...targetConfig }));
           setOriginalConfig({ ...targetConfig });
           setConfigId(targetConfig.id);
+          
+          if (targetConfig.custom_accessorials_text) {
+            const lines = targetConfig.custom_accessorials_text.split('\n');
+            const fields = {};
+            lines.forEach(line => {
+              const [k, v] = line.split(':');
+              if (k && v) {
+                 const concept = k.trim().toLowerCase().replace(/\s+/g, '');
+                 const found = [
+                   { id: 'prepull', label: 'Pre-Pull Fee' },
+                   { id: 'hazmat', label: 'Hazmat' },
+                   { id: 'detention', label: 'Detention / Waiting Time' },
+                   { id: 'overweight', label: 'Overweight' },
+                   { id: 'reefer', label: 'Reefer' },
+                   { id: 'dropfee', label: 'Drop Fee / Bobtail' },
+                   { id: 'extrastop', label: 'Extra Stop' },
+                   { id: 'losttrip', label: 'Lost Trip' },
+                   { id: 'chassis', label: 'Daily Chassis Charge' },
+                   { id: 'yardstop', label: 'Yard Stop Fee' },
+                   { id: 'layover', label: 'Layover' },
+                   { id: 'weekend', label: 'Weekend / Holiday' }
+                 ].find(a => 
+                    a.label.toLowerCase().replace(/\s+/g, '') === concept || 
+                    a.id.toLowerCase().replace(/\s+/g, '') === concept
+                 );
+                 const mappedKey = found ? found.id : k.trim().toLowerCase().replace(/\s+/g, '');
+                 fields[mappedKey] = v.trim();
+              }
+            });
+            const extraKeys = Object.keys(fields).filter(k => !['prepull', 'hazmat', 'detention', 'overweight'].includes(k));
+          }
         } else {
           // Reset to default if new profile has no data
           const def = {
@@ -135,34 +167,87 @@ export default function CostCalculator() {
     }
   };
 
+  const availableAccessorials = [
+    { id: 'prepull', label: 'Pre-Pull Fee' },
+    { id: 'hazmat', label: 'Hazmat' },
+    { id: 'detention', label: 'Detention / Waiting Time' },
+    { id: 'overweight', label: 'Overweight' },
+    { id: 'reefer', label: 'Reefer' },
+    { id: 'dropfee', label: 'Drop Fee / Bobtail' },
+    { id: 'extrastop', label: 'Extra Stop' },
+    { id: 'losttrip', label: 'Lost Trip' },
+    { id: 'chassis', label: 'Daily Chassis Charge' },
+    { id: 'yardstop', label: 'Yard Stop Fee' },
+    { id: 'layover', label: 'Layover' },
+    { id: 'weekend', label: 'Weekend / Holiday' }
+  ];
+
   const parsedFields = (() => {
-    const fields = { prepull: '', hazmat: '', detention: '', overweight: '' };
+    const fields = {};
     if (!config.custom_accessorials_text) return fields;
     config.custom_accessorials_text.split('\n').forEach(line => {
        const match = line.match(/^([^:$]+)[:\s]+(.+)$/);
        if (match) {
          const rawConcept = match[1].trim();
-         const concept = rawConcept.toLowerCase();
+         const concept = rawConcept.toLowerCase().replace(/\s+/g, ''); // normalize for comparison
          const mount = match[2].trim();
-         if (concept.includes('prepull') || concept.includes('pre-pull')) fields.prepull = mount;
-         else if (concept.includes('hazmat') || concept.includes('hmat')) fields.hazmat = mount;
-         else if (concept.includes('detention') || concept.includes('detencion')) fields.detention = mount;
-         else if (concept.includes('overweight') || concept.includes('sobrepeso')) fields.overweight = mount;
+         
+         let mappedKey = rawConcept.toLowerCase();
+         // Buscar si coincide con alguno de nuestros labels o ids
+         const found = availableAccessorials.find(a => 
+            a.label.toLowerCase().replace(/\s+/g, '') === concept || 
+            a.id.toLowerCase().replace(/\s+/g, '') === concept
+         );
+         
+         if (found) {
+           mappedKey = found.id;
+         } else {
+           if (concept.includes('prepull')) mappedKey = 'prepull';
+           else if (concept.includes('hazmat') || concept.includes('hmat')) mappedKey = 'hazmat';
+           else if (concept.includes('detention') || concept.includes('detencion') || concept.includes('wait')) mappedKey = 'detention';
+           else if (concept.includes('overweight') || concept.includes('sobrepeso')) mappedKey = 'overweight';
+         }
+         
+         fields[mappedKey] = mount;
        }
     });
     return fields;
   })();
 
-  const handleCustomFieldChange = (key, value) => {
-    const newFields = { ...parsedFields, [key]: value };
-    const lines = [];
-    if (newFields.prepull) lines.push(`prepull: ${newFields.prepull}`);
-    if (newFields.hazmat) lines.push(`hazmat: ${newFields.hazmat}`);
-    if (newFields.detention) lines.push(`detention: ${newFields.detention}`);
-    if (newFields.overweight) lines.push(`overweight: ${newFields.overweight}`);
-    
-    set('custom_accessorials_text', lines.join('\n'));
+  const generateCustomText = (fieldsObj) => {
+    return Object.entries(fieldsObj).map(([k, v]) => {
+      const found = availableAccessorials.find(a => a.id === k);
+      const label = found ? found.label : k;
+      return `${label}: ${v}`;
+    }).join('\n');
   };
+
+  const handleCustomFieldChange = (key, value) => {
+    const newFields = { ...parsedFields };
+    if (value.trim() === '') {
+      delete newFields[key];
+    } else {
+      newFields[key] = value;
+    }
+    set('custom_accessorials_text', generateCustomText(newFields));
+  };
+
+  const handleAddField = (key) => {
+    if (!key) return;
+    const newFields = { ...parsedFields, [key]: '' };
+    set('custom_accessorials_text', generateCustomText(newFields));
+  };
+
+  const [selectedAcc, setSelectedAcc] = useState(() => {
+    return localStorage.getItem('trucky_last_acc') || 'reefer';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('trucky_last_acc', selectedAcc);
+  }, [selectedAcc]);
+
+  const configuredKeys = Object.keys(parsedFields);
+  const missingAccessorials = availableAccessorials.filter(a => !configuredKeys.includes(a.id));
 
   const barSegments = [
     { label: t.calculator.breakEvenLabel, rate: breakEvenRate, color: '#facc15' },
@@ -270,29 +355,56 @@ export default function CostCalculator() {
         </div>
         
         {config.custom_accessorials_active && (
-          <div className="space-y-3">
-            <p className="text-xs text-muted-foreground">
-              Ingresa tus montos para cada cargo. El chat priorizará estos valores sobre los de mercado.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Pre-pull</label>
-                <input type="text" placeholder="$150" value={parsedFields.prepull} onChange={e => handleCustomFieldChange('prepull', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Ingresa tus montos para cada cargo. El chat priorizará estos valores sobre los de mercado.
+              </p>
+              
+              {/* Los 4 campos base siempre fijos */}
+              <div className="grid grid-cols-2 gap-3">
+                {['prepull', 'hazmat', 'detention', 'overweight'].map(key => {
+                  const acc = availableAccessorials.find(a => a.id === key);
+                  const label = acc ? acc.label : key.charAt(0).toUpperCase() + key.slice(1);
+                  return (
+                    <div key={key}>
+                      <label className="text-xs text-muted-foreground mb-1 block">{label}</label>
+                      <input 
+                        type="text" 
+                        placeholder="$..." 
+                        value={parsedFields[key] || ''} 
+                        onChange={e => handleCustomFieldChange(key, e.target.value)} 
+                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+                      />
+                    </div>
+                  );
+                })}
               </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Hazmat</label>
-                <input type="text" placeholder="$250" value={parsedFields.hazmat} onChange={e => handleCustomFieldChange('hazmat', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Detention</label>
-                <input type="text" placeholder="$50/hr" value={parsedFields.detention} onChange={e => handleCustomFieldChange('detention', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">Overweight</label>
-                <input type="text" placeholder="$200" value={parsedFields.overweight} onChange={e => handleCustomFieldChange('overweight', e.target.value)} className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+
+              {/* Fila dinámica para otros cargos */}
+              <div className="mt-4 pt-4 border-t border-border">
+                <label className="text-xs text-muted-foreground mb-2 block">Otros cargos adicionales...</label>
+                <div className="flex items-center gap-3">
+                  <select 
+                    className="w-2/3 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    value={selectedAcc}
+                    onChange={e => setSelectedAcc(e.target.value)}
+                  >
+                    {availableAccessorials.filter(a => !['prepull', 'hazmat', 'detention', 'overweight'].includes(a.id)).map(a => (
+                      <option key={a.id} value={a.id}>
+                        {a.label}
+                      </option>
+                    ))}
+                  </select>
+                  <input 
+                    type="text" 
+                    placeholder="$..." 
+                    value={parsedFields[selectedAcc] || ''} 
+                    onChange={e => handleCustomFieldChange(selectedAcc, e.target.value)} 
+                    className="w-1/3 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+                  />
+                </div>
               </div>
             </div>
-          </div>
         )}
       </div>
 
