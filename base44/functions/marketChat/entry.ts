@@ -532,7 +532,7 @@ Deno.serve(async (req) => {
     if (stateMarketData && stateMarketData.length > 0) {
       
       stateMarketData.forEach((s: any) => {
-        marketText += `- ${s.state_code}: Dry Van $${s.dry_van || 'N/A'}, Reefer $${s.reefer || 'N/A'}, Flatbed $${s.flatbed || 'N/A'}\n`;
+        // OPTIMIZATION: Do not inject massive strings into systemContext to prevent LLM slowdown
         costConfigValuesShown.push(
           s.dry_van != null ? Number(s.dry_van) : null,
           s.reefer != null ? Number(s.reefer) : null,
@@ -540,7 +540,6 @@ Deno.serve(async (req) => {
         );
       });
     }
-    systemContext += marketText;
     
     // Agregamos los accesoriales por defecto de FL para preguntas generales
     const defaultAccFL = loadAccessorials('FL');
