@@ -55,7 +55,7 @@ export default function MarketAdvisorCard({ data }) {
              (STATE_NAMES[originStateCode] && dbStateLower === STATE_NAMES[originStateCode].toLowerCase());
     });
     if (stateData && stateData[equipKey]) {
-      originStateRate = stateData[equipKey];
+      originStateRate = Number(stateData[equipKey]).toFixed(2);
     }
   }
   
@@ -412,17 +412,6 @@ export default function MarketAdvisorCard({ data }) {
         </>
       )}
 
-      {/* DEBUG INFO TO REMOVE LATER */}
-      <div className="mt-4 p-2 bg-black text-xs text-green-400 font-mono break-words rounded">
-        DEBUG: 
-        originStr={originStr}, 
-        originStateCode={originStateCode}, 
-        destStateCode={destStateCode}, 
-        equipmentLabel={equipmentLabel}, 
-        equipKey={equipKey}, 
-        stateDataLength={stateMarketData ? stateMarketData.length : 'none'},
-        stateDataFound={stateMarketData && Array.isArray(stateMarketData) ? !!stateMarketData.find(s => s.state_code && s.state_code.trim().toUpperCase() === originStateCode) : 'false'}
-      </div>
     </div>
   );
 }
