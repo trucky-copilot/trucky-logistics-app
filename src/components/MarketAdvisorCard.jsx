@@ -30,10 +30,30 @@ export default function MarketAdvisorCard({ data }) {
     else if (el.includes('flat')) equipKey = 'flatbed';
   }
 
+  const STATE_NAMES = {
+    AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+    CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+    HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+    KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+    MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+    MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+    NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+    OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+    SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+    VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+    DC: 'District of Columbia'
+  };
+
   let originStateRate = null;
   // Solo buscar tarifa si origen y destino están en el mismo estado
   if (originStateCode && destStateCode && originStateCode === destStateCode && equipKey && stateMarketData && Array.isArray(stateMarketData)) {
-    const stateData = stateMarketData.find(s => s.state_code && s.state_code.trim().toUpperCase() === originStateCode);
+    const stateData = stateMarketData.find(s => {
+      if (!s.state_code) return false;
+      const dbState = s.state_code.trim().toUpperCase();
+      const dbStateLower = s.state_code.trim().toLowerCase();
+      return dbState === originStateCode || 
+             (STATE_NAMES[originStateCode] && dbStateLower === STATE_NAMES[originStateCode].toLowerCase());
+    });
     if (stateData && stateData[equipKey]) {
       originStateRate = stateData[equipKey];
     }
@@ -391,6 +411,18 @@ export default function MarketAdvisorCard({ data }) {
       </div>
         </>
       )}
+
+      {/* DEBUG INFO TO REMOVE LATER */}
+      <div className="mt-4 p-2 bg-black text-xs text-green-400 font-mono break-words rounded">
+        DEBUG: 
+        originStr={originStr}, 
+        originStateCode={originStateCode}, 
+        destStateCode={destStateCode}, 
+        equipmentLabel={equipmentLabel}, 
+        equipKey={equipKey}, 
+        stateDataLength={stateMarketData ? stateMarketData.length : 'none'},
+        stateDataFound={stateMarketData && Array.isArray(stateMarketData) ? !!stateMarketData.find(s => s.state_code && s.state_code.trim().toUpperCase() === originStateCode) : 'false'}
+      </div>
     </div>
   );
 }
