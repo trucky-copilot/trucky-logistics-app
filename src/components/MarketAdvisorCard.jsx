@@ -26,7 +26,7 @@ export default function MarketAdvisorCard({ data }) {
   if (equipmentLabel) {
     const el = equipmentLabel.toLowerCase();
     if (el.includes('van')) equipKey = 'dry_van';
-    else if (el.includes('reefer') || el.includes('ref')) equipKey = 'reefer';
+    else if (el.includes('reefer')) equipKey = 'reefer';
     else if (el.includes('flat')) equipKey = 'flatbed';
   }
 
