@@ -528,18 +528,7 @@ Deno.serve(async (req) => {
 
     let marketText = "\n\nDATOS DE MERCADO ACTUALES (Promedios RPM base, usa estos valores si preguntan genéricamente):\n";
 
-    const stateMarketData = await base44.entities.StateMarketData.filter({});
-    if (stateMarketData && stateMarketData.length > 0) {
-      
-      stateMarketData.forEach((s: any) => {
-        // OPTIMIZATION: Do not inject massive strings into systemContext to prevent LLM slowdown
-        costConfigValuesShown.push(
-          s.dry_van != null ? Number(s.dry_van) : null,
-          s.reefer != null ? Number(s.reefer) : null,
-          s.flatbed != null ? Number(s.flatbed) : null
-        );
-      });
-    }
+    let stateMarketData: any[] = [];
     
     // Agregamos los accesoriales por defecto de FL para preguntas generales
     const defaultAccFL = loadAccessorials('FL');
@@ -933,7 +922,34 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
     let calculo: CalculatedQuote | null = null;
     let rpmPermitido: number | null = null;
 
+    const STATE_NAMES_MAP: Record<string, string> = {
+      AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+      CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+      HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+      KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+      MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+      MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+      NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+      OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+      SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+      VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+      DC: 'District of Columbia'
+    };
+    const STATE_CODES: Record<string, string> = {};
+    for (const [k, v] of Object.entries(STATE_NAMES_MAP)) {
+      STATE_CODES[v.toLowerCase()] = k;
+    }
+
+    const rawStateData = await base44.entities.StateMarketData.filter({});
+    if (rawStateData && rawStateData.length > 0) {
+      stateMarketData = rawStateData.map((s: any) => ({
+        ...s,
+        state_code: s.state_code ? (STATE_CODES[s.state_code.trim().toLowerCase()] || s.state_code.trim().toUpperCase()) : s.state_code
+      }));
+    }
+
     const customAccessorialsText = costConfigRecord?.custom_accessorials_active ? costConfigRecord.custom_accessorials_text : null;
+
 
     if (raw.equipo === 'drayage') {
       const tamano: Tamano | null = ['20', '40', '45', '20_heavy'].includes(raw.tamano) ? (raw.tamano as Tamano) : null;
