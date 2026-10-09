@@ -6,11 +6,38 @@ export default function MarketAdvisorCard({ data }) {
   const { locale } = useLanguage();
   if (!data || !data.calculo) return null;
 
-  const { origen, destino, calculo } = data;
+  const { origen, destino, calculo, stateMarketData } = data;
   const { millasIda, piso, objetivo, costoPorMillaPropio, tarifaObjetivaPropia, equipmentLabel, targetSource } = calculo;
   // --- 1. AGREGA ESTA DETECCIÓN DE ESTADOS VECINOS ---
   const locOrigen = (origen || '').toLowerCase();
   const locDestino = (destino || '').toLowerCase();
+  
+  const originStr = origen ? origen : 'Unknown';
+  const destStr = destino ? destino : (calculo?.ciudad || 'Unknown');
+
+  // Extraer estado de origen y destino
+  const stateMatch = originStr.match(/\b([A-Z]{2})\b/i);
+  const originStateCode = stateMatch ? stateMatch[1].toUpperCase() : null;
+
+  const destMatch = destStr.match(/\b([A-Z]{2})\b/i);
+  const destStateCode = destMatch ? destMatch[1].toUpperCase() : null;
+
+  let equipKey = null;
+  if (equipmentLabel) {
+    const el = equipmentLabel.toLowerCase();
+    if (el.includes('van')) equipKey = 'dry_van';
+    else if (el.includes('reefer') || el.includes('ref')) equipKey = 'reefer';
+    else if (el.includes('flat')) equipKey = 'flatbed';
+  }
+
+  let originStateRate = null;
+  // Solo buscar tarifa si origen y destino están en el mismo estado
+  if (originStateCode && destStateCode && originStateCode === destStateCode && equipKey && stateMarketData && Array.isArray(stateMarketData)) {
+    const stateData = stateMarketData.find(s => s.state_code && s.state_code.trim().toUpperCase() === originStateCode);
+    if (stateData && stateData[equipKey]) {
+      originStateRate = stateData[equipKey];
+    }
+  }
   
   const isNeighborFL = /(?:^|[^a-z])(georgia|ga|alabama|al)(?:[^a-z]|$)/i.test(origen || '') || /(?:^|[^a-z])(georgia|ga|alabama|al)(?:[^a-z]|$)/i.test(destino || '');
   const isNeighborTX = /(?:^|[^a-z])(oklahoma|ok|new mexico|nm|louisiana|la|arkansas|ar)(?:[^a-z]|$)/i.test(origen || '') || /(?:^|[^a-z])(oklahoma|ok|new mexico|nm|louisiana|la|arkansas|ar)(?:[^a-z]|$)/i.test(destino || '');
@@ -69,8 +96,7 @@ export default function MarketAdvisorCard({ data }) {
   const userCpm = costoPorMillaPropio ? costoPorMillaPropio.toFixed(2) : (marketFloorRpm || '1.75');
   const userTarget = tarifaObjetivaPropia ? tarifaObjetivaPropia.toFixed(2) : (marketTargetRpm || '2.20');
 
-  const originStr = origen ? origen : 'Unknown';
-  const destStr = destino ? destino : (calculo.ciudad || 'Unknown');
+  // originStr and destStr already declared at top
 
   const isEs = locale === 'es';
 
@@ -91,6 +117,15 @@ export default function MarketAdvisorCard({ data }) {
             {isEs ? `Aquí está el análisis para ${originStr} → ${destStr}.` : `Here's the analysis for ${originStr} → ${destStr}.`}
           </h2>
         </div>
+        
+        {originStateRate && (
+          <p className={`text-sm text-amber-400 font-semibold mb-2 ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
+            {isEs 
+              ? `Mira la tarifa del estado de la ruta es $${originStateRate}` 
+              : `Look, the rate for the route's state is $${originStateRate}`}
+          </p>
+        )}
+
         <p className={`text-sm text-gray-300 leading-relaxed ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
           {calculo.tarifaOfrecida ? (
             hasAccessorials ? (

@@ -231,9 +231,9 @@ export default function Dashboard() {
               <p className="text-sm text-muted-foreground">Todo está en orden</p>
             </div>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
               {/* Notificaciones */}
-              {notifications.slice(0, 4).map((notif) => {
+              {notifications.slice(0, 20).map((notif) => {
                 const isError = notif.prioridad === 'Alta' || notif.tipo === 'Documento vencido' || notif.tipo === 'Alerta de tarifa' || notif.prioridad === 'alta';
                 const isWarning = notif.prioridad === 'Media' || notif.tipo === 'Retraso en ruta' || notif.prioridad === 'media';
                 const Icon = TIPO_ICONS[notif.tipo] || Bell;
@@ -254,7 +254,7 @@ export default function Dashboard() {
               })}
               
               {/* Alertas de Documentos */}
-              {expiringDocs.slice(0, 4).map((alert, i) => (
+              {expiringDocs.slice(0, 20).map((alert, i) => (
                 <div key={`doc-${i}`} className={`flex items-start gap-3 p-3 rounded-xl border-l-4 border border-border transition-all ${alert.expired || alert.urgent ? 'border-l-red-400 bg-red-400/5 opacity-80' : 'border-l-yellow-400 bg-yellow-400/5 opacity-80'}`}>
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${alert.expired || alert.urgent ? 'bg-red-400/20' : 'bg-yellow-400/20'}`}>
                     <FileWarning className={`w-4 h-4 ${alert.expired || alert.urgent ? 'text-red-400' : 'text-yellow-400'}`} />

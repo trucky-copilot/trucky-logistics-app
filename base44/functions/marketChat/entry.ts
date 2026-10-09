@@ -991,9 +991,9 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
             : outcome.estadoBusqueda;
           const equipName = outcome.equipmentLabel.replace("53' ", "");
           if (locale === 'en') {
-            content = `📍 **Reference Rate (${locName})**\nFor **${equipName}**, the current average rate is **$${outcome.rpm} per mile**.`;
+            content = `📍 **Reference Rate (${locName})**\nFor **${equipName}**, the current average rate is **$${outcome.rpm.toFixed(2)} per mile**.`;
           } else {
-            content = `📍 **Tarifa de Referencia (${locName})**\nPara el equipo **${equipName}**, la tarifa promedio actual es de **$${outcome.rpm} por milla**.`;
+            content = `📍 **Tarifa de Referencia (${locName})**\nPara el equipo **${equipName}**, la tarifa promedio actual es de **$${outcome.rpm.toFixed(2)} por milla**.`;
           }
         } else if (outcome.kind === 'ask_miles') {
           content = buildMissingDataMarkdown(locale);
@@ -1020,7 +1020,8 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
         intent: 'rate_check',
         origen: raw.origen || null,
         destino: raw.destino || null,
-        calculo: calculo
+        calculo: calculo,
+        stateMarketData: stateMarketData
       };
     }
     return Response.json(responsePayload);
