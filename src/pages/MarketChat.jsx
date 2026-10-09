@@ -282,7 +282,14 @@ export default function MarketChat() {
     setError(null);
 
     try {
-      const apiMessages = newMessages.map(m => ({ role: m.role, content: m.content, ...(m.structuredData && { structuredData: m.structuredData }) }));
+      const apiMessages = newMessages.map(m => {
+        let cleanStructured = undefined;
+        if (m.structuredData) {
+          cleanStructured = { ...m.structuredData };
+          delete cleanStructured.stateMarketData;
+        }
+        return { role: m.role, content: m.content, ...(cleanStructured && { structuredData: cleanStructured }) };
+      });
       const res = await base44.functions.invoke('marketChat', {
         messages: apiMessages,
         costConfig,
