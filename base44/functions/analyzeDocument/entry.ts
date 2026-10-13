@@ -136,16 +136,15 @@ async function extractIdentities(base44, cleanedText) {
 // REGLAS DE VALIDACIÓN — Sin IA; compara datos extraídos vs perfiles guardados
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function validarRate(datos, costConfig, locale) {
+function validarRate(datos, costConfig) {
   const hallazgos = [];
   let semaforo = 'verde';
 
   if (!datos.tarifa_total) {
-    hallazgos.push(locale === 'en' ? '❌ Total rate not found in the document' : '❌ No se encontró tarifa total en el documento');
+    hallazgos.push('❌ No se encontró tarifa total en el documento');
     semaforo = 'rojo';
   } else {
-    const tBaseEn = `Total rate: $${datos.tarifa_total.toLocaleString()}`;
-    const tBaseEs = `Tarifa total: $${datos.tarifa_total.toLocaleString()}`;
+    const tBase = `Tarifa total: $${datos.tarifa_total.toLocaleString()}`;
 
     if (costConfig) {
       // Usar datos de CostConfig directamente — sin IA
@@ -156,16 +155,15 @@ function validarRate(datos, costConfig, locale) {
         if (minimo > 0 && datos.tarifa_por_milla < minimo) {
           const lossPerMile = minimo - datos.tarifa_por_milla;
           const lossTotal = datos.millas ? ` (total: $${(lossPerMile * datos.millas).toFixed(2)})` : '';
-          hallazgos.push(locale === 'en' ? `❌ ${tBaseEn} — Rate $${datos.tarifa_por_milla.toFixed(2)}/mi is below minimum ($${minimo.toFixed(2)}/mi). You lose $${lossPerMile.toFixed(2)}/mi${lossTotal}` : `❌ ${tBaseEs} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi). Pierdes $${lossPerMile.toFixed(2)}/mi${lossTotal}`);
+          hallazgos.push(`❌ ${tBase} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi). Pierdes $${lossPerMile.toFixed(2)}/mi${lossTotal}`);
           semaforo = 'rojo';
         } else if (datos.tarifa_por_milla < objetivo) {
-          const delta = objetivo - datos.tarifa_por_milla;
-          hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — Rate $${datos.tarifa_por_milla.toFixed(2)}/mi below target ($${objetivo.toFixed(2)}/mi)` : `⚠ ${tBaseEs} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del objetivo ($${objetivo.toFixed(2)}/mi)`);
+          hallazgos.push(`⚠ ${tBase} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi por debajo del objetivo ($${objetivo.toFixed(2)}/mi)`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
           const profit = datos.tarifa_por_milla - minimo;
           const profitTotal = datos.millas ? ` (total: $${(profit * datos.millas).toFixed(2)})` : '';
-          hallazgos.push(locale === 'en' ? `✓ ${tBaseEn} — Rate $${datos.tarifa_por_milla.toFixed(2)}/mi is profitable. Profit: $${profit.toFixed(2)}/mi${profitTotal}` : `✓ ${tBaseEs} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi rentable. Ganas $${profit.toFixed(2)}/mi${profitTotal}`);
+          hallazgos.push(`✓ ${tBase} — Tarifa $${datos.tarifa_por_milla.toFixed(2)}/mi rentable. Ganas $${profit.toFixed(2)}/mi${profitTotal}`);
         }
       } else if (datos.millas && datos.millas > 0) {
         // Calcular tarifa/milla desde tarifa total si no viene explícita
@@ -173,30 +171,29 @@ function validarRate(datos, costConfig, locale) {
         if (minimo > 0 && calculada < minimo) {
           const lossPerMile = minimo - calculada;
           const lossTotal = ` (total: $${(lossPerMile * datos.millas).toFixed(2)})`;
-          hallazgos.push(locale === 'en' ? `❌ ${tBaseEn} — Calculated rate $${calculada.toFixed(2)}/mi is below minimum ($${minimo.toFixed(2)}/mi). You lose $${lossPerMile.toFixed(2)}/mi${lossTotal}` : `❌ ${tBaseEs} — Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi). Pierdes $${lossPerMile.toFixed(2)}/mi${lossTotal}`);
+          hallazgos.push(`❌ ${tBase} — Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del mínimo ($${minimo.toFixed(2)}/mi). Pierdes $${lossPerMile.toFixed(2)}/mi${lossTotal}`);
           semaforo = 'rojo';
         } else if (calculada < objetivo) {
-          const delta = objetivo - calculada;
-          hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — Calculated rate $${calculada.toFixed(2)}/mi below target ($${objetivo.toFixed(2)}/mi)` : `⚠ ${tBaseEs} — Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del objetivo ($${objetivo.toFixed(2)}/mi)`);
+          hallazgos.push(`⚠ ${tBase} — Tarifa calculada $${calculada.toFixed(2)}/mi por debajo del objetivo ($${objetivo.toFixed(2)}/mi)`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
           const profit = calculada - minimo;
           const profitTotal = ` (total: $${(profit * datos.millas).toFixed(2)})`;
-          hallazgos.push(locale === 'en' ? `✓ ${tBaseEn} — Estimated rate: $${calculada.toFixed(2)}/mi (${datos.millas} miles). Profit: $${profit.toFixed(2)}/mi${profitTotal}` : `✓ ${tBaseEs} — Tarifa estimada $${calculada.toFixed(2)}/mi (${datos.millas} millas). Ganas $${profit.toFixed(2)}/mi${profitTotal}`);
+          hallazgos.push(`✓ ${tBase} — Tarifa estimada $${calculada.toFixed(2)}/mi (${datos.millas} millas). Ganas $${profit.toFixed(2)}/mi${profitTotal}`);
         }
       } else {
         // No hay tarifa_por_milla ni millas: no se puede calcular rentabilidad.
-        hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — Distance (miles) not found in PDF, cannot calculate profitability` : `⚠ ${tBaseEs} — Distancia (millas) no encontrada en el documento, no se puede calcular rentabilidad`);
+        hallazgos.push(`⚠ ${tBase} — Distancia (millas) no encontrada en el documento, no se puede calcular rentabilidad`);
         if (semaforo === 'verde') semaforo = 'amarillo';
       }
     } else {
-      hallazgos.push(locale === 'en' ? `⚠ ${tBaseEn} — No cost configuration, go to Calculator to set up your profile` : `⚠ ${tBaseEs} — Sin configuración de costos, ve a la Calculadora para configurar tu perfil`);
+      hallazgos.push(`⚠ ${tBase} — Sin configuración de costos, ve a la Calculadora para configurar tu perfil`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   }
 
   if (!datos.terminos_pago) {
-    hallazgos.push(locale === 'en' ? '⚠ Payment terms not specified' : '⚠ Términos de pago no especificados');
+    hallazgos.push('⚠ Términos de pago no especificados');
   }
 
   const isMeaningful = (val) => {
@@ -211,52 +208,52 @@ function validarRate(datos, costConfig, locale) {
       if (['null', 'n/a', 'none', 'not specified', 'no', 'false', '-', '--'].includes(s) || s === '') return false;
       const digits = s.replace(/[^0-9.]/g, '');
       if (digits !== '' && parseFloat(digits) === 0) return false;
-      if (s.replace(/[^a-z0-9]/g, '') === '') return false; // solo símbolos
+      if (s.replace(/[^a-z0-9]/g, '') === '') return false;
       return true;
     }
     if (typeof val === 'number' && val === 0) return false;
     if (typeof val === 'boolean' && val === false) return false;
     return true;
   };
-  
+
   if (isMeaningful(datos.deducciones) || isMeaningful(datos.descuentos)) {
-    hallazgos.push(locale === 'en' ? `⚠ Discounts/deductions detected: ${datos.deducciones || datos.descuentos} — review impact` : `⚠ Descuentos/deducciones detectados: ${datos.deducciones || datos.descuentos} — revisar impacto`);
+    hallazgos.push(`⚠ Descuentos/deducciones detectados: ${datos.deducciones || datos.descuentos} — revisar impacto`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   return {
     categoriaKey: 'rate',
-    categoria: locale === 'en' ? 'Rate & Payment Conditions' : 'Rate y Condiciones de Pago',
+    categoria: 'Rate y Condiciones de Pago',
     semaforo,
     hallazgos,
     datos_extraidos: {
-      tarifa: datos.tarifa_total ? `$${datos.tarifa_total.toLocaleString()}` : locale === 'en' ? 'Not found' : 'No encontrada',
-      por_milla: datos.tarifa_por_milla ? `$${datos.tarifa_por_milla}/mi` : locale === 'en' ? 'Not calculated' : 'No calculada',
-      pago: datos.terminos_pago || locale === 'en' ? 'Not specified' : 'No especificado',
-      detention: datos.detention_rate || locale === 'en' ? 'Not specified' : 'No especificada',
-      tonu: datos.tonu_rate || locale === 'en' ? 'Not specified' : 'No especificado',
+      tarifa: datos.tarifa_total ? `$${datos.tarifa_total.toLocaleString()}` : 'No encontrada',
+      por_milla: datos.tarifa_por_milla ? `$${datos.tarifa_por_milla}/mi` : 'No calculada',
+      pago: datos.terminos_pago || 'No especificado',
+      detention: datos.detention_rate || 'No especificada',
+      tonu: datos.tonu_rate || 'No especificado',
     },
-    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept until corrected — unacceptable rate or conditions' : locale === 'en' ? 'Do not accept until corrected — unacceptable rate or conditions' : 'No aceptar hasta corregir — tarifa o condiciones inaceptables'
-      : semaforo === 'amarillo' ? locale === 'en' ? 'Negotiate terms before accepting' : locale === 'en' ? 'Negotiate terms before accepting' : 'Negociar términos antes de aceptar'
-      : locale === 'en' ? 'Accept — rate and payment conditions are correct' : locale === 'en' ? 'Accept — correct rate and payment conditions' : 'Aceptar — tarifa y condiciones de pago correctas',
+    recomendacion: semaforo === 'rojo' ? 'No aceptar hasta corregir — tarifa o condiciones inaceptables'
+      : semaforo === 'amarillo' ? 'Negociar términos antes de aceptar'
+      : 'Aceptar — tarifa y condiciones de pago correctas',
   };
 }
 
-function validarCommodity(datos, carrierProfile, locale) {
+function validarCommodity(datos, carrierProfile) {
   const hallazgos = [];
   let semaforo = 'verde';
 
   if (!datos.commodity) {
-    hallazgos.push(locale === 'en' ? '⚠ Commodity not specified in document' : locale === 'en' ? '⚠ Commodity not specified in document' : '⚠ Commodity no especificada en el documento');
+    hallazgos.push('⚠ Commodity no especificada en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const commLower = datos.commodity.toLowerCase();
-    hallazgos.push(locale === 'en' ? `✓ Commodity: ${datos.commodity}` : `✓ Commodity: ${datos.commodity}`);
-    if (datos.peso) hallazgos.push(locale === 'en' ? `✓ Weight: ${datos.peso}` : `✓ Peso: ${datos.peso}`);
+    hallazgos.push(`✓ Commodity: ${datos.commodity}`);
+    if (datos.peso) hallazgos.push(`✓ Peso: ${datos.peso}`);
 
     const vagos = ['general cargo', 'freight', 'merchandise', 'goods', 'misc'];
     if (vagos.some(v => commLower === v || commLower === v + '.')) {
-      hallazgos.push(locale === 'en' ? '⚠ Very generic commodity — request specific description' : locale === 'en' ? '⚠ Very generic commodity — request specific description' : '⚠ Commodity muy genérica — solicitar descripción específica');
+      hallazgos.push('⚠ Commodity muy genérica — solicitar descripción específica');
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
 
@@ -272,13 +269,13 @@ function validarCommodity(datos, carrierProfile, locale) {
       const requiere = commLower.includes(keyword) || (datos.commodity_especial || '').toLowerCase().includes(keyword);
       if (requiere) {
         if (carrierProfile && !carrierProfile[campo]) {
-          hallazgos.push(locale === 'en' ? `❌ Commodity requires ${label} — carrier does NOT have this capability enabled` : `❌ Commodity requiere ${label} — carrier NO tiene esta capacidad habilitada`);
+          hallazgos.push(`❌ Commodity requiere ${label} — carrier NO tiene esta capacidad habilitada`);
           semaforo = 'rojo';
         } else if (!carrierProfile) {
-          hallazgos.push(locale === 'en' ? `⚠ Commodity requires ${label} — verify carrier capability` : `⚠ Commodity requiere ${label} — verificar capacidad del carrier`);
+          hallazgos.push(`⚠ Commodity requiere ${label} — verificar capacidad del carrier`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         } else {
-          hallazgos.push(locale === 'en' ? `✓ Carrier enabled for ${label}` : `✓ Carrier habilitado para ${label}`);
+          hallazgos.push(`✓ Carrier habilitado para ${label}`);
         }
       }
     });
@@ -289,7 +286,7 @@ function validarCommodity(datos, carrierProfile, locale) {
         commLower.includes(r.toLowerCase()) || r.toLowerCase().includes(commLower)
       );
       if (restringida) {
-        hallazgos.push(locale === 'en' ? `❌ Commodity "${datos.commodity}" is RESTRICTED in carrier profile` : `❌ Commodity "${datos.commodity}" está RESTRINGIDA en el perfil del carrier`);
+        hallazgos.push(`❌ Commodity "${datos.commodity}" está RESTRINGIDA en el perfil del carrier`);
         semaforo = 'rojo';
       }
     }
@@ -297,20 +294,21 @@ function validarCommodity(datos, carrierProfile, locale) {
     if (datos.tipo_equipo) {
       const equLower = datos.tipo_equipo.toLowerCase();
       if (commLower.includes('reefer') && !equLower.includes('reefer')) {
-        hallazgos.push(locale === 'en' ? '⚠ Refrigerated commodity but equipment does not appear to be reefer — verify' : '⚠ Commodity refrigerada pero equipo no parece reefer — verificar');
+        hallazgos.push('⚠ Commodity refrigerada pero equipo no parece reefer — verificar');
         if (semaforo === 'verde') semaforo = 'amarillo';
       }
     }
   }
 
   return {
+    categoriaKey: 'commodity',
     categoria: 'Commodity',
     semaforo,
     hallazgos,
     datos_extraidos: {
-      commodity: datos.commodity || locale === 'en' ? 'Not specified' : 'No especificada',
-      peso: datos.peso || locale === 'en' ? 'Not specified' : 'No especificado',
-      especial: datos.commodity_especial || locale === 'en' ? 'None' : 'Ninguna',
+      commodity: datos.commodity || 'No especificada',
+      peso: datos.peso || 'No especificado',
+      especial: datos.commodity_especial || 'Ninguna',
     },
     recomendacion: semaforo === 'rojo' ? 'No aceptar — commodity incompatible con la operación'
       : semaforo === 'amarillo' ? 'Revisar antes de aceptar — commodity requiere confirmación'
@@ -318,16 +316,16 @@ function validarCommodity(datos, carrierProfile, locale) {
   };
 }
 
-function validarEquipo(datos, trucks, carrierProfile, locale) {
+function validarEquipo(datos, trucks, carrierProfile) {
   const hallazgos = [];
   let semaforo = 'verde';
 
   if (!datos.tipo_equipo && !datos.tamano_contenedor) {
-    hallazgos.push(locale === 'en' ? '⚠ Equipment/container type not specified in document' : '⚠ Tipo de equipo/contenedor no especificado en el documento');
+    hallazgos.push('⚠ Tipo de equipo/contenedor no especificado en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const equipo = datos.tipo_equipo || datos.tamano_contenedor;
-    hallazgos.push(locale === 'en' ? `✓ Required equipment: ${equipo}` : `✓ Equipo requerido: ${equipo}`);
+    hallazgos.push(`✓ Equipo requerido: ${equipo}`);
 
     // Comparar contra equipment_types del CarrierProfile (onboarding)
     if (carrierProfile?.equipment_types?.length > 0) {
@@ -336,10 +334,10 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
         equipoLower.includes(e.toLowerCase()) || e.toLowerCase().includes(equipoLower.replace(/ft|'/g, ''))
       );
       if (!compatible) {
-        hallazgos.push(locale === 'en' ? `❌ Equipment "${equipo}" is not in carrier types: ${carrierProfile.equipment_types.join(', ')}` : `❌ Equipo "${equipo}" no está en los tipos del carrier: ${carrierProfile.equipment_types.join(', ')}`);
+        hallazgos.push(`❌ Equipo "${equipo}" no está en los tipos del carrier: ${carrierProfile.equipment_types.join(', ')}`);
         semaforo = 'rojo';
       } else {
-        hallazgos.push(locale === 'en' ? '✓ Equipment compatible with carrier profile' : '✓ Equipo compatible con perfil del carrier');
+        hallazgos.push('✓ Equipo compatible con perfil del carrier');
       }
     }
   }
@@ -348,47 +346,47 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
     const opLower = datos.operacion_tipo.toLowerCase();
     if (opLower.includes('power only')) {
       if (carrierProfile && !carrierProfile.power_only_allowed) {
-        hallazgos.push(locale === 'en' ? '❌ Power Only operation — carrier does not have this option enabled' : '❌ Operación Power Only — carrier no tiene esta opción habilitada');
+        hallazgos.push('❌ Operación Power Only — carrier no tiene esta opción habilitada');
         semaforo = 'rojo';
       } else {
-        hallazgos.push(locale === 'en' ? '✓ Power Only operation confirmed' : '✓ Operación Power Only confirmada');
+        hallazgos.push('✓ Operación Power Only confirmada');
       }
     } else {
-      hallazgos.push(locale === 'en' ? `✓ Operation type: ${datos.operacion_tipo}` : `✓ Tipo de operación: ${datos.operacion_tipo}`);
+      hallazgos.push(`✓ Tipo de operación: ${datos.operacion_tipo}`);
     }
   }
 
   if (datos.chasis_requerido) {
-    const provisto = datos.chasis_provisto_por || (locale === 'en' ? 'not specified' : 'no especificado');
+    const provisto = datos.chasis_provisto_por || 'no especificado';
     if (provisto.toLowerCase().includes('carrier')) {
-      hallazgos.push(locale === 'en' ? '⚠ Chassis at CARRIER expense — additional cost not included in rate' : '⚠ Chasis por cuenta del CARRIER — costo adicional no incluido en tarifa');
+      hallazgos.push('⚠ Chasis por cuenta del CARRIER — costo adicional no incluido en tarifa');
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
-      hallazgos.push(locale === 'en' ? `✓ Chassis provided by: ${provisto}` : `✓ Chasis provisto por: ${provisto}`);
+      hallazgos.push(`✓ Chasis provisto por: ${provisto}`);
     }
     if (carrierProfile?.chassis_types?.length > 0) {
-      hallazgos.push(locale === 'en' ? `✓ Carrier has chassis: ${carrierProfile.chassis_types.join(', ')}` : `✓ Carrier tiene chasis: ${carrierProfile.chassis_types.join(', ')}`);
+      hallazgos.push(`✓ Carrier tiene chasis: ${carrierProfile.chassis_types.join(', ')}`);
     }
   }
 
   if (trucks?.length > 0) {
     const disponibles = trucks.filter(t => t.estado === 'disponible');
     if (disponibles.length === 0) {
-      hallazgos.push(locale === 'en' ? '❌ No units available in the fleet currently' : '❌ No hay unidades disponibles en la flota actualmente');
+      hallazgos.push('❌ No hay unidades disponibles en la flota actualmente');
       semaforo = 'rojo';
     } else {
-      hallazgos.push(locale === 'en' ? `✓ ${disponibles.length} unit(s) available in fleet` : `✓ ${disponibles.length} unidad(es) disponible(s) en flota`);
+      hallazgos.push(`✓ ${disponibles.length} unidad(es) disponible(s) en flota`);
     }
   }
 
   return {
     categoriaKey: 'equipment',
-    categoria: locale === 'en' ? 'Equipment and Chassis' : 'Equipo y Chasis',
+    categoria: 'Equipo y Chasis',
     semaforo,
     hallazgos,
     datos_extraidos: {
-      equipo: datos.tipo_equipo || datos.tamano_contenedor || locale === 'en' ? 'Not specified' : 'No especificado',
-      operacion: datos.operacion_tipo || locale === 'en' ? 'Not specified' : 'No especificada',
+      equipo: datos.tipo_equipo || datos.tamano_contenedor || 'No especificado',
+      operacion: datos.operacion_tipo || 'No especificada',
       chasis: datos.chasis_requerido ? `Requerido (${datos.chasis_provisto_por || 'no especificado'})` : 'No requerido',
     },
     recomendacion: semaforo === 'rojo' ? 'No aceptar — equipo o chasis incompatible'
@@ -397,16 +395,16 @@ function validarEquipo(datos, trucks, carrierProfile, locale) {
   };
 }
 
-function validarBroker(datos, brokers, brokerProfiles, locale) {
+function validarBroker(datos, brokers, brokerProfiles) {
   const hallazgos = [];
   let semaforo = 'verde';
 
   if (!datos.broker_nombre) {
-    hallazgos.push(locale === 'en' ? '⚠ Broker name not found in document' : '⚠ Nombre del broker no encontrado en el documento');
+    hallazgos.push('⚠ Nombre del broker no encontrado en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
   if (!datos.broker_mc) {
-    hallazgos.push(locale === 'en' ? '⚠ Broker MC Number not found — verify at FMCSA.dot.gov' : '⚠ MC Number del broker no encontrado — verificar en FMCSA.dot.gov');
+    hallazgos.push('⚠ MC Number del broker no encontrado — verificar en FMCSA.dot.gov');
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
@@ -423,23 +421,23 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
   }
 
   if (perfilEncontrado) {
-    hallazgos.push(locale === 'en' ? `✓ Broker identified in profile: ${perfilEncontrado.legal_name}` : `✓ Broker identificado en perfil: ${perfilEncontrado.legal_name}`);
+    hallazgos.push(`✓ Broker identificado en perfil: ${perfilEncontrado.legal_name}`);
     if (datos.broker_mc && perfilEncontrado.mc_number) {
       const docMC = datos.broker_mc.replace(/\D/g, '');
       const perfilMC = perfilEncontrado.mc_number.replace(/\D/g, '');
       if (docMC !== perfilMC) {
-        hallazgos.push(locale === 'en' ? `❌ Document MC (${datos.broker_mc}) DOES NOT match profile (${perfilEncontrado.mc_number})` : `❌ MC del documento (${datos.broker_mc}) NO coincide con perfil (${perfilEncontrado.mc_number})`);
+        hallazgos.push(`❌ MC del documento (${datos.broker_mc}) NO coincide con perfil (${perfilEncontrado.mc_number})`);
         semaforo = 'rojo';
       } else {
-        hallazgos.push(locale === 'en' ? `✓ MC verified: ${datos.broker_mc}` : `✓ MC verificado: ${datos.broker_mc}`);
+        hallazgos.push(`✓ MC verificado: ${datos.broker_mc}`);
       }
     }
     if (perfilEncontrado.reliability_score) {
       if (perfilEncontrado.reliability_score < 5) {
-        hallazgos.push(locale === 'en' ? `⚠ Low reliability: ${perfilEncontrado.reliability_score}/10` : `⚠ Confiabilidad baja: ${perfilEncontrado.reliability_score}/10`);
+        hallazgos.push(`⚠ Confiabilidad baja: ${perfilEncontrado.reliability_score}/10`);
         if (semaforo === 'verde') semaforo = 'amarillo';
       } else {
-        hallazgos.push(locale === 'en' ? `✓ Reliability: ${perfilEncontrado.reliability_score}/10` : `✓ Confiabilidad: ${perfilEncontrado.reliability_score}/10`);
+        hallazgos.push(`✓ Confiabilidad: ${perfilEncontrado.reliability_score}/10`);
       }
     }
     if (perfilEncontrado.notes) hallazgos.push(`ℹ ${perfilEncontrado.notes}`);
@@ -453,28 +451,29 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
     );
     if (legacy) {
       if (legacy.estado === 'bloqueado') {
-        hallazgos.push(locale === 'en' ? `❌ BLOCKED BROKER: ${legacy.nombre}` : `❌ BROKER BLOQUEADO: ${legacy.nombre}`);
+        hallazgos.push(`❌ BROKER BLOQUEADO: ${legacy.nombre}`);
         semaforo = 'rojo';
       } else if (legacy.estado === 'precaucion') {
-        hallazgos.push(locale === 'en' ? `⚠ CAUTION Broker: ${legacy.nombre}` : `⚠ Broker en PRECAUCIÓN: ${legacy.nombre}`);
+        hallazgos.push(`⚠ Broker en PRECAUCIÓN: ${legacy.nombre}`);
         if (semaforo === 'verde') semaforo = 'amarillo';
       } else {
-        hallazgos.push(locale === 'en' ? `✓ Known broker: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} loads` : `✓ Broker conocido: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} cargas`);
+        hallazgos.push(`✓ Broker conocido: ${legacy.nombre} — ${legacy.cargas_realizadas || 0} cargas`);
         if (legacy.puntaje_confiabilidad && legacy.puntaje_confiabilidad < 5) {
-          hallazgos.push(locale === 'en' ? `⚠ Low reliability: ${legacy.puntaje_confiabilidad}/10` : `⚠ Confiabilidad baja: ${legacy.puntaje_confiabilidad}/10`);
+          hallazgos.push(`⚠ Confiabilidad baja: ${legacy.puntaje_confiabilidad}/10`);
           if (semaforo === 'verde') semaforo = 'amarillo';
         }
       }
     } else if (datos.broker_nombre) {
-      hallazgos.push(locale === 'en' ? '⚠ Broker not found in history — first contact, verify credentials' : '⚠ Broker no encontrado en historial — primer contacto, verificar credenciales');
+      hallazgos.push('⚠ Broker no encontrado en historial — primer contacto, verificar credenciales');
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
     if (datos.broker_mc) {
-      hallazgos.push(locale === 'en' ? `ℹ No local profile for MC ${datos.broker_mc} — verify at FMCSA` : `ℹ Sin perfil local para MC ${datos.broker_mc} — verificar en FMCSA`);
+      hallazgos.push(`ℹ Sin perfil local para MC ${datos.broker_mc} — verificar en FMCSA`);
     }
   }
 
   return {
+    categoriaKey: 'broker',
     categoria: 'Broker',
     semaforo,
     hallazgos,
@@ -483,19 +482,19 @@ function validarBroker(datos, brokers, brokerProfiles, locale) {
       mc: datos.broker_mc || 'No encontrado',
       dot: datos.broker_dot || 'No encontrado',
     },
-    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — blocked broker or inconsistent MC' : 'No aceptar — broker bloqueado o MC inconsistente'
-      : semaforo === 'amarillo' ? locale === 'en' ? 'Verify MC in FMCSA and confirm history' : 'Verificar MC en FMCSA y confirmar historial'
-      : locale === 'en' ? 'Accept — verified broker with good history' : 'Aceptar — broker verificado con buen historial',
+    recomendacion: semaforo === 'rojo' ? 'No aceptar — broker bloqueado o MC inconsistente'
+      : semaforo === 'amarillo' ? 'Verificar MC en FMCSA y confirmar historial'
+      : 'Aceptar — broker verificado con buen historial',
   };
 }
 
-function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarrierProfiles = [], orgName = null) {
+function validarCarrier(datos, carrierProfile, userInfo = null, allCarrierProfiles = [], orgName = null) {
   const hallazgos = [];
   let semaforo = 'verde';
   let identity_match = 'not_found';
 
   if (!datos.carrier_nombre) {
-    hallazgos.push(locale === 'en' ? '⚠ Carrier name not found in document' : '⚠ Nombre del carrier no encontrado en el documento');
+    hallazgos.push('⚠ Nombre del carrier no encontrado en el documento');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else if (carrierProfile) {
     const docLower = datos.carrier_nombre.toLowerCase();
@@ -511,22 +510,22 @@ function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarri
       && datos.carrier_dot.replace(/\D/g, '') === carrierProfile.dot_number.replace(/\D/g, '');
 
     if (nameMatch && (mcMatch || !datos.carrier_mc)) {
-      hallazgos.push(locale === 'en' ? `✓ Carrier verified: ${carrierProfile.company_name}` : `✓ Carrier verificado: ${carrierProfile.company_name}`);
-      if (mcMatch) hallazgos.push(locale === 'en' ? `✓ MC matches: ${datos.carrier_mc}` : `✓ MC coincide: ${datos.carrier_mc}`);
-      if (dotMatch) hallazgos.push(locale === 'en' ? `✓ DOT matches: ${datos.carrier_dot}` : `✓ DOT coincide: ${datos.carrier_dot}`);
+      hallazgos.push(`✓ Carrier verificado: ${carrierProfile.company_name}`);
+      if (mcMatch) hallazgos.push(`✓ MC coincide: ${datos.carrier_mc}`);
+      if (dotMatch) hallazgos.push(`✓ DOT coincide: ${datos.carrier_dot}`);
       identity_match = 'matched';
     } else if (nameMatch && datos.carrier_mc && !mcMatch) {
-      hallazgos.push(locale === 'en' ? `❌ Name matches but MC does not: document=${datos.carrier_mc} vs profile=${carrierProfile.mc_number}` : `❌ Nombre coincide pero MC no: documento=${datos.carrier_mc} vs perfil=${carrierProfile.mc_number}`);
+      hallazgos.push(`❌ Nombre coincide pero MC no: documento=${datos.carrier_mc} vs perfil=${carrierProfile.mc_number}`);
       semaforo = 'rojo';
       identity_match = 'mismatch';
     } else {
-      hallazgos.push(locale === 'en' ? `❌ Carrier in document "${datos.carrier_nombre}" does not match "${carrierProfile.company_name}"` : `❌ Carrier en documento "${datos.carrier_nombre}" no coincide con "${carrierProfile.company_name}"`);
+      hallazgos.push(`❌ Carrier en documento "${datos.carrier_nombre}" no coincide con "${carrierProfile.company_name}"`);
       semaforo = 'rojo';
       identity_match = 'mismatch';
     }
 
     if (datos.carrier_dot && carrierProfile.dot_number && !dotMatch) {
-      hallazgos.push(locale === 'en' ? `⚠ DOT in document (${datos.carrier_dot}) vs profile (${carrierProfile.dot_number})` : `⚠ DOT documento (${datos.carrier_dot}) vs perfil (${carrierProfile.dot_number})`);
+      hallazgos.push(`⚠ DOT documento (${datos.carrier_dot}) vs perfil (${carrierProfile.dot_number})`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   } else {
@@ -552,7 +551,7 @@ function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarri
     };
 
     if (!isMeaningful(datos.carrier_nombre) && !isMeaningful(datos.carrier_mc)) {
-      hallazgos.push(locale === 'en' ? '⚠ Carrier identity not specified in document' : '⚠ Identidad del carrier no especificada en el documento');
+      hallazgos.push('⚠ Identidad del carrier no especificada en el documento');
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
       const nombreEmpresa = orgName
@@ -560,21 +559,19 @@ function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarri
         || userInfo?.full_name
         || userInfo?.email
         || 'empresa no identificada';
-      hallazgos.push(locale === 'en'
-        ? `❌ Carrier "${datos.carrier_nombre || datos.carrier_mc}" detected — your company: "${nombreEmpresa}" — Identity theft risk.`
-        : `❌ Carrier "${datos.carrier_nombre || datos.carrier_mc}" detectado — tu empresa: "${nombreEmpresa}" — Riesgo de suplantación de identidad.`);
+      hallazgos.push(`❌ Carrier "${datos.carrier_nombre || datos.carrier_mc}" detectado — tu empresa: "${nombreEmpresa}" — Riesgo de suplantación de identidad.`);
       semaforo = 'rojo';
       identity_match = 'pending';
     }
   }
 
   if (!datos.carrier_mc || datos.carrier_mc === 'null' || datos.carrier_mc.toLowerCase() === 'n/a') {
-    hallazgos.push(locale === 'en' ? '⚠ Carrier MC not specified in document' : '⚠ MC del carrier no especificado en documento');
+    hallazgos.push('⚠ MC del carrier no especificado en documento');
   }
 
   return {
     categoriaKey: 'carrier',
-    categoria: locale === 'en' ? 'Carrier / Identity' : 'Carrier / Identidad',
+    categoria: 'Carrier / Identidad',
     semaforo,
     identity_match,
     hallazgos,
@@ -583,24 +580,24 @@ function validarCarrier(datos, carrierProfile, locale, userInfo = null, allCarri
       mc: datos.carrier_mc || 'No encontrado',
       dot: datos.carrier_dot || 'No encontrado',
     },
-    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — incorrect carrier identity' : 'No aceptar — identidad del carrier incorrecta'
-      : semaforo === 'amarillo' ? locale === 'en' ? 'Confirm carrier identity before accepting' : 'Confirmar identidad del carrier antes de aceptar'
-      : locale === 'en' ? 'Accept — carrier identity correctly verified' : 'Aceptar — identidad del carrier verificada correctamente',
+    recomendacion: semaforo === 'rojo' ? 'No aceptar — identidad del carrier incorrecta'
+      : semaforo === 'amarillo' ? 'Confirmar identidad del carrier antes de aceptar'
+      : 'Aceptar — identidad del carrier verificada correctamente',
   };
 }
 
-function validarFechasOperacion(datos, locale) {
+function validarFechasOperacion(datos) {
   const hallazgos = [];
   let semaforo = 'verde';
   const hoy = new Date();
 
   if (!datos.pickup_fecha) {
-    hallazgos.push(locale === 'en' ? '⚠ Pickup date not specified' : '⚠ Fecha de pickup no especificada');
+    hallazgos.push('⚠ Fecha de pickup no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const pickup = new Date(datos.pickup_fecha);
     if (!isNaN(pickup) && pickup < hoy && (hoy - pickup) / 86400000 > 1) {
-      hallazgos.push(locale === 'en' ? `❌ Pickup date has passed: ${datos.pickup_fecha}` : `❌ Fecha de pickup ya pasó: ${datos.pickup_fecha}`);
+      hallazgos.push(`❌ Fecha de pickup ya pasó: ${datos.pickup_fecha}`);
       semaforo = 'rojo';
     } else {
       hallazgos.push(`✓ Pickup: ${datos.pickup_fecha}${datos.pickup_hora ? ' @ ' + datos.pickup_hora : ''}`);
@@ -608,7 +605,7 @@ function validarFechasOperacion(datos, locale) {
   }
 
   if (!datos.delivery_fecha) {
-    hallazgos.push(locale === 'en' ? '⚠ Delivery date not specified' : '⚠ Fecha de entrega no especificada');
+    hallazgos.push('⚠ Fecha de entrega no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     hallazgos.push(`✓ Delivery: ${datos.delivery_fecha}${datos.delivery_hora ? ' @ ' + datos.delivery_hora : ''}`);
@@ -620,10 +617,10 @@ function validarFechasOperacion(datos, locale) {
     const horas = (delivery - pickup) / 3600000;
     if (!isNaN(horas)) {
       if (delivery < pickup) {
-        hallazgos.push(locale === 'en' ? '❌ Delivery date is before pickup — document error' : '❌ Fecha de entrega es anterior al pickup — error en el documento');
+        hallazgos.push('❌ Fecha de entrega es anterior al pickup — error en el documento');
         semaforo = 'rojo';
       } else if (horas < 4 && datos.millas && datos.millas > 100) {
-        hallazgos.push(locale === 'en' ? `❌ Window of ${horas.toFixed(0)}h for ${datos.millas} miles — not viable` : `❌ Ventana de ${horas.toFixed(0)}h para ${datos.millas} millas — inviable`);
+        hallazgos.push(`❌ Ventana de ${horas.toFixed(0)}h para ${datos.millas} millas — inviable`);
         semaforo = 'rojo';
       }
     }
@@ -632,21 +629,21 @@ function validarFechasOperacion(datos, locale) {
   if (datos.appointment_window) {
     hallazgos.push(`✓ Appointment window: ${datos.appointment_window}`);
   } else {
-    hallazgos.push(locale === 'en' ? '⚠ Appointment window not specified — potential uncompensated wait' : '⚠ Appointment window no especificada — posibles esperas sin compensación');
+    hallazgos.push('⚠ Appointment window no especificada — posibles esperas sin compensación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   if (!datos.origen || !datos.destino) {
-    hallazgos.push(locale === 'en' ? '⚠ Incomplete origin or destination' : '⚠ Origen o destino incompleto');
+    hallazgos.push('⚠ Origen o destino incompleto');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
-    hallazgos.push(locale === 'en' ? `✓ Route: ${datos.origen} → ${datos.destino}` : `✓ Ruta: ${datos.origen} → ${datos.destino}`);
-    if (datos.millas) hallazgos.push(locale === 'en' ? `✓ Distance: ${datos.millas} miles` : `✓ Distancia: ${datos.millas} millas`);
+    hallazgos.push(`✓ Ruta: ${datos.origen} → ${datos.destino}`);
+    if (datos.millas) hallazgos.push(`✓ Distancia: ${datos.millas} millas`);
   }
 
   const tieneRef = datos.load_number || datos.reference_number || datos.delivery_order_number;
   if (!tieneRef) {
-    hallazgos.push(locale === 'en' ? '⚠ No reference number — request before operating' : '⚠ Sin número de referencia — solicitar antes de operar');
+    hallazgos.push('⚠ Sin número de referencia — solicitar antes de operar');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     if (datos.load_number) hallazgos.push(`✓ Load #: ${datos.load_number}`);
@@ -656,18 +653,18 @@ function validarFechasOperacion(datos, locale) {
 
   return {
     categoriaKey: 'date',
-    categoria: locale === 'en' ? 'Dates and Operation' : 'Fechas y Operación',
+    categoria: 'Fechas y Operación',
     semaforo,
     hallazgos,
     datos_extraidos: {
-      pickup: datos.pickup_fecha || locale === 'en' ? 'Not specified' : 'No especificado',
-      delivery: datos.delivery_fecha || locale === 'en' ? 'Not specified' : 'No especificado',
-      ruta: datos.origen && datos.destino ? `${datos.origen} → ${datos.destino}` : locale === 'en' ? 'Not specified' : 'No especificada',
-      referencias: [datos.load_number, datos.reference_number, datos.delivery_order_number].filter(Boolean).join(', ') || locale === 'en' ? 'None' : 'Ninguna',
+      pickup: datos.pickup_fecha || 'No especificado',
+      delivery: datos.delivery_fecha || 'No especificado',
+      ruta: datos.origen && datos.destino ? `${datos.origen} → ${datos.destino}` : 'No especificada',
+      referencias: [datos.load_number, datos.reference_number, datos.delivery_order_number].filter(Boolean).join(', ') || 'Ninguna',
     },
-    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — impossible dates or missing references' : 'No aceptar — fechas imposibles o referencias ausentes'
-      : semaforo === 'amarillo' ? locale === 'en' ? 'Confirm times and references with broker' : 'Confirmar tiempos y referencias con el broker'
-      : locale === 'en' ? 'Accept — dates and references complete and viable' : 'Aceptar — fechas y referencias completas y viables',
+    recomendacion: semaforo === 'rojo' ? 'No aceptar — fechas imposibles o referencias ausentes'
+      : semaforo === 'amarillo' ? 'Confirmar tiempos y referencias con el broker'
+      : 'Aceptar — fechas y referencias completas y viables',
   };
 }
 
@@ -682,7 +679,7 @@ const CLAUSULAS_ABUSIVAS = [
   'unlimited liability', 'unconditional guarantee',
 ];
 
-function validarClausulas(datos, locale) {
+function validarClausulas(datos) {
   const hallazgos = [];
   let semaforo = 'verde';
 
@@ -696,35 +693,35 @@ function validarClausulas(datos, locale) {
   // Detección de cláusulas abusivas por keywords — sin IA
   const encontradas = CLAUSULAS_ABUSIVAS.filter(c => textoBase.includes(c));
   if (encontradas.length >= 2) {
-    hallazgos.push(locale === 'en' ? `❌ Multiple risk clauses: ${encontradas.join(', ')}` : `❌ Múltiples cláusulas de riesgo: ${encontradas.join(', ')}`);
+    hallazgos.push(`❌ Múltiples cláusulas de riesgo: ${encontradas.join(', ')}`);
     semaforo = 'rojo';
   } else if (encontradas.length === 1) {
-    hallazgos.push(locale === 'en' ? `⚠ Risk clause detected: ${encontradas[0]}` : `⚠ Cláusula de riesgo detectada: ${encontradas[0]}`);
+    hallazgos.push(`⚠ Cláusula de riesgo detectada: ${encontradas[0]}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   const dias = datos.dias_pago;
   if (dias && dias > 45) {
-    hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days. Explanation: Term is too long. Recommendation: Consider factoring or request Net 30.` : `⚠ Pago a ${dias} días (Net ${dias}). Explicación: Plazo de pago muy largo. Recomendación: Considerar factoring o solicitar Net 30.`);
+    hallazgos.push(`⚠ Pago a ${dias} días (Net ${dias}). Explicación: Plazo de pago muy largo. Recomendación: Considerar factoring o solicitar Net 30.`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else if (dias && dias > 30) {
-    hallazgos.push(locale === 'en' ? `⚠ Payment in ${dias} days. Explanation: Consider factoring.` : `⚠ Pago a ${dias} días. Explicación: Plazo extendido. Recomendación: Considerar factoring.`);
+    hallazgos.push(`⚠ Pago a ${dias} días. Explicación: Plazo extendido. Recomendación: Considerar factoring.`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else if (datos.terminos_pago) {
-    hallazgos.push(locale === 'en' ? `✓ Payment terms: ${datos.terminos_pago}` : `✓ Términos de pago: ${datos.terminos_pago}`);
+    hallazgos.push(`✓ Términos de pago: ${datos.terminos_pago}`);
   }
 
   if (datos.factoring_mencionado) {
-    hallazgos.push(locale === 'en' ? '⚠ Factoring mentioned — verify applied discount' : '⚠ Factoring mencionado — verificar descuento aplicado');
+    hallazgos.push('⚠ Factoring mencionado — verificar descuento aplicado');
   }
 
   if (!datos.detention_rate) {
-    hallazgos.push(locale === 'en' ? '⚠ Detention not specified' : '⚠ Detention no especificada');
+    hallazgos.push('⚠ Detention no especificada');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     const m = datos.detention_rate.match(/\$?(\d+)/);
     if (m && parseInt(m[1]) < 50) {
-      hallazgos.push(locale === 'en' ? `⚠ Unacceptable detention: ${datos.detention_rate}. Explanation: Industry standard is $75/hr ($50-100). Recommendation: Do not accept, negotiate higher rate.` : `⚠ Detention inaceptable: ${datos.detention_rate}. Explicación: El estándar de la industria es $75/hr ($50-100). Recomendación: No aceptar, negociar aumento.`);
+      hallazgos.push(`⚠ Detention inaceptable: ${datos.detention_rate}. Explicación: El estándar de la industria es $75/hr ($50-100). Recomendación: No aceptar, negociar aumento.`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     } else {
       hallazgos.push(`✓ Detention: ${datos.detention_rate}${datos.detention_free_time ? ' | Free: ' + datos.detention_free_time : ''}`);
@@ -752,24 +749,24 @@ function validarClausulas(datos, locale) {
   };
 
   if (isMeaningful(datos.demurrage)) {
-    hallazgos.push(locale === 'en' ? `⚠ Demurrage: ${datos.demurrage} — verify who assumes the cost` : `⚠ Demurrage: ${datos.demurrage} — verificar quién asume el costo`);
+    hallazgos.push(`⚠ Demurrage: ${datos.demurrage} — verificar quién asume el costo`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   if (isMeaningful(datos.per_diem)) {
-    hallazgos.push(locale === 'en' ? `⚠ Per diem: ${datos.per_diem} — review responsibility` : `⚠ Per diem: ${datos.per_diem} — revisar responsabilidad`);
+    hallazgos.push(`⚠ Per diem: ${datos.per_diem} — revisar responsabilidad`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
   if (!datos.tonu_rate) {
-    hallazgos.push(locale === 'en' ? '⚠ TONU not mentioned — no cancellation protection' : '⚠ TONU no mencionado — sin protección por cancelación');
+    hallazgos.push('⚠ TONU no mencionado — sin protección por cancelación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
     hallazgos.push(`✓ TONU: ${datos.tonu_rate}`);
   }
 
   if (isMeaningful(datos.fee_deductions)) {
-    hallazgos.push(locale === 'en' ? `⚠ Fee deductions detected: ${datos.fee_deductions}` : `⚠ Fee deductions detectadas: ${datos.fee_deductions}`);
+    hallazgos.push(`⚠ Fee deductions detectadas: ${datos.fee_deductions}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
@@ -777,36 +774,36 @@ function validarClausulas(datos, locale) {
     const excesiva = ['unlimited', 'unconditional', 'all damage', 'full liability', 'any and all']
       .some(k => datos.responsabilidad_carrier.toLowerCase().includes(k));
     if (excesiva) {
-      hallazgos.push(locale === 'en' ? '❌ Excessive carrier liability clause detected' : '❌ Cláusula de responsabilidad excesiva del carrier detectada');
+      hallazgos.push('❌ Cláusula de responsabilidad excesiva del carrier detectada');
       semaforo = 'rojo';
     } else {
-      hallazgos.push(locale === 'en' ? `⚠ Carrier liability: ${datos.responsabilidad_carrier} — review scope` : `⚠ Responsabilidad del carrier: ${datos.responsabilidad_carrier} — revisar alcance`);
+      hallazgos.push(`⚠ Responsabilidad del carrier: ${datos.responsabilidad_carrier} — revisar alcance`);
       if (semaforo === 'verde') semaforo = 'amarillo';
     }
   }
 
   if (isMeaningful(datos.penalidades)) {
-    hallazgos.push(locale === 'en' ? `⚠ Penalties: ${datos.penalidades}` : `⚠ Penalidades: ${datos.penalidades}`);
+    hallazgos.push(`⚠ Penalidades: ${datos.penalidades}`);
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
-  if (hallazgos.length === 0) hallazgos.push(locale === 'en' ? '✓ No risk clauses detected' : '✓ Sin cláusulas de riesgo detectadas');
+  if (hallazgos.length === 0) hallazgos.push('✓ Sin cláusulas de riesgo detectadas');
 
   return {
     categoriaKey: 'clause',
-    categoria: locale === 'en' ? 'Clauses and Penalties' : 'Cláusulas y Penalidades',
+    categoria: 'Cláusulas y Penalidades',
     semaforo,
     hallazgos,
     datos_extraidos: {
-      detention: datos.detention_rate || locale === 'en' ? 'Not specified' : 'No especificada',
-      tonu: datos.tonu_rate || locale === 'en' ? 'Not specified' : 'No especificado',
-      demurrage: datos.demurrage || locale === 'en' ? 'Not mentioned' : 'No mencionado',
-      per_diem: datos.per_diem || locale === 'en' ? 'Not mentioned' : 'No mencionado',
-      penalidades: datos.penalidades || locale === 'en' ? 'None' : 'Ninguna',
+      detention: datos.detention_rate || 'No especificada',
+      tonu: datos.tonu_rate || 'No especificado',
+      demurrage: datos.demurrage || 'No mencionado',
+      per_diem: datos.per_diem || 'No mencionado',
+      penalidades: datos.penalidades || 'Ninguna',
     },
-    recomendacion: semaforo === 'rojo' ? locale === 'en' ? 'Do not accept — abusive clauses or excessive liability' : locale === 'en' ? 'Do not accept — abusive clauses or excessive liability' : 'No aceptar — cláusulas abusivas o responsabilidad excesiva'
-      : semaforo === 'amarillo' ? locale === 'en' ? 'Negotiate — review clauses before signing' : locale === 'en' ? 'Negotiate — review clauses before signing' : 'Negociar — revisar cláusulas antes de firmar'
-      : locale === 'en' ? 'Accept — clauses within normal parameters' : locale === 'en' ? 'Accept — clauses within normal parameters' : 'Aceptar — cláusulas dentro de parámetros normales',
+    recomendacion: semaforo === 'rojo' ? 'No aceptar — cláusulas abusivas o responsabilidad excesiva'
+      : semaforo === 'amarillo' ? 'Negociar — revisar cláusulas antes de firmar'
+      : 'Aceptar — cláusulas dentro de parámetros normales',
   };
 }
 
@@ -814,40 +811,40 @@ function validarClausulas(datos, locale) {
 // VEREDICTO FINAL — Lógica pura, sin IA
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function calcularVeredicto(categorias, userRole, locale) {
+function calcularVeredicto(categorias, userRole) {
   const rojos = categorias.filter(c => c.semaforo === 'rojo').length;
   const amarillos = categorias.filter(c => c.semaforo === 'amarillo').length;
 
   let veredicto, semaforo_general, resumen;
 
   if (rojos >= 2) {
-    veredicto = locale === 'en' ? 'Do not accept until corrected' : 'No aceptar hasta corregir';
+    veredicto = 'No aceptar hasta corregir';
     semaforo_general = 'rojo';
     resumen = userRole === 'carrier'
-      ? locale === 'en' ? `${rojos} critical profitability or operational alerts. Do not accept this load.` : `${rojos} alertas críticas de rentabilidad u operación. No aceptar esta carga.`
-      : locale === 'en' ? `${rojos} critical alerts. The document is not ready to be assigned to operations.` : `${rojos} alertas críticas. El documento no está listo para asignar a operación.`;
+      ? `${rojos} alertas críticas de rentabilidad u operación. No aceptar esta carga.`
+      : `${rojos} alertas críticas. El documento no está listo para asignar a operación.`;
   } else if (rojos === 1) {
-    veredicto = locale === 'en' ? 'Do not accept until corrected' : 'No aceptar hasta corregir';
+    veredicto = 'No aceptar hasta corregir';
     semaforo_general = 'rojo';
-    resumen = locale === 'en' ? `Critical alert in "${categorias.find(c => c.semaforo === 'rojo')?.categoria}". Must be corrected before proceeding.` : `Alerta crítica en "${categorias.find(c => c.semaforo === 'rojo')?.categoria}". Debe corregirse antes de proceder.`;
+    resumen = `Alerta crítica en "${categorias.find(c => c.semaforo === 'rojo')?.categoria}". Debe corregirse antes de proceder.`;
   } else if (amarillos >= 3) {
-    veredicto = locale === 'en' ? 'Negotiate' : 'Negociar';
+    veredicto = 'Negociar';
     semaforo_general = 'amarillo';
     resumen = userRole === 'carrier'
-      ? locale === 'en' ? `${amarillos} conditions to negotiate before accepting the load.` : `${amarillos} condiciones a negociar antes de aceptar la carga.`
-      : locale === 'en' ? `${amarillos} points to confirm. Coordinate with broker before assigning.` : `${amarillos} puntos a confirmar. Coordinar con broker antes de asignar.`;
+      ? `${amarillos} condiciones a negociar antes de aceptar la carga.`
+      : `${amarillos} puntos a confirmar. Coordinar con broker antes de asignar.`;
   } else if (amarillos >= 1) {
-    veredicto = locale === 'en' ? 'Review before accepting' : 'Revisar antes de aceptar';
+    veredicto = 'Revisar antes de aceptar';
     semaforo_general = 'amarillo';
     resumen = userRole === 'carrier'
-      ? locale === 'en' ? `${amarillos} point(s) to review. Confirm conditions before signing.` : `${amarillos} punto(s) a revisar. Confirmar condiciones antes de firmar.`
-      : locale === 'en' ? `${amarillos} point(s) to confirm. Verify with broker before assigning to carrier.` : `${amarillos} punto(s) a confirmar. Verificar con broker antes de asignar al carrier.`;
+      ? `${amarillos} punto(s) a revisar. Confirmar condiciones antes de firmar.`
+      : `${amarillos} punto(s) a confirmar. Verificar con broker antes de asignar al carrier.`;
   } else {
-    veredicto = locale === 'en' ? 'Accept' : 'Aceptar';
+    veredicto = 'Aceptar';
     semaforo_general = 'verde';
     resumen = userRole === 'carrier'
-      ? locale === 'en' ? 'Profitable and compatible load. You may proceed.' : 'Carga rentable y compatible con tu operación. Puede proceder.'
-      : locale === 'en' ? 'Complete document compatible with assigned carrier. Ready for operation.' : 'Documento completo y compatible con el carrier asignado. Listo para operación.';
+      ? 'Carga rentable y compatible con tu operación. Puede proceder.'
+      : 'Documento completo y compatible con el carrier asignado. Listo para operación.';
   }
 
   const alertas_criticas = categorias
@@ -866,7 +863,7 @@ function calcularVeredicto(categorias, userRole, locale) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Versión del motor de reglas — incrementar manualmente cuando cambien las reglas de validación
-const RULES_VERSION = '2.0.13';
+const RULES_VERSION = '2.0.14';
 
 async function hashText(text) {
   const encoder = new TextEncoder();
@@ -911,7 +908,7 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'No autorizado' }, { status: 401 });
 
-    const { documentText, selectedCarrierId, locale = 'es' } = await req.json();
+    const { documentText, selectedCarrierId } = await req.json();
     if (!documentText || documentText.trim().length < 20) {
       return Response.json({ error: 'Texto del documento vacío o muy corto' }, { status: 400 });
     }
@@ -976,11 +973,6 @@ Deno.serve(async (req) => {
       costConfig = null;
     }
 
-    // Sin fallback cross-tenant: si no hay match explícito (selectedCarrierId ni
-    // default_carrier), carrierProfile queda null. validarCarrier() ya maneja
-    // ese caso con un mensaje neutro ("sin perfil registrado para comparar"),
-    // sin nombre de carrier ajeno ni falso-crítico de identidad.
-
     // ── PASO 3b: Calcular fingerprints de versión de configuración ────────────
     const [costVer, carrierVer, brokerVer] = await Promise.all([
       fingerprintObject(costConfig),
@@ -994,7 +986,6 @@ Deno.serve(async (req) => {
     if (previos.length > 0) {
       const prev = previos[0];
       const cacheValido =
-        (prev.locale || 'es') === locale &&
         prev.verification_summary &&
         prev.recommended_action &&
         prev.rules_version === RULES_VERSION &&
@@ -1029,31 +1020,31 @@ Deno.serve(async (req) => {
             };
         }
 
-        // Re-generamos las alertas instantáneamente
+        // Re-generamos las alertas instantáneamente en español canónico
         let categoriasCache = [];
         if (userRole === 'carrier') {
           categoriasCache = [
-            validarRate(reconstructedDatos, costConfig, locale),
-            validarCarrier(reconstructedDatos, carrierProfile, locale, user, carrierProfiles, orgName),
-            validarEquipo(reconstructedDatos, trucks, carrierProfile, locale),
-            validarCommodity(reconstructedDatos, carrierProfile, locale),
-            validarClausulas(reconstructedDatos, locale),
-            validarFechasOperacion(reconstructedDatos, locale),
-            validarBroker(reconstructedDatos, brokers, brokerProfiles, locale),
+            validarRate(reconstructedDatos, costConfig),
+            validarCarrier(reconstructedDatos, carrierProfile, user, carrierProfiles, orgName),
+            validarEquipo(reconstructedDatos, trucks, carrierProfile),
+            validarCommodity(reconstructedDatos, carrierProfile),
+            validarClausulas(reconstructedDatos),
+            validarFechasOperacion(reconstructedDatos),
+            validarBroker(reconstructedDatos, brokers, brokerProfiles),
           ];
         } else {
           categoriasCache = [
-            validarBroker(reconstructedDatos, brokers, brokerProfiles, locale),
-            validarCarrier(reconstructedDatos, carrierProfile, locale, user, carrierProfiles, orgName),
-            validarFechasOperacion(reconstructedDatos, locale),
-            validarEquipo(reconstructedDatos, trucks, carrierProfile, locale),
-            validarCommodity(reconstructedDatos, carrierProfile, locale),
-            validarClausulas(reconstructedDatos, locale),
-            validarRate(reconstructedDatos, costConfig, locale),
+            validarBroker(reconstructedDatos, brokers, brokerProfiles),
+            validarCarrier(reconstructedDatos, carrierProfile, user, carrierProfiles, orgName),
+            validarFechasOperacion(reconstructedDatos),
+            validarEquipo(reconstructedDatos, trucks, carrierProfile),
+            validarCommodity(reconstructedDatos, carrierProfile),
+            validarClausulas(reconstructedDatos),
+            validarRate(reconstructedDatos, costConfig),
           ];
         }
 
-        const { veredicto: veredictoC, semaforo_general: semaforoC, resumen_ejecutivo: resumenC, alertas_criticas: alertasC, puntos_negociar: puntosC } = calcularVeredicto(categoriasCache, userRole, locale);
+        const { veredicto: veredictoC, semaforo_general: semaforoC, resumen_ejecutivo: resumenC, alertas_criticas: alertasC, puntos_negociar: puntosC } = calcularVeredicto(categoriasCache, userRole);
 
         return Response.json({
           cached: true,
@@ -1085,7 +1076,7 @@ Deno.serve(async (req) => {
       });
       if (typeof typeCheck === 'string' && typeCheck.toLowerCase().trim().startsWith('no')) {
         return Response.json({
-          error: locale === 'en' ? 'I only process Rate Confirmations and Delivery Orders. Bank or sensitive documents are not accepted.' : 'Solo proceso Rate Confirmations y Delivery Orders. No se aceptan documentos bancarios ni sensibles.'
+          error: 'Solo proceso Rate Confirmations y Delivery Orders. No se aceptan documentos bancarios ni sensibles.'
         }, { status: 400 });
       }
     }
@@ -1112,29 +1103,29 @@ Deno.serve(async (req) => {
     if (userRole === 'carrier') {
       // Carrier: prioridad en rentabilidad, compatibilidad operativa y cláusulas
       categorias = [
-        validarRate(datos, costConfig, locale),          // ← más crítico: ¿es rentable?
-        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles, orgName),   // ← ¿está correcto mi nombre/MC?
-        validarEquipo(datos, trucks, carrierProfile, locale), // ← ¿tengo el equipo?
-        validarCommodity(datos, carrierProfile, locale), // ← ¿puedo mover esta carga?
-        validarClausulas(datos, locale),                 // ← ¿qué riesgos contractuales hay?
-        validarFechasOperacion(datos, locale),           // ← ¿son viables los tiempos?
-        validarBroker(datos, brokers, brokerProfiles, locale), // ← info del broker
+        validarRate(datos, costConfig),                                               // ← más crítico: ¿es rentable?
+        validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName),        // ← ¿está correcto mi nombre/MC?
+        validarEquipo(datos, trucks, carrierProfile),                                 // ← ¿tengo el equipo?
+        validarCommodity(datos, carrierProfile),                                      // ← ¿puedo mover esta carga?
+        validarClausulas(datos),                                                      // ← ¿qué riesgos contractuales hay?
+        validarFechasOperacion(datos),                                                // ← ¿son viables los tiempos?
+        validarBroker(datos, brokers, brokerProfiles),                                // ← info del broker
       ];
     } else {
       // Dispatcher: prioridad en completitud, broker correcto, carrier asignado y readiness
       categorias = [
-        validarBroker(datos, brokers, brokerProfiles, locale), // ← ¿broker verificado?
-        validarCarrier(datos, carrierProfile, locale, user, carrierProfiles, orgName),         // ← ¿carrier correcto asignado?
-        validarFechasOperacion(datos, locale),                 // ← ¿está completo para operar?
-        validarEquipo(datos, trucks, carrierProfile, locale),  // ← ¿compatible con el carrier?
-        validarCommodity(datos, carrierProfile, locale),       // ← ¿commodity OK para el carrier?
-        validarClausulas(datos, locale),                       // ← ¿cláusulas aceptables?
-        validarRate(datos, costConfig, locale),                // ← info de tarifa (menos crítico)
+        validarBroker(datos, brokers, brokerProfiles),                                // ← ¿broker verificado?
+        validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName),        // ← ¿carrier correcto asignado?
+        validarFechasOperacion(datos),                                                // ← ¿está completo para operar?
+        validarEquipo(datos, trucks, carrierProfile),                                 // ← ¿compatible con el carrier?
+        validarCommodity(datos, carrierProfile),                                      // ← ¿commodity OK para el carrier?
+        validarClausulas(datos),                                                      // ← ¿cláusulas aceptables?
+        validarRate(datos, costConfig),                                               // ← info de tarifa (menos crítico)
       ];
     }
 
     // ── PASO 7: Veredicto por reglas ──────────────────────────────────────────
-    const { veredicto, semaforo_general, resumen_ejecutivo, alertas_criticas, puntos_negociar } = calcularVeredicto(categorias, userRole, locale);
+    const { veredicto, semaforo_general, resumen_ejecutivo, alertas_criticas, puntos_negociar } = calcularVeredicto(categorias, userRole);
     const confidence_score = calcularConfidence(datos);
 
     // ── PASO 8: Guardar resultado estructurado (permite caché futura) ─────────

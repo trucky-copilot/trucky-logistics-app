@@ -3,9 +3,11 @@ import { base44 } from '@/api/base44Client';
 import { ChevronDown, Truck } from 'lucide-react';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { filterByOrg } from '@/lib/orgScope';
+import { useLanguage } from '@/lib/LanguageContext';
 
 export default function CarrierSelector({ selectedCarrierId, onChange }) {
   const orgId = useOrganizationId();
+  const { locale } = useLanguage();
   const [carriers, setCarriers] = useState([]);
   const [open, setOpen] = useState(false);
 
@@ -27,8 +29,10 @@ export default function CarrierSelector({ selectedCarrierId, onChange }) {
           <Truck className="w-3.5 h-3.5 text-primary" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-xs text-muted-foreground">Verificando para</div>
-          <div className="text-sm font-semibold text-foreground truncate">{selected?.company_name || 'Seleccionar carrier'}</div>
+          <div className="text-xs text-muted-foreground">{locale === 'en' ? 'Verifying for' : 'Verificando para'}</div>
+          <div className="text-sm font-semibold text-foreground truncate">
+            {selected?.company_name || (locale === 'en' ? 'Select carrier' : 'Seleccionar carrier')}
+          </div>
         </div>
         <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
@@ -43,7 +47,7 @@ export default function CarrierSelector({ selectedCarrierId, onChange }) {
             >
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium text-foreground truncate">{c.company_name}</div>
-                <div className="text-xs text-muted-foreground">{c.mc_number || 'Sin MC'}</div>
+                <div className="text-xs text-muted-foreground">{c.mc_number || (locale === 'en' ? 'No MC' : 'Sin MC')}</div>
               </div>
               {selectedCarrierId === c.id && <div className="w-1.5 h-1.5 rounded-full bg-primary flex-shrink-0" />}
             </button>

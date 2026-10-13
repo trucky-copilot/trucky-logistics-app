@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileSearch, Upload, XCircle, Loader2, Image,
@@ -25,6 +25,9 @@ export default function DocumentAnalyzer() {
   const [loading, setLoading] = useState(false);
   const [loadingMsg, setLoadingMsg] = useState('');
   const [analysis, setAnalysis] = useState(null);
+  const [translating, setTranslating] = useState(false);
+  // Caché en memoria: mantiene { es: analysis, en: analysis } para cambio instantáneo (0ms)
+  const translationsCacheRef = useRef({ es: null, en: null });
   const [error, setError] = useState(null);
   // Contexto del usuario
   const [userRole, setUserRole] = useState(null);        // 'carrier' | 'dispatcher'
@@ -65,31 +68,150 @@ export default function DocumentAnalyzer() {
     loadContext();
   }, [orgId]);
 
+  /**
+   * Traduce la totalidad del objeto de análisis en un solo lote (batch)
+   * llamando a Google Translate a través de la función existente 'translateChat'.
+   * Preserva prefijos de semáforo/icono (✓, ❌, ⚠, ℹ) aislando el texto antes de la API.
+   */
+  const translateAnalysis = async (sourceAnalysis, targetLang) => {
+    if (!sourceAnalysis || targetLang === 'es') return sourceAnalysis;
+
+    const texts = [];
+    texts.push(sourceAnalysis.resumen_ejecutivo || '');
+    texts.push(sourceAnalysis.foco_analisis || '');
+
+    const catIndices = [];
+    (sourceAnalysis.categorias || []).forEach((cat) => {
+      const catIdx = {
+        nameIdx: texts.length,
+        recIdx: -1,
+        hallazgos: []
+      };
+      texts.push(cat.categoria || '');
+
+      if (cat.recomendacion) {
+        catIdx.recIdx = texts.length;
+        texts.push(cat.recomendacion);
+      }
+
+      (cat.hallazgos || []).forEach((h) => {
+        const prefix = h.match(/^[❌⚠✓ℹ!]\s*/)?.[0] || '';
+        const cleanText = h.replace(/^[❌⚠✓ℹ!]\s*/, '').trim();
+        catIdx.hallazgos.push({ prefix, textIdx: texts.length });
+        texts.push(cleanText);
+      });
+      catIndices.push(catIdx);
+    });
+
+    const puntosIndices = [];
+    (sourceAnalysis.puntos_negociar || []).forEach((p) => {
+      puntosIndices.push(texts.length);
+      texts.push(p);
+    });
+
+    // Envío en lote con una sola petición HTTP (latencia típica < 300ms)
+    const res = await base44.functions.invoke('translateChat', {
+      messages: texts.map(t => ({ content: t })),
+      targetLang
+    });
+
+    if (!res.data?.messages) {
+      throw new Error(res.data?.error || 'Traducción fallida');
+    }
+
+    const translated = res.data.messages.map(m => m.content);
+
+    return {
+      ...sourceAnalysis,
+      resumen_ejecutivo: translated[0] || sourceAnalysis.resumen_ejecutivo,
+      foco_analisis: translated[1] || sourceAnalysis.foco_analisis,
+      categorias: (sourceAnalysis.categorias || []).map((cat, i) => {
+        const meta = catIndices[i];
+        return {
+          ...cat,
+          categoria: translated[meta.nameIdx] || cat.categoria,
+          recomendacion: meta.recIdx !== -1 ? translated[meta.recIdx] : cat.recomendacion,
+          hallazgos: meta.hallazgos.map(h => `${h.prefix}${translated[h.textIdx]}`)
+        };
+      }),
+      puntos_negociar: puntosIndices.map(idx => translated[idx])
+    };
+  };
+
+  // Reacción instantánea cuando el usuario cambia el idioma en la barra lateral
+  useEffect(() => {
+    if (!translationsCacheRef.current.es) return;
+
+    if (locale === 'es') {
+      setAnalysis(translationsCacheRef.current.es);
+    } else if (locale === 'en') {
+      if (translationsCacheRef.current.en) {
+        // 0 ms: Instantáneo desde memoria
+        setAnalysis(translationsCacheRef.current.en);
+      } else {
+        // Primera traducción a inglés
+        setTranslating(true);
+        translateAnalysis(translationsCacheRef.current.es, 'en')
+          .then(translated => {
+            translationsCacheRef.current.en = translated;
+            setAnalysis(translated);
+          })
+          .catch(err => console.error('Error al traducir análisis:', err))
+          .finally(() => setTranslating(false));
+      }
+    }
+  }, [locale]);
+
   const analyze = async () => {
     if (!documentText.trim() || loading) return;
     setLoading(true);
     setLoadingMsg(t.documents.extract);
     setError(null);
     setAnalysis(null);
+    translationsCacheRef.current = { es: null, en: null };
 
     const t1 = setTimeout(() => setLoadingMsg(t.documents.validate), 3000);
     const t2 = setTimeout(() => setLoadingMsg(t.documents.verifyBroker), 6000);
 
-    const res = await base44.functions.invoke('analyzeDocument', {
-      documentText,
-      selectedCarrierId,
-      locale,
-   });
+    try {
+      const res = await base44.functions.invoke('analyzeDocument', {
+        documentText,
+        selectedCarrierId,
+      });
 
-    clearTimeout(t1);
-    clearTimeout(t2);
+      clearTimeout(t1);
+      clearTimeout(t2);
 
-    if (res.data?.analysis) {
-      setAnalysis({ ...res.data.analysis, cached: res.data.cached || false });
-    } else if (res.data?.error) {
-      setError(res.data.error);
+      if (res.data?.analysis) {
+        const rawAnalysis = { ...res.data.analysis, cached: res.data.cached || false };
+        // Guardamos la versión canónica en español
+        translationsCacheRef.current = { es: rawAnalysis, en: null };
+
+        if (locale === 'en') {
+          setTranslating(true);
+          try {
+            const enAnalysis = await translateAnalysis(rawAnalysis, 'en');
+            translationsCacheRef.current.en = enAnalysis;
+            setAnalysis(enAnalysis);
+          } catch (e) {
+            console.error('Error al traducir al inglés:', e);
+            setAnalysis(rawAnalysis);
+          } finally {
+            setTranslating(false);
+          }
+        } else {
+          setAnalysis(rawAnalysis);
+        }
+      } else if (res.data?.error) {
+        setError(res.data.error);
+      }
+    } catch (err) {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      setError(err?.message || 'Error al conectar con el servicio de análisis');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleFile = async (e) => {
@@ -99,6 +221,7 @@ export default function DocumentAnalyzer() {
     setFileName(file.name);
     setError(null);
     setAnalysis(null);
+    translationsCacheRef.current = { es: null, en: null };
 
     if (ext === 'pdf') {
       setLoading(true);
@@ -254,7 +377,13 @@ Equipment: 20ft Dry...`}
 
       {/* Resultados */}
       {analysis && (
-        <div className="space-y-3">
+        <div className="space-y-3 relative">
+          {translating && (
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium animate-pulse shadow-sm">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              {locale === 'en' ? 'Translating analysis with Google Translate...' : 'Traduciendo análisis con Google Translate...'}
+            </div>
+          )}
           <ResultHeader analysis={analysis} onLinkToLoad={handleLinkToLoad} cached={analysis.cached} />
           <KeyFindings categorias={analysis.categorias} />
           <CategoryGrid categorias={analysis.categorias} />

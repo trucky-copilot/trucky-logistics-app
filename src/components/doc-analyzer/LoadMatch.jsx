@@ -3,17 +3,19 @@ import { base44 } from '@/api/base44Client';
 import { Link2, Package } from 'lucide-react';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { listByOrg } from '@/lib/orgScope';
-
-const CONFIDENCE_CONFIG = {
-  high:   { label: 'Alta coincidencia',  color: 'text-green-400',  bg: 'bg-green-400/10',  border: 'border-green-400/20' },
-  medium: { label: 'Coincidencia media', color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' },
-  low:    { label: 'Baja coincidencia',  color: 'text-muted-foreground', bg: 'bg-muted/50', border: 'border-border' },
-};
+import { useLanguage } from '@/lib/LanguageContext';
 
 export default function LoadMatch({ datos_extraidos }) {
   const orgId = useOrganizationId();
+  const { locale } = useLanguage();
   const [match, setMatch] = useState(null);
   const [checked, setChecked] = useState(false);
+
+  const CONFIDENCE_CONFIG = {
+    high:   { label: locale === 'en' ? 'High match' : 'Alta coincidencia',  color: 'text-green-400',  bg: 'bg-green-400/10',  border: 'border-green-400/20' },
+    medium: { label: locale === 'en' ? 'Medium match' : 'Coincidencia media', color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' },
+    low:    { label: locale === 'en' ? 'Low match' : 'Baja coincidencia',  color: 'text-muted-foreground', bg: 'bg-muted/50', border: 'border-border' },
+  };
 
   useEffect(() => {
     if (!datos_extraidos) { setChecked(true); return; }
@@ -54,12 +56,14 @@ export default function LoadMatch({ datos_extraidos }) {
     <div className={`rounded-xl border ${c.border} ${c.bg} p-4`}>
       <div className="flex items-center gap-2 mb-3">
         <Link2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
-        <p className="text-xs font-bold text-foreground uppercase tracking-wide">Carga relacionada encontrada</p>
+        <p className="text-xs font-bold text-foreground uppercase tracking-wide">
+          {locale === 'en' ? 'Related load found' : 'Carga relacionada encontrada'}
+        </p>
         <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${c.border} ${c.color}`}>{c.label}</span>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <p className="text-muted-foreground">Ruta</p>
+          <p className="text-muted-foreground">{locale === 'en' ? 'Route' : 'Ruta'}</p>
           <p className="font-medium text-foreground">{match.load.origen} → {match.load.destino}</p>
         </div>
         <div>
@@ -67,17 +71,19 @@ export default function LoadMatch({ datos_extraidos }) {
           <p className="font-medium text-foreground">{match.load.broker_nombre || '—'}</p>
         </div>
         <div>
-          <p className="text-muted-foreground">Referencia encontrada</p>
+          <p className="text-muted-foreground">{locale === 'en' ? 'Reference found' : 'Referencia encontrada'}</p>
           <p className="font-medium text-foreground font-mono">{match.ref}</p>
         </div>
         <div>
-          <p className="text-muted-foreground">Estado de carga</p>
+          <p className="text-muted-foreground">{locale === 'en' ? 'Load status' : 'Estado de carga'}</p>
           <p className="font-medium text-foreground capitalize">{match.load.estado}</p>
         </div>
       </div>
       <div className="mt-3 flex items-center gap-1.5">
         <Package className="w-3 h-3 text-primary" />
-        <span className="text-xs text-primary font-medium">Esta carga ya está registrada en el sistema</span>
+        <span className="text-xs text-primary font-medium">
+          {locale === 'en' ? 'This load is already registered in the system' : 'Esta carga ya está registrada en el sistema'}
+        </span>
       </div>
     </div>
   );

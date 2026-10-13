@@ -57,7 +57,9 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
         )}
         {isCache && (
           <span className="text-[10px] text-muted-foreground hidden sm:inline">
-            Mismo documento · mismo usuario · misma configuración · mismas reglas
+            {locale === 'en'
+              ? 'Same document · same user · same configuration · same rules'
+              : 'Mismo documento · mismo usuario · misma configuración · mismas reglas'}
           </span>
         )}
         {analysis.confidence_score != null && (
