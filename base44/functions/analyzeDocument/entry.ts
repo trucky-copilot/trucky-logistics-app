@@ -1060,7 +1060,7 @@ Deno.serve(async (req) => {
             user_role: userRole,
             confidence_score: prev.confidence_score,
             carrier_profile_used: carrierProfile?.company_name || null,
-            foco_analisis: `Resultado cacheado — analizado el ${new Date(prev.analyzed_at || prev.created_date).toLocaleDateString('es-US')}`,
+            foco_analisis: `Resultado en caché — analizado el ${new Date(prev.analyzed_at || prev.created_date).toLocaleDateString('es-US')}`,
             analyzed_at: prev.analyzed_at || prev.created_date,
             analysis_source: 'cache',
           }

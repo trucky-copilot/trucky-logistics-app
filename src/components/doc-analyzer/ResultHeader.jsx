@@ -1,4 +1,4 @@
-import { CheckCircle2, AlertTriangle, XCircle, FileText, FileCheck, History, Zap } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, FileCheck, History, Zap } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 
 export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
@@ -92,20 +92,6 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
             <p className="text-sm font-semibold text-foreground mt-1">{resumenCorto}</p>
             <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{analysis.resumen_ejecutivo}</p>
           </div>
-        </div>
-
-        {/* Foco de análisis + acción */}
-        <div className="flex items-center justify-between gap-3 mt-4 pt-3 border-t border-white/5 flex-wrap">
-          {analysis.foco_analisis && (
-            <p className="text-xs text-muted-foreground">{analysis.foco_analisis}</p>
-          )}
-          <button
-            onClick={onLinkToLoad}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors flex-shrink-0"
-          >
-            <FileText className="w-3 h-3" />
-              {t.documents.registerLoad}
-          </button>
         </div>
       </div>
     </div>
