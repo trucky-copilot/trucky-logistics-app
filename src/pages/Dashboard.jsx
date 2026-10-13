@@ -13,7 +13,6 @@ const TIPO_ICONS = {
 import KpiCard from '@/components/KpiCard';
 import StatusBadge from '@/components/StatusBadge';
 import OperationalStatusCard from '@/components/OperationalStatusCard';
-import LoadsMap from '@/components/dashboard/LoadsMap';
 import { Link } from 'react-router-dom';
 import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -189,9 +188,6 @@ export default function Dashboard() {
           color="violet"
         />
       </div>
-
-      {/* Mapa de rutas */}
-      <LoadsMap loads={loads.slice(0, 15)} />
 
       <div className="grid lg:grid-cols-3 gap-4">
         {/* Fleet Status */}

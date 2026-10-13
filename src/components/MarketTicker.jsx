@@ -3,13 +3,13 @@ import { base44 } from '@/api/base44Client';
 
 function buildItems(res) {
   const items = [];
-  if (res.diesel) items.push({ label: 'DIÉSEL', value: `$${parseFloat(res.diesel).toFixed(2)}/gal`, delta: 0 });
-  if (res.dry_van) items.push({ label: 'DRY VAN', value: `$${parseFloat(res.dry_van).toFixed(2)}/mi`, delta: 0 });
-  if (res.reefer) items.push({ label: 'REEFER', value: `$${parseFloat(res.reefer).toFixed(2)}/mi`, delta: 0 });
-  if (res.flatbed) items.push({ label: 'FLATBED', value: `$${parseFloat(res.flatbed).toFixed(2)}/mi`, delta: 0 });
-  if (res.step_deck) items.push({ label: 'STEP DECK', value: `$${parseFloat(res.step_deck).toFixed(2)}/mi`, delta: 0 });
-  if (res.power_only) items.push({ label: 'POWER ONLY', value: `$${parseFloat(res.power_only).toFixed(2)}/mi`, delta: 0 });
-  if (res.container) items.push({ label: 'CONTENEDOR', value: `$${parseFloat(res.container).toFixed(2)}/mi`, delta: 0 });
+  if (res.diesel) items.push({ label: 'DIÉSEL', value: `$${parseFloat(res.diesel).toFixed(2)}/gal` });
+  if (res.dry_van) items.push({ label: 'DRY VAN', value: `$${parseFloat(res.dry_van).toFixed(2)}/mi` });
+  if (res.reefer) items.push({ label: 'REEFER', value: `$${parseFloat(res.reefer).toFixed(2)}/mi` });
+  if (res.flatbed) items.push({ label: 'FLATBED', value: `$${parseFloat(res.flatbed).toFixed(2)}/mi` });
+  if (res.step_deck) items.push({ label: 'STEP DECK', value: `$${parseFloat(res.step_deck).toFixed(2)}/mi` });
+  if (res.power_only) items.push({ label: 'POWER ONLY', value: `$${parseFloat(res.power_only).toFixed(2)}/mi` });
+  if (res.container) items.push({ label: 'CONTENEDOR', value: `$${parseFloat(res.container).toFixed(2)}/mi` });
   return items;
 }
 
@@ -35,14 +35,10 @@ function useMarketTickerData() {
 }
 
 function TickerItem({ item }) {
-  const up = item.delta >= 0;
   return (
     <div className="flex items-center gap-1.5 px-3 flex-shrink-0">
       <span className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">{item.label}</span>
       <span className="text-[11px] font-mono font-bold text-cyan-400">{item.value}</span>
-      <span className={`text-[10px] font-mono font-semibold ${up ? 'text-green-400' : 'text-red-400'}`}>
-        {up ? '▲' : '▼'} {Math.abs(item.delta).toFixed(2)}
-      </span>
       <span className="text-muted-foreground/40 ml-1">·</span>
     </div>
   );
@@ -51,8 +47,8 @@ function TickerItem({ item }) {
 function LiveBadge() {
   return (
     <div className="flex items-center gap-1.5 px-3 flex-shrink-0">
-      <span className="trucky-blink w-1.5 h-1.5 rounded-full bg-cyan-400 inline-block" />
-      <span className="text-[10px] font-mono uppercase tracking-wide text-cyan-400 font-semibold">EN VIVO</span>
+      <span className="trucky-blink w-1.5 h-1.5 rounded-full bg-red-500 inline-block shadow-sm shadow-red-500/50" />
+      <span className="text-[10px] font-mono uppercase tracking-wide text-red-500 font-bold">Live</span>
       <span className="text-muted-foreground/40 ml-1">·</span>
     </div>
   );
