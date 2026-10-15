@@ -1,6 +1,6 @@
 {
-  "type": "object",
   "name": "ContainerRoute",
+  "type": "object",
   "properties": {
     "route_key": {
       "type": "string",
