@@ -45,16 +45,26 @@ export default function Dashboard() {
 
   const filterByProfile = (data, entity) => {
     const profileIds = getProfileIds(entity);
-    if (activeProfileId === '1' && profileIds === null) {
-      const usedIds = [];
-      for (let i = 2; i <= 5; i++) {
-        const stored = localStorage.getItem(`profile_${entity}_${orgId}_${i}`);
-        if (stored) usedIds.push(...JSON.parse(stored));
+    return data.filter(item => {
+      // 1. Si el registro ya tiene profile_id en BD (Brokers y Drivers), respetarlo directamente
+      if (item.profile_id) {
+        return item.profile_id === activeProfileId;
       }
-      return data.filter(item => !usedIds.includes(item.id));
-    }
-    if (profileIds !== null) return data.filter(item => profileIds.includes(item.id));
-    return []; // Perfil nuevo sin datos
+      // 2. Si es Perfil 1 y no hay IDs explícitos en localStorage, hereda lo no reclamado por otros perfiles
+      if (activeProfileId === '1' && profileIds === null) {
+        const usedIds = [];
+        for (let i = 2; i <= 5; i++) {
+          const stored = localStorage.getItem(`profile_${entity}_${orgId}_${i}`);
+          if (stored) usedIds.push(...JSON.parse(stored));
+        }
+        return !usedIds.includes(item.id);
+      }
+      // 3. Si el perfil tiene lista en localStorage
+      if (profileIds !== null) {
+        return profileIds.includes(item.id);
+      }
+      return false; // Perfil nuevo sin datos
+    });
   };
 
   useEffect(() => {
