@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Bell, Plus, X, CheckCheck, AlertTriangle, Info, Zap, Truck, FileWarning } from 'lucide-react';
+import { Bell, Plus, X, CheckCheck, AlertTriangle, Info, Zap, Truck, FileWarning, Trash2 } from 'lucide-react';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -35,6 +35,7 @@ function NotifForm({ onSave, onClose }) {
   const { setUnsavedChanges } = useProfile();
   const initialState = { titulo: '', mensaje: '', tipo: 'general', prioridad: 'media' };
   const [form, setForm] = useState(initialState);
+  const [isSaving, setIsSaving] = useState(false);
   
   useEffect(() => {
     const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
@@ -43,37 +44,46 @@ function NotifForm({ onSave, onClose }) {
   }, [form, setUnsavedChanges]);
 
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
+  const handleSubmit = async (e) => { 
+    e.preventDefault(); 
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(form);
+    } finally {
+      setIsSaving(false);
+    }
+  };
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold">{t.notifications.formTitle}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} disabled={isSaving} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.titleLabel} *</label>
-            <input required value={form.titulo} onChange={e => set('titulo', e.target.value)}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input required value={form.titulo} onChange={e => set('titulo', e.target.value)} disabled={isSaving}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-60" />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.message} *</label>
-            <textarea required value={form.mensaje} onChange={e => set('mensaje', e.target.value)} rows={3}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
+            <textarea required value={form.mensaje} onChange={e => set('mensaje', e.target.value)} rows={3} disabled={isSaving}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none disabled:opacity-60" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.type}</label>
-              <select value={form.tipo} onChange={e => set('tipo', e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+              <select value={form.tipo} onChange={e => set('tipo', e.target.value)} disabled={isSaving}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-60">
                 {Object.entries(TIPO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.notifications.priority}</label>
-              <select value={form.prioridad} onChange={e => set('prioridad', e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
+              <select value={form.prioridad} onChange={e => set('prioridad', e.target.value)} disabled={isSaving}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-60">
                 <option value="alta">{t.notifications.high}</option>
                 <option value="media">{t.notifications.medium}</option>
                 <option value="baja">{locale === 'en' ? 'Low' : 'Baja'}</option>
@@ -81,8 +91,17 @@ function NotifForm({ onSave, onClose }) {
             </div>
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">{t.notifications.cancel}</button>
-            <button type="submit" className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">{t.notifications.send}</button>
+            <button type="button" onClick={onClose} disabled={isSaving} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">{t.notifications.cancel}</button>
+            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+              {isSaving ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                  <span>{locale === 'en' ? 'Sending...' : 'Enviando...'}</span>
+                </>
+              ) : (
+                t.notifications.send
+              )}
+            </button>
           </div>
         </form>
       </div>
@@ -106,6 +125,7 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [filter, setFilter] = useState('all');
+  const isSavingRef = useRef(false);
 
   const getProfileNotifIds = () => {
     const key = `profile_notifs_${orgId}_${activeProfileId}`;
@@ -121,51 +141,83 @@ export default function Notifications() {
 
   const loadData = async () => {
     setLoading(true);
-    const data = await listByOrg(base44.entities.Notification, orgId, '-created_date', 100);
-    const profileIds = getProfileNotifIds();
+    try {
+      const data = await listByOrg(base44.entities.Notification, orgId, '-created_date', 100);
+      const profileIds = getProfileNotifIds();
 
-    let profileFiltered;
-    if (activeProfileId === '1' && profileIds === null) {
-      const usedIds = [];
-      for (let i = 2; i <= 5; i++) {
-        const stored = localStorage.getItem(`profile_notifs_${orgId}_${i}`);
-        if (stored) usedIds.push(...JSON.parse(stored));
+      let profileFiltered;
+      if (activeProfileId === '1' && profileIds === null) {
+        const usedIds = [];
+        for (let i = 2; i <= 5; i++) {
+          const stored = localStorage.getItem(`profile_notifs_${orgId}_${i}`);
+          if (stored) usedIds.push(...JSON.parse(stored));
+        }
+        const unclaimed = data.filter(n => (!n.profile_id || n.profile_id === '1') && !usedIds.includes(n.id));
+        const unclaimedIds = unclaimed.map(n => n.id);
+        localStorage.setItem(`profile_notifs_${orgId}_1`, JSON.stringify(unclaimedIds));
+        profileFiltered = data.filter(n => n.profile_id === '1' || unclaimedIds.includes(n.id));
+      } else {
+        profileFiltered = data.filter(n => {
+          if (n.profile_id) return n.profile_id === activeProfileId;
+          return profileIds && profileIds.includes(n.id);
+        });
       }
-      const unclaimedIds = data.map(n => n.id).filter(id => !usedIds.includes(id));
-      localStorage.setItem(`profile_notifs_${orgId}_1`, JSON.stringify(unclaimedIds));
-      profileFiltered = data.filter(n => unclaimedIds.includes(n.id));
-    } else if (profileIds !== null) {
-      profileFiltered = data.filter(n => profileIds.includes(n.id));
-    } else {
-      profileFiltered = [];
-    }
 
-    setNotifications(profileFiltered);
-    setLoading(false);
+      setNotifications(profileFiltered);
+    } catch (err) {
+      console.error('Error cargando notificaciones:', err);
+    } finally {
+      setLoading(false);
+    }
   };
+
   useEffect(() => { loadData(); }, [orgId, activeProfileId]);
 
   const handleSave = async (data) => {
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
     try {
-      const created = await base44.entities.Notification.create(withOrg(orgId, data));
+      const created = await base44.entities.Notification.create(withOrg(orgId, {
+        ...data,
+        profile_id: activeProfileId || '1',
+      }));
       addNotifToProfile(created.id);
       setShowForm(false);
-      loadData();
+      window.dispatchEvent(new CustomEvent('notifications-updated'));
+      await loadData();
     } catch (err) {
       console.error('Error guardando notificación:', err);
       alert('Error al guardar: ' + (err?.message || 'intente de nuevo'));
+    } finally {
+      isSavingRef.current = false;
     }
   };
 
   const markRead = async (id) => {
     await base44.entities.Notification.update(id, { leido: true });
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, leido: true } : n));
+    window.dispatchEvent(new CustomEvent('notifications-updated'));
   };
 
   const markAllRead = async () => {
     const unread = notifications.filter(n => !n.leido);
     await Promise.all(unread.map(n => base44.entities.Notification.update(n.id, { leido: true })));
     setNotifications(prev => prev.map(n => ({ ...n, leido: true })));
+    window.dispatchEvent(new CustomEvent('notifications-updated'));
+  };
+
+  const deleteNotification = async (id, e) => {
+    if (e) e.stopPropagation();
+    try {
+      await base44.entities.Notification.delete(id);
+      const key = `profile_notifs_${orgId}_${activeProfileId}`;
+      const current = getProfileNotifIds() || [];
+      localStorage.setItem(key, JSON.stringify(current.filter(item => item !== id)));
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      window.dispatchEvent(new CustomEvent('notifications-updated'));
+    } catch (err) {
+      console.error('Error eliminando notificación:', err);
+    }
   };
 
   const filtered = filter === 'all' ? notifications : filter === 'unread' ? notifications.filter(n => !n.leido) : notifications.filter(n => n.prioridad === filter);
@@ -244,6 +296,14 @@ export default function Notifications() {
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-xs text-muted-foreground">{timeAgo}</span>
                         {!notif.leido && <div className="w-2 h-2 rounded-full bg-primary" />}
+                        <button
+                          type="button"
+                          onClick={(e) => deleteNotification(notif.id, e)}
+                          title={locale === 'en' ? 'Delete notification' : 'Eliminar notificación'}
+                          className="p-1 rounded-md hover:bg-muted text-muted-foreground/60 hover:text-red-400 transition-colors ml-1"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">{notif.mensaje}</p>

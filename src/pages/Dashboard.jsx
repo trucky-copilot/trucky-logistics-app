@@ -84,9 +84,11 @@ export default function Dashboard() {
       setDrivers(filterByProfile(rawDrivers, 'drivers'));
       
       const notifIds = getProfileIds('notifs') || [];
-      const filteredNotifs = activeProfileId === '1' && notifIds.length === 0 
-        ? rawNotifs // Perfil 1 hereda todo si no tiene reclamos
-        : rawNotifs.filter(n => notifIds.includes(n.id));
+      const filteredNotifs = rawNotifs.filter(n => {
+        if (n.profile_id) return n.profile_id === activeProfileId;
+        if (activeProfileId === '1' && notifIds.length === 0) return true;
+        return notifIds.includes(n.id);
+      });
       setNotifications(filteredNotifs);
 
       if (configs && configs.length > 0) {

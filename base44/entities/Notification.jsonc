@@ -6,6 +6,10 @@
       "type": "string",
       "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
     },
+    "profile_id": {
+      "type": "string",
+      "description": "ID del perfil al que pertenece esta notificación"
+    },
     "tipo": {
       "type": "string",
       "enum": [
