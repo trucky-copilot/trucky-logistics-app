@@ -172,7 +172,7 @@ export default function Dashboard() {
         <KpiCard
           titulo={t.dashboard.averageRate}
           valor={avgRatePerMile > 0 ? `$${avgRatePerMile.toFixed(2)}` : '--'}
-          subtitulo={costConfig?.tarifa_objetivo ? `meta: $${costConfig.tarifa_objetivo.toFixed(2)}/milla` : t.dashboard.target}
+          subtitulo={costConfig?.tarifa_objetivo ? (locale === 'en' ? `target: $${costConfig.tarifa_objetivo.toFixed(2)}/mile` : `meta: $${costConfig.tarifa_objetivo.toFixed(2)}/milla`) : t.dashboard.target}
           icon={Package}
           color={
             costConfig?.tarifa_objetivo
@@ -217,14 +217,14 @@ export default function Dashboard() {
         <div className={`rounded-xl p-4 border ${expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta') ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
           <div className="flex items-center justify-between mb-4">
             <h2 className={`text-sm font-semibold ${(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? 'text-red-400' : 'text-foreground'}`}>
-              {(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? '🔴 Alertas y Notificaciones' : 'Alertas y Notificaciones'}
+              {(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? `🔴 ${t.dashboard.alertsAndNotifications}` : t.dashboard.alertsAndNotifications}
             </h2>
             <Link to="/notificaciones" className="text-xs text-primary hover:underline">{t.dashboard.viewAll}</Link>
           </div>
           {expiringDocs.length === 0 && notifications.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle2 className="w-8 h-8 text-green-400 mb-2" />
-              <p className="text-sm text-muted-foreground">Todo está en orden</p>
+              <p className="text-sm text-muted-foreground">{t.dashboard.allInOrder}</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
@@ -280,7 +280,7 @@ export default function Dashboard() {
                   <span className="text-xs text-muted-foreground w-4">{i + 1}</span>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-foreground truncate">{b.nombre}</div>
-                    <div className="text-xs text-muted-foreground">{b.cargas_realizadas || 0} cargas</div>
+                    <div className="text-xs text-muted-foreground">{b.cargas_realizadas || 0} {t.dashboard.loads}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-xs font-mono font-medium text-foreground">${b.tarifa_promedio?.toFixed(2) || '--'}/mi</div>

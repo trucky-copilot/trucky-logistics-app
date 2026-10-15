@@ -155,7 +155,7 @@ Deno.test('figuresFromCalculatedQuote: incluye los montos de accesoriales filtra
 
 Deno.test('general: las constantes de KB (RPM, detention, HOS, deadhead, conteo de rutas) están permitidas', () => {
   const permitidas = buildGeneralIntentAllowedNumbers();
-  const respuestaLegitima = 'El RPM base de dry van es $3.01/mi, y para reefer es $3.42/mi. Detention: $75/hr tras 2h libres.';
+  const respuestaLegitima = 'El RPM base de dry van es $3.07/mi, y para reefer es $3.66/mi. Detention: $75/hr tras 2h libres.';
   const r = assertNoInventedFigures(respuestaLegitima, permitidas);
   assertEquals(r.ok, true, `figuras encontradas fuera de rango: ${JSON.stringify(r.invented)}`);
 });
@@ -176,9 +176,9 @@ Deno.test('general: los valores de CostConfig mostrados ese turno se agregan al 
   assertEquals(r.ok, true, `figuras fuera de rango: ${JSON.stringify(r.invented)}`);
 });
 
-Deno.test('buildKbConstantNumbers: incluye el conteo exacto de rutas (209/50/259, criterio 1)', () => {
+Deno.test('buildKbConstantNumbers: incluye el conteo exacto de rutas (209/63/272, criterio 1)', () => {
   const numeros = buildKbConstantNumbers();
   assert(numeros.includes(209));
-  assert(numeros.includes(50));
-  assert(numeros.includes(259));
+  assert(numeros.includes(63));
+  assert(numeros.includes(272));
 });

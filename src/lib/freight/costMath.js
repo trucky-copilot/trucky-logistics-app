@@ -19,7 +19,8 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 function num(v) {
-  const n = Number(v);
+  const normalized = typeof v === 'string' ? v.replace(',', '.') : v;
+  const n = Number(normalized);
   return Number.isFinite(n) ? n : NaN;
 }
 

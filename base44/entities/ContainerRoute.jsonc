@@ -1,0 +1,70 @@
+{
+  "name": "ContainerRoute",
+  "type": "object",
+  "properties": {
+    "route_key": {
+      "type": "string",
+      "description": "Clave única para búsqueda rápida, ej: FL-MIAMI o TX-HOUSTON"
+    },
+    "estado": {
+      "type": "string",
+      "description": "Estado de la ruta (ej. FL o TX)"
+    },
+    "ciudad": {
+      "type": "string",
+      "description": "Ciudad destino o ruta"
+    },
+    "mercado": {
+      "type": "string",
+      "description": "Mercado o puerto asociado (ej. MIA, PEV, HOU, Ambos)"
+    },
+    "zona": {
+      "type": "string",
+      "description": "Zona (LOCAL, OTR, etc.)"
+    },
+    "grupo": {
+      "type": "string",
+      "description": "Grupo tarifario o rango de distancia"
+    },
+    "millas_ida": {
+      "type": "number",
+      "description": "Millas estimadas de ida"
+    },
+    "precio_20": {
+      "type": "number",
+      "description": "Tarifa objetivo contenedor 20 pies"
+    },
+    "piso_20": {
+      "type": "number",
+      "description": "Tarifa piso contenedor 20 pies"
+    },
+    "precio_40": {
+      "type": "number",
+      "description": "Tarifa objetivo contenedor 40 pies"
+    },
+    "piso_40": {
+      "type": "number",
+      "description": "Tarifa piso contenedor 40 pies"
+    },
+    "precio_45": {
+      "type": "number",
+      "description": "Tarifa objetivo contenedor 45 pies"
+    },
+    "piso_45": {
+      "type": "number",
+      "description": "Tarifa piso contenedor 45 pies"
+    },
+    "precio_20_heavy": {
+      "type": "number",
+      "description": "Tarifa objetivo contenedor 20 Heavy"
+    },
+    "piso_20_heavy": {
+      "type": "number",
+      "description": "Tarifa piso contenedor 20 Heavy"
+    },
+    "fuente": {
+      "type": "string",
+      "description": "Nombre del archivo Excel origen"
+    }
+  }
+}

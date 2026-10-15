@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Building2, Plus, X, Pencil } from 'lucide-react';
+import { Building2, Plus, X, Pencil, Trash2 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import DeleteConfirmModal from '@/components/DeleteConfirmModal';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
@@ -85,7 +86,7 @@ function BrokerForm({ broker, onSave, onClose }) {
               <label className="text-xs text-muted-foreground mb-1 block">{t.brokers.status}</label>
               <select value={form.estado} onChange={e => set('estado', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
-                {['activo','precaucion','bloqueado'].map(s => <option key={s} value={s}>{s}</option>)}
+                {['activo','precaucion','bloqueado'].map(s => <option key={s} value={s}>{t.statuses?.[s] || s}</option>)}
               </select>
             </div>
           </div>
@@ -122,13 +123,33 @@ function BrokerForm({ broker, onSave, onClose }) {
 }
 
 export default function Brokers() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
   const { activeProfileId } = useProfile();
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editBroker, setEditBroker] = useState(null);
+  const [deleteBroker, setDeleteBroker] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteBroker = async () => {
+    if (!deleteBroker) return;
+    try {
+      setDeleteLoading(true);
+      await base44.entities.Broker.delete(deleteBroker.id);
+      const key = `profile_brokers_${orgId}_${activeProfileId}`;
+      const current = getProfileBrokerIds() || [];
+      localStorage.setItem(key, JSON.stringify(current.filter(id => id !== deleteBroker.id)));
+      setDeleteBroker(null);
+      loadData();
+    } catch (err) {
+      console.error('Error eliminando broker:', err);
+      alert('Error al eliminar: ' + (err?.message || 'intente de nuevo'));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   const getProfileBrokerIds = () => {
     const key = `profile_brokers_${orgId}_${activeProfileId}`;
@@ -246,10 +267,18 @@ export default function Brokers() {
                     </td>
                     <td className="px-4 py-3"><StatusBadge status={broker.estado} /></td>
                     <td className="px-4 py-3">
-                      <button onClick={() => { setEditBroker(broker); setShowForm(true); }}
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 justify-end">
+                        <button onClick={() => { setEditBroker(broker); setShowForm(true); }}
+                          className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                          title={locale === 'en' ? 'Edit' : 'Editar'}>
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button onClick={() => setDeleteBroker(broker)}
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                          title={locale === 'en' ? 'Delete' : 'Eliminar'}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -258,6 +287,17 @@ export default function Brokers() {
           </div>
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={!!deleteBroker}
+        title={locale === 'en' ? 'Do you want to delete this Broker?' : '¿Desea eliminar el Broker?'}
+        subtitle={deleteBroker?.nombre || ''}
+        onConfirm={handleDeleteBroker}
+        onClose={() => setDeleteBroker(null)}
+        loading={deleteLoading}
+        confirmText={locale === 'en' ? 'Delete' : 'Eliminar'}
+        cancelText={locale === 'en' ? 'Cancel' : 'Cancelar'}
+      />
     </div>
   );
 }

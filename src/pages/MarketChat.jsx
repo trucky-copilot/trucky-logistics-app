@@ -160,6 +160,18 @@ export default function MarketChat() {
       const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
       const savedDbId = localStorage.getItem(lsKey);
 
+      // Cargar primero de caché local para evitar que los semáforos se pierdan al navegar entre módulos
+      const localCacheKey = `${lsKey}_messages`;
+      const cachedMsgs = localStorage.getItem(localCacheKey);
+      if (cachedMsgs) {
+        try {
+          const parsed = JSON.parse(cachedMsgs);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            setMessages(parsed);
+          }
+        } catch (e) { /* ignora */ }
+      }
+
       if (savedDbId) {
         try {
           const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
@@ -167,7 +179,22 @@ export default function MarketChat() {
           if (session) {
             setSessionId(session.session_id);
             setSessionDbId(session.id);
-            setMessages(session.messages || []);
+            let msgs = session.messages || [];
+            // Si el backend devolvió mensajes pero perdió structuredData, enriquecer desde localCache
+            if (cachedMsgs) {
+              try {
+                const parsedCached = JSON.parse(cachedMsgs);
+                if (Array.isArray(parsedCached)) {
+                  msgs = msgs.map((m, idx) => {
+                    if (!m.structuredData && parsedCached[idx]?.structuredData) {
+                      return { ...m, structuredData: parsedCached[idx].structuredData };
+                    }
+                    return m;
+                  });
+                }
+              } catch (e) { /* ignora */ }
+            }
+            setMessages(msgs);
             return;
           }
         } catch (e) { /* ignora errores de carga */ }
@@ -194,7 +221,21 @@ export default function MarketChat() {
             localStorage.setItem(lsKey, legacySession.id);
             setSessionId(legacySession.session_id);
             setSessionDbId(legacySession.id);
-            setMessages(legacySession.messages || []);
+            let msgs = legacySession.messages || [];
+            if (cachedMsgs) {
+              try {
+                const parsedCached = JSON.parse(cachedMsgs);
+                if (Array.isArray(parsedCached)) {
+                  msgs = msgs.map((m, idx) => {
+                    if (!m.structuredData && parsedCached[idx]?.structuredData) {
+                      return { ...m, structuredData: parsedCached[idx].structuredData };
+                    }
+                    return m;
+                  });
+                }
+              } catch (e) { /* ignora */ }
+            }
+            setMessages(msgs);
             return;
           }
         } catch (e) { /* ignora */ }
@@ -251,9 +292,23 @@ export default function MarketChat() {
 
     const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
 
+    // Limpiar stateMarketData masivo antes de guardar en DB para evitar que la entidad falle por tamaño
+    const cleanMessages = updatedMessages.map(m => {
+      if (m.structuredData) {
+        const { stateMarketData, ...rest } = m.structuredData;
+        return { ...m, structuredData: rest };
+      }
+      return m;
+    });
+
+    // Guardar SIEMPRE en caché local para persistencia instantánea y sin pérdida de semáforos
+    try {
+      localStorage.setItem(`${lsKey}_messages`, JSON.stringify(cleanMessages));
+    } catch (e) { /* ignora */ }
+
     if (currentSessionDbId) {
       await base44.entities.ChatHistory.update(currentSessionDbId, {
-        messages: updatedMessages,
+        messages: cleanMessages,
         titulo,
         profile_id: activeProfileId,
       });
@@ -263,7 +318,7 @@ export default function MarketChat() {
         session_id: currentSessionId,
         usuario: user.email,
         profile_id: activeProfileId,
-        messages: updatedMessages,
+        messages: cleanMessages,
         titulo,
       });
       localStorage.setItem(lsKey, created.id);
@@ -327,10 +382,12 @@ export default function MarketChat() {
       // mismo mensaje de "revisa tu conexión", así que un 401 del backend
       // (sesión vencida) se reportaba como problema de red.
       const status = err?.response?.status ?? err?.status;
+      const serverMsg = err?.response?.data?.message || err?.response?.data?.error || (typeof err?.response?.data === 'string' ? err.response.data : '') || err?.message || '';
+      console.error('MarketChat: error al enviar mensaje:', err, serverMsg);
       if (status === 401 || status === 403) {
         setError(t.errorSessionExpired);
       } else if (status) {
-        setError(t.errorStatus(status));
+        setError(serverMsg ? `${t.errorStatus(status)} — ${serverMsg}` : t.errorStatus(status));
       } else {
         setError(t.errorNetwork);
       }
@@ -348,6 +405,9 @@ export default function MarketChat() {
 
   const startNew = async () => {
     const user = await base44.auth.me();
+    const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
+    localStorage.removeItem(lsKey);
+    localStorage.removeItem(`${lsKey}_messages`);
     const newId = `session_${user.email}_${Date.now()}`;
     setSessionId(newId);
     setSessionDbId(null);
@@ -487,7 +547,7 @@ export default function MarketChat() {
                   {msg.structuredData?.intent === 'rate_check' && 
                    msg.structuredData?.origen && !msg.structuredData.origen.toLowerCase().includes('unknown') && 
                    msg.structuredData?.destino && !msg.structuredData.destino.toLowerCase().includes('unknown') && (
-                    <MarketAdvisorCard data={msg.structuredData} />
+                    <MarketAdvisorCard data={msg.structuredData} costConfig={costConfig} />
                   )}
                   {(!msg.structuredData || msg.structuredData.intent !== 'rate_check' || 
                     !msg.structuredData.origen || msg.structuredData.origen.toLowerCase().includes('unknown') || 

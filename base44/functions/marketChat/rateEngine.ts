@@ -112,7 +112,7 @@ export interface ChatMessage {
 // step_deck/drayage_20/drayage_40/power_only NO cambian — el kickoff no los
 // menciona.
 export const EQUIPMENT_BENCHMARKS: Equipment[] = [
-  { id: 'dry_van', label: "53' Dry Van", rpm_min: 3.12, rpm_target: 3.12 },
+  { id: 'dry_van', label: "53' Dry Van", rpm_min: 3.07, rpm_target: 3.07 },
   { id: 'reefer', label: 'Reefer', rpm_min: 3.66, rpm_target: 3.66 },
   { id: 'flatbed', label: 'Flatbed', rpm_min: 3.65, rpm_target: 3.65 },
   { id: 'step_deck', label: 'Step Deck', rpm_min: 2.75, rpm_target: 3.25 },
@@ -129,9 +129,7 @@ export const DETENTION = { standard: 75, min: 50, max: 100, free_hours: 2 };
 // cada locale se resuelve al renderizar, vía buildAccessorialsLine() +
 // MESSAGES[locale].units.perDay, no acá en la data.
 export const ACCESSORIALS: Array<{ label: string; min: number; max: number; unit?: 'perDay' }> = [
-  { label: 'TONU', min: 150, max: 300 },
-  { label: 'Pre-Pull', min: 100, max: 200 },
-  { label: 'Chassis split', min: 75, max: 75, unit: 'perDay' },
+  { label: 'Pre-Pull', min: 100, max: 100 },
   { label: 'Storage', min: 75, max: 150, unit: 'perDay' },
 ];
 
@@ -800,7 +798,7 @@ export type DrayageOutcome =
   | { kind: 'quote'; calculo: CalculatedQuote };
 
 export interface CalculatedQuote {
-  estado: Estado | null;
+  estado: Estado | string | null;
   ciudad: string | null;
   millasIda: number;
   fuenteMillas: 'tabla' | 'usuario';
@@ -835,8 +833,10 @@ export interface CalculatedQuote {
   // zonas ROJO / AMARILLO / VERDE en buildRateCheckMarkdown.
   costoPorMillaPropio: number | null;
   tarifaObjetivaPropia: number | null;
+  tarifaBreakEvenPropia: number | null;
   // Fase 4 — el umbral de millas usado para tramos cortos (~100 o ~200)
   tramoCortoThreshold: number | null;
+  tarifaPromedioEstado?: number | null;
 }
 
 function benchmarkParaTamanoDrayage(tamano: Tamano): Equipment {
@@ -905,6 +905,55 @@ function buscarEnTabla(estado: Estado, ciudad: string, tamano: Tamano, mercado?:
     dobleSupuesto: TX_SIZE_FACTORS[tamano].dobleSupuesto,
     precioIncluyeRegreso: nativo.route.semantica_millas.precio_incluye_regreso,
   };
+}
+
+export function buscarEnRutasDinamicas(
+  rutas: any[],
+  estado: Estado | string,
+  ciudad: string,
+  tamano: Tamano,
+  mercado?: string | null
+): TableMatch | null {
+  if (!Array.isArray(rutas) || rutas.length === 0) return null;
+  const cNorm = normalizeText(ciudad);
+  const estUpper = String(estado).toUpperCase();
+
+  for (const r of rutas) {
+    if (String(r.estado).toUpperCase() !== estUpper) continue;
+    if (normalizeText(r.ciudad) !== cNorm) continue;
+    if (mercado && r.mercado && r.mercado !== 'Ambos' && r.mercado !== 'MIA/PEV' && r.mercado !== mercado) continue;
+
+    let obj: number | null = null;
+    let piso: number | null = null;
+
+    if (tamano === '20') {
+      obj = r.precio_20 ?? (r.precio_40 ? deriveTxPrice(r.precio_40, '20').valor : null);
+      piso = r.piso_20 ?? null;
+    } else if (tamano === '40') {
+      obj = r.precio_40 ?? null;
+      piso = r.piso_40 ?? null;
+    } else if (tamano === '45') {
+      obj = r.precio_45 ?? (r.precio_40 ? deriveTxPrice(r.precio_40, '45').valor : null);
+      piso = r.piso_45 ?? null;
+    } else if (tamano === '20_heavy') {
+      obj = r.precio_20_heavy ?? (r.precio_40 ? deriveTxPrice(r.precio_40, '20_heavy').valor : null);
+      piso = r.piso_20_heavy ?? null;
+    }
+
+    if (obj !== null && isFinite(obj) && obj > 0) {
+      return {
+        estado: (estUpper === 'FL' || estUpper === 'TX') ? (estUpper as Estado) : 'FL',
+        ciudad: r.ciudad,
+        millasIda: r.millas_ida || 0,
+        piso: piso,
+        objetivo: obj,
+        esDerivado: false,
+        dobleSupuesto: false,
+        precioIncluyeRegreso: true,
+      };
+    }
+  }
+  return null;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1063,6 +1112,22 @@ export function filterAccessorialsByTriggers(
       });
     }
 
+    // Regla especial para Reefer (accesorial de puerto / genset):
+    // Cuando el usuario solo menciona "reefer" en la ruta, se refiere al equipo de camión y NO debe mostrar el adicional en el semáforo.
+    // Solo aplica como accesorial si el usuario explícitamente pregunta por el adicional, recargo, genset, o cuánto quedaría con el reefer.
+    if (campo.includes('reefer')) {
+      return normalizados.some(t => {
+        const tNorm = t.replace(/[-\s]+/g, '');
+        return tNorm.includes('genset') || 
+               tNorm.includes('recargo') || 
+               tNorm.includes('adicional') || 
+               tNorm.includes('extra') || 
+               tNorm.includes('conreefer') || 
+               tNorm.includes('cuantoquedaria') ||
+               tNorm.includes('cuantocobro');
+      });
+    }
+
     return normalizados.some(t => {
       const tNorm = t.replace(/[-\s]+/g, '');
       if (campo.includes(tNorm)) return true;
@@ -1113,10 +1178,13 @@ export function resolveDrayageQuote(params: {
   accessorialTriggers?: unknown;
   costoPorMillaPropio?: number | null;
   tarifaObjetivaPropia?: number | null;
+  tarifaBreakEvenPropia?: number | null;
   rawPrompt?: string;
   customAccessorialsText?: string | null;
+  dynamicContainerRoutes?: any[];
+  stateMarketData?: any[];
 }): DrayageOutcome {
-  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, rawPrompt, customAccessorialsText } = params;
+  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, rawPrompt, customAccessorialsText, dynamicContainerRoutes, stateMarketData } = params;
   const equipmentLabel = tamano === '20' ? "Drayage/Container 20'"
     : tamano === '40' ? "Drayage/Container 40'"
       : tamano === '45' ? "Drayage/Container 45'"
@@ -1125,11 +1193,26 @@ export function resolveDrayageQuote(params: {
   const locDestino = resolveLocation(destinoRaw);
   const locOrigen = resolveLocation(origenRaw);
 
-  const ciudadResuelta = (locDestino.status === 'ok' ? locDestino.ciudad : null) || (locOrigen.status === 'ok' ? locOrigen.ciudad : null);
+  let ciudadDestinoStr: string | null = locDestino.status === 'ok' ? locDestino.ciudad : null;
+  let estadoDestinoStr: string | null = locDestino.status === 'ok' ? locDestino.estado : null;
+
+  if (!ciudadDestinoStr && typeof destinoRaw === 'string' && destinoRaw.trim()) {
+    const rawDestClean = destinoRaw.trim();
+    const parts = rawDestClean.split(',');
+    ciudadDestinoStr = parts[0].trim();
+    if (parts.length > 1) {
+      const statePart = parts[1].trim().toUpperCase();
+      if (/^[A-Z]{2}$/.test(statePart)) {
+        estadoDestinoStr = statePart;
+      }
+    }
+  }
+
+  const ciudadResuelta = ciudadDestinoStr || (locOrigen.status === 'ok' ? locOrigen.ciudad : null);
   const origenCiudadPura = locOrigen.status === 'ok' ? (locOrigen.mercado || locOrigen.ciudad) : null;
 
   const mercadoResuelto = (locDestino.status === 'ok' ? locDestino.mercado : null) || (locOrigen.status === 'ok' ? locOrigen.mercado : null);
-  const estadoResuelto = (locDestino.status === 'ok' ? locDestino.estado : null) || (locOrigen.status === 'ok' ? locOrigen.estado : null);
+  const estadoResuelto = estadoDestinoStr || (locOrigen.status === 'ok' ? locOrigen.estado : null);
 
   let mercadoFinal = mercadoResuelto;
   if (!mercadoFinal && rawPrompt) {
@@ -1144,7 +1227,38 @@ export function resolveDrayageQuote(params: {
     let isMilesFallback = false;
     const hasGoogleMiles = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0;
 
-    if (hasGoogleMiles) {
+    const limiteMillasTabla = estadoResuelto === 'FL' ? 450 : 800;
+
+    // 1. Prioridad: Buscar coincidencia EXACTA por ciudad en rutas dinámicas (Excel) o en la tabla nativa
+    if (ciudadResuelta) {
+      if (Array.isArray(dynamicContainerRoutes) && dynamicContainerRoutes.length > 0) {
+        match = buscarEnRutasDinamicas(dynamicContainerRoutes, estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
+      }
+      if (!match) {
+        match = buscarEnTabla(estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
+      }
+    }
+
+    // Si hubo coincidencia de ciudad pero tenemos millas reales de ruta (Google Maps)
+    // y la diferencia es significativa (> 10 millas), en drayage (especialmente Florida OTR),
+    // la tarifa está estructurada por bandas de millas (ej. Grupo 315 para ~208 mi -> $1,150 vs Grupo 400 para 227 mi -> $1,200).
+    // Por ende, ajustamos el precio al grupo correspondiente a las millas reales de la ruta.
+    if (match && hasGoogleMiles && (millasIdaDeclaradas as number) <= limiteMillasTabla) {
+      const diffMillas = Math.abs(match.millasIda - (millasIdaDeclaradas as number));
+      if (diffMillas > 10) {
+        let closest = findClosestRouteByMiles(estadoResuelto as Estado, tamano, millasIdaDeclaradas as number);
+        if (closest) {
+          match.objetivo = closest.precio.objetivo;
+          match.piso = closest.precio.piso_tabla;
+          match.millasIda = millasIdaDeclaradas as number;
+        }
+      } else {
+        match.millasIda = millasIdaDeclaradas as number;
+      }
+    }
+
+    // 2. Si la ciudad no está en la tabla, buscar la ruta más cercana por millas dentro de la tabla (hasta limiteMillasTabla).
+    if (!match && hasGoogleMiles && (millasIdaDeclaradas as number) <= limiteMillasTabla) {
       let closest = findClosestRouteByMiles(estadoResuelto as Estado, tamano, millasIdaDeclaradas as number);
       
       // Fallback a buscar 40' si el tamaño exacto (ej. 45' o 20_heavy) no existe en la tabla de TX
@@ -1157,7 +1271,7 @@ export function resolveDrayageQuote(params: {
           match = {
             estado: estadoResuelto,
             ciudad: ciudadResuelta || closest.route.ciudad,
-            millasIda: closest.route.millas_ida,
+            millasIda: millasIdaDeclaradas as number,
             piso: closest.precio.piso_tabla,
             objetivo: closest.precio.objetivo,
             esDerivado: false,
@@ -1175,7 +1289,7 @@ export function resolveDrayageQuote(params: {
           match = {
             estado: estadoResuelto,
             ciudad: ciudadResuelta || closest.route.ciudad,
-            millasIda: closest.route.millas_ida,
+            millasIda: millasIdaDeclaradas as number,
             piso: pisoFinal,
             objetivo: objetivoFinal,
             esDerivado: derivadoFinal,
@@ -1184,13 +1298,6 @@ export function resolveDrayageQuote(params: {
           };
         }
       }
-    }
-
-    // Si por alguna razón no pudimos encontrar por millas o no había millas declaradas,
-    // usamos la lógica exacta por ciudad.
-    if (!match && ciudadResuelta) {
-      match = buscarEnTabla(estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
-      isMilesFallback = true;
     }
 
     if (match) {
@@ -1204,19 +1311,25 @@ export function resolveDrayageQuote(params: {
       });
       const accesorialesMatch = resolveAccessorialsForState(match.estado as Estado, destinoRaw, customAccessorialsText);
       const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers, origenCiudadPura);
+      // En contenedores para rutas mayores a 200 millas, al ser ida y vuelta (round trip),
+      // el RPM se calcula como: tarifa objetivo de la tabla / (2 * millas de la tabla).
+      const rpmObjetivo = match.millasIda > 200
+        ? Number((match.objetivo / (2 * match.millasIda)).toFixed(2))
+        : Number((match.objetivo / match.millasIda).toFixed(2));
       return {
         kind: 'quote',
         calculo: {
           estado: match.estado as Estado,
           ciudad: mercadoFinal ? `${match.ciudad} ${mercadoFinal}` : match.ciudad,
-          millasIda: hasGoogleMiles ? (millasIdaDeclaradas as number) : match.millasIda,
-          fuenteMillas: hasGoogleMiles ? 'usuario' : 'tabla',
+          millasIda: match.millasIda,
+          fuenteMillas: 'tabla',
           piso: ft.floor,
           floorSource: ft.floorSource,
           objetivo: ft.target,
           targetSource: ft.targetSource,
           dobleSupuesto: match.dobleSupuesto,
           equipmentLabel,
+          tarifaPromedioEstado: rpmObjetivo,
           referencias: [],
           referenciasEstadoNombre: null,
           tarifaOfrecida,
@@ -1226,6 +1339,7 @@ export function resolveDrayageQuote(params: {
           perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
           costoPorMillaPropio: costoPorMillaPropio ?? null,
           tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+          tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
           tramoCortoThreshold: null, // drayage usa tabla
         },
       };
@@ -1262,12 +1376,12 @@ export function resolveDrayageQuote(params: {
   // buscamos la ruta más parecida en millas en la tabla correspondiente para
   // usarla de referencia, en lugar del cálculo genérico por tramos.
   const isNeighborFallback = !estadoResuelto && refState.cercano;
-  const fallbackEstado = estadoResuelto || refState.estado;
+  const fallbackEstado: Estado = (estadoResuelto === 'FL' || estadoResuelto === 'TX') ? (estadoResuelto as Estado) : refState.estado;
   const isIntraStateWithTable = estadoResuelto === 'TX' || estadoResuelto === 'FL';
 
-  const limiteMillas = 200; // Límite estricto de 200 millas para fallback
+  const limiteMillas = isIntraStateWithTable ? (fallbackEstado === 'FL' ? 450 : 800) : 200;
 
-  // Comparamos millasIda contra el límite de 200 fijo
+  // Comparamos millasIda contra el límite de la tabla
   const closest = ((refState.cercano || isIntraStateWithTable) && millasIda <= limiteMillas)
     ? findClosestRouteByMiles(fallbackEstado, tamano, millasIda, isNeighborFallback)
     : null;
@@ -1287,14 +1401,22 @@ export function resolveDrayageQuote(params: {
     });
   } else {
     // Fallback al cálculo genérico por tramos si no se encontró nada cercano o no hay vecino
+    const stateContainerData = Array.isArray(stateMarketData)
+      ? stateMarketData.find((s: any) => s.state_code === fallbackEstado || s.state_code === estadoResuelto)
+      : null;
+    const stateContainerRpm = stateContainerData?.container ? Number(stateContainerData.container) : null;
+
     const benchmark = benchmarkParaTamanoDrayage(tamano);
     const tramoCortoGen = millasIda <= 200 ? resolveShortHaulTier(millasIda, 'drayage') : null;
+    const targetRpmGen = (millasIda > 200 && tarifaObjetivaPropia != null && tarifaObjetivaPropia > 0)
+      ? tarifaObjetivaPropia
+      : (stateContainerRpm ?? benchmark.rpm_target);
     ft = computeFloorTarget({
       tablaPiso: null,
       tablaObjetivo: null,
       targetEsDerivado: false,
       millasIda,
-      rpmBase: benchmark.rpm_target,
+      rpmBase: targetRpmGen,
       pagoCamionRpm,
       tramoCorto: tramoCortoGen,
       costoPorMillaPropio: costoPorMillaPropio ?? null,
@@ -1324,6 +1446,7 @@ export function resolveDrayageQuote(params: {
       targetSource: ft.targetSource,
       dobleSupuesto: false,
       equipmentLabel,
+      tarifaPromedioEstado: (millasIda > 200 && tarifaObjetivaPropia != null && tarifaObjetivaPropia > 0) ? tarifaObjetivaPropia : null,
       referencias,
       referenciasEstadoNombre: refState.cercano ? nombreEstado(refState.estado) : null,
       tarifaOfrecida,
@@ -1333,6 +1456,7 @@ export function resolveDrayageQuote(params: {
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
       costoPorMillaPropio: costoPorMillaPropio ?? null,
       tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+      tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
       tramoCortoThreshold: null,
     },
   };
@@ -1363,11 +1487,12 @@ export function resolveGenericQuote(params: {
   costoPorMillaPropio?: number | null;
   // Semáforo — tarifa objetivo del usuario (CostConfig.tarifa_objetivo).
   tarifaObjetivaPropia?: number | null;
+  tarifaBreakEvenPropia?: number | null;
   // Datos de mercado por estado extraídos por IA (Admin panel)
   stateMarketData?: any[];
   customAccessorialsText?: string | null;
 }): GenericQuoteOutcome {
-  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, stateMarketData = [], customAccessorialsText } = params;
+  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, stateMarketData = [], customAccessorialsText } = params;
 
   const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
     ? millasIdaDeclaradas
@@ -1390,12 +1515,6 @@ export function resolveGenericQuote(params: {
     if (!estadoConsultado && (destPrompt.estado === 'FL' || destPrompt.estado === 'TX')) estadoConsultado = destPrompt.estado;
     estadoDestinoStr = destPrompt.estado;
   }
-  
-  // Buscar en la data del admin
-  let rpmBase = equipment.rpm_target;
-  let notaEstado = '';
-  // Preferimos el estado de destino para la búsqueda de mercado, si no, origen.
-  let estadoBusqueda = estadoDestinoStr || estadoOrigenStr;
 
   const STATE_NAMES: Record<string, string> = {
     AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
@@ -1411,27 +1530,55 @@ export function resolveGenericQuote(params: {
     DC: 'District of Columbia'
   };
 
-  if (!estadoBusqueda) {
-    const rawLocs = ((typeof destinoRaw === 'string' ? destinoRaw : '') + ' ' + (typeof origenRaw === 'string' ? origenRaw : '')).toLowerCase();
-    
+  const DEFAULT_STATE_RATES: Record<string, Partial<Record<string, number>>> = {
+    FL: { dry_van: 2.87, reefer: 3.12, flatbed: 3.89 },
+    OK: { dry_van: 2.82, reefer: 2.82, flatbed: 2.82 },
+    TX: { dry_van: 2.82, reefer: 2.82, flatbed: 2.82 },
+    GA: { dry_van: 2.87, reefer: 3.20, flatbed: 3.12 },
+    NC: { dry_van: 2.75, reefer: 3.10, flatbed: 3.00 },
+    SC: { dry_van: 2.78, reefer: 3.12, flatbed: 3.02 },
+    TN: { dry_van: 2.80, reefer: 3.15, flatbed: 3.08 },
+    AL: { dry_van: 2.76, reefer: 3.10, flatbed: 3.05 },
+    US: { dry_van: 3.07, reefer: 3.66, flatbed: 3.65 },
+  };
+
+  // Detección complementaria de estados en texto si no vinieron en prompt resolution
+  if (!estadoOrigenStr && typeof origenRaw === 'string') {
+    const rawOrig = origenRaw.toLowerCase();
     for (const [code, name] of Object.entries(STATE_NAMES)) {
-      if (rawLocs.includes(name.toLowerCase())) {
-        estadoBusqueda = code;
+      if (rawOrig.includes(name.toLowerCase())) {
+        estadoOrigenStr = code;
         break;
       }
     }
-
-    if (!estadoBusqueda) {
-      const match = rawLocs.match(/\b([a-z]{2})\b/i);
-      if (match) {
-        estadoBusqueda = match[1].toUpperCase();
-      } else {
-        // Fallback definitivo: si no hay un estado claro ni ciudad, asumimos promedio nacional (US)
-        estadoBusqueda = 'US';
-      }
+    if (!estadoOrigenStr) {
+      const match = origenRaw.match(/\b([A-Z]{2})\b/i);
+      if (match) estadoOrigenStr = match[1].toUpperCase();
     }
   }
 
+  if (!estadoDestinoStr && typeof destinoRaw === 'string') {
+    const rawDest = destinoRaw.toLowerCase();
+    for (const [code, name] of Object.entries(STATE_NAMES)) {
+      if (rawDest.includes(name.toLowerCase())) {
+        estadoDestinoStr = code;
+        break;
+      }
+    }
+    if (!estadoDestinoStr) {
+      const match = destinoRaw.match(/\b([A-Z]{2})\b/i);
+      if (match) estadoDestinoStr = match[1].toUpperCase();
+    }
+  }
+
+  // REGLA: Si la ruta es entre dos estados diferentes (interestatal), toma la tarifa nacional (US)
+  const isInterstate = Boolean(estadoOrigenStr && estadoDestinoStr && estadoOrigenStr !== estadoDestinoStr);
+  let estadoBusqueda = isInterstate ? 'US' : (estadoDestinoStr || estadoOrigenStr || 'US');
+
+  let rpmBase = equipment.rpm_target;
+  let notaEstado = isInterstate ? ' (Promedio Nacional US)' : '';
+
+  let hasSpecificStateMatch = false;
   if (estadoBusqueda && stateMarketData.length > 0) {
     const dataEstado = stateMarketData.find((s: any) => 
       s.state_code === estadoBusqueda || 
@@ -1439,8 +1586,16 @@ export function resolveGenericQuote(params: {
     );
     if (dataEstado && dataEstado[equipment.id]) {
       rpmBase = dataEstado[equipment.id];
-      notaEstado = ` (Referencia estimada de ${estadoBusqueda})`;
+      notaEstado = isInterstate ? ' (Promedio Nacional US)' : ` (Referencia estimada de ${estadoBusqueda})`;
+      hasSpecificStateMatch = true;
     }
+  }
+
+  // Fallback con tarifas por estado extraídas del reporte DAT Trendlines subido por el admin:
+  if (!hasSpecificStateMatch && estadoBusqueda && DEFAULT_STATE_RATES[estadoBusqueda]?.[equipment.id]) {
+    rpmBase = DEFAULT_STATE_RATES[estadoBusqueda]![equipment.id]!;
+    notaEstado = isInterstate ? ' (Promedio Nacional US)' : ` (Referencia estimada de ${estadoBusqueda})`;
+    hasSpecificStateMatch = true;
   }
 
   // Intercepción: Si el usuario NO dio millas (o el LLM extrajo 0 por error), devolvemos la tarifa de referencia del estado o nacional (RPM base).
@@ -1450,19 +1605,66 @@ export function resolveGenericQuote(params: {
   }
   if (!dentroDelRangoDeSanidad(millasIda)) return { kind: 'fuera_de_rango' };
 
-  // Fase 4 — tramos cortos (v3 §7, Decisión 4)
-  const tramoCorto = resolveShortHaulTier(millasIda, equipment.id);
-  const ft = computeFloorTarget({
-    tablaPiso: null,
-    tablaObjetivo: null,
-    targetEsDerivado: false,
-    millasIda,
-    rpmBase,
-    pagoCamionRpm,
-    // Fallback: si no declaró pago_camion_rpm, usar costo_por_milla
-    costoPorMillaPropio: costoPorMillaPropio ?? null,
-    tramoCorto,
-  });
+  // Si millasIda <= 200: tomar las tarifas fijas de los contenedores (misma lógica de FL, TX o vecinos)
+  // Por defecto toma el contenedor 20 (no el 40)
+  let tableMatchFlat: { piso: number | null; objetivo: number; millasIda: number; precioIncluyeRegreso: boolean } | null = null;
+  if (millasIda != null && millasIda <= 200) {
+    const estadoDirecto = (destPrompt.status === 'ok' ? destPrompt.estado : null) || (fromPrompt.status === 'ok' ? fromPrompt.estado : null);
+    const ciudadDirecta = (destPrompt.status === 'ok' ? destPrompt.ciudad : null) || (fromPrompt.status === 'ok' ? fromPrompt.ciudad : null);
+
+    if (estadoDirecto && (estadoDirecto === 'FL' || estadoDirecto === 'TX') && ciudadDirecta) {
+      const match = buscarEnTabla(estadoDirecto as Estado, ciudadDirecta, '20');
+      if (match) {
+        tableMatchFlat = { piso: match.piso, objetivo: match.objetivo, millasIda: match.millasIda, precioIncluyeRegreso: match.precioIncluyeRegreso };
+      }
+    }
+
+    if (!tableMatchFlat) {
+      const refState = resolveReferenceState(destinoRaw || origenRaw);
+      const isNeighborFallback = !estadoDirecto && refState.cercano;
+      const fallbackEstado = (estadoDirecto === 'FL' || estadoDirecto === 'TX') ? estadoDirecto : (refState.cercano ? refState.estado : null);
+      if (fallbackEstado) {
+        const closest = findClosestRouteByMiles(fallbackEstado as Estado, '20', millasIda, isNeighborFallback);
+        if (closest) {
+          tableMatchFlat = {
+            piso: closest.precio.piso_tabla,
+            objetivo: closest.precio.objetivo,
+            millasIda: closest.route.millas_ida,
+            precioIncluyeRegreso: closest.route.semantica_millas.precio_incluye_regreso,
+          };
+        }
+      }
+    }
+  }
+
+  let ft: FloorTargetResult;
+  let tramoCorto: ReturnType<typeof resolveShortHaulTier> = null;
+
+  if (tableMatchFlat) {
+    ft = computeFloorTarget({
+      tablaPiso: tableMatchFlat.piso,
+      tablaObjetivo: tableMatchFlat.objetivo,
+      targetEsDerivado: false,
+      millasIda: tableMatchFlat.millasIda || millasIda,
+      rpmBase: null,
+      pagoCamionRpm: null,
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+    });
+  } else {
+    // Fase 4 — tramos cortos (v3 §7, Decisión 4)
+    tramoCorto = resolveShortHaulTier(millasIda, equipment.id);
+    ft = computeFloorTarget({
+      tablaPiso: null,
+      tablaObjetivo: null,
+      targetEsDerivado: false,
+      millasIda,
+      rpmBase,
+      pagoCamionRpm,
+      // Fallback: si no declaró pago_camion_rpm, usar costo_por_milla
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+      tramoCorto,
+    });
+  }
 
   // Fase 4 — segunda lectura
   const segundaLectura = ft.targetSource === 'calculo' ? computeSegundaLectura(ft.target, millasIda) : null;
@@ -1473,26 +1675,28 @@ export function resolveGenericQuote(params: {
   return {
     kind: 'quote',
     calculo: {
-      estado: null,
-      ciudad: null,
-      millasIda,
-      fuenteMillas: 'usuario',
+      estado: estadoConsultado,
+      ciudad: destPrompt.status === 'ok' ? destPrompt.ciudad : (fromPrompt.status === 'ok' ? fromPrompt.ciudad : null),
+      millasIda: tableMatchFlat ? tableMatchFlat.millasIda : millasIda,
+      fuenteMillas: tableMatchFlat ? 'tabla' : 'usuario',
       piso: ft.floor,
       floorSource: ft.floorSource,
       objetivo: ft.target,
       targetSource: ft.targetSource,
       dobleSupuesto: false,
       equipmentLabel: equipment.label + notaEstado,
+      tarifaPromedioEstado: rpmBase,
       referencias: [],
       referenciasEstadoNombre: null,
       tarifaOfrecida,
       segundaLectura,
-      precioIncluyeRegreso: false,
+      precioIncluyeRegreso: tableMatchFlat ? tableMatchFlat.precioIncluyeRegreso : false,
       accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
       perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
       costoPorMillaPropio: costoPorMillaPropio ?? null,
       tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
-      tramoCortoThreshold: tramoCorto ? tramoCorto.threshold : null,
+      tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
+      tramoCortoThreshold: tableMatchFlat ? null : (tramoCorto ? tramoCorto.threshold : null),
     },
   };
 }
@@ -1572,7 +1776,12 @@ if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
     lineas.push(`---`);
     lineas.push(`📌 **Detalles de la ruta**`);
     lineas.push(`- De: ${rutaLabel} · Distancia: ${millasTag}`);
-    lineas.push(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${tObjFmt})`);
+    const rpmMercado = q.precioIncluyeRegreso
+      ? (q.objetivo / (q.millasIda * 2))
+      : (q.objetivo / q.millasIda);
+    const rpmMercadoFmt = `$${rpmMercado.toFixed(2)}/mi`;
+    const rateDetalleFmt = (q.targetSource === 'tabla' || q.fuenteMillas === 'tabla') ? rpmMercadoFmt : tObjFmt;
+    lineas.push(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${rateDetalleFmt})`);
 
     // Accesoriales
     let totalAccesoriales = 0;
@@ -1799,7 +2008,7 @@ export const EXTRACTION_SCHEMA = {
     accessorial_query_mode: {
       type: 'string',
       enum: ['price_only', 'include_in_rate', 'none'],
-      description: "Determina el modo de consulta de accesorial. 'price_only' cuando el usuario SOLO quiere saber cuánto vale ese cargo accesorial (ej: '¿cuánto vale el pre-pull?', '¿qué cobra el hazmat?'). 'include_in_rate' cuando el usuario quiere saber el total de una ruta CON ese cargo incluido (ej: 'cuánto queda con el pre-pull', 'si me cobran pre-pull cuánto sería el total'). 'none' si no se menciona ningún accesorial."
+      description: "Determina el modo de consulta de accesorial. 'price_only' ÚNICAMENTE cuando el usuario pregunta de forma puntual y exclusiva el monto o precio de ese cargo accesorial (ej: '¿cuánto vale el pre-pull?', 'cuál es el valor de detention', 'how much is detention?'). Si el usuario hace preguntas más amplias, conceptuales o compuestas (ej: '¿qué es detention y cuánto cobro?', 'explícame el pre-pull', o si hace más de una pregunta), usa 'none' y responde a todo en respuesta_general con intent='general'. 'include_in_rate' cuando el usuario quiere saber el total de una ruta CON ese cargo incluido. 'none' si no se menciona ningún accesorial o es consulta conceptual."
     },
     respuesta_general: { type: 'string', description: "Tu respuesta general. Si el intent es draft_email, no redactes el correo aquí, simplemente pon un mensaje genérico de 'Redactando correo...' porque se hará en un segundo paso." },
     broker_name: { type: 'string', description: "El nombre del broker mencionado en el chat (ej. 'CH Robinson', 'TQL'). null si no se menciona." },
