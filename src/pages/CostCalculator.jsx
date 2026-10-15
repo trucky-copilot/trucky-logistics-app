@@ -4,6 +4,7 @@ import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
 import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
+import { useAppState } from '@/lib/AppStateContext';
 
 const QUICKLOAD_RATE = 2.20;
 const TARGET_RATE = 3.00;
@@ -133,6 +134,8 @@ export default function CostCalculator() {
   const quickloadProfit = QUICKLOAD_RATE - breakEvenRate;
   const quickloadStatus = quickloadProfit > 0.1 ? 'ganancia' : quickloadProfit > -0.1 ? 'break_even' : 'perdida';
 
+  const { currentUser } = useAppState();
+
   const keysToValidate = ['diesel_precio', 'mpg', 'millas_semana_promedio'];
   const hasZeroOrNegative = keysToValidate.some(key => {
     const val = Number(String(config[key] ?? '').replace(',', '.'));
@@ -140,30 +143,39 @@ export default function CostCalculator() {
   });
 
   const saveConfig = async () => {
-    // Si el cálculo sigue siendo inválido por alguna otra razón
-    if (hasZeroOrNegative || !costos.valido) return;
+    if (saving) return;
+    if (hasZeroOrNegative || !costos.valido) {
+      alert('Por favor verifica que Precio diésel, MPG y Millas/semana sean números mayores a 0.');
+      return;
+    }
     setSaving(true);
-    const user = await base44.auth.me();
 
-    const numericKeys = [
-      'diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal',
-      'pago_conductor_porcentaje', 'otros_gastos_semanales',
-      'millas_semana_promedio', 'tarifa_objetivo'
-    ];
-    const cleanConfig = { ...config };
-    numericKeys.forEach(k => {
-      cleanConfig[k] = Number(String(cleanConfig[k] ?? 0).replace(',', '.'));
-    });
-
-    const data = {
-      ...cleanConfig,
-      usuario: user.email,
-      profile_id: activeProfileId,
-      costo_por_milla: costos.costoPorMilla,
-      tarifa_break_even: costos.tarifaBreakEven,
-    };
-    
     try {
+      let email = currentUser?.email;
+      if (!email) {
+        const user = await base44.auth.me();
+        email = user?.email;
+      }
+      if (!email) throw new Error('No se pudo identificar la sesión de usuario');
+
+      const numericKeys = [
+        'diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal',
+        'pago_conductor_porcentaje', 'otros_gastos_semanales',
+        'millas_semana_promedio', 'tarifa_objetivo'
+      ];
+      const cleanConfig = { ...config };
+      numericKeys.forEach(k => {
+        cleanConfig[k] = Number(String(cleanConfig[k] ?? 0).replace(',', '.'));
+      });
+
+      const data = {
+        ...cleanConfig,
+        usuario: email,
+        profile_id: activeProfileId,
+        costo_por_milla: costos.costoPorMilla,
+        tarifa_break_even: costos.tarifaBreakEven,
+      };
+      
       if (configId) {
         await base44.entities.CostConfig.update(configId, data);
       } else {
@@ -177,6 +189,7 @@ export default function CostCalculator() {
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error("Error guardando CostConfig:", e);
+      alert('Error al guardar configuración: ' + (e?.message || 'intente de nuevo'));
     } finally {
       setSaving(false);
     }

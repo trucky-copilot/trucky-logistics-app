@@ -967,9 +967,13 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
     // fuera del conjunto autorizado, la respuesta NUNCA sale cruda: se
     // reemplaza por `buildBoundaryFallbackMarkdown()`.
     const conFronteraVerificada = (texto: string, permitidas: Set<number>): string => {
-      // Los números tipeados por el usuario siempre están autorizados a repetirse.
-      const userNumbers = extractNumericTokens(ultimoMsg);
-      for (const n of userNumbers) permitidas.add(n);
+      // Los números tipeados por el usuario en el turno actual o mensajes recientes siempre están autorizados.
+      for (const m of cappedMessages) {
+        if (m.role === 'user' && m.content) {
+          const userNumbers = extractNumericTokens(m.content);
+          for (const n of userNumbers) permitidas.add(n);
+        }
+      }
       
       const chequeo = assertNoInventedFigures(texto, permitidas);
       return chequeo.ok ? texto : buildBoundaryFallbackMarkdown(locale);

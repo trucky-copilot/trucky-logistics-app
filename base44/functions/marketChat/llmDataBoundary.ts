@@ -180,7 +180,25 @@ export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
     }
   }
   for (const v of q.perfilMargen.verdicts) {
-    numeros.push(v.costoBase, v.montoMargen, Math.abs(v.montoMargen), v.pctMargen);
+    numeros.push(
+      v.costoBase, 
+      v.montoMargen, 
+      Math.abs(v.montoMargen), 
+      v.pctMargen,
+      Number(v.pctMargen.toFixed(1)),
+      Number(Math.abs(v.pctMargen).toFixed(1)),
+      Math.round(v.pctMargen),
+      Math.round(Math.abs(v.pctMargen))
+    );
+  }
+  if (q.tarifaOfrecida != null && q.millasIda > 0) {
+    const rpmOfrecida = q.tarifaOfrecida / q.millasIda;
+    numeros.push(
+      rpmOfrecida,
+      Number(rpmOfrecida.toFixed(2)),
+      Number(rpmOfrecida.toFixed(1)),
+      Math.round(rpmOfrecida * 100) / 100
+    );
   }
   // Semáforo — CPM y tarifa objetivo del usuario (en $/mi) y sus totales
   // calculados para la ruta. Autorizados porque buildRateCheckMarkdown los

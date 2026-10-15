@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Truck, Plus, X, Pencil, Trash2 } from 'lucide-react';
+import { Truck, Plus, X, Pencil, Trash2, Loader2 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import DeleteConfirmModal from '@/components/DeleteConfirmModal';
 import { useOrganizationId } from '@/lib/AppStateContext';
@@ -27,6 +27,7 @@ function TruckForm({ truck, onSave, onClose }) {
     ...truck
   };
   const [form, setForm] = useState(initialState);
+  const [isSaving, setIsSaving] = useState(false);
   
   useEffect(() => {
     const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
@@ -34,14 +35,23 @@ function TruckForm({ truck, onSave, onClose }) {
     return () => setUnsavedChanges('FleetForm', false);
   }, [form, truck, setUnsavedChanges]);
   const set = (k, v) => setForm(p => ({ ...p, [k]: v }));
-  const handleSubmit = (e) => { e.preventDefault(); onSave(form); };
+  const handleSubmit = async (e) => { 
+    e.preventDefault(); 
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      await onSave(form);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold">{truck ? t.fleet.edit : t.fleet.new}</h2>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
+          <button onClick={onClose} disabled={isSaving} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
@@ -111,8 +121,17 @@ function TruckForm({ truck, onSave, onClose }) {
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
           </div>
           <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground">{t.fleet.cancel}</button>
-            <button type="submit" className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground">{t.fleet.save}</button>
+            <button type="button" onClick={onClose} disabled={isSaving} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground disabled:opacity-40">{t.fleet.cancel}</button>
+            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>{t.fleet.save}...</span>
+                </>
+              ) : (
+                t.fleet.save
+              )}
+            </button>
           </div>
         </form>
       </div>

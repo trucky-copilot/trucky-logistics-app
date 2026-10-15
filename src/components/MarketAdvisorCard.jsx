@@ -263,24 +263,33 @@ function MarketAdvisorCardContent({ data, costConfig }) {
     totalTarget = Math.round(parseFloat(targetRpm) * millasIda) + totalAccesoriales;
   }
 
-  // Regla especial: Cuando el CPM es mayor a la tarifa del estado:
-  // - roja queda igual si es menor al CPM (< CPM)
+  // Regla especial: Cuando el CPM es mayor a la tarifa del estado,
+  // O cuando la tarifa objetivo sea 0 y el CPM sea menor/bajo al promedio de tarifas por estado
+  // para contenedores donde las millas no están en la base de datos:
+  // - roja queda igual (< CPM)
   // - amarilla sea del CPM al break-even
   // - verde sea mayor al break-even
   const isCpmHigherThanState = Boolean(tarifaEstadoVal > 0 && userCpmNum > tarifaEstadoVal);
+  const isContainerZeroTargetCpmLow = Boolean(
+    isContainer && 
+    !isTableRoute && 
+    userTargetNum <= 0 && 
+    (tarifaEstadoVal > 0 && userCpmNum <= tarifaEstadoVal)
+  );
+  const applyBreakEvenAsGreen = isCpmHigherThanState || isContainerZeroTargetCpmLow || (userTargetNum <= 0 && userBreakEvenNum > 0);
 
   const totalCpmFloor = Math.round(userCpmNum * millasIda);
   const totalYellowFloor = Math.round(userBreakEvenNum * millasIda) + totalAccesoriales;
 
   // Variables dinámicas para el semáforo y recomendación
-  const yellowMinRpm = isCpmHigherThanState ? userCpm : userBreakEven;
-  const yellowMaxRpm = isCpmHigherThanState ? userBreakEven : targetRpm;
-  const yellowMinTotal = isCpmHigherThanState ? (totalCpmFloor + totalAccesoriales) : totalYellowFloor;
-  const yellowMaxTotal = isCpmHigherThanState ? totalYellowFloor : totalTarget;
+  const yellowMinRpm = applyBreakEvenAsGreen ? userCpm : userBreakEven;
+  const yellowMaxRpm = applyBreakEvenAsGreen ? userBreakEven : targetRpm;
+  const yellowMinTotal = applyBreakEvenAsGreen ? (totalCpmFloor + totalAccesoriales) : totalYellowFloor;
+  const yellowMaxTotal = applyBreakEvenAsGreen ? totalYellowFloor : totalTarget;
 
-  const greenRpm = isCpmHigherThanState ? userBreakEven : targetRpm;
-  const greenTotal = isCpmHigherThanState ? totalYellowFloor : totalTarget;
-  const greenSubtitle = isCpmHigherThanState
+  const greenRpm = applyBreakEvenAsGreen ? userBreakEven : targetRpm;
+  const greenTotal = applyBreakEvenAsGreen ? totalYellowFloor : totalTarget;
+  const greenSubtitle = applyBreakEvenAsGreen
     ? (locale === 'en' ? "your break-even" : "tu break-even")
     : (locale === 'en' ? "your target" : "tu objetivo");
 
@@ -336,14 +345,14 @@ function MarketAdvisorCardContent({ data, costConfig }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           {/* CAJA 1: VEREDICTO DE LA OFERTA */}
           {(() => {
-            const tTarget = Number(marketTargetTotal);
-            const effectiveFloor = marketFloorTotal ? Number(marketFloorTotal) : (tTarget * 0.90);
+            const tTarget = applyBreakEvenAsGreen ? greenTotal : Number(marketTargetTotal);
+            const effectiveFloor = applyBreakEvenAsGreen ? (totalCpmFloor + totalAccesoriales) : (marketFloorTotal ? Number(marketFloorTotal) : (tTarget * 0.90));
             
             const showRed = tOfrecida === null || tOfrecida < effectiveFloor;
             const showYellow = tOfrecida === null || (tOfrecida >= effectiveFloor && tOfrecida < tTarget);
 
-            const targetRpmVal = targetRpm || (tTarget && millasIda ? (tTarget / millasIda).toFixed(2) : null);
-            const floorRpmVal = marketFloorRpm || (effectiveFloor && millasIda ? (effectiveFloor / millasIda).toFixed(2) : (targetRpmVal ? (Number(targetRpmVal) * 0.90).toFixed(2) : null));
+            const targetRpmVal = applyBreakEvenAsGreen ? greenRpm : (targetRpm || (tTarget && millasIda ? (tTarget / millasIda).toFixed(2) : null));
+            const floorRpmVal = applyBreakEvenAsGreen ? yellowMinRpm : (marketFloorRpm || (effectiveFloor && millasIda ? (effectiveFloor / millasIda).toFixed(2) : (targetRpmVal ? (Number(targetRpmVal) * 0.90).toFixed(2) : null)));
 
             if (showRed) {
               return (

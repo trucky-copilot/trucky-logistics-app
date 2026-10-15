@@ -1729,20 +1729,25 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
   // Si no tiene datos propios, caemos al formato clásico de piso/objetivo.
   // ──────────────────────────────────────────────────────────────────────────
   const cpm = q.costoPorMillaPropio;    // ej: 1.75 — límite inferior (ROJO)
-  const tObj = q.tarifaObjetivaPropia;   // ej: 3.00 — límite superior (VERDE)
-  
+  let effectiveTarget = q.tarifaObjetivaPropia;   // ej: 3.00 — límite superior (VERDE)
+  const be = q.tarifaBreakEvenPropia;
 
-if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
-    // Límite superior del semáforo: el mayor entre CPM y tarifa objetivo.
-    // Si el usuario tiene cpm > tObj (calculadora con datos que necesitan revisión),
-    // el semáforo igual se muestra usando cpm como referencia real de costos.
-    const limSuperior = Math.max(cpm, tObj);
+  // Si la tarifa objetivo es 0 o no definida, pero hay break-even válido, usar break-even como meta verde
+  const isUsingBreakEven = (effectiveTarget == null || effectiveTarget <= 0) && be != null && be > 0;
+  if (isUsingBreakEven) {
+    effectiveTarget = be;
+  }
+
+  if (cpm != null && effectiveTarget != null && cpm > 0 && effectiveTarget > 0) {
+    // Límite superior del semáforo: el mayor entre CPM y tarifa objetivo / break-even
+    const limSuperior = Math.max(cpm, effectiveTarget);
     // Totales en dólares para esta ruta
-    const pisoCpm = Math.round(cpm * q.millasIda);  // total a tu CPM
-    const totalObj = Math.round(limSuperior * q.millasIda);  // total a tu objetivo
+    const pisoCpm = Math.round(cpm * q.millasIda);
+    const totalObj = Math.round(limSuperior * q.millasIda);
 
     const cpmFmt = `$${cpm.toFixed(2)}/mi`;
-    const tObjFmt = `$${tObj.toFixed(2)}/mi`;
+    const tObjFmt = `$${effectiveTarget.toFixed(2)}/mi`;
+    const targetDescriptor = isUsingBreakEven ? (locale === 'en' ? 'your break-even' : 'tu break-even') : (locale === 'en' ? 'your target' : 'tu objetivo');
 
     const lineas: string[] = [];
 
@@ -1766,7 +1771,7 @@ if (cpm != null && tObj != null && cpm > 0 && tObj > 0) {
     lineas.push('');
 
     // 🟢 VERDE
-    lineas.push(`🟢 **VERDE — Aceptar**  ${tObjFmt}+ (≥ tu objetivo)`);
+    lineas.push(`🟢 **VERDE — Aceptar**  ${tObjFmt}+ (≥ ${targetDescriptor})`);
     lineas.push(`● Tarifa rentable.`);
     lineas.push(`● Cubre tus costos y te deja margen de ganancia.`);
     lineas.push(`● Buena opción, especialmente si conseguís buen regreso.`);
