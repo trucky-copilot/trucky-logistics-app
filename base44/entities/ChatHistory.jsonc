@@ -26,7 +26,21 @@
             "type": "string"
           },
           "structuredData": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "intent": {
+                "type": "string"
+              },
+              "origen": {
+                "type": "string"
+              },
+              "destino": {
+                "type": "string"
+              },
+              "calculo": {
+                "type": "object"
+              }
+            }
           }
         }
       }

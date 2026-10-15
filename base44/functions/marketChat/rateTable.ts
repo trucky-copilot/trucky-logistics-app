@@ -137,7 +137,7 @@ export function lookupRoute(estado: Estado, ciudad: string, tamano: Tamano, merc
   const rutas = loadRoutes(estado);
   for (const route of rutas) {
     if (normalizarCiudad(route.ciudad) !== objetivo) continue;
-    if (mercado && route.mercado !== mercado) continue; // <-- FILTRO NUEVO
+    if (mercado && route.mercado !== 'Ambos' && route.mercado !== 'MIA/PEV' && route.mercado !== mercado) continue;
     const precio = route.precios.find(p => p.tamano === tamano);
     if (precio) return { route, precio };
   }

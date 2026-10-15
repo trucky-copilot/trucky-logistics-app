@@ -3,6 +3,9 @@
   "specifiers": {
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.14",
+    "npm:@base44/sdk@0.8.48": "0.8.48",
+    "npm:@base44/sdk@~0.8.53": "0.8.53",
+    "npm:@base44/vite-plugin@^1.0.45": "1.0.45",
     "npm:@eslint/js@^9.19.0": "9.39.5",
     "npm:@hello-pangea/dnd@17": "17.0.0_react@18.3.1_react-dom@18.3.1_@types+react@18.3.31",
     "npm:@hookform/resolvers@^4.1.2": "4.1.3_react-hook-form@7.89.0_@types+react@18.3.31_react@18.3.1",
@@ -62,6 +65,7 @@
     "npm:lucide-react@0.475": "0.475.0_react@18.3.1",
     "npm:moment@^2.30.1": "2.31.0",
     "npm:next-themes@~0.4.4": "0.4.6_react@18.3.1_react-dom@18.3.1",
+    "npm:pdfjs-dist@^6.4.299": "6.4.299",
     "npm:postcss@^8.5.3": "8.5.28",
     "npm:react-day-picker@^8.10.1": "8.10.2_date-fns@3.6.0_react@18.3.1",
     "npm:react-dom@^18.2.0": "18.3.1_react@18.3.1",
@@ -240,8 +244,8 @@
         "@babel/helper-validator-identifier"
       ]
     },
-    "@base44/sdk@0.8.51": {
-      "integrity": "sha512-+tnHx4e0yVLaLxME8BkI2//vdnHcNXit5w9vCWmBDNlEdEMP77QoGMxxYcnl3dY6fvCv8EXR0RGOgWZdnhqPuA==",
+    "@base44/sdk@0.8.48": {
+      "integrity": "sha512-AXDLduglymT+RM6OZu+VFQtsLe++FhXZlvn/I/M2PFOVAC3MTpdmqnm5zL5D0BPK86JBeNpeK5vd9tkKFmAdZQ==",
       "dependencies": [
         "axios",
         "partysocket",
@@ -249,8 +253,17 @@
         "uuid"
       ]
     },
-    "@base44/vite-plugin@1.0.42": {
-      "integrity": "sha512-uebvKOrA1YfrFoOQ2MQ3I6m+XUnLAJuczO4m+YhTC69x+l1H7AZZDgMQ2TpAuPVn5lNLNmz0x77KRWuIrEsECA==",
+    "@base44/sdk@0.8.53": {
+      "integrity": "sha512-05+/i6LvLG5nQJ46iknaf0pVnWOnX+cMwsQORZwSxMPuonsKYEA9/+b1WoXd+fYdCiIi41mNwJjlj+c0ou0qfg==",
+      "dependencies": [
+        "axios",
+        "partysocket",
+        "socket.io-client",
+        "uuid"
+      ]
+    },
+    "@base44/vite-plugin@1.0.45": {
+      "integrity": "sha512-usenvEAckv1xzmQENeC8Lko+w2SL2PGsHNz7mjcOcwxZRhGsbZeBsPdraC//zqqfooWD3M/MPHxhsy9wVO05Sw==",
       "dependencies": [
         "@babel/generator",
         "@babel/parser",
@@ -538,6 +551,77 @@
       "dependencies": [
         "@jridgewell/resolve-uri",
         "@jridgewell/sourcemap-codec"
+      ]
+    },
+    "@napi-rs/canvas-android-arm64@1.0.11": {
+      "integrity": "sha512-dtJS4FQEfH9OwSYLtMrEnj7T8DzBbJc/97LI/OkiWOYpW/iW5t6R/gcxVrUXS8l45gCVpwMufgucRe/pe0ISqA==",
+      "os": ["android"],
+      "cpu": ["arm64"]
+    },
+    "@napi-rs/canvas-darwin-arm64@1.0.11": {
+      "integrity": "sha512-J/JylWoJTG8OQqZaiqly4IODyAxNofUlZo0wtSBJtHk6AdymbdIkPynAM1JvQaZpPaG5h+msk9QuK8y4i1ooqw==",
+      "os": ["darwin"],
+      "cpu": ["arm64"]
+    },
+    "@napi-rs/canvas-darwin-x64@1.0.11": {
+      "integrity": "sha512-nlecCk3xy06eAGC7krZtzNDm9UNTHKuHQYK8ZYegdjzgSL8anGt/eLJZm86OWaNgZkwQwvDqfSmG8Nqe6MPZNQ==",
+      "os": ["darwin"],
+      "cpu": ["x64"]
+    },
+    "@napi-rs/canvas-linux-arm-gnueabihf@1.0.11": {
+      "integrity": "sha512-DKImmG+sTPolE0kGPsYPBxTtOjb3INALp32O2lW2CfSr0bAzSEKKuu+GrQbtilClyoPOahUErS3OrznFDraoWA==",
+      "os": ["linux"],
+      "cpu": ["arm"]
+    },
+    "@napi-rs/canvas-linux-arm64-gnu@1.0.11": {
+      "integrity": "sha512-55sykACGENj5j1rhj+81AO8JbR9HYgGjRZ7/H+pNr4VE1DvINKYNMTcutk8ZmWxk276jAQvUKJ3+Kdj9GXU3lQ==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@napi-rs/canvas-linux-arm64-musl@1.0.11": {
+      "integrity": "sha512-6Jz6jys17yXydO+WdJgu7JhoB4K7/w9sWHByzzTmLjQghUx3TDMWvLv+UcCdnWhg4oprET67EMymnrETdeGNAg==",
+      "os": ["linux"],
+      "cpu": ["arm64"]
+    },
+    "@napi-rs/canvas-linux-riscv64-gnu@1.0.11": {
+      "integrity": "sha512-lf2XeEebWiUYVOVEjLXxF7dfXrBBSEOBn9AqBh39VYXrPt5cDqI+1t58IFSjn8npqkg5jIOs8TQbjKABbFW1gQ==",
+      "os": ["linux"],
+      "cpu": ["riscv64"]
+    },
+    "@napi-rs/canvas-linux-x64-gnu@1.0.11": {
+      "integrity": "sha512-iDapw7nFSE5tsmQxcH2+KotJhyfVPmHd6vUOQN/Em+8WNbkZJwJ/rDowlJMFnMl0SYSDSfgKCNUGi6Sn5++Smg==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@napi-rs/canvas-linux-x64-musl@1.0.11": {
+      "integrity": "sha512-26q26AyITo3CGZX4HWFIMgBMA1lu3YN07gxzBm4tW6Hglq/OVyTP50kDrmWuKybCX6dh3m8Ly+c7YhI+sqCgCQ==",
+      "os": ["linux"],
+      "cpu": ["x64"]
+    },
+    "@napi-rs/canvas-win32-arm64-msvc@1.0.11": {
+      "integrity": "sha512-cUO96IdsfvIj2S+2PNcDSkTcLhjPj8pIOEWRV1Kj70MOP4wnE9zSk7N4C1EKHlFGRcgdR5AkbnBZj0dfHK9nbQ==",
+      "os": ["win32"],
+      "cpu": ["arm64"]
+    },
+    "@napi-rs/canvas-win32-x64-msvc@1.0.11": {
+      "integrity": "sha512-DFYp/ZQRdKunI/LPc0UkRXG1vlNjJKOJf8O8Ctb8+wm2Nt2ELg9Eamc31D2VoakkfGo8L+z0Iejz6WtFbQwyGw==",
+      "os": ["win32"],
+      "cpu": ["x64"]
+    },
+    "@napi-rs/canvas@1.0.11": {
+      "integrity": "sha512-vt5tog1cr+QKadIddGe+3LrcX0EmjEd0izF717Uwf92mBmgYfq2XRmL2r4bZU40spB69exxhrBn9I91HYEr/7w==",
+      "optionalDependencies": [
+        "@napi-rs/canvas-android-arm64",
+        "@napi-rs/canvas-darwin-arm64",
+        "@napi-rs/canvas-darwin-x64",
+        "@napi-rs/canvas-linux-arm-gnueabihf",
+        "@napi-rs/canvas-linux-arm64-gnu",
+        "@napi-rs/canvas-linux-arm64-musl",
+        "@napi-rs/canvas-linux-riscv64-gnu",
+        "@napi-rs/canvas-linux-x64-gnu",
+        "@napi-rs/canvas-linux-x64-musl",
+        "@napi-rs/canvas-win32-arm64-msvc",
+        "@napi-rs/canvas-win32-x64-msvc"
       ]
     },
     "@napi-rs/lzma-linux-x64-gnu@1.5.1": {
@@ -2769,8 +2853,8 @@
     "flatted@3.4.4": {
       "integrity": "sha512-5+ybhBZANEJxaH3X5evAFatUxLfEHSr7n6kYJ+1Qd0mUqr4eu9gIf6GDbWHf8RJijHrjjO8G+la14SlL2SeS1Q=="
     },
-    "follow-redirects@1.16.0": {
-      "integrity": "sha512-y5rN/uOsadFT/JfYwhxRS5R7Qce+g3zG97+JrtFZlC9klX/W5hD7iiLzScI4nZqUS7DNUdhPgw4xI8W2LuXlUw=="
+    "follow-redirects@1.16.1": {
+      "integrity": "sha512-FNvFGzoMLWmE6Yj9spb/zjd7yiNCHiAW9/Tg9CXrQ8wuu32HtlJOwWO11OJafl5FfY3DxTdQ0vj42zU1kvv5jg=="
     },
     "for-each@0.3.5": {
       "integrity": "sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==",
@@ -3821,6 +3905,12 @@
     },
     "path-parse@1.0.7": {
       "integrity": "sha512-LDJzPVEEEPR+y48z93A0Ed0yXb8pAByGWo/k5YYdYgpY2/2EsOsksJrq7lOHxryrVOn1ejG6oAp8ahvOIQD8sw=="
+    },
+    "pdfjs-dist@6.4.299": {
+      "integrity": "sha512-AVl138zALtfaAPvADulE0PZThbYzCBS79nL4pOSL/6Sm/4AH5A21BD9VHt97OlCuzJuCpmeZtAtkinisF4Vb1g==",
+      "optionalDependencies": [
+        "@napi-rs/canvas"
+      ]
     },
     "performance-now@2.1.0": {
       "integrity": "sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow=="
@@ -4962,7 +5052,7 @@
     "packageJson": {
       "dependencies": [
         "npm:@base44/sdk@~0.8.53",
-        "npm:@base44/vite-plugin@^1.0.44",
+        "npm:@base44/vite-plugin@^1.0.45",
         "npm:@eslint/js@^9.19.0",
         "npm:@hello-pangea/dnd@17",
         "npm:@hookform/resolvers@^4.1.2",

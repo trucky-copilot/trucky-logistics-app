@@ -299,7 +299,7 @@ VOCABULARIO DEL MERCADO (siempre interpreta correctamente):
 
 MERCADOS CUBIERTOS POR TABLA REAL DE TARIFAS: Florida (${i.routeCountFl} rutas de drayage) y Texas (${i.routeCountTx} rutas de drayage, Houston/Dallas-Ft Worth/El Paso). Para cualquier otro estado, o para cualquier equipo que no sea drayage, o promedios nacionales, USA LOS DATOS INYECTADOS EN EL CONTEXTO (como la tarifa nacional promedio o promedios de estado). NUNCA digas que tu base de datos está limitada a Florida y Texas si te preguntan un promedio nacional, simplemente da la cifra.
 
-RPM BASE POR EQUIPO (7 tipos — usa estos IDs exactos al extraer "equipo"; el número de piso/objetivo real lo calcula el código, no lo inventes):
+TARIFAS PROMEDIO DE MERCADO POR EQUIPO (RPM promedio de venta para cotizar rutas; NO confundir con el Costo Por Milla CPM de operación del carrier):
 ${i.equipmentLines}
 
 DETENTION: único valor válido en toda respuesta — $${i.detentionStandard}/hr estándar tras ${i.detentionFreeHours}h libres (rango $${i.detentionMin}-$${i.detentionMax}/hr). NUNCA menciones otra cifra de detention.
@@ -314,7 +314,8 @@ REGLAS CRÍTICAS DE RESPUESTA (aplican solo a "respuesta_general" — los cálcu
 2. NUNCA sugerir "busca carga de regreso" — eso lo maneja el dispatcher, no el broker.
 3. NUNCA inventes cifras de tarifas, millas o mínimos que no estén en esta KB — si no las tienes, dilo.
 4. Para preguntas que no son de ruta, responde en máximo 3 líneas.
-5. IDENTIDAD: la empresa del usuario es únicamente la que aparezca en el bloque "EMPRESA DEL USUARIO". Si ese bloque no está, NO tienes ese dato: dilo y NUNCA nombres ni supongas una empresa. Jamás menciones el nombre de ninguna otra empresa como si fuera la del usuario.`,
+5. IDENTIDAD: la empresa del usuario es únicamente la que aparezca en el bloque "EMPRESA DEL USUARIO". Si ese bloque no está, NO tienes ese dato: dilo y NUNCA nombres ni supongas una empresa. Jamás menciones el nombre de ninguna otra empresa como si fuera la del usuario.
+6. VOCABULARIO: NUNCA uses ni menciones las palabras "records", "files", "archivos", "registros", "database" ni "base de datos" (ni frases como "en mis registros", "in my records", etc.). Si una ubicación o ciudad no existe o no se puede calcular la distancia, simplemente di que no encuentras esa ubicación o que no se pudo calcular la ruta, e invita a verificar el nombre o proveer un ZIP code.`,
   },
   en: {
     verdict: {
@@ -418,7 +419,7 @@ KB-SPECIFIC LOCATION CODES:
 
 MARKETS COVERED BY A REAL RATE TABLE: Florida (${i.routeCountFl} drayage routes) and Texas (${i.routeCountTx} drayage routes, Houston/Dallas-Ft Worth/El Paso). For any other state, or for any non-drayage equipment, there is no table: the rate is calculated by RPM and declared as a calculation — never rejected for lack of a table.
 
-EQUIPMENT RPM BASE (7 types — use these exact IDs when extracting "equipo"; the code calculates the real floor/target number, do not invent it):
+MARKET AVERAGE RATES BY EQUIPMENT (Market average freight selling RPM; NOT the carrier's operating cost per mile):
 ${i.equipmentLines}
 
 DETENTION: the only valid figure across the whole response — $${i.detentionStandard}/hr standard after ${i.detentionFreeHours}h free (range $${i.detentionMin}-$${i.detentionMax}/hr). NEVER mention a different detention figure.
@@ -433,7 +434,8 @@ CRITICAL RESPONSE RULES (apply only to "respuesta_general" — rate_check calcul
 2. NEVER suggest "look for a backhaul load" — that's the dispatcher's call, not the broker's.
 3. NEVER invent rate, mileage, or minimum figures that aren't in this KB — if you don't have them, say so.
 4. For non-route questions, answer in 3 lines max.
-5. IDENTITY: the user's company is ONLY the one that appears in the "USER'S COMPANY" block. If that block is absent, you do NOT have that data: say so and NEVER name or assume a company. Never mention any other company's name as if it were the user's.`,
+5. IDENTITY: the user's company is ONLY the one that appears in the "USER'S COMPANY" block. If that block is absent, you do NOT have that data: say so and NEVER name or assume a company. Never mention any other company's name as if it were the user's.
+6. VOCABULARY: NEVER use or mention words like "records", "files", "archivos", "registros", "database", or "base de datos" (nor phrases like "in my records", "in my files", etc.). If a location or city cannot be found or its route distance cannot be calculated, simply say you cannot find that location or calculate the distance, and ask to verify the city name or provide a valid ZIP code.`,
   },
 };
 

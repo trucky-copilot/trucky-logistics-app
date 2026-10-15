@@ -8,26 +8,30 @@
 
 import { CheckCircle2, Circle, AlertCircle, ChevronRight } from 'lucide-react';
 import { useAppState } from '@/lib/AppStateContext';
+import { useLanguage } from '@/lib/LanguageContext';
 import { READINESS_MESSAGES } from '@/lib/goLiveChecklist';
 import { useNavigate } from 'react-router-dom';
 
 const LEVEL_META = {
   ready: {
-    label:  'Listo para operar',
+    label_es: 'Listo para operar',
+    label_en: 'Ready to operate',
     color:  'text-green-400',
     bg:     'bg-green-400/10',
     border: 'border-green-400/20',
     dot:    'bg-green-400',
   },
   partial: {
-    label:  'Configuración parcial',
+    label_es: 'Configuración parcial',
+    label_en: 'Partial configuration',
     color:  'text-yellow-400',
     bg:     'bg-yellow-400/10',
     border: 'border-yellow-400/20',
     dot:    'bg-yellow-400',
   },
   basic: {
-    label:  'Configuración básica',
+    label_es: 'Configuración básica',
+    label_en: 'Basic configuration',
     color:  'text-red-400',
     bg:     'bg-red-400/10',
     border: 'border-red-400/20',
@@ -41,7 +45,7 @@ const ITEM_ROUTE = {
   cost_config:        '/calculadora',
 };
 
-function CheckItem({ done, label, route }) {
+function CheckItem({ done, label, route, configureText }) {
   const navigate = useNavigate();
   return (
     <div className="flex items-center gap-2.5 py-1.5">
@@ -57,7 +61,7 @@ function CheckItem({ done, label, route }) {
           onClick={() => navigate(route)}
           className="flex items-center gap-0.5 text-xs text-primary hover:underline flex-shrink-0"
         >
-          Configurar <ChevronRight className="w-3 h-3" />
+          {configureText} <ChevronRight className="w-3 h-3" />
         </button>
       )}
     </div>
@@ -66,11 +70,13 @@ function CheckItem({ done, label, route }) {
 
 export default function OperationalStatusCard() {
   const { operationalReadiness, userProfile, organization } = useAppState();
+  const { locale } = useLanguage();
 
   // No mostrar si ya está todo listo o no hay datos aún
   if (!operationalReadiness) return null;
   if (operationalReadiness.level === 'ready') return null;
 
+  const isEn    = locale === 'en';
   const meta    = LEVEL_META[operationalReadiness.level] || LEVEL_META.partial;
   const missing = operationalReadiness.missing || [];
 
@@ -78,22 +84,22 @@ export default function OperationalStatusCard() {
   const items = [
     {
       key:   'account',
-      label: 'Cuenta activa',
+      label: isEn ? 'Active account' : 'Cuenta activa',
       done:  true,
     },
     {
       key:   'organization',
-      label: 'Organización creada',
+      label: isEn ? 'Organization created' : 'Organización creada',
       done:  !!(organization?.active),
     },
     {
       key:   'rol',
-      label: 'Rol configurado',
+      label: isEn ? 'Role configured' : 'Rol configurado',
       done:  !!(userProfile?.rol),
     },
     {
       key:   'cost_config',
-      label: 'Costos configurados',
+      label: isEn ? 'Costs configured' : 'Costos configurados',
       done:  !missing.includes('cost_config'),
       route: ITEM_ROUTE.cost_config,
     },
@@ -109,17 +115,19 @@ export default function OperationalStatusCard() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${meta.dot} animate-pulse`} />
-          <h3 className="text-sm font-semibold text-foreground">Estado operativo</h3>
+          <h3 className="text-sm font-semibold text-foreground">
+            {isEn ? 'Operational Status' : 'Estado operativo'}
+          </h3>
         </div>
         <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${meta.bg} ${meta.color}`}>
-          {meta.label}
+          {isEn ? meta.label_en : meta.label_es}
         </span>
       </div>
 
       {/* Barra de progreso */}
       <div>
         <div className="flex justify-between text-xs text-muted-foreground mb-1">
-          <span>Configuración completada</span>
+          <span>{isEn ? 'Setup progress' : 'Configuración completada'}</span>
           <span className="font-mono">{doneCount}/{totalCount}</span>
         </div>
         <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
@@ -142,6 +150,7 @@ export default function OperationalStatusCard() {
             done={item.done}
             label={item.label}
             route={item.route}
+            configureText={isEn ? 'Configure' : 'Configurar'}
           />
         ))}
       </div>
@@ -150,8 +159,12 @@ export default function OperationalStatusCard() {
       {missing.length > 0 && (
         <p className={`text-xs ${meta.color} border-t border-white/5 pt-2 leading-relaxed`}>
           {missing.length === 1
-            ? READINESS_MESSAGES[missing[0]] || 'Completa la configuración pendiente para máxima precisión.'
-            : 'Tu cuenta ya está activa, pero aún no está completamente lista para operar con máxima precisión.'
+            ? (isEn
+                ? (missing[0] === 'cost_config' ? 'Configure your operating costs in the calculator for accurate profitability checks.' : 'Complete the pending setup for maximum accuracy.')
+                : (READINESS_MESSAGES[missing[0]] || 'Completa la configuración pendiente para máxima precisión.'))
+            : (isEn
+                ? 'Your account is active, but not yet fully configured to operate with maximum accuracy.'
+                : 'Tu cuenta ya está activa, pero aún no está completamente lista para operar con máxima precisión.')
           }
         </p>
       )}

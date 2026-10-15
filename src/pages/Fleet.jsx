@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Truck, Plus, X, Pencil } from 'lucide-react';
+import { Truck, Plus, X, Pencil, Trash2 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import DeleteConfirmModal from '@/components/DeleteConfirmModal';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
@@ -65,13 +66,13 @@ function TruckForm({ truck, onSave, onClose }) {
               <label className="text-xs text-muted-foreground mb-1 block">{t.fleet.status}</label>
               <select value={form.estado} onChange={e => set('estado', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
-                {ESTADOS.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+                {ESTADOS.map(s => <option key={s} value={s}>{t.statuses?.[s] || s.replace('_', ' ')}</option>)}
               </select>
             </div>
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
-              Tipo de equipo
+              {t.fleet.equipmentType || 'Tipo de equipo'}
             </label>
 
             <select
@@ -120,13 +121,15 @@ function TruckForm({ truck, onSave, onClose }) {
 }
 
 export default function Fleet() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
   const { activeProfileId } = useProfile();
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editTruck, setEditTruck] = useState(null);
+  const [deleteTruck, setDeleteTruck] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
 
   const getProfileTruckIds = () => {
     const key = `profile_trucks_${orgId}_${activeProfileId}`;
@@ -138,6 +141,24 @@ export default function Fleet() {
     const key = `profile_trucks_${orgId}_${activeProfileId}`;
     const current = getProfileTruckIds() || [];
     localStorage.setItem(key, JSON.stringify([...current, truckId]));
+  };
+
+  const handleDeleteTruck = async () => {
+    if (!deleteTruck) return;
+    try {
+      setDeleteLoading(true);
+      await base44.entities.Truck.delete(deleteTruck.id);
+      const key = `profile_trucks_${orgId}_${activeProfileId}`;
+      const current = getProfileTruckIds() || [];
+      localStorage.setItem(key, JSON.stringify(current.filter(id => id !== deleteTruck.id)));
+      setDeleteTruck(null);
+      loadData();
+    } catch (err) {
+      console.error('Error eliminando camión:', err);
+      alert('Error al eliminar: ' + (err?.message || 'intente de nuevo'));
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const loadData = async () => {
@@ -238,8 +259,14 @@ export default function Fleet() {
                 <div className="flex items-center gap-1.5">
                   <StatusBadge status={truck.estado} />
                   <button onClick={() => { setEditTruck(truck); setShowForm(true); }}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                    title={locale === 'en' ? 'Edit' : 'Editar'}>
                     <Pencil className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => setDeleteTruck(truck)}
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                    title={locale === 'en' ? 'Delete' : 'Eliminar'}>
+                    <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -261,6 +288,17 @@ export default function Fleet() {
           ))}
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={!!deleteTruck}
+        title={locale === 'en' ? 'Do you want to delete this Truck?' : '¿Desea eliminar el Camión?'}
+        subtitle={deleteTruck ? `${deleteTruck.placa} ${deleteTruck.modelo || ''}` : ''}
+        onConfirm={handleDeleteTruck}
+        onClose={() => setDeleteTruck(null)}
+        loading={deleteLoading}
+        confirmText={locale === 'en' ? 'Delete' : 'Eliminar'}
+        cancelText={locale === 'en' ? 'Cancel' : 'Cancelar'}
+      />
     </div>
   );
 }

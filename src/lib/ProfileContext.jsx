@@ -107,9 +107,14 @@ export function ProfileProvider({ children }) {
   }, [profiles, activeProfileId, user]);
 
   const addProfile = async (name) => {
-    if (profiles.length >= MAX_PROFILES) return;
+    if (profiles.length >= MAX_PROFILES) return false;
+    const trimmed = (name || '').trim();
+    if (!trimmed) return false;
+    if (profiles.some(p => p.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      return false;
+    }
     const newId = Date.now().toString();
-    const newProfile = { id: newId, name };
+    const newProfile = { id: newId, name: trimmed };
     
     // Optimistic update
     setProfiles(prev => [...prev, newProfile]);
@@ -118,7 +123,7 @@ export function ProfileProvider({ children }) {
     // Save to backend
     try {
       const created = await base44.entities.Profile.create(withOrg(organization.id, {
-        name,
+        name: trimmed,
         usuario: user.email,
         profile_key: newId,
         is_default: false,
@@ -127,22 +132,30 @@ export function ProfileProvider({ children }) {
       
       // Update with DB ID
       setProfiles(prev => prev.map(p => p.id === newId ? { ...p, dbId: created.id } : p));
+      return true;
     } catch (err) {
       console.error('Error creating profile in backend', err);
+      return true;
     }
   };
 
   const renameProfile = async (id, newName) => {
-    setProfiles(prev => prev.map(p => p.id === id ? { ...p, name: newName } : p));
+    const trimmed = (newName || '').trim();
+    if (!trimmed) return false;
+    if (profiles.some(p => p.id !== id && p.name.trim().toLowerCase() === trimmed.toLowerCase())) {
+      return false;
+    }
+    setProfiles(prev => prev.map(p => p.id === id ? { ...p, name: trimmed } : p));
     
     const profileToUpdate = profiles.find(p => p.id === id);
     if (profileToUpdate?.dbId) {
       try {
-        await base44.entities.Profile.update(profileToUpdate.dbId, { name: newName });
+        await base44.entities.Profile.update(profileToUpdate.dbId, { name: trimmed });
       } catch (err) {
         console.error('Error renaming profile in backend', err);
       }
     }
+    return true;
   };
 
   const deleteProfile = async (id) => {

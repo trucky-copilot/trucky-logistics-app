@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Users, Plus, X, Pencil, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Users, Plus, X, Pencil, Trash2, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
+import DeleteConfirmModal from '@/components/DeleteConfirmModal';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
@@ -72,7 +73,7 @@ function DriverForm({ driver, onSave, onClose }) {
               <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.status}</label>
               <select value={form.estado} onChange={e => set('estado', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50">
-                {['activo','inactivo','vacaciones','suspension'].map(s => <option key={s} value={s}>{s}</option>)}
+                {['activo','inactivo','vacaciones','suspension'].map(s => <option key={s} value={s}>{t.statuses?.[s] || s}</option>)}
               </select>
             </div>
           </div>
@@ -133,6 +134,26 @@ export default function Drivers() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editDriver, setEditDriver] = useState(null);
+  const [deleteDriver, setDeleteDriver] = useState(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+
+  const handleDeleteDriver = async () => {
+    if (!deleteDriver) return;
+    try {
+      setDeleteLoading(true);
+      await base44.entities.Driver.delete(deleteDriver.id);
+      const key = `profile_drivers_${orgId}_${activeProfileId}`;
+      const current = getProfileDriverIds() || [];
+      localStorage.setItem(key, JSON.stringify(current.filter(id => id !== deleteDriver.id)));
+      setDeleteDriver(null);
+      loadData();
+    } catch (err) {
+      console.error('Error eliminando conductor:', err);
+      alert('Error al eliminar: ' + (err?.message || 'intente de nuevo'));
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
 
   /**
    * Obtener los IDs de conductores que pertenecen al perfil activo,
@@ -230,8 +251,14 @@ export default function Drivers() {
                 <div className="flex items-center gap-1.5">
                   <StatusBadge status={driver.estado} />
                   <button onClick={() => { setEditDriver(driver); setShowForm(true); }}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                    title={locale === 'en' ? 'Edit' : 'Editar'}>
                     <Pencil className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => setDeleteDriver(driver)}
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                    title={locale === 'en' ? 'Delete' : 'Eliminar'}>
+                    <Trash2 className="w-3 h-3" />
                   </button>
                 </div>
               </div>
@@ -255,6 +282,17 @@ export default function Drivers() {
           ))}
         </div>
       )}
+
+      <DeleteConfirmModal
+        isOpen={!!deleteDriver}
+        title={locale === 'en' ? 'Do you want to delete this Driver?' : '¿Desea eliminar el Conductor?'}
+        subtitle={deleteDriver ? `${deleteDriver.nombre} ${deleteDriver.apellido || ''}` : ''}
+        onConfirm={handleDeleteDriver}
+        onClose={() => setDeleteDriver(null)}
+        loading={deleteLoading}
+        confirmText={locale === 'en' ? 'Delete' : 'Eliminar'}
+        cancelText={locale === 'en' ? 'Cancel' : 'Cancelar'}
+      />
     </div>
   );
 }

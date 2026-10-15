@@ -1,6 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
-// Carga automática del .env local (desarrollo). En producción no existe el
+// Carga automática del .env local (desarrollo). Actualizado para re-bundling.
 // archivo y el bloque falla silenciosamente — las vars ya vienen del entorno
 // de la plataforma. Evita tener que setear GOOGLE_MAPS_API_KEY manualmente.
 try {
@@ -137,7 +137,7 @@ ${conversationHistory}
 === INSTRUCCIONES DE EXTRACCIÓN ===
 Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversación y extrae los datos según el schema. Reglas:
 - intent="ask_miles" si el dispatcher explícitamente pide SOLO la distancia o las millas de una ruta (ej. "solo dame las millas", "cuantas millas hay", "millas de x a y"). Si pide esto, NO asumas "rate_check".
-- intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades, a menos que solo pida millas! También asume "rate_check" OBLIGATORIAMENTE si el mensaje modifica o pregunta sobre cómo quedaría una cotización previa (ej. "¿y si le sumo hazmat?", "¿cómo quedaría con pre pull?"). INCLUSO si el usuario pregunta por un PROMEDIO nacional o general de un estado/ciudad sin especificar destino (ej. "tarifa nacional dryvan", "promedio en florida", "tampa dry van rate", "wisconsin rate dryvan"), DEBES usar intent="rate_check" y extraer el estado o ciudad en el origen, dejando el destino vacío.
+- intent="rate_check" si el dispatcher menciona una ruta, un origen/destino, o pide una cotización explícita o implícitamente (ej. "miami a orlando", "tampa dry van"). ¡Asume rate_check siempre que veas ciudades, a menos que solo pida millas! También asume "rate_check" OBLIGATORIAMENTE si el mensaje modifica o pregunta sobre cómo quedaría una cotización previa (ej. "¿y si le sumo hazmat?", "¿cómo quedaría con pre pull?"). INCLUSO si el usuario pregunta por un PROMEDIO nacional (ej. "rate nacional", "national rate", "tarifa nacional", "promedio nacional") o general de un estado/ciudad sin especificar destino (ej. "tarifa nacional dryvan", "promedio en florida", "tampa dry van rate", "wisconsin rate dryvan", "rate promedio de dryvan en NY"), DEBES usar intent="rate_check", extraer el estado o ciudad en el origen, dejando el destino vacío, y heredar preferentemente el equipo usado en consultas previas de tarifas promedio (no de cotizaciones de rutas intermedias) si no lo menciona en este mensaje.
 - intent="draft_email" si el dispatcher pide explícitamente redactar, crear, escribir o responder un correo electrónico, email, plantilla o mensaje para un broker/shipper (ej. "hazme un correo", "redacta un email", "necesito que escribas un correo", "ahora para pedir información un correo", "qué correo le mando"). ¡Usa esto siempre que el usuario mencione la palabra correo, email o plantilla!
 - intent="off_topic" solo si el mensaje NO tiene relación con freight, dispatch u operación de carriers — por ejemplo: programación, clima, deportes, recetas, política, traducción, chistes, o aritmética sin referencia a freight, consejos personales, u otras industrias.
 - intent="general" en cualquier otro caso. ¡NUNCA repitas mensajes de error del historial como "Necesito más datos..."! Tu respuesta_general debe responder a la pregunta, no simular un error del sistema.
@@ -154,8 +154,9 @@ Analiza el ÚLTIMO mensaje del Dispatcher dentro del contexto de la conversació
 - pago_camion: el RPM (dólares por milla) que el dispatcher dice que le paga al camión, SOLO si lo menciona explícitamente en este mensaje; null si no.
 - broker_name: el nombre de la compañía broker. ¡SOLO extráelo si el usuario menciona explícitamente al broker en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
 - driver_name: el nombre del conductor o chofer. ¡SOLO extráelo si el usuario lo menciona explícitamente en ESTE mensaje! NO lo heredes de mensajes anteriores. Ante la duda, devuelve "unknown".
-- accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "reefer", "hazmat", "pre-pull", "detention", "chassis", "extra stop", "extra top"). Extrae el término exacto o la aproximación ortográfica que use el usuario; arreglo vacío si no menciona ninguno.
-- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto. NO menciones los costos personalizados del usuario (break-even, costo por milla, objetivo) a menos que pregunte explícitamente por ellos o por rentabilidad.`;
+- accessorial_triggers: lista de cargos accesoriales que el dispatcher menciona o cuyo gatillo describe (p. ej. "hazmat", "pre-pull", "detention", "chassis", "extra stop", "extra top"). ¡ATENCIÓN CON REEFER!: Si el usuario dice "reefer" o "refeer" para cotizar o pedir una ruta (ej. "miami a tampa reefer", "ruta con reefer"), es el EQUIPO del camión, NUNCA un cargo accesorial (NO lo pongas en accessorial_triggers). Pon "reefer" en accessorial_triggers ÚNICAMENTE si el usuario pregunta explícitamente cuánto se cobra o cómo quedaría con el recargo o ADICIONAL de reefer en el semáforo (ej. "¿cuánto quedaría con el reefer?", "súmale el reefer", "cuánto vale el reefer"). Arreglo vacío si no hay ninguno.
+- accessorial_query_mode: "price_only" SOLO cuando el usuario pregunta de forma puntual y exclusiva el precio o valor del cargo accesorial (ej: "¿cuánto vale detention?", "cuál es el valor de detention", "how much is detention?"). Si el usuario hace preguntas más amplias, conceptuales o compuestas (ej: "¿qué es detention y cuánto cobro?", "What is detention and how much do I charge?", "cómo funciona y cuánto cuesta", o si hace más de una pregunta), DEBES clasificar intent="general", accessorial_query_mode="none", y responder a TODO de manera completa y natural en respuesta_general.
+- respuesta_general: SOLO para intent="general" — tu respuesta directa y completa a la pregunta del dispatcher, en máximo 5 líneas, ${MESSAGES[locale].extraction.languageDirective}, sin inventar cifras de tarifas o millas que no estén en el contexto. REGLA ESTRICTA DE VOCABULARIO: NUNCA menciones palabras como "records", "files", "archivos", "registros", "database" ni "base de datos" (ni frases como "in my records" o "en mis archivos"). Si una ciudad o ubicación no existe o no se puede calcular la distancia, simplemente indica que no se pudo encontrar la ubicación o calcular la ruta e invita a verificar el nombre o proveer un ZIP code. REGLA DE COSTO POR MILLA (CPM): Si el usuario pregunta por su "costo por milla", "el costo por milla", "CPM", "cost per mile" o costos de operación (ej. "¿cuál es el costo por milla?"), responde tomando DIRECTAMENTE el valor configurado en su calculadora. NUNCA listes las tarifas o RPM de mercado de los 7 equipos si pregunta por costo por milla; responde puntual y exclusivamente a lo que pregunta sin añadir datos no solicitados.`;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -173,6 +174,155 @@ const COSTCONFIG_DEFAULTS = { diesel_precio: 5.5, mpg: 6.5, tarifa_objetivo: 3.0
 // que no tiene el dato antes que nombrar una empresa ajena.
 // ─────────────────────────────────────────────────────────────────────────────
 
+function extraerEquipoDeTexto(text: string): string | null {
+  if (typeof text !== 'string') return null;
+  const t = text.toLowerCase();
+  if (/\b(flat[\s_-]?bed|flatber|plataforma)\b/.test(t) || t.includes('flatbed') || t.includes('flatber')) {
+    return 'flatbed';
+  }
+  if (/\b(reefer|refeer|refrigerado)\b/.test(t) || t.includes('reefer') || t.includes('refeer')) {
+    return 'reefer';
+  }
+  if (/\b(dry[\s_-]?van|dryvan|drivan)\b/.test(t) || t.includes('dry van') || t.includes('dryvan')) {
+    return 'dry_van';
+  }
+  if (/\bstep[\s_-]?deck\b/.test(t) || t.includes('step deck')) {
+    return 'step_deck';
+  }
+  if (/\bpower[\s_-]?only\b/.test(t) || t.includes('power only')) {
+    return 'power_only';
+  }
+  if (/\b(drayage|contenedor|container|chasis|chassis)\b/.test(t)) {
+    return 'drayage';
+  }
+  if (/\bvan\b/.test(t)) {
+    return 'dry_van';
+  }
+  return null;
+}
+
+function esPreguntaTarifaNacional(texto: string): boolean {
+  if (typeof texto !== 'string') return false;
+  const t = texto.toLowerCase().trim().replace(/[?¿!¡]/g, '').trim();
+  if (t === 'nacional' || t === 'national' || t === 'us' || t === 'usa') return true;
+  if (/^(y\s+)?(el\s+|a\s+nivel\s+)?nacional$/i.test(t)) return true;
+  if (/^(y\s+)?(the\s+)?national$/i.test(t)) return true;
+  const tieneTerminoNacional = t.includes('nacional') || t.includes('national') || /\busa?\b/.test(t) || t.includes('pais') || t.includes('país');
+  const tieneTerminoTarifa = t.includes('rate') || t.includes('tarifa') || t.includes('promedio') || t.includes('rpm') || t.includes('precio') || t.includes('cuanto') || t.includes('average');
+  return tieneTerminoNacional && (tieneTerminoTarifa || t.length < 25);
+}
+
+function esConsultaRatePromedio(texto: string): boolean {
+  if (typeof texto !== 'string') return false;
+  const t = texto.toLowerCase().trim().replace(/[?¿!¡]/g, '').trim();
+  if (esPreguntaTarifaNacional(t)) return true;
+  if (t.includes('promedio') || t.includes('average')) return true;
+  if (t.includes('referencia') || t.includes('reference')) return true;
+  if (/\b(rate|tarifa)\b/.test(t) && (t.includes('nacional') || t.includes('national') || t.includes('promedio') || t.includes(' en ') || t.includes(' de '))) return true;
+  return false;
+}
+
+function extraerEquipoDeConsultaPromedio(messages: any[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    const text = (msg?.content || '').toLowerCase();
+
+    // 1. Mensajes previos del asistente que respondieron con una Tarifa de Referencia / Promedio
+    if (msg?.role === 'assistant' && (text.includes('tarifa de referencia') || text.includes('reference rate'))) {
+      const eq = extraerEquipoDeTexto(text);
+      if (eq) return eq;
+    }
+
+    // 2. Mensajes previos del usuario que fueron consultas de rate promedio (excluyendo cotizaciones de rutas con " a ")
+    if (msg?.role === 'user' && esConsultaRatePromedio(text) && !text.includes(' a ')) {
+      const eq = extraerEquipoDeTexto(text);
+      if (eq) return eq;
+    }
+  }
+  return null;
+}
+
+function extraerEquipoDelHistorial(messages: any[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = (messages[i]?.content || '').toLowerCase();
+    const eq = extraerEquipoDeTexto(text);
+    if (eq) return eq;
+  }
+  return null;
+}
+
+function extraerAccesorialDeTexto(text: string): string | null {
+  if (typeof text !== 'string') return null;
+  const t = text.toLowerCase().replace(/[¿¡?!]/g, ' ');
+  if (/\b(detention|detteltion|dettention|detetion|detenci[oó]n|detecci[oó]n|waiting\s*time|espera|tiempo\s*de\s*espera)\b/.test(t) || t.includes('detention') || t.includes('detetion') || t.includes('detenci')) {
+    return 'detention';
+  }
+  if (/\b(pre[\s_-]?pull|prepull)\b/.test(t) || t.includes('pre-pull') || t.includes('prepull')) {
+    return 'pre-pull';
+  }
+  if (/\b(hazmat|peligros[oa])\b/.test(t) || t.includes('hazmat')) {
+    return 'hazmat';
+  }
+  if (/\b(chassis|chasis)\b/.test(t)) {
+    return 'chassis';
+  }
+  if (/\b(layover|laiover|layovre)\b/.test(t)) {
+    return 'layover';
+  }
+  if (/\b(tonu)\b/.test(t)) {
+    return 'tonu';
+  }
+  if (/\b(extra\s*stop|extratop|extrasop|parada\s*extra)\b/.test(t)) {
+    return 'extra stop';
+  }
+  if (/\b(storage|almacenaje)\b/.test(t)) {
+    return 'storage';
+  }
+  return null;
+}
+
+function extraerAccesorialDelHistorial(messages: any[]): string | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const text = (messages[i]?.content || '').toLowerCase();
+    const acc = extraerAccesorialDeTexto(text);
+    if (acc) return acc;
+  }
+  return null;
+}
+
+function esConsultaConceptualAccesorial(texto: string): boolean {
+  if (typeof texto !== 'string') return false;
+  const t = texto.toLowerCase().replace(/[¿¡?!]/g, ' ').trim();
+
+  // Si une dos preguntas: ej. "what is X and how much...", "qué es X y cuánto..."
+  if (/\b(what\s+is|qu[eé]\s+es)\b.*\b(and|y)\b.*\b(how\s+much|cu[aá]nto|c[oó]mo|how)\b/i.test(t)) {
+    return true;
+  }
+
+  // Si pide explicación, funcionamiento o significado
+  if (/\b(explain|explica|explicame|expl[íi]came|how\s+does.*work|c[oó]mo\s+funciona|what\s+does.*mean|qu[eé]\s+significa|cu[aá]ndo\s+aplica|when\s+does.*apply)\b/i.test(t)) {
+    return true;
+  }
+
+  // Si pregunta "What is detention?" o "¿Qué es detention?" DIRECTAMENTE sobre el concepto,
+  // SIN incluir palabras de valor monetario (value, price, rate, fee, cost, valor, precio, tarifa, costo)
+  const esPreguntaQueEs = /\b(what\s+is|qu[eé]\s+es)\b/i.test(t);
+  const mencionaValor = /\b(value|price|rate|fee|cost|valor|precio|tarifa|costo|monto)\b/i.test(t);
+  if (esPreguntaQueEs && !mencionaValor) {
+    return true;
+  }
+
+  return false;
+}
+
+function esPreguntaDePrecioOValor(texto: string): boolean {
+  if (typeof texto !== 'string') return false;
+  const t = texto.toLowerCase().replace(/[¿¡?!]/g, ' ').trim();
+  const enMatch = /\b(how\s+much|value|price|rate|fee|cost|charge|charger)\b/i.test(t);
+  const esMatch = /\b(cu[aá]nto|cuanto|cu[aá]l|cual|valor|precio|tarifa|monto|cobrar|cobro|cargar|cargo|cuesta|vale|costo)\b/i.test(t);
+  return enMatch || esMatch;
+}
+
 async function getOrganizationName(base44, userEmail) {
   try {
     const membresias = await base44.entities.OrganizationMember.filter({
@@ -188,28 +338,6 @@ async function getOrganizationName(base44, userEmail) {
   } catch (_error) {
     // Si la lectura falla, se sigue sin nombre de empresa en vez de romper la
     // respuesta del chat.
-    return null;
-  }
-}
-
-async function getRegisteredEquipment(base44, userEmail) {
-  try {
-    const memberships = await base44.entities.OrganizationMember.filter({
-      user_email: userEmail,
-      active: true,
-    });
-    const organizationId = memberships?.[0]?.organization_id;
-    if (!organizationId) return null;
-
-    // Traemos toda la flota sin límite
-    const trucks = await base44.entities.Truck.filter({
-      organization_id: organizationId,
-      estado: 'disponible',
-    });
-
-    if (!trucks || trucks.length === 0) return null;
-    return trucks; // Retornamos la lista completa de camiones
-  } catch (_error) {
     return null;
   }
 }
@@ -290,15 +418,20 @@ async function fetchDrivingMiles(
   try {
 
     const normalizeForMap = (loc: string) => {
-      let norm = loc;
-      const lower = loc.toLowerCase();
+      if (!loc || typeof loc !== 'string') return '';
+      let norm = loc.trim();
+      const lower = norm.toLowerCase();
+      // Casos de "port" o "puerto" a secas
+      if (lower === 'port' || lower === 'puerto' || lower === 'port, fl' || lower === 'puerto, fl') {
+        return `Port Everglades, Fort Lauderdale, FL`;
+      }
       // Casos críticos de puertos que igual necesitan ciudad para que Maps no falle
       if (lower.includes('mega rail') || lower.includes('garden city') || lower.includes('savannah port')) return `Georgia Ports Authority - Garden City Terminal, Savannah, GA`;
       if (lower.includes('ns rossville')) return `Norfolk Southern - Rossville Intermodal Facility, 2515 Highway 72, Rossville, TN`;
       if (lower.includes('m669') || lower.includes('port tampa bay')) return `Port Tampa Bay, 2999 Guy N Verger Blvd, Tampa, FL 33605`;
       if (lower.includes('fit') && (lower.includes('terminal') || lower.includes('lauderdale'))) return `Florida International Terminal, 4100 McIntosh Rd, Fort Lauderdale, FL 33316`;
-      if ((lower.includes('pet') || lower.includes('port everglades') || lower.includes('pev')) && lower.includes('lauderdale')) return `Port Everglades, Fort Lauderdale, FL`;
-      if (lower.includes('pomtoc') || lower.includes('sfct')) return `${norm}, Miami`;
+      if (lower.includes('pet') || lower.includes('port everglades') || lower.includes('pev')) return `Port Everglades, Fort Lauderdale, FL`;
+      if (lower.includes('pomtoc') || lower.includes('sfct') || lower.includes('port miami') || lower.includes('portmiami')) return `Port of Miami, Miami, FL`;
       // Diccionario de Parques Logísticos y Terminales
       if (lower.includes('o083') || (lower.includes('bnsf') && lower.includes('atlanta'))) return `Austell, GA`;
       if (lower === 'up' || lower === 'up rail' || lower === 'up, tx' || lower.includes('union pacific') || (lower.includes('up') && lower.includes('dallas'))) return `Wilmer, TX`;
@@ -347,7 +480,9 @@ async function fetchDrivingMiles(
     // --------------------------------------------------------------
 
     // Compatibilidad para leer la llave ya sea en Deno o en Node
-    const apiKey = Deno.env.get("GOOGLE_MAPS_API_KEY") || process.env.GOOGLE_MAPS_API_KEY;
+    const apiKey = (typeof Deno !== 'undefined' && Deno.env?.get ? Deno.env.get("GOOGLE_MAPS_API_KEY") : undefined) 
+      || (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_API_KEY)
+      || "AIzaSyAjsTFlMbPi8QYwV6kbHXBGeTOv0ShYRS0";
     console.log(`[fetchDrivingMiles] apiKey exists: ${!!apiKey}`);
 
     const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
@@ -405,44 +540,49 @@ async function fetchDrivingMiles(
   }
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
 Deno.serve(async (req) => {
-  const base44 = createClientFromRequest(req);
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
+  }
 
-  let user;
+  let locale: Locale = 'es';
   try {
-    user = await base44.auth.me();
-  } catch (_error) {
-    return Response.json({ error: 'No autorizado' }, { status: 401 });
-  }
-  if (!user) {
-    return Response.json({ error: 'No autorizado' }, { status: 401 });
-  }
+    const base44 = createClientFromRequest(req);
 
-  let body;
-  try {
-    body = await req.json();
-  } catch (_error) {
-    return Response.json({ error: 'Cuerpo de la petición inválido' }, { status: 400 });
-  }
+    let user;
+    try {
+      user = await base44.auth.me();
+    } catch (_error) {
+      return Response.json({ error: 'No autorizado' }, { status: 401, headers: corsHeaders });
+    }
+    if (!user) {
+      return Response.json({ error: 'No autorizado' }, { status: 401, headers: corsHeaders });
+    }
 
-  const { messages, costConfig: clientCostConfig, locale: rawLocale, activeProfileId } = body || {};
-  // Resuelto ANTES del try/catch externo (L~263) a propósito: si algo dentro
-  // de ese bloque revienta, el catch-all (safeFallbackContent) ya tiene un
-  // locale seguro en scope — nunca cae en undefined. Payload aditivo: si
-  // `locale` no viene, resolveLocale default a 'es'.
-  const locale: Locale = resolveLocale(rawLocale);
+    let body;
+    try {
+      body = await req.json();
+    } catch (_error) {
+      return Response.json({ error: 'Cuerpo de la petición inválido' }, { status: 400, headers: corsHeaders });
+    }
 
-  if (!isValidMessages(messages)) {
-    return Response.json({ error: 'messages debe ser un array no vacío de objetos { role, content } con valores string' }, { status: 400 });
-  }
+    const { messages, costConfig: clientCostConfig, locale: rawLocale, activeProfileId } = body || {};
+    locale = resolveLocale(rawLocale);
 
-  const cappedMessages = capHistory(messages, HISTORY_CAP);
+    if (!isValidMessages(messages)) {
+      return Response.json({ error: 'messages debe ser un array no vacío de objetos { role, content } con valores string' }, { status: 400, headers: corsHeaders });
+    }
 
-  if (JSON.stringify(cappedMessages).length > MAX_REQUEST_CHARS) {
-    return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400 });
-  }
+    const cappedMessages = capHistory(messages, HISTORY_CAP);
 
-  try {
+    if (JSON.stringify(cappedMessages).length > MAX_REQUEST_CHARS) {
+      return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400, headers: corsHeaders });
+    }
     const costConfigRecord = user
       ? await fetchCostConfigRecord(base44, user.email, activeProfileId)
       : null;
@@ -454,12 +594,8 @@ Deno.serve(async (req) => {
     }
     // ----------------------------------------------------------------------
 
-    const [organizationName, registeredEquipment] = await Promise.all([
-      getOrganizationName(base44, user.email),
-      getRegisteredEquipment(base44, user.email),
-    ]);
+    const organizationName = await getOrganizationName(base44, user.email);
     const costConfig = getCostConfig(costConfigRecord, clientCostConfig);
-    const defaultEquipment = registeredEquipment;
 
     let systemContext = MESSAGES[locale].baseContext({
       freightKbVersion: FREIGHT_KB_VERSION,
@@ -486,13 +622,7 @@ Deno.serve(async (req) => {
     if (organizationName) {
       systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
     }
-    if (defaultEquipment && defaultEquipment.length > 0) {
-      const equipNames = defaultEquipment.map((t: any) => t.equipment_type).filter(Boolean);
-      systemContext += `\n\nEQUIPOS REGISTRADOS DEL USUARIO: ${equipNames.join(', ')}.`;
-      if (equipNames.length === 1) {
-         systemContext += `\nREGLA ESTRICTA: El usuario SOLO tiene un camión tipo "${equipNames[0]}". Si el usuario NO menciona explícitamente "drayage", "contenedor", "chasis" ni un tamaño (20/40/45), DEBES extraer "${equipNames[0]}" como equipo, INCLUSO si menciona un puerto o terminal.`;
-      }
-    }
+
     // reglas-v3-multiestado Fase 6: costo_por_milla YA existía en CostConfig
     // (Calculadora) como contexto de rentabilidad; ahora ADEMÁS alimenta la
     // base "owner_operator" del veredicto por perfil (ver más abajo). Los
@@ -520,11 +650,14 @@ Deno.serve(async (req) => {
       const breakEven = costConfig.tarifa_break_even != null ? Number(costConfig.tarifa_break_even) : null;
 
       costConfigValuesShown = [diesel, mpg, parsedCpm, breakEven, objetivo];
-      systemContext += `\n\nCOSTOS PERSONALIZADOS DEL USUARIO (solo contexto de rentabilidad para respuestas generales, NO los menciones a menos que el usuario pregunte por ellos; el piso de rate_check usa "pago_camion_rpm" cuando la tabla no lo trae — ver Decisión 9-B):
+      systemContext += `\n\nDATOS DE LA CALCULADORA DEL USUARIO (Costos propios del carrier):
+- Costo por milla propio (CPM): $${parsedCpm.toFixed(2)}/mi
+- Tarifa break-even: $${breakEven ? `$${breakEven.toFixed(2)}/mi` : 'N/A'}
+- Tarifa objetivo propia: $${objetivo}/mi
 - Diésel: $${diesel}/gal | MPG: ${mpg}
-- Costo/milla: $${parsedCpm.toFixed(2)} | Break-even: $${breakEven ? breakEven.toFixed(2) : 'N/A'}/mi
-- Objetivo: $${objetivo}/mi`;
+REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo de operación, responde usando DIRECTAMENTE su costo por milla de la calculadora ($${parsedCpm.toFixed(2)}/mi). NO confundas "costo por milla" con las tarifas o RPM de venta de mercado de los equipos, y responde únicamente lo que pregunta.`;
     }
+
 
     let marketText = "\n\nDATOS DE MERCADO ACTUALES (Promedios RPM base, usa estos valores si preguntan genéricamente):\n";
 
@@ -545,7 +678,7 @@ Deno.serve(async (req) => {
       return Response.json({ content: safeFallbackContent(locale) });
     }
 
-    const intent = resolveIntent(raw.intent, cappedMessages);
+    let intent = resolveIntent(raw.intent, cappedMessages);
 
     // INTERCEPTOR: Si el usuario no ha configurado sus costos en la calculadora (ha dejado
     // los valores predeterminados y no tiene costo por milla) y NO es una consulta de millas,
@@ -590,17 +723,21 @@ Deno.serve(async (req) => {
       const permitidasMiles = new Set<number>();
       let responseText = '';
       if (raw.millas_ida != null) {
-        responseText = `📍 **De ${raw.origen} a ${raw.destino}**\nDistancia: **${raw.millas_ida} millas** aproximadamente.`;
+        responseText = locale === 'en'
+          ? `📍 **From ${raw.origen} to ${raw.destino}**\nDistance: approximately **${raw.millas_ida} miles**.`
+          : `📍 **De ${raw.origen} a ${raw.destino}**\nDistancia: **${raw.millas_ida} millas** aproximadamente.`;
         permitidasMiles.add(raw.millas_ida);
       } else {
-        responseText = `No pude calcular las millas para esa ruta. Por favor, verifica las ciudades o incluye el estado.`;
+        responseText = locale === 'en'
+          ? `I couldn't calculate the miles for that route. Please verify the city names or provide a valid ZIP code.`
+          : `No pude calcular las millas para esa ruta. Por favor, verifica las ciudades o incluye el código postal.`;
       }
       
       const conFronteraVerificada = (texto: string, permitidas: Set<number>): string => {
         const userNumbers = extractNumericTokens(ultimoMensajeDelDispatcher(cappedMessages));
         for (const n of userNumbers) permitidas.add(n);
         const chequeo = assertNoInventedFigures(texto, permitidas);
-        return chequeo.ok ? texto : buildBoundaryFallbackMarkdown();
+        return chequeo.ok ? texto : buildBoundaryFallbackMarkdown(locale);
       };
       
       return Response.json({ content: conFronteraVerificada(responseText, permitidasMiles) });
@@ -611,18 +748,50 @@ Deno.serve(async (req) => {
     // SIN mencionar una ruta específica → responde solo con el valor en texto.
     // Si menciona una ruta + accesorial → deja que fluya al rate_check normal
     // para que aparezca la tarjeta con el total sumado.
-    const triggers = Array.isArray(raw.accessorial_triggers) ? raw.accessorial_triggers : [];
+    // ── CONSULTA DE ACCESORIAL ────────────────────────────────────────────────
+    let triggers = Array.isArray(raw.accessorial_triggers) ? [...raw.accessorial_triggers] : [];
 
-    // La IA decide el modo: 'price_only' → solo precio del accesorial en texto,
-    // 'include_in_rate' → calcular tarifa + accesorial y mostrar tarjeta de veredicto.
-    // Este campo evita los regex frágiles: la IA interpreta cualquier variante natural del usuario.
+    // Detectar si el usuario está preguntando por el valor o si es conceptual
+    const esPreguntaPrecio = esPreguntaDePrecioOValor(ultimoMsg);
+    const esConceptual = esConsultaConceptualAccesorial(ultimoMsg);
+
+    // Si el mensaje actual menciona explícitamente algún accesorial en el texto (ej. "detetion", "prepull"),
+    // asegurar que esté en triggers
+    const accesorialEnTexto = extraerAccesorialDeTexto(ultimoMsg);
+    if (accesorialEnTexto && !triggers.includes(accesorialEnTexto)) {
+      triggers.push(accesorialEnTexto);
+    }
+
+    // Si no tiene triggers pero es una consulta de precio o conceptual sobre accesoriales
+    // y no hay ruta de transporte específica (sin origen ni destino), hereda del historial:
+    if (triggers.length === 0 && (esPreguntaPrecio || esConceptual) && !raw.origen && !raw.destino) {
+      const inheritedAcc = extraerAccesorialDelHistorial(cappedMessages);
+      if (inheritedAcc) {
+        triggers.push(inheritedAcc);
+      }
+    }
+
+    // Si hay accesoriales identificados y no es una cotización de ruta:
+    if (triggers.length > 0 && !raw.origen && !raw.destino && intent !== 'rate_check') {
+      if (esConceptual) {
+        // El usuario hizo una pregunta de definición o compuesta (ej: "¿Qué es detention y cuánto cobro?")
+        // -> Debe responder de manera general en texto respondiendo a todo.
+        intent = 'general';
+        raw.accessorial_query_mode = 'none';
+      } else if (esPreguntaPrecio || raw.accessorial_query_mode === 'price_only' || triggers.length > 0) {
+        // El usuario pregunta puntualmente el valor, cuánto cobrar, o nombra el accesorial a secas
+        // -> Debe mostrar la plantilla limpia.
+        raw.accessorial_query_mode = 'price_only';
+      }
+    }
+
     const accessorialMode = typeof raw.accessorial_query_mode === 'string'
       ? raw.accessorial_query_mode
       : 'none';
 
-    console.log(`[DEBUG accesorial] triggers=${JSON.stringify(triggers)} | mode=${accessorialMode} | intent=${intent} | tarifa_ofrecida=${raw.tarifa_ofrecida}`);
+    console.log(`[DEBUG accesorial] triggers=${JSON.stringify(triggers)} | mode=${accessorialMode} | intent=${intent} | conceptual=${esConceptual} | precio=${esPreguntaPrecio}`);
 
-    const esConsultaPuraAccesorial = triggers.length > 0 && accessorialMode === 'price_only';
+    const esConsultaPuraAccesorial = triggers.length > 0 && accessorialMode === 'price_only' && !esConceptual;
 
     if (esConsultaPuraAccesorial) {
       const itemsFL = loadAccessorials('FL' as any);
@@ -632,7 +801,11 @@ Deno.serve(async (req) => {
       const matchedItems = filterAccessorialsByTriggers(mergedItems, triggers);
 
       const lineas: string[] = [];
-      lineas.push(`💰 **Cargos accesoriales para: ${triggers.join(', ')}**\n`);
+      if (locale === 'en') {
+        lineas.push(`💰 **Accessorial fees for: ${triggers.join(', ')}**\n`);
+      } else {
+        lineas.push(`💰 **Cargos accesoriales para: ${triggers.join(', ')}**\n`);
+      }
 
       if (matchedItems.length > 0) {
         const uniqueItems: typeof matchedItems = [];
@@ -646,12 +819,26 @@ Deno.serve(async (req) => {
         }
         
         for (const a of uniqueItems) {
-          const customFlag = a.isCustom ? " *(Personalizado)*" : "";
-          lineas.push(`- ${a.concepto}${customFlag}: **${a.monto}**`);
+          const customFlag = a.isCustom 
+            ? (locale === 'en' ? " *(Custom)*" : " *(Personalizado)*") 
+            : "";
+          let montoTexto = a.monto;
+          if (locale === 'en') {
+            montoTexto = montoTexto
+              .replace(/·\s*por hora/gi, '· per hour')
+              .replace(/·\s*por contenedor/gi, '· per container')
+              .replace(/·\s*por d[ií]a/gi, '· per day');
+          }
+          lineas.push(`- ${a.concepto}${customFlag}: **${montoTexto}**`);
         }
       } else {
-        lineas.push(`No tengo una tarifa estándar registrada para ese cargo en mi base de datos.`);
-        lineas.push(`Te recomiendo confirmar el monto con tu broker directamente.`);
+        if (locale === 'en') {
+          lineas.push(`I don't have a standard rate for that accessorial fee.`);
+          lineas.push(`I recommend confirming the amount directly with your broker.`);
+        } else {
+          lineas.push(`No tengo una tarifa estándar registrada para ese cargo.`);
+          lineas.push(`Te recomiendo confirmar el monto con tu broker directamente.`);
+        }
       }
 
       return Response.json({ content: lineas.join('\n') });
@@ -659,48 +846,43 @@ Deno.serve(async (req) => {
 
 
     console.log(`[entry] Extracted: intent=${intent}, origen=${raw.origen}, destino=${raw.destino}, millas=${raw.millas_ida}`);
-    // Guardarraíl: Forzar drayage si la ruta existe en BD y el usuario no especificó equipo explícitamente
-        const ultimoMensajeLower = ultimoMensajeDelDispatcher(cappedMessages).toLowerCase();
-    
-    if (intent === 'rate_check') {
-      // Verificamos si mencionó un tipo de equipo explícito ("van", "reefer", etc.)
-      const mencionoTipo = ['van', 'reefer', 'flat', 'step', 'power','dryage','drayage','contenedor'].some(e => ultimoMensajeLower.includes(e));
-      // Verificamos si mencionó la placa de alguno de sus camiones registrados
-      const mencionoPlaca = defaultEquipment ? defaultEquipment.some((t: any) => ultimoMensajeLower.includes(t.placa.toLowerCase())) : false;
-      const mencionoEquipoEnUltimoMensaje = mencionoTipo || mencionoPlaca;
-      
-      const equipoYaResuelto = raw.equipo && raw.equipo !== 'unknown';
-      const tenemosEquipo = mencionoEquipoEnUltimoMensaje || equipoYaResuelto;
 
-      // Si mencionó la placa, le asignamos el tipo de equipo de esa placa
-      if (mencionoPlaca && !mencionoTipo && defaultEquipment) {
-        const camionElegido = defaultEquipment.find((t: any) => ultimoMensajeLower.includes(t.placa.toLowerCase()));
-        if (camionElegido && camionElegido.equipment_type) {
-          raw.equipo = camionElegido.equipment_type.toLowerCase().replace(' ', '_');
-        }
-      }
+    const esPreguntaNacional = esPreguntaTarifaNacional(ultimoMsg);
+    const esConsultaPromedio = esConsultaRatePromedio(ultimoMsg);
 
-      if (!tenemosEquipo) {
-        if (defaultEquipment && defaultEquipment.length > 1) {
-          // Tiene MÁS DE 1 equipo y no especificó: La IA pregunta y detiene el flujo
-          const listaEquipos = defaultEquipment.map((t: any) => `- ${t.placa} (${t.equipment_type || 'Desconocido'})`).join('\n');
-          return Response.json({
-            content: `Mira, tenemos estos equipos registrados en tu cuenta:\n${listaEquipos}\n\n¿Cuál de estos equipos deseas usar para esta ruta?`
-          });
-        } else if (defaultEquipment && defaultEquipment.length === 1) {
-          // Tiene EXACTAMENTE 1 equipo: Lo toma automático sin preguntar
-          const equipoUnico = defaultEquipment[0].equipment_type || 'unknown';
-          raw.equipo = equipoUnico.toLowerCase().replace(' ', '_');
-        } else {
-          // NO tiene flota registrada: preguntamos qué equipo es.
-          return Response.json({
-            content: `Para darte un cálculo preciso, ¿qué tipo de camión estás buscando (Dry Van, Reefer, Flatbed, Drayage...)?`
-          });
-        }
-      } else if (raw.equipo) {
-        // Normalizar texto por si el LLM extrajo "Dry Van" en lugar de "dry_van"
-        raw.equipo = raw.equipo.toLowerCase().replace(' ', '_');
+    if (esPreguntaNacional) {
+      intent = 'rate_check';
+      raw.origen = null;
+      raw.destino = 'US';
+      raw.millas_ida = null;
+    } else if (raw.origen && raw.destino && raw.origen.toLowerCase().trim() === raw.destino.toLowerCase().trim()) {
+      raw.destino = null;
+      raw.millas_ida = null;
+    }
+
+    const equipoEnUltimoMensaje = extraerEquipoDeTexto(ultimoMsg);
+    if (equipoEnUltimoMensaje) {
+      raw.equipo = equipoEnUltimoMensaje;
+    } else if (esConsultaPromedio) {
+      // En consultas sobre rates promedios o nacionales sin equipo explícito,
+      // heredamos preferentemente el equipo de la consulta previa sobre rates promedios (no de las rutas)
+      const equipoConsultaPromedio = extraerEquipoDeConsultaPromedio(cappedMessages);
+      if (equipoConsultaPromedio) {
+        raw.equipo = equipoConsultaPromedio;
+      } else if (!raw.equipo || raw.equipo === 'unknown') {
+        const inherited = extraerEquipoDelHistorial(cappedMessages);
+        if (inherited) raw.equipo = inherited;
       }
+    } else if (!raw.equipo || raw.equipo === 'unknown') {
+      const inheritedEquipment = extraerEquipoDelHistorial(cappedMessages);
+      if (inheritedEquipment) {
+        raw.equipo = inheritedEquipment;
+      }
+    }
+
+    // Normalizar texto por si el LLM extrajo "Dry Van" en lugar de "dry_van"
+    if (raw.equipo) {
+      raw.equipo = raw.equipo.toLowerCase().replace(' ', '_');
     }
 
 
@@ -724,7 +906,7 @@ Deno.serve(async (req) => {
       for (const n of userNumbers) permitidas.add(n);
       
       const chequeo = assertNoInventedFigures(texto, permitidas);
-      return chequeo.ok ? texto : buildBoundaryFallbackMarkdown();
+      return chequeo.ok ? texto : buildBoundaryFallbackMarkdown(locale);
     };
 
     if (intent === 'off_topic') {
@@ -950,6 +1132,12 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 
     const customAccessorialsText = costConfigRecord?.custom_accessorials_active ? costConfigRecord.custom_accessorials_text : null;
 
+    let dynamicContainerRoutes: any[] = [];
+    try {
+      dynamicContainerRoutes = await base44.entities.ContainerRoute.filter({});
+    } catch (_err) {
+      // Ignorar si la entidad aún no tiene registros o no existe
+    }
 
     if (raw.equipo === 'drayage') {
       const tamano: Tamano | null = ['20', '40', '45', '20_heavy'].includes(raw.tamano) ? (raw.tamano as Tamano) : null;
@@ -965,9 +1153,12 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           tarifaOfrecida,
           accessorialTriggers: raw.accessorial_triggers,
           costoPorMillaPropio,
-          tarifaObjetivaPropia: costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
+          tarifaObjetivaPropia: costConfig?.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
+          tarifaBreakEvenPropia: costConfig?.tarifa_break_even != null ? Number(costConfig.tarifa_break_even) : null,
           rawPrompt: msgSinComas,
           customAccessorialsText,
+          dynamicContainerRoutes,
+          stateMarketData,
         });
         if (outcome.kind === 'ask_miles') {
           content = raw.destino ? buildAskMilesMarkdown(outcome.ciudadConocida, locale) : buildMissingDataMarkdown(locale);
@@ -995,7 +1186,8 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           pagoCamionRpm: truckPayment.rpm,
           tarifaOfrecida,
           costoPorMillaPropio,
-          tarifaObjetivaPropia: costConfig.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
+          tarifaObjetivaPropia: costConfig?.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
+          tarifaBreakEvenPropia: costConfig?.tarifa_break_even != null ? Number(costConfig.tarifa_break_even) : null,
           stateMarketData,
           customAccessorialsText,
         });
@@ -1039,11 +1231,11 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
         stateMarketData: stateMarketData
       };
     }
-    return Response.json(responsePayload);
+    return Response.json(responsePayload, { headers: corsHeaders });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[entry.ts] Unhandled Exception:', error);
-    // Cualquier falla inesperada retorna respuesta segura, nunca 500 con stack trace.
-    return Response.json({ content: safeFallbackContent(locale) });
+    // Cualquier falla inesperada retorna respuesta segura con cabeceras CORS
+    return Response.json({ content: safeFallbackContent(locale), error: error?.message || 'Error del servidor' }, { headers: corsHeaders });
   }
 });

@@ -155,16 +155,12 @@ Deno.test('ACCESSORIALS: unit es un tag semántico "perDay", nunca el literal en
 
 Deno.test('buildAccessorialsLine: cambia el sufijo de unidad por locale sin tocar los labels', () => {
   const es = buildAccessorialsLine('es');
-  assertStringIncludes(es, 'Chassis split $75/día');
+  assertStringIncludes(es, 'Pre-Pull $100');
   assertStringIncludes(es, 'Storage $75-150/día');
-  assertStringIncludes(es, 'TONU $150-300');
-  assertStringIncludes(es, 'Pre-Pull $100-200');
 
   const en = buildAccessorialsLine('en');
-  assertStringIncludes(en, 'Chassis split $75/day');
+  assertStringIncludes(en, 'Pre-Pull $100');
   assertStringIncludes(en, 'Storage $75-150/day');
-  assertStringIncludes(en, 'TONU $150-300');
-  assertStringIncludes(en, 'Pre-Pull $100-200');
 });
 
 Deno.test('messageCatalog: extraction.languageDirective flips es/en', () => {

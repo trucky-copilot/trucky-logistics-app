@@ -17,6 +17,10 @@
     "flatbed": {
       "type": "number",
       "description": "Tarifa estimada RPM para Flatbed en este estado"
+    },
+    "container": {
+      "type": "number",
+      "description": "Tarifa estimada RPM para Contenedor / Drayage en este estado"
     }
   }
 }

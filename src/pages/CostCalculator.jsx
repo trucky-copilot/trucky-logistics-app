@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
-import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2 } from 'lucide-react';
+import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2, CheckCircle2 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
 
@@ -20,6 +20,7 @@ export default function CostCalculator() {
   const [originalConfig, setOriginalConfig] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showSavedModal, setShowSavedModal] = useState(false);
   const [configId, setConfigId] = useState(null);
   const [loading, setLoading] = useState(true);
   // Dropdown state saved below using localStorage
@@ -133,16 +134,29 @@ export default function CostCalculator() {
   const quickloadStatus = quickloadProfit > 0.1 ? 'ganancia' : quickloadProfit > -0.1 ? 'break_even' : 'perdida';
 
   const keysToValidate = ['diesel_precio', 'mpg', 'millas_semana_promedio'];
-  const hasZeroOrNegative = keysToValidate.some(key => Number(config[key]) <= 0);
+  const hasZeroOrNegative = keysToValidate.some(key => {
+    const val = Number(String(config[key] ?? '').replace(',', '.'));
+    return isNaN(val) || val <= 0;
+  });
 
   const saveConfig = async () => {
     // Si el cálculo sigue siendo inválido por alguna otra razón
     if (hasZeroOrNegative || !costos.valido) return;
-    if (!costos.valido) return;
     setSaving(true);
     const user = await base44.auth.me();
+
+    const numericKeys = [
+      'diesel_precio', 'mpg', 'seguro_semanal', 'lease_semanal',
+      'pago_conductor_porcentaje', 'otros_gastos_semanales',
+      'millas_semana_promedio', 'tarifa_objetivo'
+    ];
+    const cleanConfig = { ...config };
+    numericKeys.forEach(k => {
+      cleanConfig[k] = Number(String(cleanConfig[k] ?? 0).replace(',', '.'));
+    });
+
     const data = {
-      ...config,
+      ...cleanConfig,
       usuario: user.email,
       profile_id: activeProfileId,
       costo_por_milla: costos.costoPorMilla,
@@ -159,6 +173,7 @@ export default function CostCalculator() {
       setOriginalConfig({ ...data });
       setUnsavedChanges('CostCalculator', false);
       setSaved(true);
+      setShowSavedModal(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
       console.error("Error guardando CostConfig:", e);
@@ -251,7 +266,7 @@ export default function CostCalculator() {
 
   const barSegments = [
     { label: t.calculator.breakEvenLabel, rate: breakEvenRate, color: '#facc15' },
-    { label: t.calculator.targetLabel, rate: Number(config.tarifa_objetivo), color: '#8b5cf6' },
+    { label: t.calculator.targetLabel, rate: Number(String(config.tarifa_objetivo || 0).replace(',', '.')), color: '#8b5cf6' },
     { label: t.calculator.marketLabel, rate: 3.10, color: '#a78bfa' },
 
   ];
@@ -278,65 +293,121 @@ export default function CostCalculator() {
             <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block">
               <Fuel className="w-3 h-3" />
               {t.calculator.diesel}
-              {Number(config.diesel_precio) <= 0 && (
+              {Number(String(config.diesel_precio ?? '').replace(',', '.')) <= 0 && (
                 <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
               )}
             </label>
-            <input type="number" step="0.01" value={config.diesel_precio}
-              onChange={e => set('diesel_precio', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.diesel_precio ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('diesel_precio', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
               {t.calculator.mpg}
-              {Number(config.mpg) <= 0 && (
+              {Number(String(config.mpg ?? '').replace(',', '.')) <= 0 && (
                 <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
               )}
             </label>
-            <input type="number" step="0.1" value={config.mpg}
-              onChange={e => set('mpg', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.mpg ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('mpg', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.insurance}</label>
-            <input type="number" value={config.seguro_semanal}
-              onChange={e => set('seguro_semanal', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.seguro_semanal ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('seguro_semanal', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.lease}</label>
-            <input type="number" value={config.lease_semanal}
-              onChange={e => set('lease_semanal', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.lease_semanal ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('lease_semanal', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.driverPay}</label>
-            <input type="number" value={config.pago_conductor_porcentaje}
-              onChange={e => set('pago_conductor_porcentaje', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.pago_conductor_porcentaje ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('pago_conductor_porcentaje', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.otherCosts}</label>
-            <input type="number" value={config.otros_gastos_semanales}
-              onChange={e => set('otros_gastos_semanales', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.otros_gastos_semanales ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('otros_gastos_semanales', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
               {t.calculator.weeklyMiles}
-              {Number(config.millas_semana_promedio) <= 0 && (
+              {Number(String(config.millas_semana_promedio ?? '').replace(',', '.')) <= 0 && (
                 <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
               )}
             </label>
-            <input type="number" value={config.millas_semana_promedio}
-              onChange={e => set('millas_semana_promedio', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.millas_semana_promedio ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('millas_semana_promedio', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">{t.calculator.targetRate}</label>
-            <input type="number" step="0.01" value={config.tarifa_objetivo}
-              onChange={e => set('tarifa_objetivo', Number(e.target.value))}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            <input 
+              type="text" 
+              inputMode="decimal"
+              value={config.tarifa_objetivo ?? ''}
+              onChange={e => {
+                const val = e.target.value;
+                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('tarifa_objetivo', val);
+              }}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+            />
           </div>
         </div>
       </div>
@@ -344,9 +415,9 @@ export default function CostCalculator() {
       {/* Cargos Adicionales (Accessorials) */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">Cargos Adicionales / Accesoriales</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t.calculator.accessorialsTitle || 'Cargos Adicionales / Accesoriales'}</h2>
           <label className="flex items-center gap-2 cursor-pointer">
-            <span className="text-xs text-muted-foreground">Activar personalizados</span>
+            <span className="text-xs text-muted-foreground">{t.calculator.enableCustom || 'Activar personalizados'}</span>
             <div className="relative inline-flex items-center">
               <input type="checkbox" className="sr-only peer" checked={config.custom_accessorials_active} onChange={e => set('custom_accessorials_active', e.target.checked)} />
               <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
@@ -357,7 +428,7 @@ export default function CostCalculator() {
         {config.custom_accessorials_active && (
             <div className="space-y-3">
               <p className="text-xs text-muted-foreground">
-                Ingresa tus montos para cada cargo. El chat priorizará estos valores sobre los de mercado.
+                {t.calculator.customAccessorialsDesc || 'Ingresa tus montos para cada cargo. El chat priorizará estos valores sobre los de mercado.'}
               </p>
               
               {/* Los 4 campos base siempre fijos */}
@@ -382,7 +453,7 @@ export default function CostCalculator() {
 
               {/* Fila dinámica para otros cargos */}
               <div className="mt-4 pt-4 border-t border-border">
-                <label className="text-xs text-muted-foreground mb-2 block">Otros cargos adicionales...</label>
+                <label className="text-xs text-muted-foreground mb-2 block">{t.calculator.otherAccessorials || 'Otros cargos adicionales...'}</label>
                 <div className="flex items-center gap-3">
                   <select 
                     className="w-2/3 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
@@ -457,6 +528,34 @@ export default function CostCalculator() {
           {saved ? `✓ ${t.calculator.saved}` : t.calculator.save}
         </button>
       </div>
+
+      {/* Modal de confirmación estilizado con diseño de Trucky */}
+      {showSavedModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-semibold text-foreground">
+                Se guardó exitosamente
+              </h3>
+              <p className="text-xs text-muted-foreground mt-1">
+                Tus datos de la calculadora han sido guardados correctamente en tu perfil.
+              </p>
+            </div>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setShowSavedModal(false)}
+                className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold transition-all shadow-lg shadow-primary/20"
+              >
+                Aceptar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 } 

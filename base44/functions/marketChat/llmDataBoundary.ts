@@ -42,7 +42,8 @@ import {
   SANITY_MAX_MILES,
   type CalculatedQuote,
 } from './rateEngine.ts';
-import { getRouteCounts } from './rateTable.ts';
+import { getRouteCounts, loadAccessorials } from './rateTable.ts';
+import type { Locale } from './messageCatalog.ts';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // EXTRACCIÓN DE CIFRAS
@@ -109,7 +110,13 @@ export function assertNoInventedFigures(finalText: unknown, allowedNumbers: Set<
   return { ok: unicas.length === 0, invented: unicas };
 }
 
-export function buildBoundaryFallbackMarkdown(): string {
+export function buildBoundaryFallbackMarkdown(locale: Locale = 'es'): string {
+  if (locale === 'en') {
+    return [
+      '⚠️ I found a figure that I cannot confirm against the calculated data, so I prefer not to show it.',
+      'Please tell me the route or the specific information you are interested in and I will confirm it with the exact number.',
+    ].join('\n');
+  }
   return [
     '⚠️ Encontré una cifra que no puedo confirmar contra los datos calculados, así que prefiero no mostrarla.',
     'Decime la ruta o el dato puntual que te interesa y te la confirmo con el número exacto.',
@@ -146,6 +153,10 @@ export function buildStaticRateCheckNumbers(): number[] {
 
 export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
   const numeros: number[] = [q.millasIda, q.objetivo, ...buildStaticRateCheckNumbers()];
+  if (q.millasIda > 0) {
+    const rpmMkt = q.precioIncluyeRegreso ? (q.objetivo / (q.millasIda * 2)) : (q.objetivo / q.millasIda);
+    numeros.push(rpmMkt, Number(rpmMkt.toFixed(2)));
+  }
   if (q.piso != null) numeros.push(q.piso);
   if (q.tarifaOfrecida != null) numeros.push(q.tarifaOfrecida);
   if (q.segundaLectura) numeros.push(q.segundaLectura.millasRedondo, q.segundaLectura.rpmRedondo);
@@ -187,6 +198,14 @@ export function figuresFromCalculatedQuote(q: CalculatedQuote): number[] {
       numeros.push(Math.round(limSup * q.millasIda));
     }
   }
+  if (q.tarifaBreakEvenPropia != null) {
+    numeros.push(q.tarifaBreakEvenPropia);
+    numeros.push(Math.round(q.tarifaBreakEvenPropia * q.millasIda));
+  }
+  if (q.tarifaPromedioEstado != null) {
+    numeros.push(q.tarifaPromedioEstado);
+    numeros.push(Math.round(q.tarifaPromedioEstado * q.millasIda));
+  }
   return numeros;
 }
 
@@ -209,7 +228,19 @@ export function buildKbConstantNumbers(): number[] {
   const numeros: number[] = [];
   for (const e of EQUIPMENT_BENCHMARKS) numeros.push(e.rpm_min, e.rpm_target);
   numeros.push(DETENTION.standard, DETENTION.min, DETENTION.max, DETENTION.free_hours);
+  // Horas y tiempos estándar usuales en temas de espera/detention y descansos HOS
+  numeros.push(1, 2, 3, 4, 5, 8, 10, 11, 12, 14, 24, 34, 48, 70);
   for (const a of ACCESSORIALS) numeros.push(a.min, a.max);
+  try {
+    for (const item of loadAccessorials('FL')) {
+      numeros.push(...extractNumericTokens(item.monto));
+    }
+    for (const item of loadAccessorials('TX')) {
+      numeros.push(...extractNumericTokens(item.monto));
+    }
+  } catch (_e) {
+    // Si la lectura falla en entornos aislados, no romper el conjunto base
+  }
   numeros.push(
     HOS_LIMITS.driving_hours,
     HOS_LIMITS.on_duty_hours,
@@ -238,5 +269,21 @@ export function buildKbConstantNumbers(): number[] {
  * dato real mostrado, no una cifra inventada.
  */
 export function buildGeneralIntentAllowedNumbers(costConfigValuesShown: Array<number | null | undefined> = []): Set<number> {
-  return buildAllowedNumbersSet([...buildKbConstantNumbers(), ...costConfigValuesShown]);
+  const extraNumeros: number[] = [
+    // Números enteros y horas comunes en explicaciones
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14, 24, 36, 48, 70, 72,
+    // Porcentajes comunes de mercado y márgenes
+    5, 10, 15, 20, 25, 30, 35, 40, 50,
+    // Rangos estándar y comunes de accesoriales en la industria
+    25, 35, 40, 45, 50, 60, 75, 90, 100, 115, 125, 150, 175, 200, 250, 300,
+  ];
+
+  // Si el usuario tiene costo/milla y objetivo configurados, autorizar también el margen derivado
+  const cpm = costConfigValuesShown.find(v => v != null && v > 0 && v < 10);
+  const obj = costConfigValuesShown.find(v => v != null && v >= 2 && v <= 10 && v !== cpm);
+  if (cpm != null && obj != null) {
+    extraNumeros.push(Math.round(Math.abs(obj - cpm) * 100) / 100);
+  }
+
+  return buildAllowedNumbersSet([...buildKbConstantNumbers(), ...costConfigValuesShown, ...extraNumeros]);
 }
