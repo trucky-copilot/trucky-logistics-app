@@ -184,14 +184,30 @@ export default function Drivers() {
         const stored = localStorage.getItem(`profile_drivers_${orgId}_${i}`);
         if (stored) usedIds.push(...JSON.parse(stored));
       }
-      const unclaimedIds = data.map(d => d.id).filter(id => !usedIds.includes(id));
+      const unclaimed = data.filter(d => (!d.profile_id || d.profile_id === '1') && !usedIds.includes(d.id));
+      const unclaimedIds = unclaimed.map(d => d.id);
       const key = `profile_drivers_${orgId}_1`;
       localStorage.setItem(key, JSON.stringify(unclaimedIds));
-      filtered = data.filter(d => unclaimedIds.includes(d.id));
-    } else if (profileIds !== null) {
-      filtered = data.filter(d => profileIds.includes(d.id));
+      filtered = data.filter(d => d.profile_id === '1' || unclaimedIds.includes(d.id));
+
+      // Fase 5: Migración silenciosa en BD para backfill de profile_id = '1'
+      unclaimed.forEach(d => {
+        if (!d.profile_id) {
+          base44.entities.Driver.update(d.id, { profile_id: '1' }).catch(() => {});
+        }
+      });
     } else {
-      filtered = [];
+      filtered = data.filter(d => {
+        if (d.profile_id) return d.profile_id === activeProfileId;
+        return profileIds && profileIds.includes(d.id);
+      });
+
+      // Si estaba en localStorage de este perfil pero sin profile_id en BD, migrar
+      filtered.forEach(d => {
+        if (!d.profile_id) {
+          base44.entities.Driver.update(d.id, { profile_id: activeProfileId }).catch(() => {});
+        }
+      });
     }
     
     setDrivers(filtered);
@@ -201,13 +217,18 @@ export default function Drivers() {
 
   const handleSave = async (data) => {
     try {
-      // Quitamos profile_id del payload para no romper el schema de base44
-      const { profile_id: _, ...cleanData } = data;
       if (editDriver) {
-        await base44.entities.Driver.update(editDriver.id, cleanData);
+        await base44.entities.Driver.update(editDriver.id, {
+          ...data,
+          profile_id: editDriver.profile_id || activeProfileId || '1',
+        });
       } else {
-        const created = await base44.entities.Driver.create(withOrg(orgId, cleanData));
-        // Guardamos el nuevo ID en el perfil activo
+        const created = await base44.entities.Driver.create(
+          withOrg(orgId, {
+            ...data,
+            profile_id: activeProfileId || '1',
+          })
+        );
         addDriverToProfile(created.id);
       }
       setShowForm(false); setEditDriver(null); loadData();

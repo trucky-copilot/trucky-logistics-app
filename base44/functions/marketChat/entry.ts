@@ -70,6 +70,8 @@ import emailTemplates from './plantillas_correo.json' with { type: 'json' };
 // por qué esta pieza no tiene Deno.test directo (entry.ts no se puede
 // importar desde una prueba).
 import { MESSAGES, resolveLocale, type Locale } from './messageCatalog.ts';
+// Fase 0 (plan de latencia): medición por etapa. Ver perf.ts.
+import { createPerfTracker, attachPerf, type PerfTracker } from './perf.ts';
 
 const ROUTE_COUNTS = getRouteCounts();
 
@@ -545,7 +547,63 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-Deno.serve(async (req) => {
+// ── FASE 3: CACHÉ EN MEMORIA Y MAPEOS ESTÁTICOS ──────────────────────────────
+const STATE_NAMES_MAP: Record<string, string> = {
+  AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+  CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+  HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+  KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+  MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+  MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+  NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+  OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+  SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+  VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+  DC: 'District of Columbia'
+};
+const STATE_CODES: Record<string, string> = {};
+for (const [k, v] of Object.entries(STATE_NAMES_MAP)) {
+  STATE_CODES[v.toLowerCase()] = k;
+}
+
+interface CacheEntry<T> {
+  data: T;
+  expiresAt: number;
+}
+
+let stateMarketDataCache: CacheEntry<any[]> | null = null;
+let containerRouteCache: CacheEntry<any[]> | null = null;
+const CACHE_TTL_MS = 10 * 60 * 1000; // 10 minutos de TTL en memoria
+
+async function getCachedStateMarketData(base44: any, perf: PerfTracker): Promise<any[]> {
+  const now = Date.now();
+  if (stateMarketDataCache && stateMarketDataCache.expiresAt > now) {
+    return stateMarketDataCache.data;
+  }
+  const raw = await perf.time('db.stateMarketData', () => base44.entities.StateMarketData.filter({}));
+  const list = (raw && raw.length > 0) ? raw : [];
+  stateMarketDataCache = { data: list, expiresAt: now + CACHE_TTL_MS };
+  return list;
+}
+
+async function getCachedContainerRoutes(base44: any, perf: PerfTracker): Promise<any[]> {
+  const now = Date.now();
+  if (containerRouteCache && containerRouteCache.expiresAt > now) {
+    return containerRouteCache.data;
+  }
+  try {
+    const raw = await perf.time('db.containerRoute', () => base44.entities.ContainerRoute.filter({}));
+    const list = (raw && raw.length > 0) ? raw : [];
+    containerRouteCache = { data: list, expiresAt: now + CACHE_TTL_MS };
+    return list;
+  } catch (_err) {
+    return [];
+  }
+}
+
+// El handler recibe el tracker por parámetro (no global) para que requests
+// concurrentes en la misma instancia Deno no mezclen sus tiempos.
+async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Response> {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -556,7 +614,7 @@ Deno.serve(async (req) => {
 
     let user;
     try {
-      user = await base44.auth.me();
+      user = await perf.time('auth.me', () => base44.auth.me());
     } catch (_error) {
       return Response.json({ error: 'No autorizado' }, { status: 401, headers: corsHeaders });
     }
@@ -583,19 +641,29 @@ Deno.serve(async (req) => {
     if (JSON.stringify(cappedMessages).length > MAX_REQUEST_CHARS) {
       return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400, headers: corsHeaders });
     }
-    const costConfigRecord = user
-      ? await fetchCostConfigRecord(base44, user.email, activeProfileId)
-      : null;
+    // Fase 3: Paralelizar lecturas iniciales independientes para reducir la latencia total
+    const [costConfigRecord, organizationName, rawStateData] = await Promise.all([
+      user ? perf.time('db.costConfig', () => fetchCostConfigRecord(base44, user.email, activeProfileId)) : Promise.resolve(null),
+      perf.time('db.organizationName', () => getOrganizationName(base44, user.email)),
+      getCachedStateMarketData(base44, perf),
+    ]);
 
     // --- AUTO-FIX: Limpiar valores corruptos (como el 1838) del perfil ---
     if (user && costConfigRecord && costConfigRecord.pago_camion_rpm > 100) {
-      await persistPagoCamion(base44, user.email, costConfigRecord, null, activeProfileId);
+      await perf.time('db.costConfigFix', () => persistPagoCamion(base44, user.email, costConfigRecord, null, activeProfileId));
       costConfigRecord.pago_camion_rpm = null;
     }
     // ----------------------------------------------------------------------
 
-    const organizationName = await getOrganizationName(base44, user.email);
     const costConfig = getCostConfig(costConfigRecord, clientCostConfig);
+
+    let stateMarketData: any[] = [];
+    if (rawStateData && rawStateData.length > 0) {
+      stateMarketData = rawStateData.map((s: any) => ({
+        ...s,
+        state_code: s.state_code ? (STATE_CODES[s.state_code.trim().toLowerCase()] || s.state_code.trim().toUpperCase()) : s.state_code
+      }));
+    }
 
     let systemContext = MESSAGES[locale].baseContext({
       freightKbVersion: FREIGHT_KB_VERSION,
@@ -660,8 +728,6 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
 
 
     let marketText = "\n\nDATOS DE MERCADO ACTUALES (Promedios RPM base, usa estos valores si preguntan genéricamente):\n";
-
-    let stateMarketData: any[] = [];
     
     // Agregamos los accesoriales por defecto de FL para preguntas generales
     const defaultAccFL = loadAccessorials('FL');
@@ -672,7 +738,7 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
     }
 
     const prompt = buildExtractionPrompt(systemContext, cappedMessages, locale);
-    const raw = await extractWithRetry(base44, prompt);
+    const raw = await perf.time('llm.extract', () => extractWithRetry(base44, prompt));
 
     if (!raw) {
       return Response.json({ content: safeFallbackContent(locale) });
@@ -717,7 +783,7 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
     // Si el usuario solo pide millas, omitimos las validaciones de equipo y respondemos de inmediato.
     if (intent === 'ask_miles') {
       if (!raw.millas_ida && raw.origen && raw.destino) {
-        raw.millas_ida = await fetchDrivingMiles(base44, raw.origen, raw.destino);
+        raw.millas_ida = await perf.time('maps.miles', () => fetchDrivingMiles(base44, raw.origen, raw.destino));
       }
       
       const permitidasMiles = new Set<number>();
@@ -892,7 +958,7 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
     // Va aquí porque necesita que `raw` e `intent` ya estén declarados.
     // Usamos !raw.millas_ida para cubrir null, undefined, y 0 (que a veces el LLM arroja si no sabe).
     if (intent === 'rate_check' && !raw.millas_ida && raw.origen && raw.destino) {
-      raw.millas_ida = await fetchDrivingMiles(base44, raw.origen, raw.destino);
+      raw.millas_ida = await perf.time('maps.miles', () => fetchDrivingMiles(base44, raw.origen, raw.destino));
     }
 
     // reglas-v3-multiestado Fase 7 (criterio 4): validador automático de la
@@ -934,39 +1000,34 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
       let debugAllBrokersLength = 0;
 
       try {
-        const memberships = await base44.entities.OrganizationMember.filter({ user_email: user.email, active: true });
+        const memberships = await perf.time('db.draftContext', () => base44.entities.OrganizationMember.filter({ user_email: user.email, active: true }));
         if (memberships && memberships.length > 0) {
           const orgId = memberships[0].organization_id;
           debugOrgId = orgId;
           
           try {
-             const org = await base44.entities.Organization.get(orgId);
+             const org = await perf.time('db.draftContext', () => base44.entities.Organization.get(orgId));
              if (org) organizationName = org.name;
           } catch(err) {
              console.error('Error fetching org:', err);
           }
           
-          let profiles = await base44.entities.CarrierProfile.filter({ organization_id: orgId });
-          if (!profiles || profiles.length === 0) {
-            profiles = await base44.entities.CarrierProfile.filter({});
-          }
+          // Fase 3: Paralelizar consultas de draft por organización y eliminar fallbacks inseguros a toda la BD
+          const [profiles, allBrokers, allDrivers] = await Promise.all([
+            perf.time('db.draftProfiles', () => base44.entities.CarrierProfile.filter({ organization_id: orgId })),
+            perf.time('db.draftBrokers', () => base44.entities.Broker.filter({ organization_id: orgId })),
+            perf.time('db.draftDrivers', () => base44.entities.Driver.filter({ organization_id: orgId })),
+          ]);
+
           debugProfilesLength = profiles ? profiles.length : 0;
           if (profiles && profiles.length > 0) {
             carrierProfile = profiles[0];
           }
 
-          let allBrokers = await base44.entities.Broker.filter({ organization_id: orgId });
-          if (!allBrokers || allBrokers.length === 0) {
-            allBrokers = await base44.entities.Broker.filter({});
-          }
           debugAllBrokersLength = allBrokers ? allBrokers.length : 0;
-          brokers = allBrokers.filter((b: any) => !b.profile_id || b.profile_id === activeProfileId);
-          
-          let allDrivers = await base44.entities.Driver.filter({ organization_id: orgId });
-          if (!allDrivers || allDrivers.length === 0) {
-            allDrivers = await base44.entities.Driver.filter({});
-          }
-          drivers = allDrivers.filter((d: any) => !d.profile_id || d.profile_id === activeProfileId);
+          const targetProfId = activeProfileId || '1';
+          brokers = (allBrokers || []).filter((b: any) => (b.profile_id || '1') === targetProfId);
+          drivers = (allDrivers || []).filter((d: any) => (d.profile_id || '1') === targetProfId);
         }
       } catch(e) {
          console.error('[draft_email] Error fetching organization info:', e);
@@ -1056,7 +1117,7 @@ Conversación reciente:
 ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 `;
 
-      const draftResult = await base44.integrations.Core.InvokeLLM({
+      const draftResult = await perf.time('llm.draftEmail', () => base44.integrations.Core.InvokeLLM({
         prompt: draftingPrompt,
         response_json_schema: {
           type: "object",
@@ -1065,7 +1126,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           },
           required: ["correo"]
         }
-      });
+      }));
 
       let respuesta = draftResult?.correo || 'Error redactando el correo. Por favor, intenta de nuevo.';
       
@@ -1093,7 +1154,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 
     const truckPayment = resolveTruckPayment(costConfigRecord, raw.pago_camion);
     if (truckPayment.shouldPersist && truckPayment.rpm != null) {
-      await persistPagoCamion(base44, user.email, costConfigRecord, truckPayment.rpm, activeProfileId);
+      await perf.time('db.persistPagoCamion', () => persistPagoCamion(base44, user.email, costConfigRecord, truckPayment.rpm, activeProfileId));
     }
 
     const tarifaOfrecida = typeof raw.tarifa_ofrecida === 'number' && isFinite(raw.tarifa_ofrecida) && raw.tarifa_ofrecida > 0
@@ -1104,39 +1165,12 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
     let calculo: CalculatedQuote | null = null;
     let rpmPermitido: number | null = null;
 
-    const STATE_NAMES_MAP: Record<string, string> = {
-      AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
-      CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
-      HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
-      KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
-      MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
-      MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
-      NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
-      OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
-      SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
-      VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
-      DC: 'District of Columbia'
-    };
-    const STATE_CODES: Record<string, string> = {};
-    for (const [k, v] of Object.entries(STATE_NAMES_MAP)) {
-      STATE_CODES[v.toLowerCase()] = k;
-    }
-
-    const rawStateData = await base44.entities.StateMarketData.filter({});
-    if (rawStateData && rawStateData.length > 0) {
-      stateMarketData = rawStateData.map((s: any) => ({
-        ...s,
-        state_code: s.state_code ? (STATE_CODES[s.state_code.trim().toLowerCase()] || s.state_code.trim().toUpperCase()) : s.state_code
-      }));
-    }
-
     const customAccessorialsText = costConfigRecord?.custom_accessorials_active ? costConfigRecord.custom_accessorials_text : null;
 
+    // Fase 3: ContainerRoute solo se consulta y cachea si el equipo requerido es drayage
     let dynamicContainerRoutes: any[] = [];
-    try {
-      dynamicContainerRoutes = await base44.entities.ContainerRoute.filter({});
-    } catch (_err) {
-      // Ignorar si la entidad aún no tiene registros o no existe
+    if (raw.equipo === 'drayage') {
+      dynamicContainerRoutes = await getCachedContainerRoutes(base44, perf);
     }
 
     if (raw.equipo === 'drayage') {
@@ -1238,4 +1272,12 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
     // Cualquier falla inesperada retorna respuesta segura con cabeceras CORS
     return Response.json({ content: safeFallbackContent(locale), error: error?.message || 'Error del servidor' }, { headers: corsHeaders });
   }
+}
+
+// Punto de entrada: un tracker nuevo por request y el resumen se adjunta en
+// un solo lugar, en vez de tocar cada `return Response.json(...)` del handler.
+Deno.serve(async (req: Request) => {
+  const perf = createPerfTracker();
+  const response = await handleMarketChat(req, perf);
+  return attachPerf(response, perf);
 });

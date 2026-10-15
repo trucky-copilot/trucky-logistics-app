@@ -3,7 +3,6 @@ import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, C
 import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
-import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
@@ -125,6 +124,20 @@ export default function MarketChat() {
   const [history, setHistory] = useState([]);
   const [translatingHistory, setTranslatingHistory] = useState(false);
   const prevLocaleRef = useRef(locale);
+  const sessionDbIdRef = useRef(sessionDbId);
+  const sessionIdRef = useRef(sessionId);
+  const isSavingRef = useRef(false);
+  const pendingSaveRef = useRef(null);
+  const translationSeqRef = useRef(0);
+
+  useEffect(() => {
+    sessionDbIdRef.current = sessionDbId;
+  }, [sessionDbId]);
+
+  useEffect(() => {
+    sessionIdRef.current = sessionId;
+  }, [sessionId]);
+
   // locale del toggle ES/EN. Fuente inicial: UserProfile.idioma_chat (carga
   // ya hecha por AppStateContext, sin fetch adicional). Default 'es' si el
   // perfil no trae el campo (usuarios previos a este cambio).
@@ -174,8 +187,15 @@ export default function MarketChat() {
 
       if (savedDbId) {
         try {
-          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
-          const session = allSessions.find(s => s.id === savedDbId);
+          // Fase 2: Cargar directamente el documento por ID en vez de consultar 50 sesiones pesadas
+          let session = null;
+          try {
+            session = await base44.entities.ChatHistory.get(savedDbId);
+          } catch (_getErr) {
+            const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 15);
+            session = allSessions.find(s => s.id === savedDbId);
+          }
+
           if (session) {
             setSessionId(session.session_id);
             setSessionDbId(session.id);
@@ -203,7 +223,7 @@ export default function MarketChat() {
       // Perfil 1 sin entrada en localStorage: buscar sesión heredada (sin profile_id en DB)
       if (activeProfileId === '1') {
         try {
-          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
+          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 15);
           
           // Obtener los IDs que ya fueron reclamados por otros perfiles
           const usedSessionIds = [];
@@ -252,16 +272,188 @@ export default function MarketChat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const translateHistory = async (targetLang) => {
-    setTranslatingHistory(true);
+  const queueSaveSession = (updatedMessages, targetSessionId) => {
+    const activeSid = targetSessionId || sessionIdRef.current;
+    if (!activeSid) return;
+
+    // 1. Fase 2: Sanitizar structuredData conservando estrictamente los datos clave
+    // (intent, origen, destino, calculo) y eliminando tablas masivas como stateMarketData
+    const cleanMessages = updatedMessages.map(m => {
+      if (m.structuredData) {
+        const { intent, origen, destino, calculo } = m.structuredData;
+        return {
+          ...m,
+          structuredData: {
+            ...(intent && { intent }),
+            ...(origen && { origen }),
+            ...(destino && { destino }),
+            ...(calculo && { calculo }),
+          }
+        };
+      }
+      return m;
+    });
+
+    // 2. Persistencia síncrona inmediata en caché local (0ms, no bloquea ni falla por red)
     try {
+      const email = userProfile?.email;
+      if (email && activeProfileId) {
+        const lsKey = `chat_session_profile_${email}_${activeProfileId}`;
+        localStorage.setItem(`${lsKey}_messages`, JSON.stringify(cleanMessages));
+      }
+    } catch (_e) { /* ignora */ }
+
+    // 3. Fase 2: Limitar a máximo 60 mensajes en BD para evitar crecimiento desmedido del documento
+    const cappedForDb = cleanMessages.length > 60 ? cleanMessages.slice(-60) : cleanMessages;
+
+    // 4. Encolar guardado para MongoDB en background (una sola escritura en vuelo a la vez)
+    pendingSaveRef.current = {
+      messages: cappedForDb,
+      sessionId: activeSid,
+    };
+
+    if (isSavingRef.current) return;
+
+    const processQueue = async () => {
+      isSavingRef.current = true;
+      try {
+        while (pendingSaveRef.current) {
+          const item = pendingSaveRef.current;
+          pendingSaveRef.current = null;
+
+          const user = await base44.auth.me();
+          if (!user?.email) break;
+
+          const firstUserMsg = item.messages.find(m => m.role === 'user');
+          const titulo = firstUserMsg
+            ? (firstUserMsg.content.length > 50 ? firstUserMsg.content.slice(0, 50) + '...' : firstUserMsg.content)
+            : t.defaultTitle;
+
+          const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
+
+          console.time('[PERF ChatHistory save]');
+          if (sessionDbIdRef.current) {
+            await base44.entities.ChatHistory.update(sessionDbIdRef.current, {
+              messages: item.messages,
+              titulo,
+              profile_id: activeProfileId,
+            });
+          } else {
+            const created = await base44.entities.ChatHistory.create({
+              session_id: item.sessionId,
+              usuario: user.email,
+              profile_id: activeProfileId,
+              messages: item.messages,
+              titulo,
+            });
+            sessionDbIdRef.current = created.id;
+            setSessionDbId(created.id);
+            localStorage.setItem(lsKey, created.id);
+          }
+          console.timeEnd('[PERF ChatHistory save]');
+        }
+      } catch (dbErr) {
+        // La falla en MongoDB ya no bloquea la interfaz ni contamina errores de traducción
+        console.warn('[ChatPersistence] No se pudo sincronizar en MongoDB (guardado en caché local):', dbErr?.message || dbErr);
+      } finally {
+        isSavingRef.current = false;
+        if (pendingSaveRef.current) {
+          processQueue();
+        }
+      }
+    };
+
+    processQueue();
+  };
+
+  const translateHistory = async (targetLang) => {
+    if (translatingHistory || messages.length === 0) return;
+    const currentSeq = ++translationSeqRef.current;
+
+    // Fase 4: Limitar a los últimos 20 mensajes (ventana visible) y omitir mensajes ya cacheados
+    const WINDOW_SIZE = 20;
+    const startIndex = Math.max(0, messages.length - WINDOW_SIZE);
+    const windowMessages = messages.slice(startIndex);
+
+    const needsTranslationIndices = [];
+    const textsToSend = [];
+
+    windowMessages.forEach((m, idx) => {
+      const realIdx = startIndex + idx;
+      if (m.translations && m.translations[targetLang]) {
+        // Ya traducido en caché para este idioma
+      } else if (m.content && m.content.trim()) {
+        needsTranslationIndices.push(realIdx);
+        textsToSend.push({ role: m.role, content: m.content });
+      }
+    });
+
+    // Caso A: Todos los mensajes ya tienen traducción en caché en memoria (0 ms, sin petición de red)
+    if (needsTranslationIndices.length === 0) {
+      setMessages(prev => prev.map(m => {
+        if (m.translations && m.translations[targetLang]) {
+          return { ...m, content: m.translations[targetLang] };
+        }
+        return m;
+      }));
+      return;
+    }
+
+    // Caso B: Solo enviamos a Google Translate los mensajes que no están en caché
+    setTranslatingHistory(true);
+
+    try {
+      console.time('[PERF translateChat invoke]');
       const res = await base44.functions.invoke('translateChat', {
-        messages: messages,
+        messages: textsToSend,
         targetLang: targetLang
       });
+      console.timeEnd('[PERF translateChat invoke]');
+
+      // Si inició otra traducción posterior mientras esta corría, descartar resultado obsoleto
+      if (translationSeqRef.current !== currentSeq) {
+        return;
+      }
+
       if (res.data?.messages) {
-        setMessages(res.data.messages);
-        await saveSession(res.data.messages, sessionId, sessionDbId);
+        const returnedTranslated = res.data.messages;
+        setMessages(prev => {
+          const updated = [...prev];
+          needsTranslationIndices.forEach((targetIndex, i) => {
+            if (updated[targetIndex] && returnedTranslated[i]) {
+              const transText = returnedTranslated[i].content;
+              const prevTranslations = updated[targetIndex].translations || {};
+              if (!prevTranslations[prevLocaleRef.current || 'es']) {
+                prevTranslations[prevLocaleRef.current || 'es'] = updated[targetIndex].content;
+              }
+              prevTranslations[targetLang] = transText;
+              updated[targetIndex] = {
+                ...updated[targetIndex],
+                content: transText,
+                translations: prevTranslations,
+              };
+            }
+          });
+
+          // Aplicar la versión traducida también en los que ya estaban en caché
+          const fullyUpdated = updated.map(m => {
+            if (m.translations && m.translations[targetLang]) {
+              return { ...m, content: m.translations[targetLang] };
+            }
+            return m;
+          });
+
+          // Persistir en caché local
+          try {
+            const email = userProfile?.email;
+            if (email && activeProfileId) {
+              const lsKey = `chat_session_profile_${email}_${activeProfileId}_messages_${targetLang}`;
+              localStorage.setItem(lsKey, JSON.stringify(fullyUpdated));
+            }
+          } catch (_e) { /* ignora */ }
+
+          return fullyUpdated;
+        });
       } else if (res.data?.error) {
         setError(`Error de traducción: ${res.data.error}`);
       }
@@ -270,7 +462,9 @@ export default function MarketChat() {
       const backendError = err?.response?.data?.error;
       setError(`Fallo al contactar traducción: ${backendError || err.message || 'Error desconocido'}`);
     } finally {
-      setTranslatingHistory(false);
+      if (translationSeqRef.current === currentSeq) {
+        setTranslatingHistory(false);
+      }
     }
   };
 
@@ -283,58 +477,26 @@ export default function MarketChat() {
     }
   }, [locale]);
 
-  const saveSession = async (updatedMessages, currentSessionId, currentSessionDbId) => {
-    const user = await base44.auth.me();
-    const firstUserMsg = updatedMessages.find(m => m.role === 'user');
-    const titulo = firstUserMsg
-      ? (firstUserMsg.content.length > 50 ? firstUserMsg.content.slice(0, 50) + '...' : firstUserMsg.content)
-      : t.defaultTitle;
-
-    const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
-
-    // Limpiar stateMarketData masivo antes de guardar en DB para evitar que la entidad falle por tamaño
-    const cleanMessages = updatedMessages.map(m => {
-      if (m.structuredData) {
-        const { stateMarketData, ...rest } = m.structuredData;
-        return { ...m, structuredData: rest };
-      }
-      return m;
-    });
-
-    // Guardar SIEMPRE en caché local para persistencia instantánea y sin pérdida de semáforos
-    try {
-      localStorage.setItem(`${lsKey}_messages`, JSON.stringify(cleanMessages));
-    } catch (e) { /* ignora */ }
-
-    if (currentSessionDbId) {
-      await base44.entities.ChatHistory.update(currentSessionDbId, {
-        messages: cleanMessages,
-        titulo,
-        profile_id: activeProfileId,
-      });
-    } else {
-      // Crear nueva sesión y guardar referencia en localStorage para este perfil
-      const created = await base44.entities.ChatHistory.create({
-        session_id: currentSessionId,
-        usuario: user.email,
-        profile_id: activeProfileId,
-        messages: cleanMessages,
-        titulo,
-      });
-      localStorage.setItem(lsKey, created.id);
-      setSessionDbId(created.id);
-    }
-  };
-
   const sendMessage = async (text) => {
     const userMessage = text || input.trim();
-    if (!userMessage || loading) return;
+    if (!userMessage || loading || translatingHistory) return;
 
-    const newMessages = [...messages, { role: 'user', content: userMessage, timestamp: new Date().toISOString() }];
+    const newMessages = [
+      ...messages,
+      { 
+        role: 'user', 
+        content: userMessage, 
+        timestamp: new Date().toISOString(),
+        translations: { [locale]: userMessage }
+      }
+    ];
     setMessages(newMessages);
     setInput('');
     setLoading(true);
     setError(null);
+
+    // Persistir de inmediato el mensaje del usuario en background
+    queueSaveSession(newMessages);
 
     try {
       const apiMessages = newMessages.map(m => {
@@ -345,13 +507,20 @@ export default function MarketChat() {
         }
         return { role: m.role, content: m.content, ...(cleanStructured && { structuredData: cleanStructured }) };
       });
+
+      console.time('[PERF marketChat invoke]');
       const res = await base44.functions.invoke('marketChat', {
         messages: apiMessages,
         costConfig,
         locale,
         activeProfileId,
       });
-      console.log('[DEBUG marketChat] raw res:', JSON.stringify(res?.data));
+      console.timeEnd('[PERF marketChat invoke]');
+
+      if (res.data?._perf) {
+        console.log('[PERF marketChat backend breakdown]', res.data._perf);
+      }
+
       if (res.data?.error) {
         console.log('[DEBUG marketChat] error en respuesta:', res.data.error);
         setError(res.data.error);
@@ -360,27 +529,24 @@ export default function MarketChat() {
           role: 'assistant', 
           content: res.data.content, 
           timestamp: new Date().toISOString(),
+          translations: { [locale]: res.data.content },
           ...(res.data.structuredData && { structuredData: res.data.structuredData })
         };
         const updatedMessages = [...newMessages, assistantMsg];
         setMessages(updatedMessages);
-        try {
-          await saveSession(updatedMessages, sessionId, sessionDbId);
-        } catch (saveErr) {
-          console.error('[DEBUG marketChat] saveSession falló (ignorado):', saveErr);
-        }
+
+        // ¡CRUCIAL (Fase 1.1)!: Liberar spinner de UI de inmediato
+        setLoading(false);
+
+        // Guardar sesión en background (cola única que no traba la interfaz)
+        queueSaveSession(updatedMessages);
+        return;
       } else {
         console.log('[DEBUG marketChat] sin content ni error. res.data:', res?.data);
         setError(t.errorNoResponse);
       }
     } catch (err) {
       console.error('MarketChat: error al enviar mensaje', err);
-      // El cliente de functions se crea con `interceptResponses: false`, así que
-      // axios rechaza cualquier respuesta no-2xx con el status en `err.response`.
-      // Las entidades (saveSession) sí pasan por el interceptor y lanzan
-      // Base44Error, que trae el status en `err.status`. Antes todo caía en el
-      // mismo mensaje de "revisa tu conexión", así que un 401 del backend
-      // (sesión vencida) se reportaba como problema de red.
       const status = err?.response?.status ?? err?.status;
       const serverMsg = err?.response?.data?.message || err?.response?.data?.error || (typeof err?.response?.data === 'string' ? err.response.data : '') || err?.message || '';
       console.error('MarketChat: error al enviar mensaje:', err, serverMsg);
@@ -404,13 +570,16 @@ export default function MarketChat() {
   };
 
   const startNew = async () => {
+    pendingSaveRef.current = null;
     const user = await base44.auth.me();
     const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
     localStorage.removeItem(lsKey);
     localStorage.removeItem(`${lsKey}_messages`);
     const newId = `session_${user.email}_${Date.now()}`;
     setSessionId(newId);
+    sessionIdRef.current = newId;
     setSessionDbId(null);
+    sessionDbIdRef.current = null;
     setMessages([]);
     setInput('');
     setShowHistory(false);
@@ -418,18 +587,22 @@ export default function MarketChat() {
   };
 
   const loadHistoryItem = (item) => {
+    pendingSaveRef.current = null;
     setSessionId(item.session_id);
+    sessionIdRef.current = item.session_id;
     setSessionDbId(item.id);
+    sessionDbIdRef.current = item.id;
     setMessages(item.messages || []);
     setShowHistory(false);
   };
 
   const openHistory = async () => {
     const user = await base44.auth.me();
-    const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 50);
+    // Fase 2: Limitar a 20 registros más recientes en vez de 50
+    const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 20);
     // Filtrar por el perfil activo (los viejos sin profile_id se asumen del Perfil 1)
     const profileSessions = allSessions.filter(s => (s.profile_id || '1') === activeProfileId);
-    setHistory(profileSessions.slice(0, 20));
+    setHistory(profileSessions.slice(0, 15));
     setShowHistory(true);
   };
 
@@ -519,8 +692,9 @@ export default function MarketChat() {
               {t.quickPrompts.map((prompt, i) => (
                 <button
                   key={i}
+                  disabled={loading || translatingHistory}
                   onClick={() => sendMessage(prompt)}
-                  className="text-left px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 text-sm text-muted-foreground hover:text-foreground transition-all"
+                  className="text-left px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 text-sm text-muted-foreground hover:text-foreground transition-all disabled:opacity-50"
                 >
                   {prompt}
                 </button>
@@ -618,15 +792,16 @@ export default function MarketChat() {
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder={t.inputPlaceholder}
+              placeholder={translatingHistory ? (locale === 'en' ? 'Translating history...' : 'Traduciendo historial...') : t.inputPlaceholder}
+              disabled={loading || translatingHistory}
               rows={1}
-              className="w-full resize-none bg-muted border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors"
+              className="w-full resize-none bg-muted border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors disabled:opacity-60"
               style={{ minHeight: '44px', maxHeight: '120px' }}
             />
           </div>
           <button
             onClick={() => sendMessage()}
-            disabled={!input.trim() || loading}
+            disabled={!input.trim() || loading || translatingHistory}
             className="w-11 h-11 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center flex-shrink-0 transition-all"
           >
             <Send className="w-4 h-4 text-primary-foreground" />

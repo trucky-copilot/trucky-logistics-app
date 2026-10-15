@@ -175,13 +175,29 @@ export default function Brokers() {
         const stored = localStorage.getItem(`profile_brokers_${orgId}_${i}`);
         if (stored) usedIds.push(...JSON.parse(stored));
       }
-      const unclaimedIds = data.map(b => b.id).filter(id => !usedIds.includes(id));
+      const unclaimed = data.filter(b => (!b.profile_id || b.profile_id === '1') && !usedIds.includes(b.id));
+      const unclaimedIds = unclaimed.map(b => b.id);
       localStorage.setItem(`profile_brokers_${orgId}_1`, JSON.stringify(unclaimedIds));
-      filtered = data.filter(b => unclaimedIds.includes(b.id));
-    } else if (profileIds !== null) {
-      filtered = data.filter(b => profileIds.includes(b.id));
+      filtered = data.filter(b => b.profile_id === '1' || unclaimedIds.includes(b.id));
+
+      // Fase 5: Migración silenciosa en BD para backfill de profile_id = '1'
+      unclaimed.forEach(b => {
+        if (!b.profile_id) {
+          base44.entities.Broker.update(b.id, { profile_id: '1' }).catch(() => {});
+        }
+      });
     } else {
-      filtered = [];
+      filtered = data.filter(b => {
+        if (b.profile_id) return b.profile_id === activeProfileId;
+        return profileIds && profileIds.includes(b.id);
+      });
+
+      // Si estaba en localStorage de este perfil pero sin profile_id en BD, migrar
+      filtered.forEach(b => {
+        if (!b.profile_id) {
+          base44.entities.Broker.update(b.id, { profile_id: activeProfileId }).catch(() => {});
+        }
+      });
     }
 
     setBrokers(filtered);
@@ -192,9 +208,17 @@ export default function Brokers() {
   const handleSave = async (data) => {
     try {
       if (editBroker) {
-        await base44.entities.Broker.update(editBroker.id, data);
+        await base44.entities.Broker.update(editBroker.id, {
+          ...data,
+          profile_id: editBroker.profile_id || activeProfileId || '1',
+        });
       } else {
-        const created = await base44.entities.Broker.create(withOrg(orgId, data));
+        const created = await base44.entities.Broker.create(
+          withOrg(orgId, {
+            ...data,
+            profile_id: activeProfileId || '1',
+          })
+        );
         addBrokerToProfile(created.id);
       }
       setShowForm(false); setEditBroker(null); loadData();

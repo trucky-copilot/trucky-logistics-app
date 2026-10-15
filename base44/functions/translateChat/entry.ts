@@ -25,6 +25,13 @@ Deno.serve(async (req: Request) => {
       throw new Error("Missing 'messages' array or 'targetLang'");
     }
 
+    if (messages.length === 0) {
+      return new Response(JSON.stringify({ messages: [] }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     // Usamos el fallback duro ya que Deno está bloqueando la lectura del archivo .env localmente
     const apiKey = Deno.env.get("GOOGLE_TRANSLATE_API_KEY") || "AIzaSyAjsTFlMbPi8QYwV6kbHXBGeTOv0ShYRS0";
     
