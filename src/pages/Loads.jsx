@@ -62,7 +62,7 @@ export default function Loads() {
       if (l.profile_id) {
         return l.profile_id === activeProfileId;
       }
-      return profileIds ? profileIds.includes(l.id) : (activeProfileId === '1');
+      return Boolean(profileIds && profileIds.includes(l.id));
     });
 
     setLoads(filtered);

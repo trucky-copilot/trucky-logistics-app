@@ -191,7 +191,7 @@ export default function Fleet() {
       if (t.profile_id) {
         return t.profile_id === activeProfileId;
       }
-      return profileIds ? profileIds.includes(t.id) : (activeProfileId === '1');
+      return Boolean(profileIds && profileIds.includes(t.id));
     });
     
     setTrucks(filtered);

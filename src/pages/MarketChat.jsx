@@ -356,77 +356,67 @@ export default function MarketChat() {
       const lsKey = `chat_session_profile_${user.email}_${activeProfileId}`;
       const savedDbId = localStorage.getItem(lsKey);
 
-      // Cargar primero de caché local para evitar que los semáforos se pierdan al navegar entre módulos
+      // Cargar primero de caché local para evitar parpadeos al navegar entre módulos
       const localCacheKey = `${lsKey}_messages`;
       const cachedMsgs = localStorage.getItem(localCacheKey);
+      let loadedFromCache = false;
       if (cachedMsgs) {
         try {
           const parsed = JSON.parse(cachedMsgs);
           if (Array.isArray(parsed) && parsed.length > 0) {
             setMessages(parsed);
+            loadedFromCache = true;
           }
         } catch (e) { /* ignora */ }
       }
 
-      if (savedDbId) {
-        try {
-          let session = null;
+      // Buscar en Base44 Cloud la sesión del perfil actual
+      try {
+        let session = null;
+        if (savedDbId) {
           try {
             session = await base44.entities.ChatHistory.get(savedDbId);
-          } catch (_getErr) {
-            const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 15);
-            session = allSessions.find(s => s.id === savedDbId);
+          } catch (_) {
+            session = null;
           }
-
-          if (session) {
-            setSessionId(session.session_id);
-            setSessionDbId(session.id);
-            let msgs = session.messages || [];
-            if (cachedMsgs) {
-              try {
-                const parsedCached = JSON.parse(cachedMsgs);
-                if (Array.isArray(parsedCached)) {
-                  msgs = msgs.map((m, idx) => {
-                    const isDraftOrText = typeof m.content === 'string' && (m.content.startsWith('```') || m.content.toLowerCase().includes('subject:'));
-                    if (!isDraftOrText && !m.structuredData && parsedCached[idx]?.structuredData) {
-                      return { ...m, structuredData: parsedCached[idx].structuredData };
-                    }
-                    return m;
-                  });
-                }
-              } catch (e) { /* ignora */ }
-            }
-            setMessages(msgs);
-            return;
-          }
-        } catch (e) { /* ignora errores de carga */ }
-      }
-      
-      // Si no hay sesión guardada en localStorage o no se encontró, buscar la última sesión que pertenezca ESTRICTAMENTE a este perfil en Base44
-      if (!savedDbId) {
-        try {
-          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 15);
-          const profileSession = allSessions.find(s => s.profile_id === activeProfileId);
-
-          if (profileSession) {
-            localStorage.setItem(lsKey, profileSession.id);
-            setSessionId(profileSession.session_id);
-            setSessionDbId(profileSession.id);
-            setMessages(profileSession.messages || []);
-            return;
-          } else {
-            // Perfil limpio sin historial previo: iniciar sesión limpia sin mezclar
-            setMessages([]);
-            setSessionDbId(null);
-            return;
-          }
-        } catch (e) {
-          console.error('[MarketChat] Error buscando sesión de perfil:', e);
         }
+
+        if (!session) {
+          const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 30);
+          session = allSessions.find(s => s.profile_id === activeProfileId);
+        }
+
+        if (session) {
+          localStorage.setItem(lsKey, session.id);
+          setSessionId(session.session_id);
+          setSessionDbId(session.id);
+          sessionDbIdRef.current = session.id;
+          sessionIdRef.current = session.session_id;
+
+          let msgs = session.messages || [];
+          if (cachedMsgs) {
+            try {
+              const parsedCached = JSON.parse(cachedMsgs);
+              if (Array.isArray(parsedCached) && parsedCached.length >= msgs.length) {
+                msgs = parsedCached;
+              }
+            } catch (_) {}
+          }
+          setMessages(msgs);
+          return;
+        } else if (!loadedFromCache) {
+          // Perfil nuevo sin historial: iniciar sesión limpia sin pisar otros perfiles
+          setMessages([]);
+          setSessionDbId(null);
+          sessionDbIdRef.current = null;
+        }
+      } catch (err) {
+        console.error('[MarketChat] Error sincronizando sesión con backend:', err);
       }
 
       const newId = `session_${user.email}_${activeProfileId}_${Date.now()}`;
       setSessionId(newId);
+      sessionIdRef.current = newId;
     };
     if (activeProfileId) init();
   }, [activeProfileId]);
