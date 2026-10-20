@@ -92,7 +92,7 @@ const EQUIPMENT_LINES = EQUIPMENT_BENCHMARKS
 // resolveTruckPayment) por si el LLM se desvía del schema.
 
 async function extractIntent(base44, prompt) {
-  return await base44.integrations.Core.InvokeLLM({
+  return await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt,
     response_json_schema: EXTRACTION_SCHEMA,
   });
@@ -1121,7 +1121,7 @@ Conversación reciente:
 ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 `;
 
-      const draftResult = await perf.time('llm.draftEmail', () => base44.integrations.Core.InvokeLLM({
+      const draftResult = await perf.time('llm.draftEmail', () => base44.asServiceRole.integrations.Core.InvokeLLM({
         prompt: draftingPrompt,
         response_json_schema: {
           type: "object",

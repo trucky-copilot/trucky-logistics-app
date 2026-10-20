@@ -114,7 +114,7 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
       `;
 
       try {
-        const result = await base44.integrations.Core.InvokeLLM({
+        const result = await base44.asServiceRole.integrations.Core.InvokeLLM({
           prompt,
           response_json_schema: SCHEMA
         });

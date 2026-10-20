@@ -57,7 +57,7 @@ Document:
 `;
 
 async function extractFinancials(base44, cleanedText) {
-  return await base44.integrations.Core.InvokeLLM({
+  return await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt: BASE_PROMPT + cleanedText + "\n---",
     response_json_schema: {
       type: "object",
@@ -84,7 +84,7 @@ async function extractFinancials(base44, cleanedText) {
 }
 
 async function extractLogistics(base44, cleanedText) {
-  return await base44.integrations.Core.InvokeLLM({
+  return await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt: BASE_PROMPT + cleanedText + "\n---",
     response_json_schema: {
       type: "object",
@@ -112,7 +112,7 @@ async function extractLogistics(base44, cleanedText) {
 }
 
 async function extractIdentities(base44, cleanedText) {
-  return await base44.integrations.Core.InvokeLLM({
+  return await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt: BASE_PROMPT + cleanedText + "\n---",
     response_json_schema: {
       type: "object",
@@ -1071,7 +1071,7 @@ Deno.serve(async (req) => {
 
     // ── PASO 4: Si el texto es ambiguo, verificar con IA si es documento válido ─
     if (tipoDetectado === 'ambiguous') {
-      const typeCheck = await base44.integrations.Core.InvokeLLM({
+      const typeCheck = await base44.asServiceRole.integrations.Core.InvokeLLM({
         prompt: `Is this text a trucking Rate Confirmation or Delivery Order? Answer ONLY "yes" or "no".\n\n${documentText.slice(0, 400)}`,
       });
       if (typeof typeCheck === 'string' && typeCheck.toLowerCase().trim().startsWith('no')) {
