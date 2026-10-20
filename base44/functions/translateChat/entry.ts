@@ -97,9 +97,9 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    // Usamos el fallback duro ya que Deno está bloqueando la lectura del archivo .env localmente
-    const apiKey = Deno.env.get("GOOGLE_TRANSLATE_API_KEY") || "AIzaSyAjsTFlMbPi8QYwV6kbHXBGeTOv0ShYRS0";
-    
+    // La clave vive como secreto de la app (Secrets), nunca escrita en el código.
+    const apiKey = Deno.env.get("GOOGLE_TRANSLATE_API_KEY");
+
     if (!apiKey) {
       throw new Error("Missing GOOGLE_TRANSLATE_API_KEY environment variable");
     }

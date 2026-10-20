@@ -47,9 +47,8 @@ import {
   buildDrayageRoundTripMarkdown,
   filterAccessorialsByTriggers,
   applyCustomAccessorials,
-  type Tamano,
-  type CalculatedQuote,
 } from './rateEngine.ts';
+import type { Tamano, CalculatedQuote } from './rateEngine.ts';
 import { getRouteCounts, loadAccessorials } from './rateTable.ts';
 import {
   assertNoInventedFigures,
@@ -69,9 +68,11 @@ import emailTemplates from './plantillas_correo.json' with { type: 'json' };
 // (engram sdd/chat-idioma-toggle/design) y apply-progress para el detalle de
 // por qué esta pieza no tiene Deno.test directo (entry.ts no se puede
 // importar desde una prueba).
-import { MESSAGES, resolveLocale, type Locale } from './messageCatalog.ts';
+import { MESSAGES, resolveLocale } from './messageCatalog.ts';
+import type { Locale } from './messageCatalog.ts';
 // Fase 0 (plan de latencia): medición por etapa. Ver perf.ts.
-import { createPerfTracker, attachPerf, type PerfTracker } from './perf.ts';
+import { createPerfTracker, attachPerf } from './perf.ts';
+import type { PerfTracker } from './perf.ts';
 
 const ROUTE_COUNTS = getRouteCounts();
 
@@ -482,9 +483,8 @@ async function fetchDrivingMiles(
     // --------------------------------------------------------------
 
     // Compatibilidad para leer la llave ya sea en Deno o en Node
-    const apiKey = (typeof Deno !== 'undefined' && Deno.env?.get ? Deno.env.get("GOOGLE_MAPS_API_KEY") : undefined) 
-      || (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_API_KEY)
-      || "AIzaSyAjsTFlMbPi8QYwV6kbHXBGeTOv0ShYRS0";
+    const apiKey = (typeof Deno !== 'undefined' && Deno.env?.get ? Deno.env.get("GOOGLE_MAPS_API_KEY") : undefined)
+      || (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_API_KEY);
     console.log(`[fetchDrivingMiles] apiKey exists: ${!!apiKey}`);
 
     const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
