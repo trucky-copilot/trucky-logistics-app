@@ -123,8 +123,13 @@ export default async function syncGmail(req: Request, ctx: any) {
         const startSeq = Math.max(1, totalMessages - fetchCount + 1);
         const range = `${startSeq}:${totalMessages}`;
 
-        // Obtener los correos existentes en Base44 para deduplicar
-        const existingEmails = await base44.entities.Email.filter();
+        // Obtener los correos existentes en Base44 para deduplicar (con rol de servicio para no fallar por RLS)
+        let existingEmails = [];
+        try {
+          existingEmails = await (base44.asServiceRole?.entities?.Email?.filter() || base44.entities.Email.filter());
+        } catch (_) {
+          existingEmails = [];
+        }
         const existingSet = new Set(
           existingEmails.map((e: any) => `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`)
         );
@@ -155,8 +160,9 @@ export default async function syncGmail(req: Request, ctx: any) {
             continue; // Se excluye de la bandeja de entrada según el requisito
           }
 
-          // Guardar el correo logístico verificado en Base44
-          const nuevoRegistro = await base44.entities.Email.create({
+          // Guardar el correo logístico verificado en Base44 (usando serviceRole para bypass seguro de RLS de backend)
+          const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+          const nuevoRegistro = await emailEntity.create({
             organization_id: organization_id || null,
             profile_id: profile_id || null,
             remitente_nombre: fromName,

@@ -418,8 +418,14 @@ export default function MarketChat() {
       setSessionId(newId);
       sessionIdRef.current = newId;
     };
-    if (activeProfileId) init();
-  }, [activeProfileId]);
+    if (activeProfileId) {
+      init();
+      // Si el usuario tiene el panel de historial abierto y cambia de perfil, refrescar las consultas del nuevo perfil
+      if (showHistory) {
+        openHistory();
+      }
+    }
+  }, [activeProfileId, showHistory]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
