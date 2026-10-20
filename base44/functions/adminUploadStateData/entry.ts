@@ -30,7 +30,9 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
     } catch (e) {
       // ignore
     }
-    if (!user || (user.email !== 'juan.grau@ogm.com.co' && user.email !== 'luis.bermudez@ogm.com.co')) {
+    // Acceso por el rol de la plataforma (App Users), nunca por una lista de
+    // correos escrita en el código.
+    if (!user || user.role !== 'admin') {
       return new Response('Unauthorized', { status: 403 });
     }
 
