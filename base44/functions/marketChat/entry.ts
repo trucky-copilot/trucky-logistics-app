@@ -542,10 +542,25 @@ async function fetchDrivingMiles(
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// CORS: igual que en translateChat, se refleja el Origin solo cuando es un
+// origen propio de la app (nunca el comodín "*"), así un sitio ajeno no puede
+// llamar a esta función desde el navegador de un visitante.
+const ALLOWED_ORIGIN_SUFFIXES = ['.base44.app', '.base44.com'];
+const ALLOWED_ORIGIN_PREFIXES = ['http://localhost:', 'http://127.0.0.1:'];
+
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') || '';
+  const allowed =
+    !!origin &&
+    (ALLOWED_ORIGIN_SUFFIXES.some((suffix) => origin.endsWith(suffix)) ||
+      ALLOWED_ORIGIN_PREFIXES.some((prefix) => origin.startsWith(prefix)));
+
+  return {
+    ...(allowed ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' } : {}),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
 
 // ── FASE 3: CACHÉ EN MEMORIA Y MAPEOS ESTÁTICOS ──────────────────────────────
 const STATE_NAMES_MAP: Record<string, string> = {
@@ -604,6 +619,9 @@ async function getCachedContainerRoutes(base44: any, perf: PerfTracker): Promise
 // El handler recibe el tracker por parámetro (no global) para que requests
 // concurrentes en la misma instancia Deno no mezclen sus tiempos.
 async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Response> {
+  // Cabeceras CORS por request: dependen del Origin que envía el navegador.
+  const corsHeaders = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
