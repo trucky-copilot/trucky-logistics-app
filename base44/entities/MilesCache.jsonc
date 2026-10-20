@@ -4,7 +4,7 @@
   "properties": {
     "clave": {
       "type": "string",
-      "description": "El origen y destino unidos por |, en minúsculas"
+      "description": "El origen y destino unidos por |, en min\u00fasculas"
     },
     "millas": {
       "type": "number",
@@ -14,5 +14,44 @@
   "required": [
     "clave",
     "millas"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }
