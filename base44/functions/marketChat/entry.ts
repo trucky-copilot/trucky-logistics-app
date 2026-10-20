@@ -642,11 +642,14 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
       return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400, headers: corsHeaders });
     }
     // Fase 3: Paralelizar lecturas iniciales independientes para reducir la latencia total
-    const [costConfigRecord, organizationName, rawStateData] = await Promise.all([
+    const [costConfigRecord, organizationName, rawStateData, userProfileRecords] = await Promise.all([
       user ? perf.time('db.costConfig', () => fetchCostConfigRecord(base44, user.email, activeProfileId)) : Promise.resolve(null),
       perf.time('db.organizationName', () => getOrganizationName(base44, user.email)),
       getCachedStateMarketData(base44, perf),
+      user ? perf.time('db.userProfile', () => base44.entities.UserProfile.filter({ usuario: user.email })) : Promise.resolve([]),
     ]);
+
+    const userRole = (userProfileRecords && userProfileRecords.length > 0 && userProfileRecords[0].rol) ? userProfileRecords[0].rol : 'dispatcher';
 
     // --- AUTO-FIX: Limpiar valores corruptos (como el 1838) del perfil ---
     if (user && costConfigRecord && costConfigRecord.pago_camion_rpm > 100) {
@@ -991,6 +994,12 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
     }
 
     if (intent === 'draft_email') {
+      if (userRole === 'carrier') {
+        return Response.json({
+          content: 'No puedo entregar plantillas de correo para carriers.'
+        });
+      }
+
       const formattedTemplates = emailTemplates.templates.map(t => 
         `Plantilla ID: ${t.id}\nNombre: ${t.name}\nCuándo usarla: ${t.description}\nCuerpo exacto a copiar:\n${t.body}\n-----------------------------------\n`
       ).join('');

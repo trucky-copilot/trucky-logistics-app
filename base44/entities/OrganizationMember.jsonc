@@ -23,7 +23,11 @@
     "active": {
       "type": "boolean",
       "default": true,
-      "description": "Si la membres\u00eda est\u00e1 activa"
+      "description": "Si la membresía está activa"
+    },
+    "google_sub": {
+      "type": "string",
+      "description": "Identificador único y permanente de Google (sub claim del token)"
     }
   },
   "required": [

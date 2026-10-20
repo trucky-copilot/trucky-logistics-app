@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, Check } from 'lucide-react';
+import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, Check, Mail, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { useAppState } from '@/lib/AppStateContext';
+import { useAppState, useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useToast } from '@/components/ui/use-toast';
 import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
@@ -72,8 +73,11 @@ const UI_STRINGS = {
   },
 };
 
-const CodeBlock = ({ node, ...props }) => {
+const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) => {
   const [copied, setCopied] = useState(false);
+  const [sendModalOpen, setSendModalOpen] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sentSuccess, setSentSuccess] = useState(false);
   
   const getText = (children) => {
     if (typeof children === 'string') return children;
@@ -84,6 +88,63 @@ const CodeBlock = ({ node, ...props }) => {
   
   const textToCopy = getText(props.children);
 
+  const [to, setTo] = useState('');
+  const [subject, setSubject] = useState('');
+  const [content, setContent] = useState('');
+
+  const handleOpenSend = () => {
+    const subjectMatch = textToCopy.match(/^Subject:\s*(.*)$/im);
+    const emailMatch = textToCopy.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    
+    let cleanContent = textToCopy;
+    if (subjectMatch) {
+      cleanContent = cleanContent.replace(/^Subject:\s*.*\n*/im, '').trim();
+    }
+
+    setSubject(subjectMatch ? subjectMatch[1].trim() : (locale === 'en' ? 'Rate Quote - Trucky' : 'Cotización de Tarifa - Trucky'));
+    setTo(emailMatch ? emailMatch[1].trim() : '');
+    setContent(cleanContent);
+    setSendModalOpen(true);
+  };
+
+  const handleConfirmSend = async (e) => {
+    e.preventDefault();
+    if (!to || !subject || !content) return;
+    setSending(true);
+    try {
+      const res = await base44.functions.invoke('sendGmail', {
+        to,
+        subject,
+        content,
+        organization_id: orgId,
+        profile_id: activeProfileId,
+        categoria: 'brokers'
+      });
+      if (res?.data?.error) {
+        toast?.({
+          title: locale === 'en' ? 'Send error' : 'Error al enviar',
+          description: res.data.error,
+          variant: 'destructive',
+        });
+      } else {
+        setSentSuccess(true);
+        setSendModalOpen(false);
+        toast?.({
+          title: locale === 'en' ? 'Email sent successfully' : 'Correo enviado con éxito',
+          description: locale === 'en' ? `Delivered to ${to}. Visible in your Emails inbox.` : `Despachado a ${to}. Ya puedes verlo en tu sección de Emails.`,
+        });
+      }
+    } catch (err) {
+      toast?.({
+        title: locale === 'en' ? 'Failed to send' : 'Fallo en el despacho',
+        description: err.message,
+        variant: 'destructive',
+      });
+    } finally {
+      setSending(false);
+    }
+  };
+
   const handleCopy = () => {
     navigator.clipboard.writeText(textToCopy);
     setCopied(true);
@@ -92,25 +153,137 @@ const CodeBlock = ({ node, ...props }) => {
 
   return (
     <div className="my-4 rounded-xl bg-[#1e1e24] border border-[#2b2b36] overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#18181b] border-b border-[#2b2b36]">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#18181b] border-b border-[#2b2b36] flex-wrap gap-2">
         <span className="text-xs font-semibold text-zinc-400">Trucky Email Draft</span>
-        <button 
-          onClick={handleCopy}
-          className="text-xs text-primary hover:text-primary/80 flex items-center gap-1.5 transition-colors font-medium"
-        >
-          {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-          {copied ? 'Copied!' : 'Copy'}
-        </button>
+        <div className="flex items-center gap-2">
+          {sentSuccess ? (
+            <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              {locale === 'en' ? 'Sent via Gmail' : 'Enviado por Gmail'}
+            </span>
+          ) : (
+            <button
+              type="button"
+              onClick={handleOpenSend}
+              className="text-xs text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors font-semibold"
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>{locale === 'en' ? 'Send via Gmail' : 'Enviar por Gmail'}</span>
+            </button>
+          )}
+
+          <button 
+            type="button"
+            onClick={handleCopy}
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors font-medium px-2 py-1 rounded-lg hover:bg-muted"
+          >
+            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? (locale === 'en' ? 'Copied!' : 'Copiado!') : (locale === 'en' ? 'Copy' : 'Copiar')}
+          </button>
+        </div>
       </div>
       <div className="p-4 overflow-x-auto">
         <pre className="text-[13px] text-zinc-300 font-mono leading-relaxed m-0 whitespace-pre-wrap break-words" {...props} />
       </div>
+
+      {sendModalOpen && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-bold text-foreground">
+                  {locale === 'en' ? 'Confirm Email Dispatch (Gmail)' : 'Confirmar Envío de Correo (Gmail)'}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSendModalOpen(false)}
+                className="p-1 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmSend} className="p-5 space-y-3.5 flex-1 overflow-y-auto">
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  {locale === 'en' ? 'Recipient (Broker / Customer)' : 'Destinatario (Broker / Cliente)'}
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={to}
+                  onChange={(e) => setTo(e.target.value)}
+                  placeholder="broker@freight.com"
+                  className="w-full mt-1 bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  {locale === 'en' ? 'Subject' : 'Asunto'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full mt-1 bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                  {locale === 'en' ? 'Message content' : 'Contenido del mensaje'}
+                </label>
+                <textarea
+                  required
+                  rows={8}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  className="w-full mt-1 bg-background border border-border rounded-xl p-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary font-mono leading-relaxed resize-none"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border">
+                <button
+                  type="button"
+                  onClick={() => setSendModalOpen(false)}
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                >
+                  {locale === 'en' ? 'Cancel' : 'Cancelar'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={sending}
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all disabled:opacity-50"
+                >
+                  {sending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>{locale === 'en' ? 'Sending...' : 'Enviando...'}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>{locale === 'en' ? 'Send via Gmail' : 'Enviar por Gmail'}</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 export default function MarketChat() {
-  const { userProfile } = useAppState();
+  const { userProfile, currentUser } = useAppState();
+  const orgId = useOrganizationId();
+  const { toast } = useToast();
   const { locale, setLocale } = useLanguage();
   const { activeProfileId } = useProfile();
   const [messages, setMessages] = useState([]);
@@ -145,6 +318,16 @@ export default function MarketChat() {
   const bottomRef = useRef(null);
   const inputRef = useRef(null);
 
+  // Soporte para consultas transferidas directamente desde el módulo de Emails
+  useEffect(() => {
+    const prefill = localStorage.getItem('prefill_chat_prompt');
+    if (prefill) {
+      setInput(prefill);
+      localStorage.removeItem('prefill_chat_prompt');
+      setTimeout(() => inputRef.current?.focus(), 100);
+    }
+  }, []);
+
   // Escritura optimista: el toggle cambia de inmediato en UI (setLocale ya
   // corrió sincrónicamente en el handler); esta función solo persiste la
   // preferencia en UserProfile en paralelo, sin bloquear. Sigue el mismo
@@ -154,9 +337,9 @@ export default function MarketChat() {
   useEffect(() => {
     const init = async () => {
       const user = await base44.auth.me();
+      if (!user?.email) return;
 
-      // Limpiar pantalla al cambiar de perfil
-      setMessages([]);
+      // Sincronizar identificadores de sesión sin vaciar mensajes prematuramente
       setSessionId(null);
       setSessionDbId(null);
 
@@ -187,7 +370,6 @@ export default function MarketChat() {
 
       if (savedDbId) {
         try {
-          // Fase 2: Cargar directamente el documento por ID en vez de consultar 50 sesiones pesadas
           let session = null;
           try {
             session = await base44.entities.ChatHistory.get(savedDbId);
@@ -200,13 +382,13 @@ export default function MarketChat() {
             setSessionId(session.session_id);
             setSessionDbId(session.id);
             let msgs = session.messages || [];
-            // Si el backend devolvió mensajes pero perdió structuredData, enriquecer desde localCache
             if (cachedMsgs) {
               try {
                 const parsedCached = JSON.parse(cachedMsgs);
                 if (Array.isArray(parsedCached)) {
                   msgs = msgs.map((m, idx) => {
-                    if (!m.structuredData && parsedCached[idx]?.structuredData) {
+                    const isDraftOrText = typeof m.content === 'string' && (m.content.startsWith('```') || m.content.toLowerCase().includes('subject:'));
+                    if (!isDraftOrText && !m.structuredData && parsedCached[idx]?.structuredData) {
                       return { ...m, structuredData: parsedCached[idx].structuredData };
                     }
                     return m;
@@ -219,49 +401,30 @@ export default function MarketChat() {
           }
         } catch (e) { /* ignora errores de carga */ }
       }
-
-      // Perfil 1 sin entrada en localStorage: buscar sesión heredada (sin profile_id en DB)
-      if (activeProfileId === '1') {
+      
+      // Si no hay sesión guardada en localStorage o no se encontró, buscar la última sesión que pertenezca ESTRICTAMENTE a este perfil en Base44
+      if (!savedDbId) {
         try {
           const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 15);
-          
-          // Obtener los IDs que ya fueron reclamados por otros perfiles
-          const usedSessionIds = [];
-          for (let i = 0; i < localStorage.length; i++) {
-            const k = localStorage.key(i);
-            if (k && k.startsWith(`chat_session_profile_${user.email}_`)) {
-              usedSessionIds.push(localStorage.getItem(k));
-            }
-          }
-          
-          // Adoptar la sesión más reciente que NO sea de otro perfil
-          const legacySession = allSessions.find(s => !usedSessionIds.includes(s.id));
+          const profileSession = allSessions.find(s => s.profile_id === activeProfileId);
 
-          if (legacySession) {
-            localStorage.setItem(lsKey, legacySession.id);
-            setSessionId(legacySession.session_id);
-            setSessionDbId(legacySession.id);
-            let msgs = legacySession.messages || [];
-            if (cachedMsgs) {
-              try {
-                const parsedCached = JSON.parse(cachedMsgs);
-                if (Array.isArray(parsedCached)) {
-                  msgs = msgs.map((m, idx) => {
-                    if (!m.structuredData && parsedCached[idx]?.structuredData) {
-                      return { ...m, structuredData: parsedCached[idx].structuredData };
-                    }
-                    return m;
-                  });
-                }
-              } catch (e) { /* ignora */ }
-            }
-            setMessages(msgs);
+          if (profileSession) {
+            localStorage.setItem(lsKey, profileSession.id);
+            setSessionId(profileSession.session_id);
+            setSessionDbId(profileSession.id);
+            setMessages(profileSession.messages || []);
+            return;
+          } else {
+            // Perfil limpio sin historial previo: iniciar sesión limpia sin mezclar
+            setMessages([]);
+            setSessionDbId(null);
             return;
           }
-        } catch (e) { /* ignora */ }
+        } catch (e) {
+          console.error('[MarketChat] Error buscando sesión de perfil:', e);
+        }
       }
 
-      // Nuevo perfil sin historial
       const newId = `session_${user.email}_${activeProfileId}_${Date.now()}`;
       setSessionId(newId);
     };
@@ -296,7 +459,7 @@ export default function MarketChat() {
 
     // 2. Persistencia síncrona inmediata en caché local (0ms, no bloquea ni falla por red)
     try {
-      const email = userProfile?.email;
+      const email = currentUser?.email || userProfile?.usuario || userProfile?.email;
       if (email && activeProfileId) {
         const lsKey = `chat_session_profile_${email}_${activeProfileId}`;
         localStorage.setItem(`${lsKey}_messages`, JSON.stringify(cleanMessages));
@@ -445,7 +608,7 @@ export default function MarketChat() {
 
           // Persistir en caché local
           try {
-            const email = userProfile?.email;
+            const email = currentUser?.email || userProfile?.usuario || userProfile?.email;
             if (email && activeProfileId) {
               const lsKey = `chat_session_profile_${email}_${activeProfileId}_messages_${targetLang}`;
               localStorage.setItem(lsKey, JSON.stringify(fullyUpdated));
@@ -498,6 +661,52 @@ export default function MarketChat() {
     // Persistir de inmediato el mensaje del usuario en background
     queueSaveSession(newMessages);
 
+    const isEmailDraftRequest = (text) => {
+      const t = (text || '').toLowerCase();
+      return (
+        t.includes('correo') ||
+        t.includes('email') ||
+        t.includes('plantilla') ||
+        t.includes('formato') ||
+        t.includes('draft')
+      ) && (
+        t.includes('hazme') ||
+        t.includes('haz') ||
+        t.includes('redacta') ||
+        t.includes('escribe') ||
+        t.includes('dame') ||
+        t.includes('generar') ||
+        t.includes('crea') ||
+        t.includes('pedir') ||
+        t.includes('informacion') ||
+        t.includes('información') ||
+        t.includes('cotizar') ||
+        t.includes('negociar') ||
+        t.includes('rechazar') ||
+        t.includes('aceptar') ||
+        t.includes('plantilla') ||
+        t.includes('formato')
+      );
+    };
+
+    const isCarrier = userProfile?.rol === 'carrier';
+
+    if (isCarrier && isEmailDraftRequest(userMessage)) {
+      const noCarrierReply = 'No puedo entregar plantillas de correo para carriers.';
+
+      const assistantMsg = {
+        role: 'assistant',
+        content: noCarrierReply,
+        timestamp: new Date().toISOString(),
+        translations: { [locale]: noCarrierReply }
+      };
+      const updatedMessages = [...newMessages, assistantMsg];
+      setMessages(updatedMessages);
+      setLoading(false);
+      queueSaveSession(updatedMessages);
+      return;
+    }
+
     try {
       const apiMessages = newMessages.map(m => {
         let cleanStructured = undefined;
@@ -525,11 +734,17 @@ export default function MarketChat() {
         console.log('[DEBUG marketChat] error en respuesta:', res.data.error);
         setError(res.data.error);
       } else if (res.data?.content) {
+        let cleanContent = res.data.content;
+        // Solo para carriers: si llega un borrador de correo tipo plantilla, interceptar con la regla de negocio
+        if (isCarrier && (cleanContent.includes('```text') || cleanContent.toLowerCase().includes('thank you for reaching out') || cleanContent.toLowerCase().includes('before we send our rate'))) {
+          cleanContent = 'No puedo entregar plantillas de correo para carriers.';
+        }
+
         const assistantMsg = { 
           role: 'assistant', 
-          content: res.data.content, 
+          content: cleanContent, 
           timestamp: new Date().toISOString(),
-          translations: { [locale]: res.data.content },
+          translations: { [locale]: cleanContent },
           ...(res.data.structuredData && { structuredData: res.data.structuredData })
         };
         const updatedMessages = [...newMessages, assistantMsg];
@@ -600,8 +815,8 @@ export default function MarketChat() {
     const user = await base44.auth.me();
     // Fase 2: Limitar a 20 registros más recientes en vez de 50
     const allSessions = await base44.entities.ChatHistory.filter({ usuario: user.email }, '-updated_date', 20);
-    // Filtrar por el perfil activo (los viejos sin profile_id se asumen del Perfil 1)
-    const profileSessions = allSessions.filter(s => (s.profile_id || '1') === activeProfileId);
+    // Filtrar estrictamente por el perfil activo (resuelve C4 del reporte QA)
+    const profileSessions = allSessions.filter(s => s.profile_id === activeProfileId);
     setHistory(profileSessions.slice(0, 15));
     setShowHistory(true);
   };
@@ -719,17 +934,26 @@ export default function MarketChat() {
               {msg.role === 'assistant' ? (
                 <>
                   {msg.structuredData?.intent === 'rate_check' && 
+                   !msg.content?.startsWith('```') &&
                    msg.structuredData?.origen && !msg.structuredData.origen.toLowerCase().includes('unknown') && 
                    msg.structuredData?.destino && !msg.structuredData.destino.toLowerCase().includes('unknown') && (
                     <MarketAdvisorCard data={msg.structuredData} costConfig={costConfig} />
                   )}
-                  {(!msg.structuredData || msg.structuredData.intent !== 'rate_check' || 
+                  {(!msg.structuredData || msg.structuredData.intent !== 'rate_check' || msg.content?.startsWith('```') ||
                     !msg.structuredData.origen || msg.structuredData.origen.toLowerCase().includes('unknown') || 
                     !msg.structuredData.destino || msg.structuredData.destino.toLowerCase().includes('unknown')) && (
                     <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground [&>pre]:whitespace-pre-wrap [&>pre]:break-words">
                       <ReactMarkdown
                         components={{
-                          pre: CodeBlock,
+                          pre: (preProps) => (
+                            <CodeBlock
+                              {...preProps}
+                              orgId={orgId}
+                              activeProfileId={activeProfileId}
+                              locale={locale}
+                              toast={toast}
+                            />
+                          ),
                           code: ({ node, inline, ...props }) =>
                             inline
                               ? <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs" {...props} />

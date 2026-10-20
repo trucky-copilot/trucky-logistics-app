@@ -10,7 +10,7 @@ const QUICKLOAD_RATE = 2.20;
 const TARGET_RATE = 3.00;
 
 export default function CostCalculator() {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
   const { activeProfileId, setUnsavedChanges } = useProfile();
   const [config, setConfig] = useState({
     diesel_precio: 5.40, mpg: 6.5, seguro_semanal: 800,
@@ -306,9 +306,7 @@ export default function CostCalculator() {
             <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block">
               <Fuel className="w-3 h-3" />
               {t.calculator.diesel}
-              {Number(String(config.diesel_precio ?? '').replace(',', '.')) <= 0 && (
-                <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
-              )}
+              <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
             </label>
             <input 
               type="text" 
@@ -324,9 +322,7 @@ export default function CostCalculator() {
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
               {t.calculator.mpg}
-              {Number(String(config.mpg ?? '').replace(',', '.')) <= 0 && (
-                <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
-              )}
+              <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
             </label>
             <input 
               type="text" 
@@ -394,9 +390,7 @@ export default function CostCalculator() {
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
               {t.calculator.weeklyMiles}
-              {Number(String(config.millas_semana_promedio ?? '').replace(',', '.')) <= 0 && (
-                <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">obligatorio</span></span>
-              )}
+              <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
             </label>
             <input 
               type="text" 

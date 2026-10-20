@@ -14,6 +14,7 @@ import Layout from '@/components/Layout';
 import Welcome         from '@/pages/Welcome';
 import Dashboard       from '@/pages/Dashboard';
 import MarketChat      from '@/pages/MarketChat';
+import Emails          from '@/pages/Emails';
 import DocumentAnalyzer from '@/pages/DocumentAnalyzer';
 import Loads           from '@/pages/Loads';
 import Fleet           from '@/pages/Fleet';
@@ -68,6 +69,7 @@ function AppContent() {
       <Route element={<Layout />}>
         <Route path="/"             element={<Dashboard />} />
         <Route path="/chat"         element={<MarketChat />} />
+        <Route path="/emails"       element={<Emails />} />
         <Route path="/documentos"   element={<DocumentAnalyzer />} />
         <Route path="/cargas"       element={<Loads />} />
         <Route path="/flota"        element={<Fleet />} />

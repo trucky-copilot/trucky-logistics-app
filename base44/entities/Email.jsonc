@@ -1,0 +1,84 @@
+{
+  "name": "Email",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organización a la que pertenece este correo (aislamiento multi-tenant)"
+    },
+    "profile_id": {
+      "type": "string",
+      "description": "ID del perfil específico (Carrier o Dispatcher) que gestiona este correo"
+    },
+    "remitente_nombre": {
+      "type": "string",
+      "description": "Nombre visible del remitente (ej. C.H. Robinson, Evans Reid)"
+    },
+    "remitente_email": {
+      "type": "string",
+      "description": "Dirección de correo electrónico del remitente"
+    },
+    "destinatario_email": {
+      "type": "string",
+      "description": "Dirección de correo electrónico de destino"
+    },
+    "asunto": {
+      "type": "string",
+      "description": "Línea de asunto del correo"
+    },
+    "cuerpo": {
+      "type": "string",
+      "description": "Contenido completo del mensaje en texto plano o HTML"
+    },
+    "snippet": {
+      "type": "string",
+      "description": "Extracto corto del mensaje para la vista previa de la lista"
+    },
+    "fecha": {
+      "type": "string",
+      "description": "Fecha y hora del correo en formato ISO 8601"
+    },
+    "leido": {
+      "type": "boolean",
+      "default": false,
+      "description": "Estado de lectura: false activa el punto azul indicador de no leído"
+    },
+    "destacado": {
+      "type": "boolean",
+      "default": false,
+      "description": "Indica si el correo ha sido marcado con estrella/favorito"
+    },
+    "categoria": {
+      "type": "string",
+      "enum": [
+        "cargas",
+        "brokers",
+        "general"
+      ],
+      "default": "cargas",
+      "description": "Categoría logística del mensaje"
+    },
+    "es_logistico": {
+      "type": "boolean",
+      "default": true,
+      "description": "Filtro anti-ruido: true si superó el filtro y debe mostrarse en la bandeja"
+    },
+    "tipo_flujo": {
+      "type": "string",
+      "enum": [
+        "inbox",
+        "sent"
+      ],
+      "default": "inbox",
+      "description": "inbox para correos recibidos, sent para correos enviados desde Trucky"
+    },
+    "load_id": {
+      "type": "string",
+      "description": "ID opcional de una carga relacionada creada a partir de este correo"
+    }
+  },
+  "required": [
+    "remitente_email",
+    "asunto"
+  ]
+}

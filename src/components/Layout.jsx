@@ -1,7 +1,7 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { useState } from 'react';
 import {
-  LayoutDashboard, MessageSquare, FileSearch, Calculator,
+  LayoutDashboard, MessageSquare, Mail, FileSearch, Calculator,
   Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
   LogOut, ChevronUp, ShieldAlert
 } from 'lucide-react';
@@ -24,6 +24,7 @@ import { base44 } from '@/api/base44Client';
 const NAV_ITEMS = [
   { path: '/', label: 'dashboard', icon: LayoutDashboard },
   { path: '/chat', label: 'chat', icon: MessageSquare },
+  { path: '/emails', label: 'emails', icon: Mail },
   { path: '/documentos', label: 'documents', icon: FileSearch },
   { path: '/cargas', label: 'loads', icon: Package },
   { path: '/flota', label: 'fleet', icon: Truck },

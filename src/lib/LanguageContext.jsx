@@ -9,6 +9,7 @@ const translations = {
     nav: {
       dashboard: 'Dashboard',
       chat: 'Chat de Mercado',
+      emails: 'Emails',
       documents: 'Verificador',
       loads: 'Cargas',
       fleet: 'Flota',
@@ -120,6 +121,7 @@ const translations = {
     nav: {
       dashboard: 'Dashboard',
       chat: 'Market Chat',
+      emails: 'Emails',
       documents: 'Document Checker',
       loads: 'Loads',
       fleet: 'Fleet',

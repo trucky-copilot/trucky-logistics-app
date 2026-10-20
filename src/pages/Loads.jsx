@@ -56,22 +56,14 @@ export default function Loads() {
     const data = await listByOrg(base44.entities.Load, orgId, '-created_date', 100);
     const profileIds = getProfileLoadIds();
 
-    let filtered;
-    if (activeProfileId === '1' && profileIds === null) {
-      // Perfil 1 sin lista: inicializamos con todos los IDs que NO pertenezcan a otros perfiles
-      const usedIds = [];
-      for (let i = 2; i <= 5; i++) {
-        const stored = localStorage.getItem(`profile_loads_${orgId}_${i}`);
-        if (stored) usedIds.push(...JSON.parse(stored));
+    // Prioridad 1 (Backend): si los registros tienen profile_id guardado en Base44, filtrar directamente por él
+    // Prioridad 2 (Legacy): usar el array de localStorage si aún no se ha migrado
+    let filtered = data.filter(l => {
+      if (l.profile_id) {
+        return l.profile_id === activeProfileId;
       }
-      const unclaimedIds = data.map(l => l.id).filter(id => !usedIds.includes(id));
-      localStorage.setItem(`profile_loads_${orgId}_1`, JSON.stringify(unclaimedIds));
-      filtered = data.filter(l => unclaimedIds.includes(l.id));
-    } else if (profileIds !== null) {
-      filtered = data.filter(l => profileIds.includes(l.id));
-    } else {
-      filtered = [];
-    }
+      return profileIds ? profileIds.includes(l.id) : (activeProfileId === '1');
+    });
 
     setLoads(filtered);
     setLoading(false);
@@ -89,7 +81,14 @@ export default function Loads() {
       const profit = data.tarifa_negociada - dieselCost - (data.tarifa_negociada * 0.25);
       const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
 
-      const payload = { ...data, revenue_por_milla: rpm, costo_estimado: dieselCost, ganancia_estimada: profit, resultado };
+      const payload = { 
+        ...data, 
+        profile_id: activeProfileId, 
+        revenue_por_milla: rpm, 
+        costo_estimado: dieselCost, 
+        ganancia_estimada: profit, 
+        resultado 
+      };
 
       if (editLoad) {
         await base44.entities.Load.update(editLoad.id, payload);
@@ -150,7 +149,6 @@ export default function Loads() {
         {[
           { key: 'all', label: t.loadsPage.all }, { key: 'en_transito', label: t.loadsPage.inTransit },
           { key: 'pendiente', label: t.loadsPage.pending }, { key: 'entregado', label: t.loadsPage.delivered },
-          { key: 'ganancia', label: `🟢 ${t.loadsPage.gain}` }, { key: 'perdida', label: `🔴 ${t.loadsPage.loss}` },
         ].map(f => (
           <button
             key={f.key}
@@ -194,7 +192,6 @@ export default function Loads() {
                   <th className="text-right px-4 py-3 font-medium">$/mi</th>
                   <th className="text-right px-4 py-3 font-medium">{t.loadsPage.total}</th>
                   <th className="text-left px-4 py-3 font-medium hidden sm:table-cell">{t.loadsPage.status}</th>
-                  <th className="text-left px-4 py-3 font-medium">{t.loadsPage.result}</th>
                   <th className="px-4 py-3"></th>
                 </tr>
               </thead>
@@ -214,7 +211,6 @@ export default function Loads() {
                     }`}>${load.revenue_por_milla?.toFixed(2) || '--'}</td>
                     <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${(load.tarifa_negociada || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 hidden sm:table-cell"><StatusBadge status={load.estado || 'pendiente'} /></td>
-                    <td className="px-4 py-3"><StatusBadge status={load.resultado || 'break_even'} /></td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1 justify-end">
                         <button

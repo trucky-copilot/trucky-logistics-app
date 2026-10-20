@@ -139,6 +139,28 @@ export default function Dashboard() {
     return alerts;
   });
 
+  // Alertas operacionales: Camiones en mantenimiento y Conductores suspendidos
+  const maintenanceTruckAlerts = trucks.filter(t => t.estado === 'mantenimiento').map(t => ({
+    id: `truck-maint-${t.id}`,
+    titulo: `${locale === 'en' ? 'Truck' : 'Camión'} ${t.placa}`,
+    mensaje: locale === 'en' 
+      ? `In maintenance${t.conductor_nombre ? ` — Driver: ${t.conductor_nombre}` : ''}`
+      : `En mantenimiento${t.conductor_nombre ? ` — Conductor: ${t.conductor_nombre}` : ''}`,
+    urgent: true,
+  }));
+
+  const suspendedDriverAlerts = drivers.filter(d => d.estado === 'suspension').map(d => ({
+    id: `driver-susp-${d.id}`,
+    titulo: `${d.nombre} ${d.apellido || ''}`.trim(),
+    mensaje: locale === 'en' ? 'Driver is suspended' : 'Conductor suspendido',
+    urgent: true,
+  }));
+
+  const hasCriticalAlerts = expiringDocs.some(a => a.urgent || a.expired) 
+    || notifications.some(n => n.prioridad === 'Alta' || n.prioridad === 'alta')
+    || maintenanceTruckAlerts.length > 0
+    || suspendedDriverAlerts.length > 0;
+
   const recentLoads = loads.slice(0, 8);
 
   if (loading) return (
@@ -226,20 +248,46 @@ export default function Dashboard() {
         </div>
 
         {/* Document Alerts and Notifications */}
-        <div className={`rounded-xl p-4 border ${expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta') ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
+        <div className={`rounded-xl p-4 border ${hasCriticalAlerts ? 'bg-red-400/5 border-red-400/30' : 'bg-card border-border'}`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-sm font-semibold ${(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? 'text-red-400' : 'text-foreground'}`}>
-              {(expiringDocs.some(a => a.urgent || a.expired) || notifications.some(n => n.prioridad === 'Alta')) ? `🔴 ${t.dashboard.alertsAndNotifications}` : t.dashboard.alertsAndNotifications}
+            <h2 className={`text-sm font-semibold ${hasCriticalAlerts ? 'text-red-400' : 'text-foreground'}`}>
+              {hasCriticalAlerts ? `🔴 ${t.dashboard.alertsAndNotifications}` : t.dashboard.alertsAndNotifications}
             </h2>
             <Link to="/notificaciones" className="text-xs text-primary hover:underline">{t.dashboard.viewAll}</Link>
           </div>
-          {expiringDocs.length === 0 && notifications.length === 0 ? (
+          {expiringDocs.length === 0 && notifications.length === 0 && maintenanceTruckAlerts.length === 0 && suspendedDriverAlerts.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-6 text-center">
               <CheckCircle2 className="w-8 h-8 text-green-400 mb-2" />
               <p className="text-sm text-muted-foreground">{t.dashboard.allInOrder}</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+              {/* Alertas de Camiones en Mantenimiento */}
+              {maintenanceTruckAlerts.map(truckAlert => (
+                <div key={truckAlert.id} className="flex items-start gap-3 p-3 rounded-xl border-l-4 border-l-red-400 bg-red-400/5 border border-border transition-all">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-red-400/20">
+                    <Truck className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{truckAlert.titulo}</p>
+                    <p className="text-xs text-red-400">🔴 {truckAlert.mensaje}</p>
+                  </div>
+                </div>
+              ))}
+
+              {/* Alertas de Conductores Suspendidos */}
+              {suspendedDriverAlerts.map(driverAlert => (
+                <div key={driverAlert.id} className="flex items-start gap-3 p-3 rounded-xl border-l-4 border-l-red-400 bg-red-400/5 border border-border transition-all">
+                  <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 bg-red-400/20">
+                    <AlertTriangle className="w-4 h-4 text-red-400" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-foreground">{driverAlert.titulo}</p>
+                    <p className="text-xs text-red-400">🔴 {driverAlert.mensaje}</p>
+                  </div>
+                </div>
+              ))}
+
               {/* Notificaciones */}
               {notifications.slice(0, 20).map((notif) => {
                 const isError = notif.prioridad === 'Alta' || notif.tipo === 'Documento vencido' || notif.tipo === 'Alerta de tarifa' || notif.prioridad === 'alta';
@@ -327,7 +375,6 @@ export default function Dashboard() {
                   <th className="text-right pb-2 font-medium hidden md:table-cell">{t.dashboard.miles}</th>
                   <th className="text-right pb-2 font-medium">$/mi</th>
                   <th className="text-right pb-2 font-medium">{t.dashboard.total}</th>
-                  <th className="text-right pb-2 font-medium hidden sm:table-cell">{t.dashboard.result}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50">
@@ -344,9 +391,6 @@ export default function Dashboard() {
                       (load.revenue_por_milla || 0) >= 2.6 ? 'text-yellow-400' : 'text-red-400'
                     }`}>${load.revenue_por_milla?.toFixed(2) || '--'}</td>
                     <td className="py-2 text-right font-mono text-xs text-foreground">${(load.tarifa_negociada || 0).toLocaleString()}</td>
-                    <td className="py-2 text-right hidden sm:table-cell">
-                      <StatusBadge status={load.resultado || 'break_even'} />
-                    </td>
                   </tr>
                 ))}
               </tbody>

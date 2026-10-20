@@ -43,7 +43,42 @@
     },
     "created_by_user": {
       "type": "string",
-      "description": "Email del usuario que cre\u00f3 la organizaci\u00f3n"
+      "description": "Email del usuario que creó la organización"
+    },
+    "stripe_customer_id": {
+      "type": "string",
+      "description": "ID del cliente en Stripe (cus_xxx)"
+    },
+    "stripe_subscription_id": {
+      "type": "string",
+      "description": "ID de la suscripción en Stripe (sub_xxx)"
+    },
+    "subscription_status": {
+      "type": "string",
+      "enum": [
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "incomplete",
+        "none"
+      ],
+      "default": "none",
+      "description": "Estado de la suscripción sincronizado con Stripe"
+    },
+    "trial_ends_at": {
+      "type": "string",
+      "description": "Fecha ISO del fin del periodo de prueba de 30 días"
+    },
+    "checkout_in_progress": {
+      "type": "boolean",
+      "default": false,
+      "description": "Bloqueo atómico temporal para evitar dobles checkouts simultáneos"
+    },
+    "checkout_locked_at": {
+      "type": "string",
+      "description": "Timestamp ISO de cuando se inició el checkout (para TTL/expiración del bloqueo)"
     }
   },
   "required": [

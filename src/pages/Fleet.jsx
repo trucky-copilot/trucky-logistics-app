@@ -185,23 +185,14 @@ export default function Fleet() {
     const data = await listByOrg(base44.entities.Truck, orgId);
     const profileIds = getProfileTruckIds();
     
-    let filtered;
-    if (activeProfileId === '1' && profileIds === null) {
-      // Perfil 1 sin lista: inicializamos con todos los IDs que NO pertenezcan a otros perfiles
-      const usedIds = [];
-      for (let i = 2; i <= 5; i++) {
-        const stored = localStorage.getItem(`profile_trucks_${orgId}_${i}`);
-        if (stored) usedIds.push(...JSON.parse(stored));
+    // Prioridad 1: Filtrar por profile_id nativo en BD (Base44)
+    // Prioridad 2: Fallback por array de localStorage
+    let filtered = data.filter(t => {
+      if (t.profile_id) {
+        return t.profile_id === activeProfileId;
       }
-      const unclaimedIds = data.map(t => t.id).filter(id => !usedIds.includes(id));
-      const key = `profile_trucks_${orgId}_1`;
-      localStorage.setItem(key, JSON.stringify(unclaimedIds));
-      filtered = data.filter(t => unclaimedIds.includes(t.id));
-    } else if (profileIds !== null) {
-      filtered = data.filter(t => profileIds.includes(t.id));
-    } else {
-      filtered = [];
-    }
+      return profileIds ? profileIds.includes(t.id) : (activeProfileId === '1');
+    });
     
     setTrucks(filtered);
     setLoading(false);
@@ -210,13 +201,31 @@ export default function Fleet() {
 
   const handleSave = async (data) => {
     try {
-      const { profile_id: _, ...cleanData } = data;
+      const cleanData = { ...data, profile_id: activeProfileId };
+      let targetId;
       if (editTruck) {
         await base44.entities.Truck.update(editTruck.id, cleanData);
+        targetId = editTruck.id;
       } else {
         const created = await base44.entities.Truck.create(withOrg(orgId, cleanData));
         addTruckToProfile(created.id);
+        targetId = created.id;
       }
+
+      if (cleanData.estado === 'mantenimiento') {
+        await base44.entities.Notification.create(withOrg(orgId, {
+          profile_id: activeProfileId || '1',
+          tipo: 'cambio_asignacion',
+          titulo: `Camión en mantenimiento: ${cleanData.placa}`,
+          mensaje: `El camión con placa ${cleanData.placa}${cleanData.conductor_nombre ? ` (${cleanData.conductor_nombre})` : ''} está en mantenimiento.`,
+          prioridad: 'alta',
+          leido: false,
+          referencia_id: targetId,
+          referencia_tipo: 'Truck'
+        })).catch(console.error);
+        window.dispatchEvent(new CustomEvent('notifications-updated'));
+      }
+
       setShowForm(false); setEditTruck(null); loadData();
     } catch (err) {
       console.error('Error guardando camión:', err);
