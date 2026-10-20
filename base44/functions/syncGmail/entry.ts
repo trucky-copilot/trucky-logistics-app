@@ -2,10 +2,25 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { ImapFlow } from 'npm:imapflow';
 import { simpleParser } from 'npm:mailparser';
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// CORS: solo se refleja el Origin cuando es un origen propio de la app (nunca
+// el comodín "*"), igual que en translateChat y marketChat, para que un sitio
+// ajeno no pueda llamar a esta función desde el navegador de un visitante.
+const ALLOWED_ORIGIN_SUFFIXES = ['.base44.app', '.base44.com'];
+const ALLOWED_ORIGIN_PREFIXES = ['http://localhost:', 'http://127.0.0.1:'];
+
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') || '';
+  const allowed =
+    !!origin &&
+    (ALLOWED_ORIGIN_SUFFIXES.some((suffix) => origin.endsWith(suffix)) ||
+      ALLOWED_ORIGIN_PREFIXES.some((prefix) => origin.startsWith(prefix)));
+
+  return {
+    ...(allowed ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' } : {}),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
 
 // Palabras clave que confirman contexto de logística y transporte
 const LOGISTICS_KEYWORDS = [
@@ -55,6 +70,9 @@ function classifyEmail(subject: string, text: string) {
 }
 
 export default async function syncGmail(req: Request, ctx: any) {
+  // Cabeceras CORS por request: dependen del Origin que envía el navegador.
+  const corsHeaders = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
