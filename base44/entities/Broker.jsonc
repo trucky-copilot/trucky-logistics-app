@@ -4,11 +4,11 @@
   "properties": {
     "organization_id": {
       "type": "string",
-      "description": "ID de la organización a la que pertenece este registro"
+      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
     },
     "profile_id": {
       "type": "string",
-      "description": "Opcional: ID del perfil específico al que pertenece este broker"
+      "description": "Opcional: ID del perfil espec\u00edfico al que pertenece este broker"
     },
     "nombre": {
       "type": "string"
@@ -62,5 +62,55 @@
   },
   "required": [
     "nombre"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }

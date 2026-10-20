@@ -4,7 +4,7 @@
   "properties": {
     "state_code": {
       "type": "string",
-      "description": "Código de 2 letras del estado, ej. FL, TX, GA"
+      "description": "C\u00f3digo de 2 letras del estado, ej. FL, TX, GA"
     },
     "dry_van": {
       "type": "number",
@@ -22,5 +22,45 @@
       "type": "number",
       "description": "Tarifa estimada RPM para Contenedor / Drayage en este estado"
     }
-  }
+  },
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": null,
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  },
+  "required": []
 }

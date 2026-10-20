@@ -47,9 +47,8 @@ import {
   buildDrayageRoundTripMarkdown,
   filterAccessorialsByTriggers,
   applyCustomAccessorials,
-  type Tamano,
-  type CalculatedQuote,
 } from './rateEngine.ts';
+import type { Tamano, CalculatedQuote } from './rateEngine.ts';
 import { getRouteCounts, loadAccessorials } from './rateTable.ts';
 import {
   assertNoInventedFigures,
@@ -69,9 +68,11 @@ import emailTemplates from './plantillas_correo.json' with { type: 'json' };
 // (engram sdd/chat-idioma-toggle/design) y apply-progress para el detalle de
 // por qué esta pieza no tiene Deno.test directo (entry.ts no se puede
 // importar desde una prueba).
-import { MESSAGES, resolveLocale, type Locale } from './messageCatalog.ts';
+import { MESSAGES, resolveLocale } from './messageCatalog.ts';
+import type { Locale } from './messageCatalog.ts';
 // Fase 0 (plan de latencia): medición por etapa. Ver perf.ts.
-import { createPerfTracker, attachPerf, type PerfTracker } from './perf.ts';
+import { createPerfTracker, attachPerf } from './perf.ts';
+import type { PerfTracker } from './perf.ts';
 
 const ROUTE_COUNTS = getRouteCounts();
 
@@ -92,7 +93,7 @@ const EQUIPMENT_LINES = EQUIPMENT_BENCHMARKS
 // resolveTruckPayment) por si el LLM se desvía del schema.
 
 async function extractIntent(base44, prompt) {
-  return await base44.integrations.Core.InvokeLLM({
+  return await base44.asServiceRole.integrations.Core.InvokeLLM({
     prompt,
     response_json_schema: EXTRACTION_SCHEMA,
   });
@@ -482,9 +483,8 @@ async function fetchDrivingMiles(
     // --------------------------------------------------------------
 
     // Compatibilidad para leer la llave ya sea en Deno o en Node
-    const apiKey = (typeof Deno !== 'undefined' && Deno.env?.get ? Deno.env.get("GOOGLE_MAPS_API_KEY") : undefined) 
-      || (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_API_KEY)
-      || "AIzaSyAjsTFlMbPi8QYwV6kbHXBGeTOv0ShYRS0";
+    const apiKey = (typeof Deno !== 'undefined' && Deno.env?.get ? Deno.env.get("GOOGLE_MAPS_API_KEY") : undefined)
+      || (typeof process !== 'undefined' && process.env?.GOOGLE_MAPS_API_KEY);
     console.log(`[fetchDrivingMiles] apiKey exists: ${!!apiKey}`);
 
     const url = new URL('https://maps.googleapis.com/maps/api/distancematrix/json');
@@ -542,10 +542,25 @@ async function fetchDrivingMiles(
   }
 }
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// CORS: igual que en translateChat, se refleja el Origin solo cuando es un
+// origen propio de la app (nunca el comodín "*"), así un sitio ajeno no puede
+// llamar a esta función desde el navegador de un visitante.
+const ALLOWED_ORIGIN_SUFFIXES = ['.base44.app', '.base44.com'];
+const ALLOWED_ORIGIN_PREFIXES = ['http://localhost:', 'http://127.0.0.1:'];
+
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') || '';
+  const allowed =
+    !!origin &&
+    (ALLOWED_ORIGIN_SUFFIXES.some((suffix) => origin.endsWith(suffix)) ||
+      ALLOWED_ORIGIN_PREFIXES.some((prefix) => origin.startsWith(prefix)));
+
+  return {
+    ...(allowed ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' } : {}),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
 
 // ── FASE 3: CACHÉ EN MEMORIA Y MAPEOS ESTÁTICOS ──────────────────────────────
 const STATE_NAMES_MAP: Record<string, string> = {
@@ -604,6 +619,9 @@ async function getCachedContainerRoutes(base44: any, perf: PerfTracker): Promise
 // El handler recibe el tracker por parámetro (no global) para que requests
 // concurrentes en la misma instancia Deno no mezclen sus tiempos.
 async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Response> {
+  // Cabeceras CORS por request: dependen del Origin que envía el navegador.
+  const corsHeaders = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -1130,7 +1148,7 @@ Conversación reciente:
 ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 `;
 
-      const draftResult = await perf.time('llm.draftEmail', () => base44.integrations.Core.InvokeLLM({
+      const draftResult = await perf.time('llm.draftEmail', () => base44.asServiceRole.integrations.Core.InvokeLLM({
         prompt: draftingPrompt,
         response_json_schema: {
           type: "object",

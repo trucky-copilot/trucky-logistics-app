@@ -55,12 +55,12 @@
     },
     "pago_camion_rpm": {
       "type": "number",
-      "description": "Lo que el usuario le paga al camión por milla (RPM). Decisión 9-B: NO es dato de tabla, lo declara el usuario, se pregunta una sola vez y se reutiliza como piso cuando el estado consultado no trae piso de tabla (Florida). Sin default a propósito: su ausencia significa que todavía no se preguntó."
+      "description": "Lo que el usuario le paga al cami\u00f3n por milla (RPM). Decisi\u00f3n 9-B: NO es dato de tabla, lo declara el usuario, se pregunta una sola vez y se reutiliza como piso cuando el estado consultado no trae piso de tabla (Florida). Sin default a prop\u00f3sito: su ausencia significa que todav\u00eda no se pregunt\u00f3."
     },
     "custom_accessorials_active": {
       "type": "boolean",
       "default": false,
-      "description": "Si está activo, usa los cargos personalizados"
+      "description": "Si est\u00e1 activo, usa los cargos personalizados"
     },
     "custom_accessorials_text": {
       "type": "string",
@@ -69,5 +69,55 @@
   },
   "required": [
     "usuario"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "data.usuario": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "data.usuario": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.usuario": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.usuario": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }

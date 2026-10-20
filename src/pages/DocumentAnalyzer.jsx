@@ -248,11 +248,10 @@ export default function DocumentAnalyzer() {
       setLoadingMsg(t.documents.process);
       try {
         const { file_url } = await base44.integrations.Core.UploadFile({ file });
-        const extracted = await base44.integrations.Core.InvokeLLM({
-          prompt: 'Extract all text content from this document exactly as it appears. Return only the raw text, no commentary.',
-          file_urls: [file_url],
-        });
-        setDocumentText(typeof extracted === 'string' ? extracted : JSON.stringify(extracted));
+        const extractRes = await base44.functions.invoke('extractDocumentText', { file_url });
+        const extracted = extractRes.data?.text;
+        if (!extracted) throw new Error(extractRes.data?.error || 'No se pudo extraer el texto');
+        setDocumentText(extracted);
       } catch {
         setError(t.documents.processError);
       }

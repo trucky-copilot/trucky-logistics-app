@@ -124,7 +124,7 @@ export default function Layout() {
               {isActive(path) && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
             </Link>
           ))}
-          {['juan.grau@ogm.com.co', 'luis.bermudez@ogm.com.co'].includes(user?.email) && (
+          {user?.role === 'admin' && (
             <Link
               to="/admin"
               onClick={() => setSidebarOpen(false)}
@@ -214,7 +214,7 @@ export default function Layout() {
           </div>
           {!isChat && <MarketTicker />}
           <div className="ml-auto flex items-center gap-3">
-            {!['juan.grau@ogm.com.co', 'luis.bermudez@ogm.com.co'].includes(user?.email) && <ProfileSelector />}
+            {user?.role !== 'admin' && <ProfileSelector />}
             <NotificationBell />
           </div>
         </header>
