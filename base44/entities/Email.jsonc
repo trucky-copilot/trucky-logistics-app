@@ -4,11 +4,11 @@
   "properties": {
     "organization_id": {
       "type": "string",
-      "description": "ID de la organización a la que pertenece este correo (aislamiento multi-tenant)"
+      "description": "ID de la organizaci\u00f3n a la que pertenece este correo (aislamiento multi-tenant)"
     },
     "profile_id": {
       "type": "string",
-      "description": "ID del perfil específico (Carrier o Dispatcher) que gestiona este correo"
+      "description": "ID del perfil espec\u00edfico (Carrier o Dispatcher) que gestiona este correo"
     },
     "remitente_nombre": {
       "type": "string",
@@ -16,15 +16,15 @@
     },
     "remitente_email": {
       "type": "string",
-      "description": "Dirección de correo electrónico del remitente"
+      "description": "Direcci\u00f3n de correo electr\u00f3nico del remitente"
     },
     "destinatario_email": {
       "type": "string",
-      "description": "Dirección de correo electrónico de destino"
+      "description": "Direcci\u00f3n de correo electr\u00f3nico de destino"
     },
     "asunto": {
       "type": "string",
-      "description": "Línea de asunto del correo"
+      "description": "L\u00ednea de asunto del correo"
     },
     "cuerpo": {
       "type": "string",
@@ -41,7 +41,7 @@
     "leido": {
       "type": "boolean",
       "default": false,
-      "description": "Estado de lectura: false activa el punto azul indicador de no leído"
+      "description": "Estado de lectura: false activa el punto azul indicador de no le\u00eddo"
     },
     "destacado": {
       "type": "boolean",
@@ -56,12 +56,12 @@
         "general"
       ],
       "default": "cargas",
-      "description": "Categoría logística del mensaje"
+      "description": "Categor\u00eda log\u00edstica del mensaje"
     },
     "es_logistico": {
       "type": "boolean",
       "default": true,
-      "description": "Filtro anti-ruido: true si superó el filtro y debe mostrarse en la bandeja"
+      "description": "Filtro anti-ruido: true si super\u00f3 el filtro y debe mostrarse en la bandeja"
     },
     "tipo_flujo": {
       "type": "string",
@@ -80,5 +80,55 @@
   "required": [
     "remitente_email",
     "asunto"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "read": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
 }
