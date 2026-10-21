@@ -24,3 +24,10 @@ Protected server functions requiring membership + entitlement audit include mark
 5. Test Google -> tenant -> test Checkout -> signed webhook -> protected server operation; cancel, failures, duplicate clicks and out-of-order events.
 
 Do not publish PR #15 to production yet. No claim that end-to-end verification has completed.
+
+## Confirmed user decision: preserve existing access
+Existing companies keep access without automatic charges. New companies require subscription. Added a server policy and explicit billing_access_mode enum with NO default. This policy is NOT wired into production: doing so before migration would deny unclassified accounts.
+
+Before wiring enforcement: trusted operator must snapshot all existing organizations AND registered users without organizations, define an immutable cutoff, back up IDs, classify existing organizations legacy_exempt, and preserve eligibility for existing users who finish onboarding later. Missing classification must trigger migration review, not silently become legacy or paid. New org creators must set subscription_required server-side only once the migration is complete. Audit admin mutation and direct entity policies. No automatic live migration was performed by this PR. Never use a client-supplied legacy flag or infer exemption solely from absent Stripe fields.
+
+Policy unit tests cover explicit legacy exemption, exact trial boundary, unclassified records and onboarding flag bypass. They do not prove application/API enforcement, which remains pending. Past_due and cancel-at-period-end retention policy requires dedicated implementation before activation; no current access is changed.

@@ -98,6 +98,14 @@
       "type": "integer",
       "default": 0,
       "description": "Versión monótona para control de concurrencia optimista (OCC)"
+    },
+    "billing_access_mode": {
+      "type": "string",
+      "enum": [
+        "legacy_exempt",
+        "subscription_required"
+      ],
+      "description": "Server-managed migration classification. No default: existing records require explicit migration before enforcement."
     }
   },
   "required": [
