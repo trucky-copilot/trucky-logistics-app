@@ -2,6 +2,10 @@
   "name": "CheckoutLock",
   "type": "object",
   "properties": {
+    "lock_id": {
+      "type": "string",
+      "description": "Clave determinista única del candado por organización: org_lock_<orgId>"
+    },
     "organization_id": {
       "type": "string",
       "description": "ID de la organización que tiene la reserva activa"
@@ -33,6 +37,7 @@
     }
   },
   "required": [
+    "lock_id",
     "organization_id",
     "reservation_id",
     "idempotency_key",
