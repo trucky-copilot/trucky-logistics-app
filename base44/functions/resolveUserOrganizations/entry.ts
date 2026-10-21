@@ -124,7 +124,7 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
     const db = base44.asServiceRole.entities;
 
     const memberships = await db.OrganizationMember.filter({
-      user_email: identity.email,
+      google_sub: identity.sub,
       active: true,
     });
 
@@ -136,7 +136,7 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
       // si la membresía ya tiene google_sub y no coincide, es OTRA cuenta de Google
       // que reutilizó el correo → se excluye. Requiere el campo `google_sub`
       // en OrganizationMember (pendiente de agregar al esquema).
-      if (m.google_sub && m.google_sub !== identity.sub) continue;
+      if (m.google_sub !== identity.sub) continue;
 
       const orgs = await db.Organization.filter({ id: m.organization_id });
       const org = orgs?.[0];
