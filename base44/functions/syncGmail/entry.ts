@@ -81,8 +81,15 @@ export default async function syncGmail(req: Request, ctx: any) {
 
   try {
     const base44 = createClientFromRequest(req);
+    let currentUser: any = null;
+    try {
+      currentUser = await base44.auth.me();
+    } catch (_) {
+      currentUser = null;
+    }
+
     const body = await req.json().catch(() => ({}));
-    const { organization_id, profile_id, limit = 20, gmailUser: reqGmailUser } = body;
+    const { organization_id, profile_id, limit = 10, gmailUser: reqGmailUser } = body;
 
     const gmailUser = (reqGmailUser && String(reqGmailUser).trim()) || Deno.env.get("GMAIL_USER");
     const rawPass = Deno.env.get("GMAIL_APP_PASSWORD");
@@ -91,7 +98,7 @@ export default async function syncGmail(req: Request, ctx: any) {
     if (!gmailUser || !gmailPass) {
       return new Response(
         JSON.stringify({ error: "Credenciales de Gmail no configuradas en el entorno (GMAIL_USER, GMAIL_APP_PASSWORD)" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -107,7 +114,12 @@ export default async function syncGmail(req: Request, ctx: any) {
     });
 
     try {
-      await client.connect();
+      // Timeout estricto de 10 segundos para conexión IMAP
+      const connectPromise = client.connect();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error("Tiempo de espera agotado al conectar a imap.gmail.com (10s)")), 10000)
+      );
+      await Promise.race([connectPromise, timeoutPromise]);
     } catch (imapAuthError: any) {
       console.error("[syncGmail] Error de autenticación/conexión IMAP:", imapAuthError);
       return new Response(
@@ -129,8 +141,8 @@ export default async function syncGmail(req: Request, ctx: any) {
       const totalMessages = status.messages || 0;
 
       if (totalMessages > 0) {
-        // Consultar los correos más recientes (hasta el límite pedido, por defecto 20)
-        const fetchCount = Math.min(limit, totalMessages);
+        // Consultar los correos más recientes (máximo 10 para garantizar respuesta en <3 segundos)
+        const fetchCount = Math.min(Math.max(1, limit), 10, totalMessages);
         const startSeq = Math.max(1, totalMessages - fetchCount + 1);
         const range = `${startSeq}:${totalMessages}`;
 
@@ -179,6 +191,7 @@ export default async function syncGmail(req: Request, ctx: any) {
             const nuevoRegistro = await emailEntity.create({
               organization_id: organization_id || null,
               profile_id: profile_id || null,
+              created_by_id: currentUser?.id || null,
               remitente_nombre: fromName,
               remitente_email: fromAddress,
               destinatario_email: toAddress,

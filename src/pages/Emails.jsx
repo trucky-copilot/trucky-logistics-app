@@ -106,7 +106,7 @@ export default function Emails() {
         gmailUser: targetEmail,
         organization_id: orgId,
         profile_id: activeProfileId,
-        limit: 25,
+        limit: 10,
       });
 
       const data = res?.data || {};
@@ -128,9 +128,10 @@ export default function Emails() {
         await fetchEmails();
       }
     } catch (err) {
+      const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error de conexión con el servidor';
       toast({
-        title: isEs ? 'Fallo de conexión' : 'Connection failed',
-        description: err.message || (isEs ? 'No se pudo conectar a Gmail' : 'Could not connect to Gmail'),
+        title: isEs ? 'Error en sincronización' : 'Sync failed',
+        description: serverMsg,
         variant: 'destructive',
       });
     } finally {
