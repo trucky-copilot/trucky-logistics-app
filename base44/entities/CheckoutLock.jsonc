@@ -1,0 +1,63 @@
+{
+  "name": "CheckoutLock",
+  "type": "object",
+  "properties": {
+    "organization_id": {
+      "type": "string",
+      "description": "ID de la organización que tiene la reserva activa"
+    },
+    "reservation_id": {
+      "type": "string",
+      "description": "Identificador único criptográfico de la reserva ganadora"
+    },
+    "idempotency_key": {
+      "type": "string",
+      "description": "Clave de idempotencia del cliente Vercel"
+    },
+    "stripe_session_id": {
+      "type": "string",
+      "description": "ID de Checkout Session en Stripe (cs_test_... / cs_live_...)"
+    },
+    "created_at": {
+      "type": "string",
+      "description": "Fecha y hora ISO de creación de la reserva"
+    },
+    "expires_at": {
+      "type": "string",
+      "description": "Fecha y hora ISO límite para que expire o se vincule Stripe"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["reserved", "attached", "released", "completed"],
+      "default": "reserved"
+    }
+  },
+  "required": [
+    "organization_id",
+    "reservation_id",
+    "idempotency_key",
+    "expires_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
