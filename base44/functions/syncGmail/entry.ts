@@ -106,7 +106,18 @@ export default async function syncGmail(req: Request, ctx: any) {
       logger: false,
     });
 
-    await client.connect();
+    try {
+      await client.connect();
+    } catch (imapAuthError: any) {
+      console.error("[syncGmail] Error de autenticación/conexión IMAP:", imapAuthError);
+      return new Response(
+        JSON.stringify({ 
+          error: `Error de conexión con Gmail (${gmailUser}): ${imapAuthError.message || 'Verifica la contraseña de aplicación de 16 caracteres de Google y que IMAP esté habilitado'}` 
+        }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const lock = await client.getMailboxLock('INBOX');
 
     const syncedEmails = [];
@@ -123,11 +134,13 @@ export default async function syncGmail(req: Request, ctx: any) {
         const startSeq = Math.max(1, totalMessages - fetchCount + 1);
         const range = `${startSeq}:${totalMessages}`;
 
-        // Obtener los correos existentes en Base44 para deduplicar (con rol de servicio para no fallar por RLS)
-        let existingEmails = [];
+        // Obtener los correos existentes en Base44 para deduplicar (con fallback seguro)
+        let existingEmails: any[] = [];
         try {
-          existingEmails = await (base44.asServiceRole?.entities?.Email?.filter() || base44.entities.Email.filter());
-        } catch (_) {
+          const emailQueryClient = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+          existingEmails = await emailQueryClient.filter();
+        } catch (filterErr: any) {
+          console.warn("[syncGmail] No se pudieron precargar emails para deduplicar:", filterErr?.message || filterErr);
           existingEmails = [];
         }
         const existingSet = new Set(
@@ -160,28 +173,38 @@ export default async function syncGmail(req: Request, ctx: any) {
             continue; // Se excluye de la bandeja de entrada según el requisito
           }
 
-          // Guardar el correo logístico verificado en Base44 (usando serviceRole para bypass seguro de RLS de backend)
-          const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
-          const nuevoRegistro = await emailEntity.create({
-            organization_id: organization_id || null,
-            profile_id: profile_id || null,
-            remitente_nombre: fromName,
-            remitente_email: fromAddress,
-            destinatario_email: toAddress,
-            asunto: subject,
-            cuerpo: plainText || snippet,
-            snippet: snippet || subject,
-            fecha: date,
-            leido: false, // Inicia como no leído (punto azul)
-            destacado: false,
-            categoria,
-            es_logistico: true,
-            tipo_flujo: 'inbox',
-          });
+          // Guardar el correo logístico verificado en Base44
+          try {
+            const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+            const nuevoRegistro = await emailEntity.create({
+              organization_id: organization_id || null,
+              profile_id: profile_id || null,
+              remitente_nombre: fromName,
+              remitente_email: fromAddress,
+              destinatario_email: toAddress,
+              asunto: subject,
+              cuerpo: plainText || snippet,
+              snippet: snippet || subject,
+              fecha: date,
+              leido: false, // Inicia como no leído (punto azul)
+              destacado: false,
+              categoria,
+              es_logistico: true,
+              tipo_flujo: 'inbox',
+            });
 
-          syncedEmails.push(nuevoRegistro);
-          nuevosGuardados++;
-          existingSet.add(dedupeKey);
+            syncedEmails.push(nuevoRegistro);
+            nuevosGuardados++;
+            existingSet.add(dedupeKey);
+          } catch (dbInsertError: any) {
+            console.error("[syncGmail] Error guardando email en Base44:", dbInsertError);
+            return new Response(
+              JSON.stringify({ 
+                error: `Error al guardar en base de datos Base44: ${dbInsertError.message || 'Verifica los permisos RLS de la entidad Email'}` 
+              }),
+              { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
         }
       }
     } finally {
@@ -203,9 +226,9 @@ export default async function syncGmail(req: Request, ctx: any) {
     if (client) {
       try { await client.logout(); } catch (_) {}
     }
-    console.error("Error en syncGmail:", error);
+    console.error("Error no controlado en syncGmail:", error);
     return new Response(
-      JSON.stringify({ error: error.message || "Error al sincronizar con Gmail" }),
+      JSON.stringify({ error: error.message || "Error inesperado al sincronizar con Gmail" }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
