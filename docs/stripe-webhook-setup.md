@@ -24,3 +24,10 @@ No lock TTL: crash or uncertain DB write leaves persistent lock for operator rec
 - Organization creation is still two nontransactional writes and needs recovery tests.
 
 No claims of deployed or end-to-end verified status are made by this PR.
+
+## RLS migration in this PR
+Organization and OrganizationMember direct create/update/delete are now restricted to Base44 app admins. Service-role backend writes remain available. This closes ordinary-user billing updates and arbitrary owner membership creation. Read rules are unchanged. Platform app admins remain trusted.
+
+Native onboarding now calls ensureOwnOrganization with the Base44 session; the server derives owner email from auth.me(), accepts only a bounded company name, sets setup/none (never production readiness or paid access), and repairs missing owner membership after partial failure. It does not attach Google sub by email. This is not transactional company creation; concurrent native onboarding calls can still duplicate organizations, but cannot start a paid subscription. This remains a staging blocker for a fully automatic production onboarding flow.
+
+Deploy ensureOwnOrganization, updated Onboarding frontend and RLS together in a staging app first. Verify ordinary owner cannot directly update Organization subscription_status, stripe IDs or create OrganizationMember role=owner/admin; verify server onboarding still works. Existing admin-only management tools may require additional server endpoints. Do not blindly publish RLS alone, as old frontend direct writes will be rejected. Do not enable paid entitlement until every protected backend operation checks membership and canonical billing access.

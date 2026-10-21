@@ -49,33 +49,17 @@ export default function Onboarding({ onComplete }) {
 
   const handleComplete = async () => {
     setLoading(true);
+    try {
     const user = await base44.auth.me();
 
-    // 1. Organización
-    let org = null;
-    const existingOrgs = await base44.entities.Organization.filter({ created_by_user: user.email });
-    if (existingOrgs.length > 0) {
-      org = existingOrgs[0];
-    } else {
-      org = await base44.entities.Organization.create({
-        name:                 empresa || user.full_name || user.email,
-        created_by_user:      user.email,
-        workspace_status:     'production',
-        onboarding_completed: true,
-        production_ready:     true,
-        active:               true,
-      });
-    }
-
-    // 2. OrganizationMember
-    const existingMembers = await base44.entities.OrganizationMember.filter({ organization_id: org.id, user_email: user.email });
-    if (existingMembers.length === 0) {
-      await base44.entities.OrganizationMember.create({
-        organization_id: org.id,
-        user_email:      user.email,
-        role:            'owner',
-        active:          true,
-      });
+    // Company and owner role are assigned by a native-session server function.
+    const setup = await base44.functions.invoke('ensureOwnOrganization', {
+      company_name: empresa || user.full_name || '',
+    });
+    const org = setup?.data?.organization;
+    if (!org?.id) {
+      setLoading(false);
+      throw new Error('No se pudo preparar la empresa. Intenta nuevamente.');
     }
 
     // 3. UserProfile
@@ -140,6 +124,11 @@ export default function Onboarding({ onComplete }) {
     }
 
     onComplete();
+    } catch {
+      window.alert('No se pudo completar el registro. Intenta de nuevo.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // ── Loading ───────────────────────────────────────────────────────────────────
