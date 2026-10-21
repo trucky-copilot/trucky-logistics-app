@@ -27,7 +27,7 @@ async function redis(command: unknown[]) {
   return data.result;
 }
 
-export default async function stripeWebhook(req: Request, _ctx: unknown) {
+export default async function billingWebhook(req: Request, _ctx: unknown) {
   if (req.method !== 'POST') return reply(405, 'METHOD_NOT_ALLOWED');
   const key = Deno.env.get('STRIPE_SECRET_KEY');
   const signingSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
