@@ -79,6 +79,18 @@
     "checkout_locked_at": {
       "type": "string",
       "description": "Timestamp ISO de cuando se inició el checkout (para TTL/expiración del bloqueo)"
+    },
+    "checkout_reservation_id": {
+      "type": "string",
+      "description": "Identificador único y verificable de la reserva de checkout activa"
+    },
+    "checkout_idempotency_key": {
+      "type": "string",
+      "description": "Clave de idempotencia estable para reintentos del mismo intento de checkout"
+    },
+    "stripe_checkout_session_id": {
+      "type": "string",
+      "description": "ID de la sesión de Stripe Checkout (cs_test_xxx o cs_live_xxx)"
     }
   },
   "required": [
