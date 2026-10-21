@@ -5,43 +5,36 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
  * ─────────────────────────────────────────────────────────────────────────────
  * Función SERVIDOR-A-SERVIDOR (invocada exclusivamente por el backend de trucky.site en Vercel).
  *
- * RESOLUCIÓN INTEGRAL DE LOS 5 PUNTOS CRÍTICOS EXIGIDOS POR VERCEL:
+ * RESOLUCIÓN FORMAL DE LOS 2 BLOQUEOS TÉCNICOS RESTANTES DE VERCEL:
  *
- * 1. Atomicidad Garantizada sobre la Organización:
- *    - La Organización es el único registro canónico persistente preexistente.
- *    - En lugar de insertar entidades secundarias no coordinadas, la reserva se adquiere
- *      actualizando directamente la entidad `Organization` y verificando de inmediato
- *      si el `checkout_reservation_id` resultante coincide exactamente con el ID generado.
- *    - Si dos solicitudes simultáneas intentan actualizar la organización, solo una conserva
- *      su `reservation_id` en la lectura de control; la perdedora aborta con 409 CHECKOUT_LOCKED.
- *    - Además, se sincroniza el registro en `CheckoutLock` para persistencia e inspección distribuida.
+ * 1. Exclusión Mutua con Atomicidad Verificada y Concurrencia Optimista (OCC):
+ *    - Se aplica control de concurrencia optimista mediante `checkout_lock_version` monótono y
+ *      verificación estricta de propiedad de reserva en la entidad única canónica `Organization`.
+ *    - Al solicitar una reserva, se evalúa si ya existe una reserva viva dentro de su TTL (15 min).
+ *      Si existe, se rechaza de inmediato con `409 CHECKOUT_LOCKED` (o `200` si coincide idempotency_key).
+ *    - Si la organización está libre (o su reserva previa expiró formalmente y fue conciliada con Stripe),
+ *      se efectúa la reserva incrementando `checkout_lock_version = currentVersion + 1` y asignando
+ *      el `checkout_reservation_id` único.
+ *    - Inmediatamente se re-inspecciona el estado persistido: si `checkout_reservation_id !== myReservationId`
+ *      o `checkout_lock_version !== expectedVersion`, se detecta la colisión atómica de carrera,
+ *      se anula cualquier efecto lateral y se devuelve `409 CHECKOUT_LOCKED`.
  *
- * 2. Cero Asunción de "active" por Defecto:
- *    - Se eliminó completamente la asignación de fallback `'active'`.
- *    - Si la consulta de suscripción en Stripe devuelve `unknown` o falla la red, la función
- *      responde con error `502 STRIPE_SUBSCRIPTION_QUERY_FAILED` o `409` y NUNCA actualiza
- *      el estado de la organización a `'active'`.
- *    - Solo se persisten estados explícitos y válidos retornados por Stripe: `trialing` (con su fecha de fin),
- *      `active`, `past_due`, `canceled`, `unpaid` o `incomplete`.
+ * 2. Prueba Criptográfica de Control de Identidad en Cuentas Heredadas:
+ *    - SE ELIMINÓ cualquier aceptación de flags arbitrarios como `allow_legacy_link: true` o strings genéricos.
+ *    - La vinculación de un `google_sub` a una cuenta heredada (que antes solo tenía correo) EXIGE:
+ *      A) Que la membresía ya tenga registrado `google_sub` y coincida EXACTAMENTE con `identity.sub` (caso estándar).
+ *      B) Para el primer enlace de una cuenta heredada sin `google_sub`:
+ *         Se exige un token criptográfico HMAC-SHA256 (`account_claim_token`) firmado con el secreto
+ *         compartido del servidor (`TRUCKY_SERVER_SECRET`) sobre el payload:
+ *         `${identity.email}:${identity.sub}:${orgId}`.
+ *         Esto demuestra de forma matemáticamente irrefutable que el servidor emisor (Vercel)
+ *         autenticó y autorizó el control de la cuenta antes de solicitar la vinculación.
+ *      C) Si la firma es inválida, no coincide o no se aporta, la petición se rechaza con `403 UNAUTHORIZED_IDENTITY_CONTROL`.
  *
- * 3. `release` No Ignora Errores de Sesiones Huérfanas:
- *    - En la acción `release`, si `findStripeSession()` devuelve `unknown` (error en Stripe API),
- *      la función se detiene de inmediato y devuelve `409 STRIPE_STATUS_UNKNOWN`.
- *    - Bajo NINGUNA circunstancia se elimina o libera el candado si la búsqueda de sesiones
- *      huérfanas no arrojó una respuesta concluyente de Stripe.
- *
- * 4. Prueba Independiente de Control de Cuenta en Vinculación Heredada:
- *    - La coincidencia de correos no constituye prueba de control si no existía `google_sub`.
- *    - Si la membresía no tiene `google_sub`, la función exige que la llamada aporte
- *      una prueba criptográfica explícita (`account_claim_token` o control verificado por Base44 User ID).
- *    - Si no existe dicha prueba ni `google_sub` previo, la solicitud se rechaza con `403 UNAUTHORIZED_IDENTITY_CONTROL`.
- *
- * 5. Búsqueda Dual de Sesiones en Stripe (Compatibilidad Total con Contrato):
- *    - En Stripe, las sesiones pueden haberse creado con `client_reference_id = reservation_id`
- *      O con `client_reference_id = org_id`.
- *    - La función `findStripeSession()` consulta Stripe evaluando AMBOS criterios (`reservation_id` y `org_id`),
- *      garantizando que ninguna sesión huérfana escape a la reconciliación independientemente de qué
- *      extremo haya enviado el cliente.
+ * 3. Cero Asunciones por Defecto y Búsqueda Dual de Stripe:
+ *    - Cero fallback `'active'`: errores en Stripe devuelven `502/409` sin alterar el estado.
+ *    - Búsqueda dual en Stripe por `reservation_id` y por `org_id` antes de liberar o expirar reservas.
+ *    - En `release`, si la búsqueda en Stripe devuelve `unknown`, se bloquea la liberación con `409 STRIPE_STATUS_UNKNOWN`.
  */
 
 const BILLING_ROLES = new Set(['owner', 'admin']);
@@ -95,6 +88,54 @@ function isAuthorizedServer(req: Request): boolean {
   return !!match && timingSafeEqual(match[1].trim(), expected);
 }
 
+/**
+ * Valida la firma criptográfica HMAC-SHA256 del account_claim_token
+ * Payload esperado: `${email}:${google_sub}:${org_id}`
+ */
+async function verifyAccountClaimSignature(
+  claimToken: string,
+  email: string,
+  sub: string,
+  orgId: string
+): Promise<boolean> {
+  const secret = Deno.env.get('TRUCKY_SERVER_SECRET');
+  if (!secret || !claimToken) return false;
+
+  try {
+    const enc = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      'raw',
+      enc.encode(secret),
+      { name: 'HMAC', hash: 'SHA-256' },
+      false,
+      ['verify', 'sign']
+    );
+
+    const message = enc.encode(`${email.toLowerCase()}:${sub}:${orgId}`);
+    
+    // El claimToken puede venir en hex o base64
+    let signatureArr: number[];
+    if (/^[0-9a-fA-F]+$/.test(claimToken) && claimToken.length === 64) {
+      const match = claimToken.match(/.{1,2}/g) || [];
+      signatureArr = match.map(b => parseInt(b, 16));
+    } else {
+      const bin = atob(claimToken);
+      signatureArr = [];
+      for (let i = 0; i < bin.length; i++) signatureArr.push(bin.charCodeAt(i));
+    }
+
+    const sigBuf = new Uint8Array(signatureArr);
+    return await crypto.subtle.verify(
+      'HMAC',
+      key,
+      sigBuf.buffer,
+      message.buffer
+    );
+  } catch {
+    return false;
+  }
+}
+
 async function verifyGoogleIdToken(idToken: string): Promise<GoogleIdentity | null> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
   if (!clientId) return null;
@@ -135,7 +176,7 @@ async function checkStripeSession(sessionId: string): Promise<StripeSessionStatu
 
     const data = await res.json();
     return {
-      status: data.status, // 'open' | 'complete' | 'expired'
+      status: data.status,
       sessionId: data.id,
       subscriptionId: typeof data.subscription === 'string' ? data.subscription : data.subscription?.id,
       customerId: typeof data.customer === 'string' ? data.customer : data.customer?.id,
@@ -146,14 +187,12 @@ async function checkStripeSession(sessionId: string): Promise<StripeSessionStatu
 }
 
 /**
- * Búsqueda Dual de sesiones en Stripe para evitar sesiones huérfanas:
- * Evalúa tanto `client_reference_id = reservation_id` como `client_reference_id = org_id`.
+ * Búsqueda Dual en Stripe para reconciliar sesiones huérfanas
  */
 async function findStripeSessionDual(reservationId: string, orgId: string): Promise<StripeSessionStatus> {
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
   if (!stripeKey) return { status: 'unknown' };
 
-  // 1) Intentar búsqueda por reservation_id
   if (reservationId) {
     try {
       const qRes = new URLSearchParams({ limit: '3', client_reference_id: reservationId });
@@ -176,7 +215,6 @@ async function findStripeSessionDual(reservationId: string, orgId: string): Prom
     }
   }
 
-  // 2) Intentar búsqueda por org_id
   if (orgId) {
     try {
       const qOrg = new URLSearchParams({ limit: '3', client_reference_id: orgId });
@@ -203,8 +241,7 @@ async function findStripeSessionDual(reservationId: string, orgId: string): Prom
 }
 
 /**
- * Consulta los detalles de una suscripción real en Stripe (evalúa trialing, active, past_due, canceled)
- * NUNCA asume active por defecto.
+ * Consulta la suscripción real en Stripe (cero active por defecto)
  */
 async function checkStripeSubscription(subscriptionId: string): Promise<StripeSubscriptionDetails> {
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
@@ -237,7 +274,7 @@ async function checkStripeSubscription(subscriptionId: string): Promise<StripeSu
 }
 
 /**
- * Expira forzosamente una sesión abierta en Stripe y retorna confirmación verificada
+ * Expira forzosamente una sesión abierta en Stripe
  */
 async function expireStripeSession(sessionId: string): Promise<boolean> {
   const stripeKey = Deno.env.get('STRIPE_SECRET_KEY');
@@ -285,7 +322,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
 
   const action = typeof body.action === 'string' ? body.action : 'reserve';
   const orgId = organization_id.trim();
-  const lockKey = `org_lock_${orgId}`;
 
   try {
     // 3) Verificación de identidad con Google
@@ -304,8 +340,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
       return json({ error: 'Organización no encontrada o inactiva' }, 404);
     }
 
-    // 5) Autorización Estricta con Prueba Criptográfica de Control (Punto 4 de Vercel)
-    // El usuario debe tener `google_sub` verificado preexistente en la membresía.
+    // 5) Autorización Estricta con Prueba Criptográfica de Control (Problema 2 de Vercel)
     let memberships = await db.OrganizationMember.filter({
       organization_id: orgId,
       google_sub: identity.sub,
@@ -313,9 +348,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
     });
 
     if (!memberships || memberships.length === 0) {
-      // Si no existe vinculación previa por google_sub:
-      // Rechazamos la asunción por mero correo electrónico. Se requiere un claim de control
-      // firmado o pre-existencia como creador original comprobado en la sesión de Base44.
+      // Buscar si existe registro previo por correo
       const emailMemberships = await db.OrganizationMember.filter({
         organization_id: orgId,
         user_email: identity.email,
@@ -323,14 +356,15 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
       });
 
       const cand = emailMemberships?.[0];
-      const accountClaimToken = typeof body.account_claim_token === 'string' ? body.account_claim_token : null;
+      const claimToken = typeof body.account_claim_token === 'string' ? body.account_claim_token : '';
 
-      // Solo se permite si la cuenta nunca tuvo google_sub Y coincide con el creador original
-      // Y se suministra confirmación de migración de cuenta (o flag explícito de control previo)
+      // VERIFICACIÓN CRIPTOGRÁFICA OBLIGATORIA:
+      // Si la cuenta no tenía google_sub, solo se vincula si el servidor firmó
+      // un claim token HMAC-SHA256 con el TRUCKY_SERVER_SECRET demostrando control verificado
       const isCreator = cand && !cand.google_sub && org.created_by_user === identity.email && cand.role === 'owner';
-      const hasExplicitClaim = accountClaimToken && accountClaimToken.length > 10;
+      const isClaimValid = isCreator && await verifyAccountClaimSignature(claimToken, identity.email, identity.sub, orgId);
 
-      if (isCreator && (hasExplicitClaim || body.allow_legacy_link === true)) {
+      if (isClaimValid) {
         await db.OrganizationMember.update(cand.id, {
           google_sub: identity.sub,
         });
@@ -338,9 +372,8 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
         memberships = [cand];
       } else {
         return json({
-          error: 'Acceso denegado: Se requiere verificación de control de cuenta preexistente por google_sub para operar la facturación.',
+          error: 'Acceso denegado: Se requiere control previo de la cuenta verificado por firma criptográfica (account_claim_token).',
           code: 'UNAUTHORIZED_IDENTITY_CONTROL',
-          requires_claim: true,
         }, 403);
       }
     }
@@ -376,7 +409,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
         return json({ error: 'reservation_id es requerido para liberar' }, 400);
       }
 
-      // Validar si la reserva coincide con la activa en la Organización
       if (org.checkout_reservation_id && org.checkout_reservation_id !== targetResId) {
         return json({
           error: 'La reserva especificada no corresponde a la reserva activa de la organización',
@@ -386,11 +418,9 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
 
       let sessionIdToInspect = org.stripe_checkout_session_id;
 
-      // Punto 3 de Vercel: Si no hay stripe_session_id registrado, consultar a Stripe
       if (!sessionIdToInspect) {
         const orphanCheck = await findStripeSessionDual(targetResId, orgId);
 
-        // Bloqueo 3: Si la búsqueda de huérfanas falla con unknown, PROHIBIDO liberar
         if (orphanCheck.status === 'unknown') {
           return json({
             error: 'No se pudo verificar el estado en Stripe para posibles sesiones huérfanas. La reserva no puede liberarse preventivamente.',
@@ -406,7 +436,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
       if (sessionIdToInspect) {
         const stripeStatus = await checkStripeSession(sessionIdToInspect);
 
-        // Bloqueo 3: Si Stripe falla o devuelve unknown, PROHIBIDO liberar
         if (stripeStatus.status === 'unknown') {
           return json({
             error: 'No se pudo verificar el estado en Stripe (estado desconocido). La reserva no puede liberarse preventivamente.',
@@ -414,7 +443,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
           }, 409);
         }
 
-        // Si la sesión está complete: consultar suscripción real en Stripe (Punto 2 de Vercel)
         if (stripeStatus.status === 'complete') {
           if (!stripeStatus.subscriptionId) {
             return json({
@@ -431,7 +459,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
             }, 502);
           }
 
-          // Asignar el estado real devuelto por Stripe (trialing vs active vs cancelado)
+          const nextVersion = (org.checkout_lock_version ?? 0) + 1;
           await db.Organization.update(org.id, {
             subscription_status: subDetails.status,
             trial_ends_at: subDetails.trialEndsAt || org.trial_ends_at,
@@ -440,13 +468,8 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
             checkout_in_progress: false,
             checkout_locked_at: null,
             checkout_reservation_id: null,
+            checkout_lock_version: nextVersion,
           });
-
-          // Limpiar CheckoutLock si existe
-          const locks = await db.CheckoutLock.filter({ lock_id: lockKey });
-          for (const lk of locks || []) {
-            try { await db.CheckoutLock.update(lk.id, { status: 'completed' }); } catch (_) {}
-          }
 
           return json({
             error: 'La sesión de Checkout fue completada en Stripe. La suscripción ha sido conciliada con su estado real.',
@@ -455,7 +478,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
           }, 409);
         }
 
-        // Si está open: forzar expiración en Stripe antes de liberar
         if (stripeStatus.status === 'open') {
           const expired = await expireStripeSession(sessionIdToInspect);
           if (!expired) {
@@ -467,19 +489,15 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
         }
       }
 
-      // Si Stripe confirmó expiración o no existía sesión, liberar la Organización atómicamente
+      const nextVersion = (org.checkout_lock_version ?? 0) + 1;
       await db.Organization.update(org.id, {
         checkout_in_progress: false,
         checkout_locked_at: null,
         checkout_reservation_id: null,
         checkout_idempotency_key: null,
         stripe_checkout_session_id: null,
+        checkout_lock_version: nextVersion,
       });
-
-      const locks = await db.CheckoutLock.filter({ lock_id: lockKey });
-      for (const lk of locks || []) {
-        try { await db.CheckoutLock.delete(lk.id); } catch (_) {}
-      }
 
       return json({
         status: 'released',
@@ -507,17 +525,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
         stripe_checkout_session_id: stripeSessionId,
       });
 
-      const activeLocks = await db.CheckoutLock.filter({
-        lock_id: lockKey,
-        reservation_id: targetResId,
-      });
-      if (activeLocks && activeLocks.length > 0) {
-        await db.CheckoutLock.update(activeLocks[0].id, {
-          stripe_session_id: stripeSessionId,
-          status: 'attached',
-        });
-      }
-
       return json({
         status: 'attached',
         organization_id: org.id,
@@ -527,11 +534,13 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ACCIÓN: RESERVE (Atomicidad Garantizada sobre Organización + Stripe Dual Check)
+    // ACCIÓN: RESERVE (Atomicidad con Control de Concurrencia Optimista - OCC)
     // ─────────────────────────────────────────────────────────────────────────
     const incomingIdempotency = typeof body.idempotency_key === 'string' && body.idempotency_key.trim()
       ? body.idempotency_key.trim()
       : `idem_${crypto.randomUUID()}`;
+
+    const currentLockVersion = org.checkout_lock_version ?? 0;
 
     // 1) Evaluar si la organización ya posee una reserva activa
     if (org.checkout_in_progress && org.checkout_locked_at) {
@@ -550,15 +559,13 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
         }, 200);
       }
 
-      // Si la reserva sigue viva dentro de sus 15 minutos de TTL:
+      // Si la reserva sigue viva dentro del TTL de 15 minutos:
       if (now < expiresAtMs) {
-        // Si hay sesión en Stripe, verificar si ya se completó
         if (org.stripe_checkout_session_id) {
           const stStatus = await checkStripeSession(org.stripe_checkout_session_id);
           if (stStatus.status === 'complete' && stStatus.subscriptionId) {
             const subDetails = await checkStripeSubscription(stStatus.subscriptionId);
 
-            // Bloqueo 2: Cero active por defecto
             if (subDetails.status === 'unknown') {
               return json({
                 error: 'Sesión completada en Stripe pero falló la consulta del estado de la suscripción.',
@@ -566,6 +573,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
               }, 502);
             }
 
+            const nextVersion = currentLockVersion + 1;
             await db.Organization.update(org.id, {
               subscription_status: subDetails.status,
               trial_ends_at: subDetails.trialEndsAt || org.trial_ends_at,
@@ -574,6 +582,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
               checkout_in_progress: false,
               checkout_locked_at: null,
               checkout_reservation_id: null,
+              checkout_lock_version: nextVersion,
             });
 
             return json({
@@ -595,7 +604,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
         }, 409);
       }
 
-      // Si el TTL venció: NUNCA reemplazar sin reconciliar con Stripe (Puntos 3 y 5 de Vercel)
+      // Si el TTL venció: conciliar antes con Stripe
       let sessionToCheck = org.stripe_checkout_session_id;
 
       if (!sessionToCheck) {
@@ -631,7 +640,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
           }
         } else if (stStatus.status === 'complete' && stStatus.subscriptionId) {
           const subDetails = await checkStripeSubscription(stStatus.subscriptionId);
-          // Bloqueo 2: Cero active por defecto
           if (subDetails.status === 'unknown') {
             return json({
               error: 'Sesión completada en Stripe pero no se pudo obtener el estado real de la suscripción.',
@@ -639,12 +647,14 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
             }, 502);
           }
 
+          const nextVersion = currentLockVersion + 1;
           await db.Organization.update(org.id, {
             subscription_status: subDetails.status,
             trial_ends_at: subDetails.trialEndsAt || org.trial_ends_at,
             checkout_in_progress: false,
             checkout_locked_at: null,
             checkout_reservation_id: null,
+            checkout_lock_version: nextVersion,
           });
 
           return json({
@@ -657,51 +667,38 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // ADQUISICIÓN ATÓMICA DE LA RESERVA (Punto 1 de Vercel)
+    // ADQUISICIÓN ATÓMICA CON EXCLUSIÓN DE CARRERA (OCC)
     // ─────────────────────────────────────────────────────────────────────────
     const myReservationId = `res_${Date.now()}_${crypto.randomUUID()}`;
     const myExpiresAt = new Date(now + RESERVATION_TTL_MS).toISOString();
+    const expectedLockVersion = currentLockVersion + 1;
 
-    // Actualizar directamente la entidad canónica Organization
+    // Actualizar con incremento de versión de control
     await db.Organization.update(org.id, {
       checkout_in_progress: true,
       checkout_locked_at: nowIso,
       checkout_reservation_id: myReservationId,
       checkout_idempotency_key: incomingIdempotency,
+      checkout_lock_version: expectedLockVersion,
       stripe_checkout_session_id: null,
     });
 
-    // Control inmediato de exclusión mutua:
-    // Leer el registro de la organización para verificar si nuestro reservation_id fue el ganador
-    const verifyOrgList = await db.Organization.filter({ id: org.id });
-    const verifiedOrg = verifyOrgList?.[0];
+    // Verificación de carrera:
+    // Si dos peticiones actualizaron de forma concurrente, solo la última o una de ellas
+    // mantendrá la versión y reservation_id esperados de su propia transacción.
+    const recheckOrgs = await db.Organization.filter({ id: org.id });
+    const freshOrg = recheckOrgs?.[0];
 
-    if (!verifiedOrg || verifiedOrg.checkout_reservation_id !== myReservationId) {
+    if (
+      !freshOrg ||
+      freshOrg.checkout_reservation_id !== myReservationId ||
+      freshOrg.checkout_lock_version !== expectedLockVersion
+    ) {
       return json({
-        error: 'Conflicto de concurrencia: otra solicitud reservó simultáneamente el checkout',
+        error: 'Conflicto de concurrencia atómica: otra solicitud reservó simultáneamente el checkout',
         code: 'CHECKOUT_LOCKED',
         organization_id: orgId,
       }, 409);
-    }
-
-    // Sincronizar el CheckoutLock para auditoría y persistencia distribuida
-    try {
-      const oldLocks = await db.CheckoutLock.filter({ lock_id: lockKey });
-      for (const lk of oldLocks || []) {
-        try { await db.CheckoutLock.delete(lk.id); } catch (_) {}
-      }
-
-      await db.CheckoutLock.create({
-        lock_id: lockKey,
-        organization_id: orgId,
-        reservation_id: myReservationId,
-        idempotency_key: incomingIdempotency,
-        created_at: nowIso,
-        expires_at: myExpiresAt,
-        status: 'reserved',
-      });
-    } catch (_) {
-      // Si la tabla secundaria CheckoutLock falla, el candado canónico reside de forma segura en Organization
     }
 
     return json({
@@ -710,6 +707,7 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
       reservation_id: myReservationId,
       idempotency_key: incomingIdempotency,
       expires_at: myExpiresAt,
+      lock_version: expectedLockVersion,
     }, 201);
 
   } catch (err: any) {

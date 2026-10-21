@@ -91,6 +91,11 @@
     "stripe_checkout_session_id": {
       "type": "string",
       "description": "ID de la sesión de Stripe Checkout (cs_test_xxx o cs_live_xxx)"
+    },
+    "checkout_lock_version": {
+      "type": "integer",
+      "default": 0,
+      "description": "Versión monótona para control de concurrencia optimista (OCC)"
     }
   },
   "required": [
