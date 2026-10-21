@@ -107,15 +107,130 @@ export default async function syncGmail(req: Request, ctx: any) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { organization_id, profile_id, limit = 10, gmailUser: reqGmailUser } = body;
+    const { organization_id, profile_id, limit = 10, gmailUser: reqGmailUser, accessToken } = body;
 
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CASO 1: SINCRONIZACIÓN OFICIAL GOOGLE OAUTH 2.0 (REST API) — SIN CONTRASEÑAS
+    // ─────────────────────────────────────────────────────────────────────────────
+    if (accessToken) {
+      console.log("[syncGmail] Sincronizando vía Google OAuth 2.0...");
+      const listRes = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${Math.min(limit, 15)}&q=category:primary`,
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+
+      if (!listRes.ok) {
+        const errJson = await listRes.json().catch(() => ({}));
+        const msg = errJson?.error?.message || `Error ${listRes.status} de Google OAuth`;
+        return new Response(
+          JSON.stringify({ error: `Fallo de autenticación con Google: ${msg}. Por favor vuelve a conectar tu cuenta.` }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const listData = await listRes.json();
+      const messages = listData.messages || [];
+
+      // Obtener emails existentes en Base44 para deduplicar
+      let existingEmails: any[] = [];
+      try {
+        const emailQueryClient = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+        existingEmails = await emailQueryClient.filter();
+      } catch (_) {
+        existingEmails = [];
+      }
+      const existingSet = new Set(
+        existingEmails.map((e: any) => `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`)
+      );
+
+      const syncedEmails = [];
+      let nuevosGuardados = 0;
+      let omitidosNoLogisticos = 0;
+
+      for (const msgMeta of messages) {
+        const detailRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgMeta.id}?format=full`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!detailRes.ok) continue;
+
+        const detail = await detailRes.json();
+        const headers = detail.payload?.headers || [];
+        const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || '';
+
+        const subject = getHeader('Subject') || '(Sin asunto)';
+        const fromHeader = getHeader('From') || 'desconocido@correo.com';
+        const toHeader = getHeader('To') || 'usuario@gmail.com';
+        const dateHeader = getHeader('Date') ? new Date(getHeader('Date')).toISOString() : new Date().toISOString();
+        const snippet = detail.snippet || subject;
+
+        // Extraer remitente nombre y email
+        const fromMatch = fromHeader.match(/^(.*?)\s*<(.+?)>$/);
+        const fromName = fromMatch ? fromMatch[1].replace(/["']/g, '').trim() : fromHeader.split('@')[0];
+        const fromAddress = fromMatch ? fromMatch[2].trim() : fromHeader;
+
+        // Deduplicar
+        const dedupeKey = `${fromAddress}__${subject}__${dateHeader.slice(0, 16)}`;
+        if (existingSet.has(dedupeKey)) continue;
+
+        // Clasificar logística
+        const { es_logistico, categoria } = classifyEmail(subject, snippet);
+        if (!es_logistico) {
+          omitidosNoLogisticos++;
+          continue;
+        }
+
+        try {
+          const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+          const nuevoRegistro = await emailEntity.create({
+            organization_id: organization_id || null,
+            profile_id: profile_id || null,
+            created_by_id: currentUser?.id || null,
+            remitente_nombre: fromName,
+            remitente_email: fromAddress,
+            destinatario_email: toHeader,
+            asunto: subject,
+            cuerpo: snippet,
+            snippet: snippet,
+            fecha: dateHeader,
+            leido: false,
+            destacado: false,
+            categoria,
+            es_logistico: true,
+            tipo_flujo: 'inbox',
+          });
+
+          syncedEmails.push(nuevoRegistro);
+          nuevosGuardados++;
+          existingSet.add(dedupeKey);
+        } catch (dbErr: any) {
+          console.error("[syncGmail OAuth] Error guardando:", dbErr);
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          nuevosGuardados,
+          omitidosNoLogisticos,
+          totalEncontrados: syncedEmails.length,
+        }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────────
+    // CASO 2: FALLBACK IMAP (Sólo si se especifica usuario y contraseña de entorno)
+    // ─────────────────────────────────────────────────────────────────────────────
     const gmailUser = (reqGmailUser && String(reqGmailUser).trim()) || Deno.env.get("GMAIL_USER");
     const rawPass = Deno.env.get("GMAIL_APP_PASSWORD");
     const gmailPass = rawPass ? rawPass.replace(/\s+/g, '') : null;
 
     if (!gmailUser || !gmailPass) {
       return new Response(
-        JSON.stringify({ error: "Credenciales de Gmail no configuradas en el entorno (GMAIL_USER, GMAIL_APP_PASSWORD)" }),
+        JSON.stringify({ 
+          error: "Para sincronizar sin contraseña, haz clic en 'Conectar con Google (OAuth 2.0)' arriba a la derecha." 
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
