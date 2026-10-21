@@ -1,10 +1,10 @@
 # Isolated Stripe webhook test deployment
 
-This PR contains ONLY stripeWebhook and tests. No entity schema, RLS, onboarding or current app access changes. It does not enable checkout or claim production access security.
+This PR contains ONLY billingWebhook and tests. No entity schema, RLS, onboarding or current app access changes. It does not enable checkout or claim production access security.
 
 ## Base44 deployment
-Merge this PR, synchronize it into Base44, and publish the stripeWebhook function. Leave STRIPE_WEBHOOK_TEST_ENABLED unset. No billing mutation occurs while disabled. Intended route (verify deployment before registration):
-https://trucky-17a283d5.base44.app/api/functions/stripeWebhook
+Merge this PR, synchronize it into Base44, and publish the billingWebhook function. Leave STRIPE_WEBHOOK_TEST_ENABLED unset. No billing mutation occurs while disabled. Intended route (verify deployment before registration):
+https://trucky-17a283d5.base44.app/api/functions/billingWebhook
 
 ## Protected secrets (never put values in chat or Git)
 - STRIPE_SECRET_KEY: same test Stripe account as web checkout.
@@ -26,3 +26,9 @@ Website test checkout must restrict organization IDs server-side too. Verify aut
 
 ## Limits
 Actual Redis, Stripe and Base44 execution remains to be verified after publication. Test organization IDs must not be user-editable. Existing Organization RLS permits creator edits of billing fields; global security hardening remains separate draft PR #15. This isolated function is not a production launch and does not enforce app entitlements or provide SSO. Subscription mapping conflicts fail closed; uncertainty retains Redis lock for manual reconciliation. Do not delete locks blindly. No production domain changes.
+
+
+## Route migration
+The old stripeWebhook function is removed from source; verify whether Base44 removes the old deployed route or requires manual removal. Publish billingWebhook first, then edit the EXISTING Stripe test destination URL to /api/functions/billingWebhook. Retain its signing secret if Stripe keeps the same destination; if Stripe issues a replacement, update the protected secret accordingly. Do not create another subscription or disable signature verification. Keep STRIPE_WEBHOOK_TEST_ENABLED=false while checking routing: signed supported events should return our 503 PROVISIONING_NOT_ENABLED, not a platform 401. Only after controlled configuration acceptance enable and resend existing failed events.
+
+The claimed reserved-name behavior is a developer-reported hypothesis; success must be confirmed in actual gateway/runtime logs. No production access changes.
