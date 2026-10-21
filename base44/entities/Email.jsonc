@@ -1,6 +1,6 @@
 {
-  "name": "Email",
   "type": "object",
+  "name": "Email",
   "properties": {
     "organization_id": {
       "type": "string",
@@ -40,37 +40,37 @@
     },
     "leido": {
       "type": "boolean",
-      "default": false,
-      "description": "Estado de lectura: false activa el punto azul indicador de no le\u00eddo"
+      "description": "Estado de lectura: false activa el punto azul indicador de no le\u00eddo",
+      "default": false
     },
     "destacado": {
       "type": "boolean",
-      "default": false,
-      "description": "Indica si el correo ha sido marcado con estrella/favorito"
+      "description": "Indica si el correo ha sido marcado con estrella/favorito",
+      "default": false
     },
     "categoria": {
       "type": "string",
+      "description": "Categor\u00eda log\u00edstica del mensaje",
       "enum": [
         "cargas",
         "brokers",
         "general"
       ],
-      "default": "cargas",
-      "description": "Categor\u00eda log\u00edstica del mensaje"
+      "default": "cargas"
     },
     "es_logistico": {
       "type": "boolean",
-      "default": true,
-      "description": "Filtro anti-ruido: true si super\u00f3 el filtro y debe mostrarse en la bandeja"
+      "description": "Filtro anti-ruido: true si super\u00f3 el filtro y debe mostrarse en la bandeja",
+      "default": true
     },
     "tipo_flujo": {
       "type": "string",
+      "description": "inbox para correos recibidos, sent para correos enviados desde Trucky",
       "enum": [
         "inbox",
         "sent"
       ],
-      "default": "inbox",
-      "description": "inbox para correos recibidos, sent para correos enviados desde Trucky"
+      "default": "inbox"
     },
     "load_id": {
       "type": "string",
@@ -82,7 +82,18 @@
     "asunto"
   ],
   "rls": {
-    "create": null,
+    "create": {
+      "$or": [
+        {
+          "created_by_id": "{{user.id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
     "read": {
       "$or": [
         {
