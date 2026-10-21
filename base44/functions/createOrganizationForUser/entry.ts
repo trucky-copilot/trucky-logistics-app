@@ -118,7 +118,7 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     // 4) Idempotencia y verificación previa:
     // Comprobar si el usuario ya tiene una organización creada con ese nombre
     const existingMemberships = await db.OrganizationMember.filter({
-      user_email: identity.email,
+      google_sub: identity.sub,
       active: true,
       role: 'owner'
     });
@@ -127,10 +127,6 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       const orgs = await db.Organization.filter({ id: m.organization_id });
       const org = orgs?.[0];
       if (org && org.active !== false && org.name.toLowerCase() === companyName.toLowerCase()) {
-        // Aseguramos que google_sub quede guardado si no estaba
-        if (!m.google_sub) {
-          await db.OrganizationMember.update(m.id, { google_sub: identity.sub });
-        }
         return json({
           status: 'already_exists',
           org_id: org.id,
