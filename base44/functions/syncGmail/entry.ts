@@ -22,18 +22,19 @@ function corsHeadersFor(req: Request) {
   };
 }
 
-// Palabras clave que confirman contexto de logística y transporte
+// Palabras clave que confirman contexto de logística, transporte y plataforma Trucky
 const LOGISTICS_KEYWORDS = [
-  'load', 'freight', 'rate', 'lane', 'reefer', 'dry van', 'drayage', 'flatbed',
-  'container', 'chassis', 'detention', 'layover', 'tonu', 'bol', 'bill of lading',
+  'load', 'loads', 'freight', 'freights', 'rate', 'rates', 'lane', 'lanes', 'reefer', 'dry van', 'drayage', 'flatbed',
+  'container', 'containers', 'chassis', 'detention', 'layover', 'tonu', 'bol', 'bill of lading',
   'rate confirmation', 'rate con', 'delivery order', 'proof of delivery', 'pod',
-  'lumper', 'carrier', 'broker', 'dispatcher', 'dispatch', 'pickup', 'delivery',
+  'lumper', 'carrier', 'carriers', 'broker', 'brokers', 'dispatcher', 'dispatchers', 'dispatch', 'pickup', 'delivery',
   'origin', 'destination', 'mc#', 'mc number', 'dot#', 'factoring', 'quickpay',
-  'invoice', 'settlement', 'deadhead', 'all-in', 'rpm', 'flete', 'carga', 'camion',
-  'remolque', 'orden de entrega', 'carta porte'
+  'invoice', 'settlement', 'deadhead', 'all-in', 'rpm', 'flete', 'fletes', 'carga', 'cargas', 'camion', 'camiones',
+  'remolque', 'orden de entrega', 'carta porte', 'flota', 'flotas', 'trucky', 'cotizacion', 'cotización', 'logistica', 'logística',
+  'tarifa', 'tarifas', 'transporte', 'conductor', 'conductores', 'trailer', 'tractor'
 ];
 
-// Palabras clave personales, familiares, ocio o no laborales para exclusión
+// Palabras clave personales, ocio o no laborales para exclusión
 const EXCLUSION_KEYWORDS = [
   'mamá', 'mama', 'papá', 'papa', 'hijo', 'hija', 'familia', 'abuelo', 'abuela',
   'netflix', 'spotify', 'steam', 'playstation', 'xbox', 'disney+', 'prime video',
@@ -43,29 +44,46 @@ const EXCLUSION_KEYWORDS = [
 
 /**
  * Clasificador inteligente de correos:
- * Discrimina correos operativos del transporte de mensajes personales o spam.
+ * Discrimina correos operativos del transporte y Trucky de mensajes personales o spam.
  */
 function classifyEmail(subject: string, text: string) {
   const content = `${subject || ''} ${text || ''}`.toLowerCase();
 
-  const tieneExclusion = EXCLUSION_KEYWORDS.some(k => content.includes(k));
-  const matchesLogistics = LOGISTICS_KEYWORDS.filter(k => content.includes(k));
+  // Si contiene expresamente 'trucky', cotizaciones o carriers/dispatchers/brokers, es 100% logístico
+  const esTruckyLogistica = content.includes('trucky') || 
+    content.includes('carrier') || 
+    content.includes('dispatcher') || 
+    content.includes('broker') || 
+    content.includes('carga') || 
+    content.includes('flete') || 
+    content.includes('flota') ||
+    content.includes('logistica') ||
+    content.includes('logística');
 
-  // Si tiene términos de ocio/familia y nulo contexto logístico -> descartar
-  if (tieneExclusion && matchesLogistics.length < 2) {
-    return { es_logistico: false, categoria: 'general' };
-  }
-
-  // Si tiene palabras clave logísticas
-  if (matchesLogistics.length > 0) {
+  if (esTruckyLogistica) {
     let categoria = 'cargas';
-    if (content.includes('broker') || content.includes('packet') || content.includes('setup') || content.includes('acuerdo') || content.includes('rate') || content.includes('quote')) {
+    if (content.includes('broker') || content.includes('packet') || content.includes('setup') || content.includes('quote') || content.includes('rate')) {
       categoria = 'brokers';
     }
     return { es_logistico: true, categoria };
   }
 
-  // Por defecto, sin indicadores logísticos, no debe aparecer en la bandeja operativa
+  const tieneExclusion = EXCLUSION_KEYWORDS.some(k => content.includes(k));
+  const matchesLogistics = LOGISTICS_KEYWORDS.filter(k => content.includes(k));
+
+  // Si tiene términos de ocio/familia y nulo contexto logístico -> descartar
+  if (tieneExclusion && matchesLogistics.length === 0) {
+    return { es_logistico: false, categoria: 'general' };
+  }
+
+  if (matchesLogistics.length > 0) {
+    let categoria = 'cargas';
+    if (content.includes('broker') || content.includes('rate') || content.includes('tarifa')) {
+      categoria = 'brokers';
+    }
+    return { es_logistico: true, categoria };
+  }
+
   return { es_logistico: false, categoria: 'general' };
 }
 
