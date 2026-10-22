@@ -17,10 +17,11 @@ async function redis(command: unknown[]) {
   const token = Deno.env.get('CHECKOUT_REDIS_REST_TOKEN');
   if (!url || !token || new URL(url).protocol !== 'https:') throw Error('REDIS_CONFIGURATION_REQUIRED');
   const res = await fetch(url, {
-    method: 'POST', redirect: 'error', signal: AbortSignal.timeout(8000),
+    method: 'POST', redirect: 'manual', signal: AbortSignal.timeout(8000),
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(command),
   });
+  if (res.status >= 300 && res.status < 400) throw Error('REDIS_REDIRECT_REJECTED');
   if (!res.ok) throw Error('REDIS_UNAVAILABLE');
   const data = await res.json();
   if (data.error || !Object.hasOwn(data, 'result')) throw Error('REDIS_UNAVAILABLE');
