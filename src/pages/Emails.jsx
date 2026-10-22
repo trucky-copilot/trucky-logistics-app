@@ -9,10 +9,12 @@ import { base44 } from '@/api/base44Client';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 
 export default function Emails() {
+  const { user } = useAuth();
   const orgId = useOrganizationId();
   const { activeProfileId } = useProfile();
   const { locale } = useLanguage();
@@ -52,11 +54,24 @@ export default function Emails() {
         ? scoped.filter(e => !e.profile_id || String(e.profile_id) === String(activeProfileId))
         : scoped;
 
-      setEmails(profileScoped);
-      if (profileScoped.length > 0) {
+      // Filtrar correos no deseados de Google/sistema
+      const cleanList = profileScoped.filter(e => {
+        const sender = (e.remitente_email || '').toLowerCase();
+        const subject = (e.asunto || '').toLowerCase();
+        if (sender.includes('google.com') || sender.includes('accounts.google') || sender.includes('openai.com')) {
+          return false;
+        }
+        if (subject.includes('alerta de seguridad') || subject.includes('security alert') || subject.includes('recuperado correctamente')) {
+          return false;
+        }
+        return true;
+      });
+
+      setEmails(cleanList);
+      if (cleanList.length > 0) {
         setSelectedEmail(prev => {
-          if (prev && profileScoped.some(p => p.id === prev.id)) return prev;
-          return profileScoped[0];
+          if (prev && cleanList.some(p => p.id === prev.id)) return prev;
+          return cleanList[0];
         });
       } else {
         setSelectedEmail(null);
@@ -175,6 +190,7 @@ export default function Emails() {
         gmailUser: emailToSync,
         organization_id: orgId,
         profile_id: activeProfileId,
+        user_id: user?.id || null,
         limit: 35,
       });
 
@@ -206,12 +222,18 @@ export default function Emails() {
         const nuevos = data.nuevosGuardados || 0;
         const omitidos = data.omitidosNoLogisticos || 0;
         if (Array.isArray(data.emails) && data.emails.length > 0) {
+          const freshClean = data.emails.filter(e => {
+            const sender = (e.remitente_email || '').toLowerCase();
+            return !sender.includes('google.com') && !sender.includes('accounts.google') && !sender.includes('openai.com');
+          });
           setEmails(prev => {
             const existingIds = new Set(prev.map(p => p.id));
-            const fresh = data.emails.filter(e => !existingIds.has(e.id));
+            const fresh = freshClean.filter(e => !existingIds.has(e.id));
             return [...fresh, ...prev];
           });
-          setSelectedEmail(data.emails[0]);
+          if (freshClean.length > 0) {
+            setSelectedEmail(freshClean[0]);
+          }
         }
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
@@ -220,21 +242,8 @@ export default function Emails() {
             : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).`,
         });
         
-        // Refrescar sólo incorporando los de backend sin borrar los locales
-        try {
-          const all = await base44.entities.Email.filter({}, '-fecha', 100);
-          if (Array.isArray(all) && all.length > 0) {
-            setEmails(prev => {
-              const combined = [...prev];
-              all.forEach(item => {
-                if (!combined.some(c => c.id === item.id)) {
-                  combined.push(item);
-                }
-              });
-              return combined;
-            });
-          }
-        } catch (_) {}
+        // Refrescar desde la base de datos aplicando los filtros de perfil
+        await fetchEmails();
       }
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error de conexión';

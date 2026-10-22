@@ -122,7 +122,9 @@ export default async function syncGmail(req: Request, ctx: any) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { organization_id, profile_id, limit = 10, gmailUser: reqGmailUser, accessToken } = body;
+    const { organization_id, profile_id, limit = 10, gmailUser: reqGmailUser, accessToken, user_id: reqUserId } = body;
+    const finalUserId = currentUser?.id || reqUserId || null;
+    const finalProfileId = profile_id ? String(profile_id) : null;
 
     // ─────────────────────────────────────────────────────────────────────────────
     // CASO 1: SINCRONIZACIÓN OFICIAL GOOGLE OAUTH 2.0 (REST API) — SIN CONTRASEÑAS
@@ -205,8 +207,8 @@ export default async function syncGmail(req: Request, ctx: any) {
           const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
           const nuevoRegistro = await emailEntity.create({
             organization_id: organization_id || null,
-            profile_id: profile_id || null,
-            created_by_id: currentUser?.id || null,
+            profile_id: finalProfileId,
+            created_by_id: finalUserId,
             remitente_nombre: fromName,
             remitente_email: fromAddress,
             destinatario_email: toHeader,
