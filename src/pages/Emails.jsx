@@ -170,7 +170,7 @@ export default function Emails() {
         gmailUser: emailToSync,
         organization_id: orgId,
         profile_id: activeProfileId,
-        limit: 10,
+        limit: 35,
       });
 
       const data = res?.data || {};

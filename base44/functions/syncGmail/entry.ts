@@ -114,8 +114,9 @@ export default async function syncGmail(req: Request, ctx: any) {
     // ─────────────────────────────────────────────────────────────────────────────
     if (accessToken) {
       console.log("[syncGmail] Sincronizando vía Google OAuth 2.0...");
+      const fetchLimit = Math.max(Math.min(limit || 30, 50), 30);
       const listRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${Math.min(limit, 15)}&q=category:primary`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
@@ -135,13 +136,15 @@ export default async function syncGmail(req: Request, ctx: any) {
       let existingEmails: any[] = [];
       try {
         const emailQueryClient = base44.asServiceRole?.entities?.Email || base44.entities.Email;
-        existingEmails = await emailQueryClient.filter();
+        existingEmails = await emailQueryClient.filter({}, '-fecha', 100);
       } catch (_) {
         existingEmails = [];
       }
-      const existingSet = new Set(
-        existingEmails.map((e: any) => `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`)
-      );
+      const existingMap = new Map();
+      existingEmails.forEach((e: any) => {
+        const k = `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`;
+        existingMap.set(k, e);
+      });
 
       const syncedEmails = [];
       let nuevosGuardados = 0;
@@ -169,9 +172,12 @@ export default async function syncGmail(req: Request, ctx: any) {
         const fromName = fromMatch ? fromMatch[1].replace(/["']/g, '').trim() : fromHeader.split('@')[0];
         const fromAddress = fromMatch ? fromMatch[2].trim() : fromHeader;
 
-        // Deduplicar
+        // Deduplicar: si ya existe, agregarlo a la lista de sincronizados para mostrarlo en el feed
         const dedupeKey = `${fromAddress}__${subject}__${dateHeader.slice(0, 16)}`;
-        if (existingSet.has(dedupeKey)) continue;
+        if (existingMap.has(dedupeKey)) {
+          syncedEmails.push(existingMap.get(dedupeKey));
+          continue;
+        }
 
         // Clasificar logística
         const { es_logistico, categoria } = classifyEmail(subject, snippet);
@@ -202,7 +208,7 @@ export default async function syncGmail(req: Request, ctx: any) {
 
           syncedEmails.push(nuevoRegistro);
           nuevosGuardados++;
-          existingSet.add(dedupeKey);
+          existingMap.set(dedupeKey, nuevoRegistro);
         } catch (dbErr: any) {
           console.error("[syncGmail OAuth] Error guardando:", dbErr);
         }
