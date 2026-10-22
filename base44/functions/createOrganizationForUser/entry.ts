@@ -218,14 +218,30 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       sanitizedCategory = 'RUNTIME_REFERENCE_ERROR';
     }
 
-    const FUNCTION_VERSION = 'v1.3.0-diag';
+    const rawStack = String((error as { stack?: string })?.stack || '');
+    // Extraer los primeros frames locales sin filtrar rutas absolutas ni tokens
+    const stackFrames = rawStack
+      .split('\n')
+      .slice(0, 4)
+      .map(line => line.trim().replace(/^at\s+/, ''))
+      .map(frame => frame.replace(/https?:\/\/[^\s)]+/g, '[REDACTED_URL]'))
+      .filter(Boolean);
+
+    // Sanitizar mensaje eliminando URLs o posibles tokens
+    const sanitizedMessage = rawMsg
+      .replace(/https?:\/\/[^\s]+/g, '[REDACTED_URL]')
+      .replace(/[A-Za-z0-9_\-]{30,}/g, '[REDACTED_TOKEN]');
+
+    const FUNCTION_VERSION = 'v1.3.1-stack';
 
     console.error('organization_creation_failed', {
       version: FUNCTION_VERSION,
       diagnosticId,
       stage,
       errorName,
+      errorMessage: sanitizedMessage,
       category: sanitizedCategory,
+      stackFrames,
       status: typeof status === 'number' ? status : undefined,
     });
     return json({
@@ -233,9 +249,13 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       diagnostic_id: diagnosticId,
       version: FUNCTION_VERSION,
       stage,
+      error_name: errorName,
+      message: sanitizedMessage,
       category: sanitizedCategory,
+      stack_frames: stackFrames,
     }, 500);
   }
 }
+
 
 
