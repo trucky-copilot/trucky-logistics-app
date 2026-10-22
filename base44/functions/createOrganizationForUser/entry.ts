@@ -232,13 +232,19 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       .replace(/https?:\/\/[^\s]+/g, '[REDACTED_URL]')
       .replace(/[A-Za-z0-9_\-]{30,}/g, '[REDACTED_TOKEN]');
 
-    const FUNCTION_VERSION = 'v1.3.1-stack';
+    const causeObj = (error as { cause?: { code?: string; name?: string; message?: string } })?.cause;
+    const causeCode = typeof causeObj?.code === 'string' ? causeObj.code : undefined;
+    const causeName = typeof causeObj?.name === 'string' ? causeObj.name : undefined;
+
+    const FUNCTION_VERSION = 'v1.3.2-cause';
 
     console.error('organization_creation_failed', {
       version: FUNCTION_VERSION,
       diagnosticId,
       stage,
       errorName,
+      causeCode,
+      causeName,
       errorMessage: sanitizedMessage,
       category: sanitizedCategory,
       stackFrames,
@@ -250,12 +256,15 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       version: FUNCTION_VERSION,
       stage,
       error_name: errorName,
+      cause_code: causeCode,
+      cause_name: causeName,
       message: sanitizedMessage,
       category: sanitizedCategory,
       stack_frames: stackFrames,
     }, 500);
   }
 }
+
 
 
 
