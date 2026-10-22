@@ -1,5 +1,5 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, MessageSquare, Mail, FileSearch, Calculator,
   Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
@@ -39,6 +39,30 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { t, locale, setLocale } = useLanguage();
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !user || !user.id) return;
+    const createdDate = String(user.created_date || '');
+    const createdDateUtc = /(?:Z|[+-]\d{2}:?\d{2})$/.test(createdDate)
+      ? createdDate
+      : createdDate + 'Z';
+    const createdAtMs = Date.parse(createdDateUtc);
+    const isNewSignup = Number.isFinite(createdAtMs) &&
+      Date.now() - createdAtMs < 24 * 60 * 60 * 1000;
+    const key = '_aw_signup_fired_AW-18531970204/FleXCPrCqaYdEJzZ3YRF_' + user.id;
+    if (!isNewSignup || localStorage.getItem(key)) return;
+    let tries = 0;
+    const fire = () => {
+      if (!window.gtag) { if (tries++ < 20) setTimeout(fire, 250); return; }
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+      window.gtag('event', 'conversion', {
+        send_to: 'AW-18531970204/FleXCPrCqaYdEJzZ3YRF',
+        transaction_id: user.id,
+      });
+    };
+    fire();
+  }, [user]);
 
   const persistLocale = async (nextLocale) => {
     try {
