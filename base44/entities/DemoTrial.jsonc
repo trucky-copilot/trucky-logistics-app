@@ -1,0 +1,16 @@
+{
+ "name":"DemoTrial","type":"object",
+ "properties":{
+  "google_sub":{"type":"string"},
+  "user_email":{"type":"string"},
+  "trial_started_at":{"type":"string"},
+  "trial_ends_at":{"type":"string"}
+ },
+ "required":["google_sub","user_email","trial_started_at","trial_ends_at"],
+ "rls":{
+  "create":{"user_condition":{"role":"admin"}},
+  "read":{"user_condition":{"role":"admin"}},
+  "update":{"user_condition":{"role":"admin"}},
+  "delete":{"user_condition":{"role":"admin"}}
+ }
+}
