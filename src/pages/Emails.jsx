@@ -246,11 +246,8 @@ export default function Emails() {
   };
 
   const handleSyncGmail = () => {
-    if (!oauthToken) {
-      handleConnectGoogle('select_account');
-    } else {
-      triggerSync(oauthToken, googleConnectedEmail);
-    }
+    // Abrir siempre la ventana oficial de Google para permitir seleccionar la cuenta deseada y renovar credenciales
+    handleConnectGoogle('select_account');
   };
 
   // ─── Marcar / Desmarcar como favorito ────────────────────────────────────────
