@@ -214,6 +214,7 @@ export default async function syncGmail(req: Request, ctx: any) {
           nuevosGuardados,
           omitidosNoLogisticos,
           totalEncontrados: syncedEmails.length,
+          emails: syncedEmails,
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );

@@ -45,11 +45,11 @@ export default function Emails() {
       setLoading(true);
       const all = await base44.entities.Email.filter({}, '-fecha', 100);
       const emailList = Array.isArray(all) ? all : [];
-      // Filtrar por organización de forma segura
+      // Filtrar por organización de forma segura: si tiene organization_id debe coincidir, pero si es null/undefined también se permite
       const scoped = emailList.filter(e => !orgId || !e.organization_id || e.organization_id === orgId);
-      // Filtrar por perfil activo si existe
+      // Filtrar por perfil: los correos sin profile_id se muestran a todos los perfiles; si tienen profile_id específico, respetan el activo
       const profileScoped = activeProfileId
-        ? scoped.filter(e => !e.profile_id || e.profile_id === activeProfileId)
+        ? scoped.filter(e => !e.profile_id || String(e.profile_id) === String(activeProfileId))
         : scoped;
 
       setEmails(profileScoped);
@@ -200,6 +200,15 @@ export default function Emails() {
       } else {
         const nuevos = data.nuevosGuardados || 0;
         const omitidos = data.omitidosNoLogisticos || 0;
+        if (Array.isArray(data.emails) && data.emails.length > 0) {
+          setEmails(prev => {
+            const existingIds = new Set(prev.map(p => p.id));
+            const fresh = data.emails.filter(e => !existingIds.has(e.id));
+            const merged = [...fresh, ...prev];
+            return merged;
+          });
+          setSelectedEmail(prev => prev || data.emails[0]);
+        }
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
           description: isEs
@@ -420,29 +429,11 @@ export default function Emails() {
         </div>
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-          {/* Campo de correo editable con persistencia por perfil */}
-          <div className="relative flex items-center">
-            <Mail className="w-3.5 h-3.5 text-muted-foreground absolute left-3 pointer-events-none" />
-            <input
-              type="email"
-              value={googleConnectedEmail}
-              onChange={(e) => {
-                const val = e.target.value;
-                setGoogleConnectedEmail(val);
-                if (activeProfileId) {
-                  localStorage.setItem(`trucky_oauth_email_${activeProfileId}`, val);
-                }
-              }}
-              placeholder={isEs ? 'correo@gmail.com' : 'email@gmail.com'}
-              className="bg-card border border-border/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary w-full sm:w-[220px]"
-            />
-          </div>
-
           <button
             onClick={handleSyncGmail}
             disabled={syncing}
             className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border hover:bg-muted/80 text-foreground transition-colors disabled:opacity-50 whitespace-nowrap"
-            title={isEs ? 'Sincronizar correos de esta cuenta' : 'Sync emails from this account'}
+            title={isEs ? 'Sincronizar correos de tu cuenta de Google' : 'Sync emails from your Google account'}
           >
             <RotateCw className={`w-3.5 h-3.5 text-primary ${syncing ? 'animate-spin' : ''}`} />
             <span>{syncing ? (isEs ? 'Sincronizando...' : 'Syncing...') : (isEs ? 'Sincronizar' : 'Sync')}</span>
