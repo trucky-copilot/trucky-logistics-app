@@ -82,8 +82,8 @@ export default function Emails() {
     }
   }, [activeProfileId]);
 
-  // Iniciar popup oficial de Google OAuth 2.0
-  const handleConnectGoogle = () => {
+  // Iniciar popup oficial de Google OAuth 2.0 (permite prompt configurable para renovación silenciosa o explícita)
+  const handleConnectGoogle = (promptMode = 'select_account') => {
     if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
       toast({
         title: isEs ? 'Cargando Google...' : 'Loading Google...',
@@ -97,6 +97,12 @@ export default function Emails() {
         client_id: GOOGLE_CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email',
         callback: async (tokenResponse) => {
+          if (tokenResponse?.error) {
+            console.error('[Google OAuth error]:', tokenResponse);
+            // Si el modo silencioso falla, no bloquear; requerir interacción en siguiente intento
+            return;
+          }
+
           if (tokenResponse?.access_token) {
             const token = tokenResponse.access_token;
             setOauthToken(token);
@@ -107,7 +113,7 @@ export default function Emails() {
                 headers: { Authorization: `Bearer ${token}` }
               });
               const info = await infoRes.json();
-              const connectedEmail = info.email || 'Google Account';
+              const connectedEmail = info.email || googleConnectedEmail || 'Google Account';
               setGoogleConnectedEmail(connectedEmail);
 
               if (activeProfileId) {
@@ -117,19 +123,20 @@ export default function Emails() {
 
               toast({
                 title: isEs ? 'Cuenta de Google Conectada' : 'Google Account Connected',
-                description: isEs ? `Conectado como ${connectedEmail}. Ahora puedes sincronizar tus correos.` : `Connected as ${connectedEmail}. You can now sync emails.`,
+                description: isEs ? `Conectado como ${connectedEmail}. Sincronizando...` : `Connected as ${connectedEmail}. Syncing...`,
               });
 
-              // Sincronizar automáticamente tras conectar
+              // Sincronizar automáticamente tras conectar con el nuevo token
               triggerSync(token, connectedEmail);
             } catch (_) {
               setGoogleConnectedEmail('Cuenta Conectada');
+              triggerSync(token, googleConnectedEmail);
             }
           }
         },
       });
 
-      client.requestAccessToken({ prompt: 'select_account' });
+      client.requestAccessToken({ prompt: promptMode });
     } catch (err) {
       console.error('Error al iniciar Google OAuth:', err);
       toast({
@@ -140,12 +147,19 @@ export default function Emails() {
     }
   };
 
+  const clearExpiredToken = () => {
+    setOauthToken('');
+    if (activeProfileId) {
+      localStorage.removeItem(`trucky_oauth_token_${activeProfileId}`);
+    }
+  };
+
   const triggerSync = async (currentToken, currentEmail) => {
     const token = currentToken || oauthToken;
     const emailToSync = currentEmail || googleConnectedEmail;
 
     if (!token) {
-      handleConnectGoogle();
+      handleConnectGoogle('select_account');
       return;
     }
 
@@ -161,11 +175,23 @@ export default function Emails() {
 
       const data = res?.data || {};
       if (data.error) {
-        // Si el token expiró, reiniciar conexión
-        if (data.error.includes('autenticación') || data.error.includes('401')) {
-          handleConnectGoogle();
+        const errorText = String(data.error).toLowerCase();
+        // Si el token expiró o las credenciales no son válidas, limpiar y pedir reautorización
+        if (
+          errorText.includes('autenticación') ||
+          errorText.includes('401') ||
+          errorText.includes('invalid authentication credentials') ||
+          errorText.includes('expected oauth 2 access token')
+        ) {
+          clearExpiredToken();
+          toast({
+            title: isEs ? 'Sesión de Google caducada' : 'Google session expired',
+            description: isEs ? 'Renovando credenciales con Google...' : 'Refreshing Google credentials...',
+          });
+          handleConnectGoogle('select_account');
           return;
         }
+
         toast({
           title: isEs ? 'Error de sincronización' : 'Sync Error',
           description: data.error,
@@ -184,6 +210,22 @@ export default function Emails() {
       }
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error de conexión';
+      const msgLower = String(serverMsg).toLowerCase();
+      if (
+        msgLower.includes('autenticación') ||
+        msgLower.includes('401') ||
+        msgLower.includes('invalid authentication credentials') ||
+        msgLower.includes('expected oauth 2 access token')
+      ) {
+        clearExpiredToken();
+        toast({
+          title: isEs ? 'Sesión de Google caducada' : 'Google session expired',
+          description: isEs ? 'Renovando credenciales con Google...' : 'Refreshing Google credentials...',
+        });
+        handleConnectGoogle('select_account');
+        return;
+      }
+
       toast({
         title: isEs ? 'Error en sincronización' : 'Sync failed',
         description: serverMsg,
@@ -195,7 +237,11 @@ export default function Emails() {
   };
 
   const handleSyncGmail = () => {
-    triggerSync(oauthToken, googleConnectedEmail);
+    if (!oauthToken) {
+      handleConnectGoogle('select_account');
+    } else {
+      triggerSync(oauthToken, googleConnectedEmail);
+    }
   };
 
   // ─── Marcar / Desmarcar como favorito ────────────────────────────────────────
