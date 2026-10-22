@@ -202,11 +202,40 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     const err = error as { name?: string; message?: string; status?: number; statusCode?: number; response?: { status?: number } };
     const known = ['DEMO_REGISTRY_UNAVAILABLE', 'DEMO_REGISTRY_CONFIGURATION', 'DEMO_REGISTRY_HTTP', 'DEMO_REGISTRY_COMMAND'];
     const status = err?.status ?? err?.statusCode ?? err?.response?.status;
+    const errorName = typeof err?.name === 'string' ? err.name : 'Error';
+    const rawMsg = String(err?.message || '');
+
+    let sanitizedCategory = 'BACKEND_OPERATION_FAILED';
+    if (known.includes(rawMsg)) {
+      sanitizedCategory = rawMsg;
+    } else if (errorName === 'TimeoutError' || rawMsg.toLowerCase().includes('timeout') || rawMsg.toLowerCase().includes('aborted')) {
+      sanitizedCategory = 'NETWORK_TIMEOUT';
+    } else if (errorName === 'TypeError' && rawMsg.toLowerCase().includes('fetch')) {
+      sanitizedCategory = 'NETWORK_FETCH_FAILED';
+    } else if (errorName === 'TypeError') {
+      sanitizedCategory = 'RUNTIME_TYPE_ERROR';
+    } else if (errorName === 'ReferenceError') {
+      sanitizedCategory = 'RUNTIME_REFERENCE_ERROR';
+    }
+
+    const FUNCTION_VERSION = 'v1.3.0-diag';
+
     console.error('organization_creation_failed', {
-      diagnosticId, stage,
-      category: known.includes(err?.message || '') ? err.message : 'BACKEND_OPERATION_FAILED',
+      version: FUNCTION_VERSION,
+      diagnosticId,
+      stage,
+      errorName,
+      category: sanitizedCategory,
       status: typeof status === 'number' ? status : undefined,
     });
-    return json({ error: 'Error interno al crear la organización', diagnostic_id: diagnosticId }, 500);
+    return json({
+      error: 'Error interno al crear la organización',
+      diagnostic_id: diagnosticId,
+      version: FUNCTION_VERSION,
+      stage,
+      category: sanitizedCategory,
+    }, 500);
   }
 }
+
+
