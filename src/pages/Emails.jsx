@@ -39,22 +39,27 @@ export default function Emails() {
 
   const isEs = locale === 'es';
 
-  // ─── Carga inicial de correos ────────────────────────────────────────────────
+  // ─── Carga inicial de correos desde la base de datos por perfil ──────────────
   const fetchEmails = async () => {
     try {
       setLoading(true);
       const all = await base44.entities.Email.filter({}, '-fecha', 100);
       const emailList = Array.isArray(all) ? all : [];
-      // Filtrar por organización de forma segura: si tiene organization_id debe coincidir, pero si es null/undefined también se permite
+      // Filtrar por organización
       const scoped = emailList.filter(e => !orgId || !e.organization_id || e.organization_id === orgId);
-      // Filtrar por perfil: los correos sin profile_id se muestran a todos los perfiles; si tienen profile_id específico, respetan el activo
+      // Filtrar estrictamente por el perfil activo para que cada perfil tenga sus propios correos
       const profileScoped = activeProfileId
         ? scoped.filter(e => !e.profile_id || String(e.profile_id) === String(activeProfileId))
         : scoped;
 
       setEmails(profileScoped);
       if (profileScoped.length > 0) {
-        setSelectedEmail(prev => prev ? (profileScoped.find(p => p.id === prev.id) || profileScoped[0]) : profileScoped[0]);
+        setSelectedEmail(prev => {
+          if (prev && profileScoped.some(p => p.id === prev.id)) return prev;
+          return profileScoped[0];
+        });
+      } else {
+        setSelectedEmail(null);
       }
     } catch (err) {
       console.error('Error al cargar correos:', err);

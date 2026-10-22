@@ -39,19 +39,41 @@ const EXCLUSION_KEYWORDS = [
   'mamá', 'mama', 'papá', 'papa', 'hijo', 'hija', 'familia', 'abuelo', 'abuela',
   'netflix', 'spotify', 'steam', 'playstation', 'xbox', 'disney+', 'prime video',
   'hbo', 'twitch', 'uber eats', 'rappi', 'pedidosya', 'casino', 'lotería',
-  'reserva de hotel', 'vuelo vacacional', 'cena familiar'
+  'reserva de hotel', 'vuelo vacacional', 'cena familiar',
+  'alerta de seguridad', 'security alert', 'código de verificación', 'verification code',
+  'recuperado correctamente', 'ha compartido algunos datos', 'google workspace',
+  'política de privacidad', 'privacy policy'
+];
+
+// Dominios o remitentes de sistema que nunca son correos de brokers ni cargas
+const EXCLUDED_SENDERS = [
+  'no-reply@accounts.google.com',
+  'google.com',
+  'openai.com',
+  'notifications@github.com'
 ];
 
 /**
  * Clasificador inteligente de correos:
  * Discrimina correos operativos del transporte y Trucky de mensajes personales o spam.
  */
-function classifyEmail(subject: string, text: string) {
+function classifyEmail(subject: string, text: string, fromAddress = '') {
+  const sender = (fromAddress || '').toLowerCase();
   const content = `${subject || ''} ${text || ''}`.toLowerCase();
 
+  // Descartar automáticamente correos de sistema, Google y OpenAI
+  if (EXCLUDED_SENDERS.some(dom => sender.includes(dom)) || sender.includes('google.com') || sender.includes('accounts.google')) {
+    return { es_logistico: false, categoria: 'general' };
+  }
+
+  // Si tiene palabras de exclusión de seguridad o cuentas
+  const tieneExclusion = EXCLUSION_KEYWORDS.some(k => content.includes(k) || sender.includes(k));
+  if (tieneExclusion && !content.includes('flete') && !content.includes('freight') && !content.includes('rate')) {
+    return { es_logistico: false, categoria: 'general' };
+  }
+
   // Si contiene expresamente 'trucky', cotizaciones o carriers/dispatchers/brokers, es 100% logístico
-  const esTruckyLogistica = content.includes('trucky') || 
-    content.includes('carrier') || 
+  const esTruckyLogistica = content.includes('carrier') || 
     content.includes('dispatcher') || 
     content.includes('broker') || 
     content.includes('carga') || 
@@ -68,14 +90,7 @@ function classifyEmail(subject: string, text: string) {
     return { es_logistico: true, categoria };
   }
 
-  const tieneExclusion = EXCLUSION_KEYWORDS.some(k => content.includes(k));
   const matchesLogistics = LOGISTICS_KEYWORDS.filter(k => content.includes(k));
-
-  // Si tiene términos de ocio/familia y nulo contexto logístico -> descartar
-  if (tieneExclusion && matchesLogistics.length === 0) {
-    return { es_logistico: false, categoria: 'general' };
-  }
-
   if (matchesLogistics.length > 0) {
     let categoria = 'cargas';
     if (content.includes('broker') || content.includes('rate') || content.includes('tarifa')) {
@@ -179,8 +194,8 @@ export default async function syncGmail(req: Request, ctx: any) {
           continue;
         }
 
-        // Clasificar logística
-        const { es_logistico, categoria } = classifyEmail(subject, snippet);
+        // Clasificar logística pasando fromAddress
+        const { es_logistico, categoria } = classifyEmail(subject, snippet, fromAddress);
         if (!es_logistico) {
           omitidosNoLogisticos++;
           continue;
