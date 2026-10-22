@@ -1,0 +1,9 @@
+# Public demo company registry (test Stripe only)
+
+Adds server-owned Redis eligibility for newly created companies. No schema/RLS/current access changes. Default OFF (`PUBLIC_TEST_DEMO_ENABLED` absent). Existing organizations are NOT enrolled by email/name/status. New Google-verified organization is registered only after owner membership is created. Resolver exposes billing_demo_enabled derived from Redis. Sync accepts existing test allowlist OR server registry; still fetches canonical Stripe test subscription and verifies org metadata.
+
+Base44 needs CHECKOUT_REDIS_REST_URL/TOKEN from same Redis as Vercel, existing TRUCKY_SERVER_SECRET and test STRIPE_SECRET_KEY. Never share values in chat. Keep public flag unset until matching website webhook is updated and tested. Registry uses `trucky:demo:test:eligible:<orgId>` keys (value 1); these are not user fields. Native-session access and onboarding remain separate: this PR does NOT implement cross-platform SSO or global paid access.
+
+Create uses SET NX durable attempt per Google subject/name plus atomic quota (3 new attempts/day/subject). No automatic TTL for uncertain create outcomes. Existing-membership lookup happens first; partially failed create may need operator reconciliation. This prevents identical concurrent creates, not a transactional org+membership write. Review orphan records before manual recovery. Old companies without eligibility remain unchanged; do not backfill all current companies into demo registry.
+
+Deploy all three changed functions together with their colocated demoRegistry.ts modules. Feature off preserves existing workflow (resolver false); after explicit activation, real acceptance requires new Google identity and company. Matching Vercel receiver must check the same Redis registry rather than blindly accepting any metadata org ID. No production domain cutover until coordinated config and acceptance.

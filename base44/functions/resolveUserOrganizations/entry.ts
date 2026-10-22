@@ -1,3 +1,4 @@
+import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
 /**
@@ -145,6 +146,7 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
       const status: string = org.subscription_status ?? 'none';
       organizations.push({
         id: org.id,
+        billing_demo_enabled: await isDemoOrganization(org.id),
         name: org.name,
         role: m.role,
         subscription_status: status,

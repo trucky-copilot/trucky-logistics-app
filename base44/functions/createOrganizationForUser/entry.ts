@@ -1,3 +1,4 @@
+import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
 /**
@@ -137,6 +138,21 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       }
     }
 
+    const publicDemo = Deno.env.get('PUBLIC_TEST_DEMO_ENABLED') === 'true';
+    let creationKey: string | undefined;
+    if (publicDemo) {
+      // One canonical attempt per identity and normalized name. Unknown outcomes
+      // remain blocked rather than creating another organization on retry.
+      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256',
+        new TextEncoder().encode(`${identity.sub}:${companyName.toLowerCase()}`)));
+      const suffix = Array.from(digest).map(b => b.toString(16).padStart(2, '0')).join('');
+      creationKey = `trucky:demo:test:create:${suffix}`;
+      const acquired = await demoRedis(['SET', creationKey, 'pending', 'NX']);
+      if (acquired !== 'OK') return json({ error: 'DEMO_CREATION_REQUIRES_RECONCILIATION' }, 409);
+      const quota = await demoRedis(['EVAL', "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],86400) end; return n", '1', `trucky:demo:test:quota:${identity.sub}`]);
+      if (quota > 3) return json({ error: 'DEMO_CREATION_LIMIT' }, 429);
+    }
+
     // 5) Crear la Organización
     const newOrg = await db.Organization.create({
       name: companyName,
@@ -159,6 +175,10 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       active: true
     });
 
+    if (publicDemo) {
+      await registerDemoOrganization(newOrg.id);
+      await demoRedis(['SET', creationKey!, newOrg.id]);
+    }
     return json({
       status: 'created',
       org_id: newOrg.id,
