@@ -20,3 +20,24 @@ Deno.test('test actor without paid access denied; nontest actor unchanged', asyn
  if (await billingGuard(request(),client('existing@example.test')) !== null) throw Error('legacy regression');
  Deno.env.delete('BILLING_ACCESS_TEST_ENABLED');
 });
+
+Deno.test('multiple memberships cannot authorize a different operational tenant', async () => {
+ Deno.env.set('BILLING_ACCESS_TEST_ENABLED','true');
+ Deno.env.set('BILLING_ACCESS_TEST_USER_EMAILS','test@example.test');
+ const client = {auth:{me:async()=>({email:'test@example.test'})},asServiceRole:{entities:{OrganizationMember:{filter:async()=>[{organization_id:'org_old'},{organization_id:'org_paid'}]}}}};
+ const req = new Request('https://example.test',{method:'POST',body:JSON.stringify({organization_id:'org_paid'})});
+ const result = await billingGuard(req,client);
+ if (result?.status !== 403 || (await result.json()).code !== 'TENANT_CONTEXT_NOT_SUPPORTED') throw Error('tenant mismatch allowed');
+ Deno.env.delete('BILLING_ACCESS_TEST_ENABLED');
+});
+Deno.test('lookup exceptions fail closed instead of entering legacy fallback', async () => {
+ Deno.env.set('BILLING_ACCESS_TEST_ENABLED','true');
+ const response = await billingGuard(new Request('https://example.test'),{auth:{me:async()=>{throw Error('network');}}});
+ if (response?.status !== 503) throw Error('fail open');
+ Deno.env.delete('BILLING_ACCESS_TEST_ENABLED');
+});
+Deno.test('all six packaged guards stay identical', async () => {
+ const folders=['marketChat','analyzeDocument','extractDocumentText','translateChat','syncGmail','sendGmail'];
+ const copies=await Promise.all(folders.map(f=>Deno.readTextFile(`base44/functions/${f}/billingGuard.ts`)));
+ if (!copies.every(s=>s===copies[0])) throw Error('guards diverged');
+});
