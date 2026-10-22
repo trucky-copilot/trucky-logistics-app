@@ -1,3 +1,4 @@
+import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
 export default async function syncBillingSubscription(req: Request, _ctx: unknown) {
@@ -16,7 +17,7 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
   try {
     const body = await req.json();
     const allowed = new Set((Deno.env.get('STRIPE_TEST_ORGANIZATION_IDS') || '').split(',').map(x => x.trim()).filter(Boolean));
-    if (typeof body.organization_id !== 'string' || !allowed.has(body.organization_id)) return reply('TEST_ORGANIZATION_NOT_ALLOWED', 403);
+    if (typeof body.organization_id !== 'string' || (!allowed.has(body.organization_id) && !await isDemoOrganization(body.organization_id))) return reply('TEST_ORGANIZATION_NOT_ALLOWED', 403);
     if (typeof body.subscription_id !== 'string' || !/^sub_[a-zA-Z0-9]+$/.test(body.subscription_id)) return reply('INVALID_SUBSCRIPTION', 400);
     const key = Deno.env.get('STRIPE_SECRET_KEY');
     if (!key?.startsWith('sk_test_')) return reply('TEST_CONFIGURATION_REQUIRED', 503);
