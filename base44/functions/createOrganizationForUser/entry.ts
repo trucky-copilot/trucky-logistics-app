@@ -108,16 +108,20 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     ? body.account_type
     : 'carrier';
 
+  const diagnosticId = crypto.randomUUID();
+  let stage = 'google_identity';
   try {
     // 3) Identidad de Google
     const identity = await verifyGoogleIdToken(idToken);
     if (!identity) return json({ error: 'Token de Google inválido o expirado' }, 401);
 
+    stage = 'service_client';
     const base44 = createClientFromRequest(req);
     const db = base44.asServiceRole.entities;
 
     // 4) Idempotencia y verificación previa:
     // Comprobar si el usuario ya tiene una organización creada con ese nombre
+    stage = 'membership_lookup';
     const existingMemberships = await db.OrganizationMember.filter({
       google_sub: identity.sub,
       active: true,
@@ -125,6 +129,7 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     });
 
     for (const m of existingMemberships ?? []) {
+    stage = 'organization_lookup';
       const orgs = await db.Organization.filter({ id: m.organization_id });
       const org = orgs?.[0];
       if (org && org.active !== false && org.name.toLowerCase() === companyName.toLowerCase()) {
@@ -147,13 +152,16 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
         new TextEncoder().encode(`${identity.sub}:${companyName.toLowerCase()}`)));
       const suffix = Array.from(digest).map(b => b.toString(16).padStart(2, '0')).join('');
       creationKey = `trucky:demo:test:create:${suffix}`;
+    stage = 'redis_creation_lock';
       const acquired = await demoRedis(['SET', creationKey, 'pending', 'NX']);
       if (acquired !== 'OK') return json({ error: 'DEMO_CREATION_REQUIRES_RECONCILIATION' }, 409);
+    stage = 'redis_quota';
       const quota = await demoRedis(['EVAL', "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],86400) end; return n", '1', `trucky:demo:test:quota:${identity.sub}`]);
       if (quota > 3) return json({ error: 'DEMO_CREATION_LIMIT' }, 429);
     }
 
     // 5) Crear la Organización
+    stage = 'organization_create';
     const newOrg = await db.Organization.create({
       name: companyName,
       account_type: accountType,
@@ -167,6 +175,7 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     });
 
     // 6) Crear la membresía atómica como 'owner'
+    stage = 'membership_create';
     await db.OrganizationMember.create({
       organization_id: newOrg.id,
       user_email: identity.email,
@@ -176,7 +185,9 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     });
 
     if (publicDemo) {
+    stage = 'registry_register';
       await registerDemoOrganization(newOrg.id);
+    stage = 'registry_finalize';
       await demoRedis(['SET', creationKey!, newOrg.id]);
     }
     return json({
@@ -188,7 +199,14 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     }, 201);
 
   } catch (error) {
-    console.error('[createOrganizationForUser]', error);
-    return json({ error: 'Error interno al crear la organización' }, 500);
+    const err = error as { name?: string; message?: string; status?: number; statusCode?: number; response?: { status?: number } };
+    const known = ['DEMO_REGISTRY_UNAVAILABLE', 'DEMO_REGISTRY_CONFIGURATION', 'DEMO_REGISTRY_HTTP', 'DEMO_REGISTRY_COMMAND'];
+    const status = err?.status ?? err?.statusCode ?? err?.response?.status;
+    console.error('organization_creation_failed', {
+      diagnosticId, stage,
+      category: known.includes(err?.message || '') ? err.message : 'BACKEND_OPERATION_FAILED',
+      status: typeof status === 'number' ? status : undefined,
+    });
+    return json({ error: 'Error interno al crear la organización', diagnostic_id: diagnosticId }, 500);
   }
 }
