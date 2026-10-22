@@ -1,3 +1,4 @@
+import { billingGuard } from "./billingGuard.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { ImapFlow } from 'npm:imapflow';
 import { simpleParser } from 'npm:mailparser';
@@ -99,6 +100,8 @@ export default async function syncGmail(req: Request, ctx: any) {
 
   try {
     const base44 = createClientFromRequest(req);
+    const billingDenied = await billingGuard(req, base44);
+    if (billingDenied) return billingDenied;
     let currentUser: any = null;
     try {
       currentUser = await base44.auth.me();

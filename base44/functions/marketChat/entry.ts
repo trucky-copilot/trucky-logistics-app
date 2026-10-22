@@ -1,3 +1,4 @@
+import { billingGuard } from "./billingGuard.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 
 // Carga automática del .env local (desarrollo). Actualizado para re-bundling.
@@ -629,6 +630,8 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
   let locale: Locale = 'es';
   try {
     const base44 = createClientFromRequest(req);
+    const billingDenied = await billingGuard(req, base44);
+    if (billingDenied) return billingDenied;
 
     let user;
     try {
