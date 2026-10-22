@@ -29,6 +29,20 @@ export default function Emails() {
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
 
+  // ─── Estado de Conexión Google OAuth 2.0 ────────────────────────────────────
+  const [googleConnectedEmail, setGoogleConnectedEmail] = useState('');
+  const [oauthToken, setOauthToken] = useState('');
+  const GOOGLE_CLIENT_ID = '940005071153-h3ec1g6i15qo8nkabvrlgijbsas8g9ks.apps.googleusercontent.com';
+
+  useEffect(() => {
+    if (activeProfileId) {
+      const savedEmail = localStorage.getItem(`trucky_oauth_email_${activeProfileId}`) || '';
+      const savedToken = localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || '';
+      setGoogleConnectedEmail(savedEmail);
+      setOauthToken(savedToken);
+    }
+  }, [activeProfileId]);
+
   // Modal de redacción rápida
   const [composeOpen, setComposeOpen] = useState(false);
   const [sendingCompose, setSendingCompose] = useState(false);
@@ -60,8 +74,6 @@ export default function Emails() {
       const cleanList = profileScoped.filter(e => {
         const sender = (e.remitente_email || '').toLowerCase();
         const subject = (e.asunto || '').toLowerCase();
-        const body = (e.cuerpo || e.snippet || '').toLowerCase();
-        const content = `${subject} ${body}`;
 
         // Si se especificó cuenta de Google y el registro tiene google_account, verificar coincidencia
         if (activeGoogleAcc && e.google_account) {
@@ -118,21 +130,6 @@ export default function Emails() {
   useEffect(() => {
     fetchEmails();
   }, [orgId, activeProfileId, googleConnectedEmail]);
-
-  // ─── Estado de Conexión Google OAuth 2.0 ────────────────────────────────────
-  const [googleConnectedEmail, setGoogleConnectedEmail] = useState('');
-  const [oauthToken, setOauthToken] = useState('');
-
-  const GOOGLE_CLIENT_ID = '940005071153-h3ec1g6i15qo8nkabvrlgijbsas8g9ks.apps.googleusercontent.com';
-
-  useEffect(() => {
-    if (activeProfileId) {
-      const savedEmail = localStorage.getItem(`trucky_oauth_email_${activeProfileId}`) || '';
-      const savedToken = localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || '';
-      setGoogleConnectedEmail(savedEmail);
-      setOauthToken(savedToken);
-    }
-  }, [activeProfileId]);
 
   // Iniciar popup oficial de Google OAuth 2.0 (permite prompt configurable para renovación silenciosa o explícita)
   const handleConnectGoogle = (promptMode = 'select_account') => {
