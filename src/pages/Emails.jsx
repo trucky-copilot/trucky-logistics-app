@@ -204,10 +204,9 @@ export default function Emails() {
           setEmails(prev => {
             const existingIds = new Set(prev.map(p => p.id));
             const fresh = data.emails.filter(e => !existingIds.has(e.id));
-            const merged = [...fresh, ...prev];
-            return merged;
+            return [...fresh, ...prev];
           });
-          setSelectedEmail(prev => prev || data.emails[0]);
+          setSelectedEmail(data.emails[0]);
         }
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
@@ -215,7 +214,22 @@ export default function Emails() {
             ? `${nuevos} correos logísticos importados (${omitidos} personales/spam filtrados).`
             : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).`,
         });
-        await fetchEmails();
+        
+        // Refrescar sólo incorporando los de backend sin borrar los locales
+        try {
+          const all = await base44.entities.Email.filter({}, '-fecha', 100);
+          if (Array.isArray(all) && all.length > 0) {
+            setEmails(prev => {
+              const combined = [...prev];
+              all.forEach(item => {
+                if (!combined.some(c => c.id === item.id)) {
+                  combined.push(item);
+                }
+              });
+              return combined;
+            });
+          }
+        } catch (_) {}
       }
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error de conexión';
