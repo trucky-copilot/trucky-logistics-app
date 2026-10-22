@@ -75,6 +75,10 @@
     "load_id": {
       "type": "string",
       "description": "ID opcional de una carga relacionada creada a partir de este correo"
+    },
+    "google_account": {
+      "type": "string",
+      "description": "Cuenta de Google (ej. correo@gmail.com) desde la cual se sincronizó este mensaje"
     }
   },
   "required": [

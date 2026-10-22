@@ -41,8 +41,8 @@ export default function Emails() {
 
   const isEs = locale === 'es';
 
-  // ─── Carga inicial de correos desde la base de datos por perfil ──────────────
-  const fetchEmails = async () => {
+  // ─── Carga inicial de correos desde la base de datos por perfil y cuenta ───
+  const fetchEmails = async (overrideAccount) => {
     try {
       setLoading(true);
       const all = await base44.entities.Email.filter({}, '-fecha', 100);
@@ -54,16 +54,48 @@ export default function Emails() {
         ? scoped.filter(e => !e.profile_id || String(e.profile_id) === String(activeProfileId))
         : scoped;
 
-      // Filtrar correos no deseados de Google/sistema
+      const activeGoogleAcc = (overrideAccount !== undefined ? overrideAccount : (googleConnectedEmail || '')).toLowerCase().trim();
+
+      // Filtrar correos no deseados de Google/sistema y correos no logísticos
       const cleanList = profileScoped.filter(e => {
         const sender = (e.remitente_email || '').toLowerCase();
         const subject = (e.asunto || '').toLowerCase();
-        if (sender.includes('google.com') || sender.includes('accounts.google') || sender.includes('openai.com')) {
+        const body = (e.cuerpo || e.snippet || '').toLowerCase();
+        const content = `${subject} ${body}`;
+
+        // Si se especificó cuenta de Google y el registro tiene google_account, verificar coincidencia
+        if (activeGoogleAcc && e.google_account) {
+          if (e.google_account.toLowerCase().trim() !== activeGoogleAcc) {
+            return false;
+          }
+        }
+
+        // Excluir dominios conocidos no logísticos
+        if (
+          sender.includes('google.com') ||
+          sender.includes('accounts.google') ||
+          sender.includes('openai.com') ||
+          sender.includes('linkedin.com') ||
+          sender.includes('github.com') ||
+          sender.includes('amazon.com') ||
+          sender.includes('uber.com')
+        ) {
           return false;
         }
-        if (subject.includes('alerta de seguridad') || subject.includes('security alert') || subject.includes('recuperado correctamente')) {
+
+        // Excluir alertas de seguridad, códigos y marketing genérico
+        if (
+          subject.includes('alerta de seguridad') ||
+          subject.includes('security alert') ||
+          subject.includes('recuperado correctamente') ||
+          subject.includes('código de verificación') ||
+          subject.includes('verification code') ||
+          subject.includes('política de privacidad') ||
+          subject.includes('privacy policy')
+        ) {
           return false;
         }
+
         return true;
       });
 
@@ -85,7 +117,7 @@ export default function Emails() {
 
   useEffect(() => {
     fetchEmails();
-  }, [orgId, activeProfileId]);
+  }, [orgId, activeProfileId, googleConnectedEmail]);
 
   // ─── Estado de Conexión Google OAuth 2.0 ────────────────────────────────────
   const [googleConnectedEmail, setGoogleConnectedEmail] = useState('');
@@ -221,20 +253,6 @@ export default function Emails() {
       } else {
         const nuevos = data.nuevosGuardados || 0;
         const omitidos = data.omitidosNoLogisticos || 0;
-        if (Array.isArray(data.emails) && data.emails.length > 0) {
-          const freshClean = data.emails.filter(e => {
-            const sender = (e.remitente_email || '').toLowerCase();
-            return !sender.includes('google.com') && !sender.includes('accounts.google') && !sender.includes('openai.com');
-          });
-          setEmails(prev => {
-            const existingIds = new Set(prev.map(p => p.id));
-            const fresh = freshClean.filter(e => !existingIds.has(e.id));
-            return [...fresh, ...prev];
-          });
-          if (freshClean.length > 0) {
-            setSelectedEmail(freshClean[0]);
-          }
-        }
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
           description: isEs
@@ -242,8 +260,8 @@ export default function Emails() {
             : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).`,
         });
         
-        // Refrescar desde la base de datos aplicando los filtros de perfil
-        await fetchEmails();
+        // Refrescar desde la base de datos aplicando los filtros de perfil y cuenta actual
+        await fetchEmails(emailToSync);
       }
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error de conexión';
@@ -446,10 +464,17 @@ export default function Emails() {
               </span>
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {isEs
-              ? 'Conectado a tu cuenta de Gmail · Filtro inteligente anti-ruido activado'
-              : 'Connected to your Gmail account · Smart logistics filter active'}
+          <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
+            <span>
+              {isEs
+                ? 'Conectado a Gmail · Filtro inteligente anti-ruido activado'
+                : 'Connected to Gmail · Smart logistics filter active'}
+            </span>
+            {googleConnectedEmail && (
+              <span className="px-2 py-0.5 rounded-md bg-muted text-[11px] font-medium text-foreground border border-border">
+                {googleConnectedEmail}
+              </span>
+            )}
           </p>
         </div>
 

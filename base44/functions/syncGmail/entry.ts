@@ -22,84 +22,95 @@ function corsHeadersFor(req: Request) {
   };
 }
 
-// Palabras clave que confirman contexto de logística, transporte y plataforma Trucky
-const LOGISTICS_KEYWORDS = [
-  'load', 'loads', 'freight', 'freights', 'rate', 'rates', 'lane', 'lanes', 'reefer', 'dry van', 'drayage', 'flatbed',
-  'container', 'containers', 'chassis', 'detention', 'layover', 'tonu', 'bol', 'bill of lading',
-  'rate confirmation', 'rate con', 'delivery order', 'proof of delivery', 'pod',
-  'lumper', 'carrier', 'carriers', 'broker', 'brokers', 'dispatcher', 'dispatchers', 'dispatch', 'pickup', 'delivery',
-  'origin', 'destination', 'mc#', 'mc number', 'dot#', 'factoring', 'quickpay',
-  'invoice', 'settlement', 'deadhead', 'all-in', 'rpm', 'flete', 'fletes', 'carga', 'cargas', 'camion', 'camiones',
-  'remolque', 'orden de entrega', 'carta porte', 'flota', 'flotas', 'trucky', 'cotizacion', 'cotización', 'logistica', 'logística',
-  'tarifa', 'tarifas', 'transporte', 'conductor', 'conductores', 'trailer', 'tractor'
+// Palabras clave inequívocas de transporte de carga, fletes y corretaje
+const MANDATORY_LOGISTICS_TERMS = [
+  'load', 'loads', 'freight', 'freights', 'rate con', 'rate confirmation', 'bill of lading', 'bol',
+  'flete', 'fletes', 'carga', 'cargas', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
+  'detention', 'layover', 'tonu', 'lumper', 'carrier setup', 'broker packet', 'delivery order',
+  'proof of delivery', 'pod', 'deadhead', 'all-in rate', 'rpm', 'tarifa de flete', 'orden de carga',
+  'carta porte', 'remolque', 'trailer', 'tractor'
 ];
 
-// Palabras clave personales, ocio o no laborales para exclusión
+// Palabras clave generales del ecosistema de logística (requieren al menos un término clave o remitente especializado)
+const LOGISTICS_KEYWORDS = [
+  ...MANDATORY_LOGISTICS_TERMS,
+  'carrier', 'carriers', 'broker', 'brokers', 'dispatcher', 'dispatchers', 'dispatch',
+  'pickup', 'delivery', 'lane', 'lanes', 'container', 'containers', 'mc#', 'mc number', 'dot#',
+  'factoring', 'quickpay', 'camion', 'camiones', 'flota', 'flotas', 'trucky', 'cotizacion flete'
+];
+
+// Palabras clave personales, ocio, marketing o servicios corporativos ajenos al flete
 const EXCLUSION_KEYWORDS = [
   'mamá', 'mama', 'papá', 'papa', 'hijo', 'hija', 'familia', 'abuelo', 'abuela',
   'netflix', 'spotify', 'steam', 'playstation', 'xbox', 'disney+', 'prime video',
-  'hbo', 'twitch', 'uber eats', 'rappi', 'pedidosya', 'casino', 'lotería',
-  'reserva de hotel', 'vuelo vacacional', 'cena familiar',
+  'hbo', 'twitch', 'uber', 'rappi', 'pedidosya', 'casino', 'lotería', 'didi',
+  'reserva de hotel', 'vuelo vacacional', 'cena familiar', 'airbnb', 'booking.com',
   'alerta de seguridad', 'security alert', 'código de verificación', 'verification code',
   'recuperado correctamente', 'ha compartido algunos datos', 'google workspace',
-  'política de privacidad', 'privacy policy'
+  'política de privacidad', 'privacy policy', 'actualización de términos', 'terms of service',
+  'newsletter', 'boletín', 'resumen semanal', 'weekly digest', 'promoción', 'oferta especial',
+  'descuento', 'factura de compra', 'recibo de pago', 'order confirmation', 'amazon.com',
+  'mercadolibre', 'ebay', 'aliexpress', 'linkedin', 'facebook', 'instagram', 'twitter', 'x.com'
 ];
 
-// Dominios o remitentes de sistema que nunca son correos de brokers ni cargas
+// Dominios o remitentes de sistema o no logísticos que nunca son cargas
 const EXCLUDED_SENDERS = [
   'no-reply@accounts.google.com',
   'google.com',
   'openai.com',
-  'notifications@github.com'
+  'notifications@github.com',
+  'linkedin.com',
+  'amazon.com',
+  'facebookmail.com',
+  'uber.com',
+  'apple.com',
+  'microsoft.com',
+  'twitter.com',
+  'x.com',
+  'stripe.com'
 ];
 
 /**
  * Clasificador inteligente de correos:
- * Discrimina correos operativos del transporte y Trucky de mensajes personales o spam.
+ * Discrimina correos operativos del transporte y Trucky de mensajes personales, spam o marketing.
  */
 function classifyEmail(subject: string, text: string, fromAddress = '') {
   const sender = (fromAddress || '').toLowerCase();
-  const content = `${subject || ''} ${text || ''}`.toLowerCase();
+  const subj = (subject || '').toLowerCase();
+  const content = `${subj} ${text || ''}`.toLowerCase();
 
-  // Descartar automáticamente correos de sistema, Google y OpenAI
+  // 1. Descartar automáticamente correos de sistema, Google, redes o tiendas
   if (EXCLUDED_SENDERS.some(dom => sender.includes(dom)) || sender.includes('google.com') || sender.includes('accounts.google')) {
     return { es_logistico: false, categoria: 'general' };
   }
 
-  // Si tiene palabras de exclusión de seguridad o cuentas
+  // 2. Si tiene palabras de exclusión (ocio, seguridad, e-commerce, promociones)
   const tieneExclusion = EXCLUSION_KEYWORDS.some(k => content.includes(k) || sender.includes(k));
-  if (tieneExclusion && !content.includes('flete') && !content.includes('freight') && !content.includes('rate')) {
+  if (tieneExclusion) {
+    // Solo permitir si explícitamente es un flete o rate confirmation inconfundible
+    const esFleteInconfundible = content.includes('rate con') || content.includes('bill of lading') || content.includes('flete') || content.includes('freight load');
+    if (!esFleteInconfundible) {
+      return { es_logistico: false, categoria: 'general' };
+    }
+  }
+
+  // 3. Evaluar presencia de términos clave de flete y transporte
+  const hasMandatory = MANDATORY_LOGISTICS_TERMS.some(term => content.includes(term));
+  const hasSubjectMatch = LOGISTICS_KEYWORDS.some(k => subj.includes(k));
+  const hasTrucky = content.includes('trucky');
+
+  // Si no coincide con ningún término obligatorio ni en el asunto ni es de Trucky, se descarta
+  if (!hasMandatory && !hasSubjectMatch && !hasTrucky) {
     return { es_logistico: false, categoria: 'general' };
   }
 
-  // Si contiene expresamente 'trucky', cotizaciones o carriers/dispatchers/brokers, es 100% logístico
-  const esTruckyLogistica = content.includes('carrier') || 
-    content.includes('dispatcher') || 
-    content.includes('broker') || 
-    content.includes('carga') || 
-    content.includes('flete') || 
-    content.includes('flota') ||
-    content.includes('logistica') ||
-    content.includes('logística');
-
-  if (esTruckyLogistica) {
-    let categoria = 'cargas';
-    if (content.includes('broker') || content.includes('packet') || content.includes('setup') || content.includes('quote') || content.includes('rate')) {
-      categoria = 'brokers';
-    }
-    return { es_logistico: true, categoria };
+  // 4. Categorización
+  let categoria = 'cargas';
+  if (content.includes('broker') || content.includes('rate') || content.includes('tarifa') || content.includes('packet') || content.includes('setup')) {
+    categoria = 'brokers';
   }
 
-  const matchesLogistics = LOGISTICS_KEYWORDS.filter(k => content.includes(k));
-  if (matchesLogistics.length > 0) {
-    let categoria = 'cargas';
-    if (content.includes('broker') || content.includes('rate') || content.includes('tarifa')) {
-      categoria = 'brokers';
-    }
-    return { es_logistico: true, categoria };
-  }
-
-  return { es_logistico: false, categoria: 'general' };
+  return { es_logistico: true, categoria };
 }
 
 export default async function syncGmail(req: Request, ctx: any) {
@@ -159,7 +170,8 @@ export default async function syncGmail(req: Request, ctx: any) {
       }
       const existingMap = new Map();
       existingEmails.forEach((e: any) => {
-        const k = `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`;
+        const acc = (e.google_account || '').toLowerCase().trim();
+        const k = `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}__${acc}`;
         existingMap.set(k, e);
       });
 
@@ -189,8 +201,9 @@ export default async function syncGmail(req: Request, ctx: any) {
         const fromName = fromMatch ? fromMatch[1].replace(/["']/g, '').trim() : fromHeader.split('@')[0];
         const fromAddress = fromMatch ? fromMatch[2].trim() : fromHeader;
 
-        // Deduplicar: si ya existe, agregarlo a la lista de sincronizados para mostrarlo en el feed
-        const dedupeKey = `${fromAddress}__${subject}__${dateHeader.slice(0, 16)}`;
+        // Deduplicar: si ya existe para este perfil y cuenta de Google, reutilizar
+        const connectedGoogleAccount = (reqGmailUser || '').toLowerCase().trim();
+        const dedupeKey = `${fromAddress}__${subject}__${dateHeader.slice(0, 16)}__${connectedGoogleAccount}`;
         if (existingMap.has(dedupeKey)) {
           syncedEmails.push(existingMap.get(dedupeKey));
           continue;
@@ -209,6 +222,7 @@ export default async function syncGmail(req: Request, ctx: any) {
             organization_id: organization_id || null,
             profile_id: finalProfileId,
             created_by_id: finalUserId,
+            google_account: connectedGoogleAccount || null,
             remitente_nombre: fromName,
             remitente_email: fromAddress,
             destinatario_email: toHeader,
