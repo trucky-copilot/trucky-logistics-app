@@ -9,6 +9,8 @@ import { AppStateProvider, useAppState } from '@/lib/AppStateContext';
 import { ProfileProvider } from '@/lib/ProfileContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Layout from '@/components/Layout';
+import { DemoProvider, useDemo } from '@/lib/DemoContext';
+import DemoExpiredScreen from '@/components/DemoExpiredScreen';
 
 // Page imports
 import Welcome         from '@/pages/Welcome';
@@ -67,10 +69,6 @@ function AppLoading() {
     </div>
   );
 }
-
-import { DemoProvider, useDemo } from '@/lib/DemoContext';
-import DemoExpiredScreen from '@/components/DemoExpiredScreen';
-
 // ─── Core app (reads AppStateContext & DemoContext) ──────────────────────────
 function AppContent() {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
