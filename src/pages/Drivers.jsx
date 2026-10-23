@@ -7,6 +7,8 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
+import { useDemo } from '@/lib/DemoContext';
+import DemoLimitModal from '@/components/DemoLimitModal';
 
 function DocAlert({ label, date }) {
   const { t } = useLanguage();
@@ -149,9 +151,11 @@ export default function Drivers() {
   const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
   const { activeProfileId } = useProfile();
+  const { isDemoUser, limits } = useDemo();
   const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [editDriver, setEditDriver] = useState(null);
   const [deleteDriver, setDeleteDriver] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -305,11 +309,25 @@ export default function Drivers() {
           <h1 className="text-xl font-bold text-foreground">{t.drivers.title}</h1>
           <p className="text-sm text-muted-foreground">{drivers.length} {t.drivers.registered}</p>
         </div>
-        <button onClick={() => { setEditDriver(null); setShowForm(true); }}
+        <button onClick={() => {
+          if (isDemoUser && drivers.length >= (limits?.DRIVERS || 3)) {
+            setShowLimitModal(true);
+            return;
+          }
+          setEditDriver(null); 
+          setShowForm(true); 
+        }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
           <Plus className="w-3.5 h-3.5" />{t.drivers.add}
         </button>
       </div>
+
+      <DemoLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        entityName="conductores"
+        limit={limits?.DRIVERS || 3}
+      />
 
       {showForm && <DriverForm driver={editDriver} onSave={handleSave} onClose={() => { setShowForm(false); setEditDriver(null); }} />}
 

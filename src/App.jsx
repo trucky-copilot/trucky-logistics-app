@@ -37,13 +37,17 @@ function AppLoading() {
   );
 }
 
-// ─── Core app (reads AppStateContext) ─────────────────────────────────────────
+import { DemoProvider, useDemo } from '@/lib/DemoContext';
+import DemoExpiredScreen from '@/components/DemoExpiredScreen';
+
+// ─── Core app (reads AppStateContext & DemoContext) ──────────────────────────
 function AppContent() {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const { appState, resolveState, setupDetails } = useAppState();
+  const { isTrialExpired, loadingTrial, trialData } = useDemo();
 
   // Platform-level loading / errors
-  if (isLoadingPublicSettings || isLoadingAuth || appState === 'loading') return <AppLoading />;
+  if (isLoadingPublicSettings || isLoadingAuth || appState === 'loading' || loadingTrial) return <AppLoading />;
 
   if (authError) {
     if (authError.type === 'user_not_registered') return <UserNotRegisteredError />;
@@ -51,12 +55,13 @@ function AppContent() {
   }
 
   // ── SIN SESIÓN (TRUCKY-46) ─────────────────────────────────────────────────
-  // `unauthenticated` significa que `base44.auth.me()` falló: no hay sesión.
-  // Antes este estado no se manejaba y caía al `return <Routes>` de abajo, así
-  // que después de "Cerrar sesión" la app volvía a pintar el shell completo
-  // (sidebar + dashboard) sin sesión: parecía que el logout no hacía nada, y
-  // toda llamada al backend fallaba con 401. Sin sesión, se muestra el login.
   if (appState === 'unauthenticated') return <Welcome />;
+
+  // ── CONTROL DE DEMO TRIAL ──────────────────────────────────────────────────
+  if (isTrialExpired) {
+    const reason = !trialData?.hasTrial ? 'no_trial' : 'expired';
+    return <DemoExpiredScreen reason={reason} />;
+  }
 
   // ── SETUP: user needs to complete onboarding ───────────────────────────────
   if (appState === 'setup') {
@@ -91,11 +96,13 @@ function App() {
       <QueryClientProvider client={queryClientInstance}>
         <Router>
         <AppStateProvider>
-          <ProfileProvider>
-            <LanguageProvider>
-              <AppContent />
-            </LanguageProvider>
-          </ProfileProvider>
+          <DemoProvider>
+            <ProfileProvider>
+              <LanguageProvider>
+                <AppContent />
+              </LanguageProvider>
+            </ProfileProvider>
+          </DemoProvider>
         </AppStateProvider>
         </Router>
         <Toaster />
@@ -103,5 +110,6 @@ function App() {
     </AuthProvider>
   );
 }
+
 
 export default App;

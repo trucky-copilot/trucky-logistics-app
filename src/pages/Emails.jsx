@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import {
   Mail, RotateCw, Plus, Search, Star, MessageSquare,
   Send, Sparkles, Inbox, Package, Building2,
-  CheckCircle2, Clock, X, Loader2, ArrowUpRight, Copy, Check
+  CheckCircle2, Clock, X, Loader2, ArrowUpRight, Copy, Check,
+  ChevronRight, Lock, Bot, Paperclip
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useOrganizationId } from '@/lib/AppStateContext';
@@ -12,6 +13,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
+import { useDemo } from '@/lib/DemoContext';
 
 export default function Emails() {
   const { user } = useAuth();
@@ -19,6 +21,7 @@ export default function Emails() {
   const { activeProfileId } = useProfile();
   const { locale } = useLanguage();
   const { toast } = useToast();
+  const { isDemoUser } = useDemo();
   const navigate = useNavigate();
 
   const [emails, setEmails] = useState([]);
@@ -111,6 +114,86 @@ export default function Emails() {
         return true;
       });
 
+      if (isDemoUser) {
+        // En modo DEMO, usar los correos de ejemplo enriquecidos para la interfaz estándar
+        const sampleEmails = [
+          {
+            id: 'demo-1',
+            remitente_nombre: 'Miami Cargo Express',
+            remitente_email: 'dispatch@miamicargo.com',
+            destinatario_email: 'operations@trucky.site',
+            asunto: 'Pickup Confirmation – 04/14/2026',
+            fecha: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+            categoria: 'cargas',
+            tipo_flujo: 'received',
+            leido: false,
+            destacado: true,
+            snippet: 'Please confirm the pickup for 1 container in Miami Yard...',
+            cuerpo: `Hi team,\n\nPlease confirm the pickup for 1 container in Miami Yard scheduled for 04/14/2026 at 09:00 AM.\n\nDetails:\n- Equipment: 1 container (40ft High Cube)\n- Commodity: Electronics\n- Weight: 38,500 lbs\n- Rate: $1,450.00 Flat\n\nPlease let us know driver info as soon as assigned.\n\nBest regards,\nMiami Cargo Express Team`,
+          },
+          {
+            id: 'demo-2',
+            remitente_nombre: 'DHL Logistics',
+            remitente_email: 'freight-quote@dhl.com',
+            destinatario_email: 'operations@trucky.site',
+            asunto: 'Rate request – 20ft container PortMiami to Orlando',
+            fecha: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
+            categoria: 'cargas',
+            tipo_flujo: 'received',
+            leido: false,
+            destacado: false,
+            snippet: 'Hi, can you provide your best rate for 20ft container...',
+            cuerpo: `Hi dispatch team,\n\nCan you provide your best rate and availability for a 20ft container moving from PortMiami to Orlando, FL on Friday?\n\n- Pickup: PortMiami (G-Gate)\n- Delivery: Orlando Distribution Center\n- Chassis: Tri-axle required\n\nThanks,\nDHL Freight Logistics`,
+          },
+          {
+            id: 'demo-3',
+            remitente_nombre: 'Port of Miami',
+            remitente_email: 'terminal-updates@portmiami.gov',
+            destinatario_email: 'operations@trucky.site',
+            asunto: 'Terminal update – Extended gate hours next week',
+            fecha: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
+            categoria: 'brokers',
+            tipo_flujo: 'received',
+            leido: true,
+            destacado: false,
+            snippet: 'Important information regarding terminal gate hours...',
+            cuerpo: `Attention All Port Users & Carriers:\n\nPlease be advised that terminal gates will operate with extended hours starting next Monday 06:00 AM to 18:00 PM to accommodate increased container traffic.\n\nPlease ensure your drivers have valid TWIC badges and pre-registered appointments.\n\nOperations Department\nPort of Miami`,
+          },
+          {
+            id: 'demo-4',
+            remitente_nombre: 'Seaboard Marine',
+            remitente_email: 'docs@seaboardmarine.com',
+            destinatario_email: 'operations@trucky.site',
+            asunto: 'Shipping documents & Delivery Order #90214',
+            fecha: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
+            categoria: 'brokers',
+            tipo_flujo: 'received',
+            leido: true,
+            destacado: true,
+            snippet: 'Attached you will find the BOL and customs release...',
+            cuerpo: `Hello,\n\nPlease find attached the Bill of Lading (BOL) and delivery release order for shipment #90214.\n\nConsignee: Global Freight Hub LLC\nCustoms Status: Cleared / Released\nDemurrage free time expires: 04/18/2026\n\nKind regards,\nSeaboard Documentation Desk`,
+          },
+          {
+            id: 'demo-5',
+            remitente_nombre: 'Customer USA',
+            remitente_email: 'loads@customerusa.com',
+            destinatario_email: 'operations@trucky.site',
+            asunto: 'New load opportunity – 3 loads per week contract',
+            fecha: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
+            categoria: 'cargas',
+            tipo_flujo: 'received',
+            leido: true,
+            destacado: false,
+            snippet: 'We have an upcoming weekly contracted lane ready for dispatch...',
+            cuerpo: `Good afternoon,\n\nWe have an upcoming contract lane with 3 loads per week (Dry Van / Reefer) between Jacksonville and Atlanta.\n\nConsistent freight, Net 15 payment terms, fuel surcharge included.\n\nLet us know if you have dedicated capacity to take on this volume.\n\nBest,\nCustomer USA Supply Chain`,
+          },
+        ];
+
+        setEmails(sampleEmails);
+        setSelectedEmail(sampleEmails[0]);
+        return;
+      }
+
       setEmails(cleanList);
       if (cleanList.length > 0) {
         setSelectedEmail(prev => {
@@ -129,7 +212,7 @@ export default function Emails() {
 
   useEffect(() => {
     fetchEmails();
-  }, [orgId, activeProfileId, googleConnectedEmail]);
+  }, [orgId, activeProfileId, googleConnectedEmail, isDemoUser]);
 
   // Iniciar popup oficial de Google OAuth 2.0 (permite prompt configurable para renovación silenciosa o explícita)
   const handleConnectGoogle = (promptMode = 'select_account') => {
@@ -289,6 +372,15 @@ export default function Emails() {
   };
 
   const handleSyncGmail = () => {
+    if (isDemoUser) {
+      toast({
+        title: isEs ? 'Modo Demostración' : 'Demo Mode',
+        description: isEs
+          ? 'La sincronización con Gmail no está disponible en la versión demo. Activa la versión completa para conectar tu cuenta.'
+          : 'Gmail synchronization is not available in demo mode. Activate full version to connect your account.',
+      });
+      return;
+    }
     // Abrir siempre la ventana oficial de Google para permitir seleccionar la cuenta deseada y renovar credenciales
     handleConnectGoogle('select_account');
   };
@@ -443,6 +535,8 @@ export default function Emails() {
     }
   };
 
+
+
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
       {/* ─── Encabezado Principal ──────────────────────────────────────────────── */}
@@ -478,9 +572,15 @@ export default function Emails() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <button
             onClick={handleSyncGmail}
-            disabled={syncing}
-            className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border hover:bg-muted/80 text-foreground transition-colors disabled:opacity-50 whitespace-nowrap"
-            title={isEs ? 'Sincronizar correos de tu cuenta de Google' : 'Sync emails from your Google account'}
+            disabled={syncing || isDemoUser}
+            className={`flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground transition-colors whitespace-nowrap ${
+              isDemoUser ? 'opacity-40 cursor-not-allowed hover:bg-card' : 'hover:bg-muted/80 disabled:opacity-50'
+            }`}
+            title={
+              isDemoUser
+                ? (isEs ? 'Sincronización deshabilitada en la versión Demo' : 'Sync disabled in Demo version')
+                : (isEs ? 'Sincronizar correos de tu cuenta de Google' : 'Sync emails from your Google account')
+            }
           >
             <RotateCw className={`w-3.5 h-3.5 text-primary ${syncing ? 'animate-spin' : ''}`} />
             <span>{syncing ? (isEs ? 'Sincronizando...' : 'Syncing...') : (isEs ? 'Sincronizar' : 'Sync')}</span>
@@ -759,10 +859,55 @@ export default function Emails() {
               </div>
 
               {/* Cuerpo del Mensaje */}
-              <div className="flex-1 p-5 overflow-y-auto bg-card/20">
+              <div className="flex-1 p-5 overflow-y-auto bg-card/20 space-y-5">
                 <div className="prose prose-invert max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-zinc-200">
                   {selectedEmail.cuerpo || selectedEmail.snippet || '(Sin contenido)'}
                 </div>
+
+                {/* Si es usuario demo, mostramos la tarjeta de desbloqueo al pie del correo */}
+                {isDemoUser && (
+                  <div className="p-5 rounded-2xl bg-gradient-to-b from-[#18152c] to-[#100e1f] border border-violet-500/30 text-center space-y-4 shadow-xl mt-6">
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-300 shadow-lg shadow-violet-600/20">
+                      <Lock className="w-6 h-6" />
+                    </div>
+
+                    <div className="space-y-1">
+                      <h3 className="text-sm md:text-base font-bold text-white">
+                        Desbloquea el análisis completo
+                      </h3>
+                      <p className="text-xs text-zinc-400">
+                        Conecta tu email y obtén el análisis completo y respuestas con IA.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left max-w-md mx-auto text-[11px] text-zinc-300">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                        <span>Clasificación inteligente</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Mail className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
+                        <span>Respuestas con IA</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                        <span>Automatización de tareas</span>
+                      </div>
+                    </div>
+
+                    <div className="pt-1">
+                      <a
+                        href="https://trucky.site"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 w-full max-w-sm py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/25 transition-all hover:scale-[1.01]"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        <span>Activar versión completa →</span>
+                      </a>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           ) : (

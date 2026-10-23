@@ -7,6 +7,8 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
+import { useDemo } from '@/lib/DemoContext';
+import DemoLimitModal from '@/components/DemoLimitModal';
 
 const ESTADOS = ['disponible', 'en_ruta', 'en_yarda', 'mantenimiento'];
 const EQUIPMENT_TYPES = [
@@ -143,9 +145,11 @@ export default function Fleet() {
   const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
   const { activeProfileId } = useProfile();
+  const { isDemoUser, limits } = useDemo();
   const [trucks, setTrucks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [editTruck, setEditTruck] = useState(null);
   const [deleteTruck, setDeleteTruck] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -242,11 +246,25 @@ export default function Fleet() {
           <h1 className="text-xl font-bold text-foreground">{t.fleet.title}</h1>
           <p className="text-sm text-muted-foreground">{trucks.length} {t.fleet.trucks}</p>
         </div>
-        <button onClick={() => { setEditTruck(null); setShowForm(true); }}
+        <button onClick={() => {
+          if (isDemoUser && trucks.length >= (limits?.FLEET || 3)) {
+            setShowLimitModal(true);
+            return;
+          }
+          setEditTruck(null); 
+          setShowForm(true); 
+        }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
           <Plus className="w-3.5 h-3.5" />{t.fleet.add}
         </button>
       </div>
+
+      <DemoLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        entityName="camiones"
+        limit={limits?.FLEET || 3}
+      />
 
       {/* Status summary */}
       <div className="grid grid-cols-4 gap-2">

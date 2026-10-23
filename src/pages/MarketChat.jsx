@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, Check, Mail, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAppState, useOrganizationId } from '@/lib/AppStateContext';
@@ -7,8 +7,10 @@ import { useToast } from '@/components/ui/use-toast';
 import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
+import { useDemo } from '@/lib/DemoContext';
 
 const SESSION_KEY = 'trucky_chat_session';
+
 
 // UI_STRINGS — objeto local ES/EN para las strings de interfaz de este
 // componente. Decisión de Preview (engram #9376): NO se extiende
@@ -286,6 +288,7 @@ export default function MarketChat() {
   const { toast } = useToast();
   const { locale, setLocale } = useLanguage();
   const { activeProfileId } = useProfile();
+  const { isDemoUser, limits } = useDemo();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -636,7 +639,26 @@ export default function MarketChat() {
     }
   }, [locale]);
 
+  // Límite de mensajes para usuarios demo
+  const userMessagesCount = useMemo(() => {
+    return messages.filter(m => m.role === 'user').length;
+  }, [messages]);
+
+  const maxMessages = limits?.CHAT_MESSAGES || 15;
+  const isChatLimitReached = isDemoUser && userMessagesCount >= maxMessages;
+
   const sendMessage = async (text) => {
+    if (isChatLimitReached) {
+      toast?.({
+        title: locale === 'en' ? 'Demo Limit Reached' : 'Límite de la versión demo',
+        description: locale === 'en'
+          ? `You have reached the maximum of ${maxMessages} messages in demo mode. Upgrade to unlock full access.`
+          : `Has alcanzado el máximo de ${maxMessages} mensajes en modo demo. Activa la versión completa para continuar.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const userMessage = text || input.trim();
     if (!userMessage || loading || translatingHistory) return;
 
@@ -1003,30 +1025,70 @@ export default function MarketChat() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Input */}
+      {/* Input / Demo Limit Banner */}
       <div className="flex-shrink-0 p-4 md:p-6 border-t border-border">
-        <div className="flex gap-2 items-end">
-          <div className="flex-1 relative">
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={translatingHistory ? (locale === 'en' ? 'Translating history...' : 'Traduciendo historial...') : t.inputPlaceholder}
-              disabled={loading || translatingHistory}
-              rows={1}
-              className="w-full resize-none bg-muted border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors disabled:opacity-60"
-              style={{ minHeight: '44px', maxHeight: '120px' }}
-            />
+        {isChatLimitReached ? (
+          <div className="p-4 rounded-xl bg-gradient-to-r from-violet-950/60 via-purple-900/40 to-indigo-950/60 border border-violet-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+            <div>
+              <p className="text-sm font-semibold text-white">
+                {locale === 'en' ? 'Demo Limit Reached (15 / 15 messages)' : 'Límite de la demo alcanzado (15 / 15 mensajes)'}
+              </p>
+              <p className="text-xs text-zinc-300">
+                {locale === 'en'
+                  ? 'Unlock unlimited AI market queries and deep freight analysis.'
+                  : 'Desbloquea consultas ilimitadas con IA y análisis profundo de tarifas.'}
+              </p>
+            </div>
+            <a
+              href="https://trucky.site"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs whitespace-nowrap shadow-md transition-all flex items-center gap-1.5"
+            >
+              <span>{locale === 'en' ? 'Upgrade Plan →' : 'Activar versión completa →'}</span>
+            </a>
           </div>
-          <button
-            onClick={() => sendMessage()}
-            disabled={!input.trim() || loading || translatingHistory}
-            className="w-11 h-11 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center flex-shrink-0 transition-all"
-          >
-            <Send className="w-4 h-4 text-primary-foreground" />
-          </button>
-        </div>
+        ) : (
+          <div>
+            {isDemoUser && (
+              <div className="flex items-center justify-between mb-2 text-[11px] text-zinc-400">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20 font-medium">
+                  DEMO · {userMessagesCount} de {maxMessages} mensajes
+                </span>
+                <a
+                  href="https://trucky.site"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-violet-300 underline transition-colors"
+                >
+                  {locale === 'en' ? 'Unlimited access' : 'Acceso ilimitado'}
+                </a>
+              </div>
+            )}
+            <div className="flex gap-2 items-end">
+              <div className="flex-1 relative">
+                <textarea
+                  ref={inputRef}
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder={translatingHistory ? (locale === 'en' ? 'Translating history...' : 'Traduciendo historial...') : t.inputPlaceholder}
+                  disabled={loading || translatingHistory || isChatLimitReached}
+                  rows={1}
+                  className="w-full resize-none bg-muted border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors disabled:opacity-60"
+                  style={{ minHeight: '44px', maxHeight: '120px' }}
+                />
+              </div>
+              <button
+                onClick={() => sendMessage()}
+                disabled={!input.trim() || loading || translatingHistory || isChatLimitReached}
+                className="w-11 h-11 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center flex-shrink-0 transition-all"
+              >
+                <Send className="w-4 h-4 text-primary-foreground" />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

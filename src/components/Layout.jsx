@@ -21,6 +21,8 @@ import MarketTicker from './MarketTicker';
 import ProfileSelector from './ProfileSelector';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { base44 } from '@/api/base44Client';
+import { useDemo } from '@/lib/DemoContext';
+
 const NAV_ITEMS = [
   { path: '/', label: 'dashboard', icon: LayoutDashboard },
   { path: '/chat', label: 'chat', icon: MessageSquare },
@@ -39,6 +41,10 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { t, locale, setLocale } = useLanguage();
+  const { isDemoUser } = useDemo();
+
+  const visibleNavItems = NAV_ITEMS;
+
 
   const persistLocale = async (nextLocale) => {
     try {
@@ -91,7 +97,14 @@ export default function Layout() {
               <span className="text-white font-black text-lg leading-none">t</span>
             </div>
             <div className="leading-tight">
-              <div className="text-base font-bold text-foreground tracking-tight lowercase">trucky</div>
+              <div className="flex items-center gap-2">
+                <div className="text-base font-bold text-foreground tracking-tight lowercase">trucky</div>
+                {isDemoUser && (
+                  <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 text-[9px] font-black uppercase tracking-wider">
+                    Demo
+                  </span>
+                )}
+              </div>
               <div className="text-[10px] text-violet-300/70 font-medium">Your road co-pilot</div>
             </div>
           </div>
@@ -105,7 +118,7 @@ export default function Layout() {
 
         {/* Navigation */}
         <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
+          {visibleNavItems.map(({ path, label, icon: Icon }) => (
             <Link
               key={path}
               to={path}

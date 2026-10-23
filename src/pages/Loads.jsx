@@ -8,14 +8,18 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
+import { useDemo } from '@/lib/DemoContext';
+import DemoLimitModal from '@/components/DemoLimitModal';
 
 export default function Loads() {
   const orgId = useOrganizationId();
   const { t, locale } = useLanguage();
   const { activeProfileId } = useProfile();
+  const { isDemoUser, limits } = useDemo();
   const [loads, setLoads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [editLoad, setEditLoad] = useState(null);
   const [deleteLoad, setDeleteLoad] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -122,13 +126,27 @@ export default function Loads() {
           <p className="text-sm text-muted-foreground">{loads.length} {t.loadsPage.registered}</p>
         </div>
         <button
-          onClick={() => { setEditLoad(null); setShowForm(true); }}
+          onClick={() => {
+            if (isDemoUser && loads.length >= (limits?.LOADS || 3)) {
+              setShowLimitModal(true);
+              return;
+            }
+            setEditLoad(null); 
+            setShowForm(true); 
+          }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           {t.loadsPage.add}
         </button>
       </div>
+
+      <DemoLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        entityName="cargas"
+        limit={limits?.LOADS || 3}
+      />
 
       {/* Summary strip - Ganancia estimada removida */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

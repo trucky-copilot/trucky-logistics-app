@@ -3,6 +3,7 @@ import { useAuth } from './AuthContext';
 import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 import { withOrg } from '@/lib/orgScope';
+import { useDemo } from '@/lib/DemoContext';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
 const ProfileContext = createContext(null);
@@ -12,11 +13,15 @@ export const MAX_PROFILES = 5;
 export function ProfileProvider({ children }) {
   const { user } = useAuth();
   const { organization } = useAppState();
+  const { isDemoUser, limits } = useDemo();
+  
+  const maxProfilesAllowed = isDemoUser ? (limits?.PROFILES || 3) : MAX_PROFILES;
   
   const [profiles, setProfiles] = useState([]);
   const [activeProfileId, setActiveProfileId] = useState(null);
   const [unsavedBlockers, setUnsavedBlockers] = useState({}); // { [componentId]: boolean }
   const [loading, setLoading] = useState(true);
+
 
   // Unsaved changes confirmation state
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -107,7 +112,7 @@ export function ProfileProvider({ children }) {
   }, [profiles, activeProfileId, user]);
 
   const addProfile = async (name) => {
-    if (profiles.length >= MAX_PROFILES) return false;
+    if (profiles.length >= maxProfilesAllowed) return false;
     const trimmed = (name || '').trim();
     if (!trimmed) return false;
     if (profiles.some(p => p.name.trim().toLowerCase() === trimmed.toLowerCase())) {
@@ -215,6 +220,7 @@ export function ProfileProvider({ children }) {
     deleteProfile,
     switchProfile,
     setUnsavedChanges,
+    maxProfilesAllowed,
     loading
   };
 

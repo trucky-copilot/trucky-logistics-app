@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileSearch, Upload, XCircle, Loader2, Image,
-  Truck, Users
+  Truck, Users, FileText, X, ChevronRight, Lock, Sparkles, CheckCircle2, AlertTriangle, Calendar, Building, HelpCircle
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ResultHeader from '@/components/doc-analyzer/ResultHeader';
@@ -14,12 +14,14 @@ import CarrierSelector from '@/components/doc-analyzer/CarrierSelector';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useLanguage } from '@/lib/LanguageContext';
+import { useDemo } from '@/lib/DemoContext';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
 
 export default function DocumentAnalyzer() {
   const orgId = useOrganizationId();
   const { t, locale } = useLanguage();
+  const { isDemoUser } = useDemo();
   const [documentText, setDocumentText] = useState('');
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -276,6 +278,8 @@ export default function DocumentAnalyzer() {
     ? { label: t.documents.carrierMode, icon: Truck, color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' }
     : { label: t.documents.dispatcherMode, icon: Users, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
 
+
+
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
       {/* Header */}
@@ -376,18 +380,86 @@ Equipment: 20ft Dry...`}
 
       {/* Resultados */}
       {analysis && (
-        <div className="space-y-3 relative">
+        <div className="space-y-4 relative">
           {translating && (
             <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium animate-pulse shadow-sm">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               {locale === 'en' ? 'Translating analysis with Google Translate...' : 'Traduciendo análisis con Google Translate...'}
             </div>
           )}
+
+          {/* Encabezado y hallazgos principales visibles */}
           <ResultHeader analysis={analysis} onLinkToLoad={handleLinkToLoad} cached={analysis.cached} />
           <KeyFindings categorias={analysis.categorias} />
-          <CategoryGrid categorias={analysis.categorias} />
-          <ActionBlock veredicto={analysis.veredicto} puntos_negociar={analysis.puntos_negociar} />
-          <LoadMatch datos_extraidos={analysis.datos_extraidos} />
+
+          {/* Si es usuario demo, mostramos el resto difuminado y la ventana/tarjeta de desbloqueo superpuesta */}
+          {isDemoUser ? (
+            <div className="relative mt-4">
+              {/* Contenedor difuminado con las otras alertas y secciones */}
+              <div className="filter blur-[6px] opacity-30 pointer-events-none select-none space-y-3">
+                <CategoryGrid categorias={analysis.categorias} />
+                <ActionBlock veredicto={analysis.veredicto} puntos_negociar={analysis.puntos_negociar} />
+                <LoadMatch datos_extraidos={analysis.datos_extraidos} />
+              </div>
+
+              {/* Ventana flotante/superpuesta de desbloqueo */}
+              <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
+                <div className="w-full max-w-lg p-6 md:p-8 rounded-3xl bg-[#0f0e1c]/95 border border-violet-500/40 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-600/10 border border-violet-500/40 flex items-center justify-center text-violet-300 shadow-xl shadow-violet-600/20">
+                    <Lock className="w-7 h-7" />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <h3 className="text-xl font-bold text-white tracking-tight">
+                      Desbloquea el análisis completo
+                    </h3>
+                    <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                      Obtén todos los detalles y toma decisiones con confianza.
+                    </p>
+                  </div>
+
+                  <div className="space-y-2.5 text-left max-w-xs mx-auto text-xs text-zinc-300 pt-1">
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 flex-shrink-0">
+                        <AlertTriangle className="w-4 h-4" />
+                      </div>
+                      <span className="font-medium text-zinc-200">Alertas críticas y cláusulas</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 flex-shrink-0">
+                        <Sparkles className="w-4 h-4" />
+                      </div>
+                      <span className="font-medium text-zinc-200">Evaluación de rentabilidad</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+                        <FileText className="w-4 h-4" />
+                      </div>
+                      <span className="font-medium text-zinc-200">Historial de brokers y documentos</span>
+                    </div>
+                  </div>
+
+                  <div className="pt-2">
+                    <a
+                      href="https://trucky.site"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-violet-600/30 transition-all hover:scale-[1.02]"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      <span>Activar versión completa →</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <CategoryGrid categorias={analysis.categorias} />
+              <ActionBlock veredicto={analysis.veredicto} puntos_negociar={analysis.puntos_negociar} />
+              <LoadMatch datos_extraidos={analysis.datos_extraidos} />
+            </>
+          )}
         </div>
       )}
     </div>

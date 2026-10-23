@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { ChevronDown, Plus, Trash2, Edit2, AlertCircle } from 'lucide-react';
 
 export default function ProfileSelector() {
-  const { profiles, activeProfile, activeProfileId, switchProfile, addProfile, renameProfile, deleteProfile } = useProfile();
+  const { profiles, activeProfile, activeProfileId, switchProfile, addProfile, renameProfile, deleteProfile, maxProfilesAllowed = 3 } = useProfile();
   
   // States for dialogs
   const [promptOpen, setPromptOpen] = useState(false);
@@ -60,10 +60,11 @@ export default function ProfileSelector() {
   };
 
   const openAddPrompt = () => {
-    if (profiles.length >= MAX_PROFILES) {
+    if (profiles.length >= maxProfilesAllowed) {
       setLimitOpen(true);
       return;
     }
+
     setPromptType('add');
     setSelectedProfileId(null);
     setPromptValue('');
@@ -231,7 +232,7 @@ export default function ProfileSelector() {
               Alcanzaste el límite de la cantidad de perfiles
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-muted-foreground mt-1.5">
-              Has alcanzado el límite máximo de {MAX_PROFILES} perfiles permitidos en tu cuenta. Para agregar uno nuevo, elimina o renombra alguno de los existentes.
+              Has alcanzado el límite máximo de {maxProfilesAllowed} perfiles permitidos en tu cuenta. Para agregar uno nuevo, elimina o renombra alguno de los existentes.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-center mt-4">

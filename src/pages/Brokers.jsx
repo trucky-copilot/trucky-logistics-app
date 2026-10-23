@@ -7,6 +7,8 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
+import { useDemo } from '@/lib/DemoContext';
+import DemoLimitModal from '@/components/DemoLimitModal';
 
 function ScoreDots({ score, max = 10 }) {
   const filled = Math.round((score || 0));
@@ -145,9 +147,11 @@ export default function Brokers() {
   const { t, locale } = useLanguage();
   const orgId = useOrganizationId();
   const { activeProfileId } = useProfile();
+  const { isDemoUser, limits } = useDemo();
   const [brokers, setBrokers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showLimitModal, setShowLimitModal] = useState(false);
   const [editBroker, setEditBroker] = useState(null);
   const [deleteBroker, setDeleteBroker] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
@@ -254,11 +258,25 @@ export default function Brokers() {
           <h1 className="text-xl font-bold text-foreground">{t.brokers.title}</h1>
           <p className="text-sm text-muted-foreground">{brokers.length} {t.brokers.registered}</p>
         </div>
-        <button onClick={() => { setEditBroker(null); setShowForm(true); }}
+        <button onClick={() => {
+          if (isDemoUser && brokers.length >= (limits?.BROKERS || 3)) {
+            setShowLimitModal(true);
+            return;
+          }
+          setEditBroker(null); 
+          setShowForm(true); 
+        }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
           <Plus className="w-3.5 h-3.5" />{t.brokers.add}
         </button>
       </div>
+
+      <DemoLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        entityName="brokers"
+        limit={limits?.BROKERS || 3}
+      />
 
       {showForm && <BrokerForm broker={editBroker} onSave={handleSave} onClose={() => { setShowForm(false); setEditBroker(null); }} />}
 

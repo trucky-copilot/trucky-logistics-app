@@ -118,12 +118,22 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
     setIsAuthenticated(false);
     
-    if (shouldRedirect) {
-      // Use the SDK's logout method which handles token cleanup and redirect
-      base44.auth.logout(window.location.href);
-    } else {
-      // Just remove the token without redirect
+    // Limpiar todas las claves de autenticación locales
+    try {
+      localStorage.removeItem('base44_access_token');
+      localStorage.removeItem('token');
+      localStorage.removeItem('base44_token');
+      sessionStorage.clear();
+    } catch (_) {}
+
+    // Llamar al logout del SDK sin URL externa para que invalide la sesión
+    try {
       base44.auth.logout();
+    } catch (_) {}
+
+    if (shouldRedirect) {
+      // Recargar siempre al origen local exacto (ej. http://localhost:5173/)
+      window.location.href = window.location.origin;
     }
   };
 

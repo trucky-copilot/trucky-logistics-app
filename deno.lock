@@ -5042,7 +5042,7 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
-        "npm:@base44/sdk@~0.8.56",
+        "npm:@base44/sdk@~0.8.57",
         "npm:@base44/vite-plugin@^1.0.47",
         "npm:@eslint/js@^9.19.0",
         "npm:@hello-pangea/dnd@17",

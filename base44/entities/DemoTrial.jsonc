@@ -1,0 +1,56 @@
+{
+  "name": "DemoTrial",
+  "type": "object",
+  "properties": {
+    "google_sub": {
+      "type": "string",
+      "description": "Google Subject identifier del usuario demo"
+    },
+    "user_email": {
+      "type": "string",
+      "description": "Email de la cuenta Google asociada"
+    },
+    "trial_started_at": {
+      "type": "string",
+      "description": "Timestamp ISO del inicio del periodo demo"
+    },
+    "trial_ends_at": {
+      "type": "string",
+      "description": "Timestamp ISO del fin del periodo demo"
+    }
+  },
+  "required": [
+    "google_sub",
+    "trial_started_at",
+    "trial_ends_at"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
