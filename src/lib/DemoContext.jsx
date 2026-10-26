@@ -11,6 +11,7 @@ export const WHITELISTED_ADMIN_EMAILS = new Set([
   'luisbermudezacero@gmail.com',
   'juan.grau@ogm.com.co',
   'luis.bermudez@ogm.com.co',
+  'ianruizmora@gmail.com',
 ]);
 
 // Límites definidos para usuarios demo
