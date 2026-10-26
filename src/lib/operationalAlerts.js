@@ -24,7 +24,7 @@ export function getOperationalAlerts({
   // 1. FLOTAS (TRUCKS)
   // ==========================================
   trucks.forEach(truck => {
-    // ROJO: En mantenimiento
+    // 1. ROJO: En mantenimiento
     if (truck.estado === 'mantenimiento') {
       alerts.push({
         id: `truck-maint-${truck.id}`,
@@ -39,9 +39,10 @@ export function getOperationalAlerts({
         link: '/flota',
         urgent: true,
       });
+      return;
     }
 
-    // AMARILLO: En yarda (esperando asignación o ruta)
+    // 2. AMARILLO: En yarda (esperando asignación o ruta)
     if (truck.estado === 'en_yarda') {
       alerts.push({
         id: `truck-yard-${truck.id}`,
@@ -56,10 +57,11 @@ export function getOperationalAlerts({
         link: '/flota',
         urgent: false,
       });
+      return;
     }
 
-    // AMARILLO: Chasis no disponible
-    if (truck.chasis_disponible === false && truck.estado !== 'mantenimiento') {
+    // 3. AMARILLO: Chasis no disponible
+    if (truck.chasis_disponible === false) {
       alerts.push({
         id: `truck-chassis-${truck.id}`,
         modulo: 'flota',
@@ -73,6 +75,7 @@ export function getOperationalAlerts({
         link: '/flota',
         urgent: false,
       });
+      return;
     }
 
     // VERDES: disponible, en_ruta -> Excluidas
@@ -84,7 +87,7 @@ export function getOperationalAlerts({
   drivers.forEach(driver => {
     const driverName = `${driver.nombre || ''} ${driver.apellido || ''}`.trim() || (isEn ? 'Driver' : 'Conductor');
 
-    // ROJO: Conductor en suspensión
+    // 1. ROJO: Conductor en suspensión
     if (driver.estado === 'suspension' || driver.estado === 'suspendido') {
       alerts.push({
         id: `driver-susp-${driver.id}`,
@@ -97,21 +100,7 @@ export function getOperationalAlerts({
         link: '/conductores',
         urgent: true,
       });
-    }
-
-    // AMARILLO: Conductor de vacaciones
-    if (driver.estado === 'vacaciones') {
-      alerts.push({
-        id: `driver-vac-${driver.id}`,
-        modulo: 'conductores',
-        moduloLabel: isEn ? 'Drivers' : 'Conductores',
-        nivel: 'amarillo',
-        titulo: driverName,
-        mensaje: isEn ? 'Driver on vacation' : 'Conductor en vacaciones',
-        icon: 'AlertTriangle',
-        link: '/conductores',
-        urgent: false,
-      });
+      return;
     }
 
     // Documentos (Licencia, Médico, TWIC, HazMat)
@@ -122,15 +111,14 @@ export function getOperationalAlerts({
       { key: 'hazmat_vencimiento', label: 'HazMat' },
     ];
 
-    docFields.forEach(({ key, label }) => {
+    // 2. ROJO: Al menos un documento vencido
+    for (const { key, label } of docFields) {
       const dateStr = driver[key];
       if (dateStr) {
         const exp = new Date(dateStr);
         exp.setHours(0, 0, 0, 0);
         const diff = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
         if (diff < 0) {
-          // ROJO: Vencido
           alerts.push({
             id: `driver-doc-exp-${driver.id}-${key}`,
             modulo: 'conductores',
@@ -144,8 +132,35 @@ export function getOperationalAlerts({
             link: '/conductores',
             urgent: true,
           });
-        } else if (diff <= 60) {
-          // AMARILLO: Vence en menos de 60 días
+          return;
+        }
+      }
+    }
+
+    // 3. AMARILLO: Conductor de vacaciones
+    if (driver.estado === 'vacaciones') {
+      alerts.push({
+        id: `driver-vac-${driver.id}`,
+        modulo: 'conductores',
+        moduloLabel: isEn ? 'Drivers' : 'Conductores',
+        nivel: 'amarillo',
+        titulo: driverName,
+        mensaje: isEn ? 'Driver on vacation' : 'Conductor en vacaciones',
+        icon: 'AlertTriangle',
+        link: '/conductores',
+        urgent: false,
+      });
+      return;
+    }
+
+    // 4. AMARILLO: Al menos un documento por vencer en <= 60 días
+    for (const { key, label } of docFields) {
+      const dateStr = driver[key];
+      if (dateStr) {
+        const exp = new Date(dateStr);
+        exp.setHours(0, 0, 0, 0);
+        const diff = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+        if (diff >= 0 && diff <= 60) {
           alerts.push({
             id: `driver-doc-soon-${driver.id}-${key}`,
             modulo: 'conductores',
@@ -159,9 +174,10 @@ export function getOperationalAlerts({
             link: '/conductores',
             urgent: false,
           });
+          return;
         }
       }
-    });
+    }
 
     // VERDES: estado activo y documentos al día -> Excluidas
   });
@@ -172,7 +188,7 @@ export function getOperationalAlerts({
   brokers.forEach(broker => {
     const brokerName = broker.nombre || (isEn ? 'Broker' : 'Broker');
 
-    // ROJO: Broker Bloqueado
+    // 1. ROJO: Broker Bloqueado
     if (broker.estado === 'bloqueado') {
       alerts.push({
         id: `broker-block-${broker.id}`,
@@ -187,10 +203,11 @@ export function getOperationalAlerts({
         link: '/brokers',
         urgent: true,
       });
+      return;
     }
 
-    // ROJO: Puntaje de confiabilidad crítico (< 5) cuando no esté ya bloqueado
-    if (broker.estado !== 'bloqueado' && broker.puntaje_confiabilidad !== undefined && Number(broker.puntaje_confiabilidad) < 5) {
+    // 2. ROJO: Puntaje de confiabilidad crítico (< 5) cuando no esté ya bloqueado
+    if (broker.puntaje_confiabilidad !== undefined && Number(broker.puntaje_confiabilidad) < 5) {
       alerts.push({
         id: `broker-score-crit-${broker.id}`,
         modulo: 'brokers',
@@ -204,9 +221,10 @@ export function getOperationalAlerts({
         link: '/brokers',
         urgent: true,
       });
+      return;
     }
 
-    // AMARILLO: Estado Precaución
+    // 3. AMARILLO: Estado Precaución
     if (broker.estado === 'precaucion') {
       alerts.push({
         id: `broker-warn-${broker.id}`,
@@ -221,12 +239,11 @@ export function getOperationalAlerts({
         link: '/brokers',
         urgent: false,
       });
+      return;
     }
 
-    // AMARILLO: Confiabilidad regular (entre 5 y 6.9) en brokers no bloqueados
+    // 4. AMARILLO: Confiabilidad regular (entre 5 y 6.9)
     if (
-      broker.estado !== 'bloqueado' &&
-      broker.estado !== 'precaucion' &&
       broker.puntaje_confiabilidad !== undefined &&
       Number(broker.puntaje_confiabilidad) >= 5 &&
       Number(broker.puntaje_confiabilidad) < 7
@@ -244,10 +261,11 @@ export function getOperationalAlerts({
         link: '/brokers',
         urgent: false,
       });
+      return;
     }
 
-    // AMARILLO: Términos de pago extendidos (> 45 días)
-    if (broker.dias_pago && Number(broker.dias_pago) > 45 && broker.estado !== 'bloqueado') {
+    // 5. AMARILLO: Términos de pago extendidos (> 45 días)
+    if (broker.dias_pago && Number(broker.dias_pago) > 45) {
       alerts.push({
         id: `broker-paydays-${broker.id}`,
         modulo: 'brokers',
@@ -261,6 +279,7 @@ export function getOperationalAlerts({
         link: '/brokers',
         urgent: false,
       });
+      return;
     }
 
     // VERDES: activo con puntaje >= 7 y días de pago <= 45 -> Excluidas
@@ -268,6 +287,7 @@ export function getOperationalAlerts({
 
   // ==========================================
   // 4. CARGAS (LOADS)
+  // Regla estricta: Cada carga emite como máximo 1 sola alerta (la más crítica)
   // ==========================================
   loads.forEach(load => {
     const loadRef = load.numero_referencia
@@ -275,7 +295,7 @@ export function getOperationalAlerts({
       : (load.origen && load.destino ? `${load.origen} → ${load.destino}` : `#${load.id?.slice?.(-4) || 'Carga'}`);
     const loadTitle = `${isEn ? 'Load' : 'Carga'} ${loadRef}`;
 
-    // ROJO: Carga cancelada
+    // 1. ROJO: Carga cancelada
     if (load.estado === 'cancelado') {
       alerts.push({
         id: `load-cancel-${load.id}`,
@@ -288,27 +308,11 @@ export function getOperationalAlerts({
         link: '/cargas',
         urgent: true,
       });
+      return;
     }
 
-    // ROJO: Pérdida financiera proyectada
-    if (load.estado !== 'cancelado' && (load.resultado === 'perdida' || (load.ganancia_estimada !== undefined && Number(load.ganancia_estimada) < -50))) {
-      alerts.push({
-        id: `load-loss-${load.id}`,
-        modulo: 'cargas',
-        moduloLabel: isEn ? 'Loads' : 'Cargas',
-        nivel: 'rojo',
-        titulo: loadTitle,
-        mensaje: isEn
-          ? `Projected financial loss: -$${Math.abs(Math.round(load.ganancia_estimada || 0))}`
-          : `Pérdida financiera proyectada: -$${Math.abs(Math.round(load.ganancia_estimada || 0))}`,
-        icon: 'Package',
-        link: '/cargas',
-        urgent: true,
-      });
-    }
-
-    // ROJO: Entrega retrasada (fecha de entrega pasada y aún no entregada ni cancelada)
-    if (load.fecha_entrega && load.estado !== 'entregado' && load.estado !== 'cancelado') {
+    // 2. ROJO: Entrega retrasada (fecha de entrega pasada y aún no entregada)
+    if (load.fecha_entrega && load.estado !== 'entregado') {
       const delivDate = new Date(load.fecha_entrega);
       delivDate.setHours(0, 0, 0, 0);
       if (delivDate < today) {
@@ -325,10 +329,29 @@ export function getOperationalAlerts({
           link: '/cargas',
           urgent: true,
         });
+        return;
       }
     }
 
-    // AMARILLO: Carga pendiente de asignación / despacho
+    // 3. ROJO: Pérdida financiera proyectada
+    if (load.resultado === 'perdida' || (load.ganancia_estimada !== undefined && Number(load.ganancia_estimada) < -50)) {
+      alerts.push({
+        id: `load-loss-${load.id}`,
+        modulo: 'cargas',
+        moduloLabel: isEn ? 'Loads' : 'Cargas',
+        nivel: 'rojo',
+        titulo: loadTitle,
+        mensaje: isEn
+          ? `Projected financial loss: -$${Math.abs(Math.round(load.ganancia_estimada || 0))}`
+          : `Pérdida financiera proyectada: -$${Math.abs(Math.round(load.ganancia_estimada || 0))}`,
+        icon: 'Package',
+        link: '/cargas',
+        urgent: true,
+      });
+      return;
+    }
+
+    // 4. AMARILLO: Carga pendiente de asignación / despacho
     if (load.estado === 'pendiente') {
       alerts.push({
         id: `load-pending-${load.id}`,
@@ -343,14 +366,11 @@ export function getOperationalAlerts({
         link: '/cargas',
         urgent: false,
       });
+      return;
     }
 
-    // AMARILLO: Margen en break-even
-    if (
-      load.estado !== 'cancelado' &&
-      load.estado !== 'pendiente' &&
-      load.resultado === 'break_even'
-    ) {
+    // 5. AMARILLO: Margen en break-even
+    if (load.resultado === 'break_even') {
       alerts.push({
         id: `load-breakeven-${load.id}`,
         modulo: 'cargas',
@@ -364,6 +384,7 @@ export function getOperationalAlerts({
         link: '/cargas',
         urgent: false,
       });
+      return;
     }
 
     // VERDES: entregado, ganancia, en tránsito a tiempo -> Excluidas
