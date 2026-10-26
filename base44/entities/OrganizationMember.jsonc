@@ -4,7 +4,7 @@
   "properties": {
     "organization_id": {
       "type": "string",
-      "description": "ID de la organizaci\u00f3n"
+      "description": "ID de la organización"
     },
     "user_email": {
       "type": "string",
@@ -18,7 +18,7 @@
         "member"
       ],
       "default": "member",
-      "description": "Rol del usuario dentro de la organizaci\u00f3n"
+      "description": "Rol del usuario dentro de la organización"
     },
     "active": {
       "type": "boolean",
@@ -28,6 +28,10 @@
     "google_sub": {
       "type": "string",
       "description": "Identificador único y permanente de Google (sub claim del token)"
+    },
+    "base44_user_id": {
+      "type": "string",
+      "description": "Native Base44 user ID bound by trusted server migration. Never derive or accept from client-supplied email."
     }
   },
   "required": [
