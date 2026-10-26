@@ -1,3 +1,4 @@
+import { subscriptionProjection } from "./projection.mjs";
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
@@ -28,19 +29,18 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     // Never trust status/customer/trial dates received from the caller.
     const sub = await new Stripe(key).subscriptions.retrieve(body.subscription_id);
     if (sub.livemode !== live || sub.metadata.org_id !== body.organization_id) return reply('SUBSCRIPTION_MISMATCH', 409);
-    if (!['trialing', 'active', 'past_due', 'canceled', 'unpaid', 'incomplete'].includes(sub.status)) return reply('STATUS_REQUIRES_MIGRATION', 409);
+
     const db = createClientFromRequest(req).asServiceRole.entities;
     const org = (await db.Organization.filter({ id: body.organization_id }))?.[0];
     if (!org) return reply('ORGANIZATION_NOT_FOUND', 404);
-    const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
-    const prefix = live ? 'stripe_live_' : 'stripe_';
-    const statusField = live ? 'live_subscription_status' : 'subscription_status';
-    if ((org[prefix+'subscription_id'] && org[prefix+'subscription_id'] !== sub.id) || (org[prefix+'customer_id'] && org[prefix+'customer_id'] !== customer)) return reply('BILLING_MAPPING_CONFLICT',409);
-    await db.Organization.update(org.id, {
-      [statusField]: sub.status, [prefix+'subscription_id']: sub.id,
-      [prefix+'customer_id']: customer,
-      [live ? 'live_trial_ends_at' : 'trial_ends_at']: sub.trial_end ? new Date(sub.trial_end*1000).toISOString() : null,
-    });
+    let projection;
+    try { projection = subscriptionProjection(org, sub, mode); }
+    catch (error) {
+      const code = error instanceof Error ? error.message : 'SUBSCRIPTION_MISMATCH';
+      const allowed = ['SUBSCRIPTION_MISMATCH','STATUS_REQUIRES_MIGRATION','BILLING_MAPPING_CONFLICT','CUSTOMER_REQUIRED'];
+      return reply(allowed.includes(code) ? code : 'SUBSCRIPTION_MISMATCH',409);
+    }
+    await db.Organization.update(org.id, projection);
     return new Response(JSON.stringify({code:'SUBSCRIPTION_RECONCILED',mode}), {status:200,headers:{'Content-Type':'application/json'}});
   } catch { return reply('RECONCILIATION_REQUIRED', 503); }
 }

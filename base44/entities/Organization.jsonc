@@ -62,7 +62,9 @@
         "canceled",
         "unpaid",
         "incomplete",
-        "none"
+        "none",
+        "incomplete_expired",
+        "paused"
       ],
       "default": "none",
       "description": "Estado de la suscripción sincronizado con Stripe"
@@ -115,7 +117,9 @@
         "canceled",
         "unpaid",
         "incomplete",
-        "none"
+        "none",
+        "incomplete_expired",
+        "paused"
       ],
       "default": "none"
     }
