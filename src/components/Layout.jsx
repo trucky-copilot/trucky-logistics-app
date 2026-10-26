@@ -43,6 +43,13 @@ export default function Layout() {
   const { t, locale, setLocale } = useLanguage();
   const { isDemoUser } = useDemo();
 
+  const nonAdminOperationalEmails = new Set([
+    'luisbermudezacero@gmail.com',
+    'ianruizmora@gmail.com',
+  ]);
+  const userEmail = (user?.email || '').toLowerCase().trim();
+  const showAdminPanel = user?.role === 'admin' && !nonAdminOperationalEmails.has(userEmail);
+
   const visibleNavItems = NAV_ITEMS;
 
 
@@ -161,7 +168,7 @@ export default function Layout() {
               {isActive(path) && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
             </Link>
           ))}
-          {user?.role === 'admin' && (
+          {showAdminPanel && (
             <Link
               to="/admin"
               onClick={() => setSidebarOpen(false)}
@@ -251,7 +258,7 @@ export default function Layout() {
           </div>
           {!isChat && <MarketTicker />}
           <div className="ml-auto flex items-center gap-3">
-            {user?.role !== 'admin' && <ProfileSelector />}
+            <ProfileSelector />
             <NotificationBell />
           </div>
         </header>
