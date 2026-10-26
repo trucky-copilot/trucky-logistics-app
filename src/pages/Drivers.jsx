@@ -258,42 +258,8 @@ export default function Drivers() {
         targetId = created.id;
       }
 
-      if (data.estado === 'suspension') {
-        await base44.entities.Notification.create(withOrg(orgId, {
-          profile_id: activeProfileId || '1',
-          tipo: 'general',
-          titulo: `Conductor en suspensión: ${data.nombre} ${data.apellido || ''}`.trim(),
-          mensaje: `El conductor ${data.nombre} ${data.apellido || ''} se encuentra en estado de suspensión.`,
-          prioridad: 'alta',
-          leido: false,
-          referencia_id: targetId,
-          referencia_tipo: 'Driver'
-        })).catch(console.error);
-        window.dispatchEvent(new CustomEvent('notifications-updated'));
-      }
-
-      // Alertas por documentos vencidos al guardar
-      const today = new Date();
-      const docsToCheck = [
-        { key: 'licencia_vencimiento', name: 'Licencia' },
-        { key: 'medico_vencimiento', name: 'Examen Médico' },
-        { key: 'twic_vencimiento', name: 'TWIC' }
-      ];
-      for (const d of docsToCheck) {
-        if (data[d.key] && new Date(data[d.key]) < today) {
-          await base44.entities.Notification.create(withOrg(orgId, {
-            profile_id: activeProfileId || '1',
-            tipo: 'documento_vencido',
-            titulo: `${d.name} vencido: ${data.nombre} ${data.apellido || ''}`.trim(),
-            mensaje: `${d.name} venció el ${data[d.key]}.`,
-            prioridad: 'alta',
-            leido: false,
-            referencia_id: targetId,
-            referencia_tipo: 'Driver'
-          })).catch(console.error);
-          window.dispatchEvent(new CustomEvent('notifications-updated'));
-        }
-      }
+      // Notificar a los observadores de alertas operacionales
+      window.dispatchEvent(new CustomEvent('notifications-updated'));
 
       setShowForm(false); setEditDriver(null); loadData();
     } catch (err) {

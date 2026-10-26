@@ -372,7 +372,32 @@ export function getOperationalAlerts({
   // ==========================================
   // 5. NOTIFICACIONES DEL SISTEMA (BD)
   // ==========================================
+  // Prevenir duplicaciones de notificaciones generadas para camiones o conductores
+  // que ya cuentan con alerta operativa nativa en este motor.
+  const trackedTruckPlates = trucks.map(t => (t.placa || '').toLowerCase().trim()).filter(Boolean);
+  const trackedDriverNames = drivers.map(d => `${d.nombre || ''} ${d.apellido || ''}`.toLowerCase().trim()).filter(Boolean);
+
   notifications.forEach(notif => {
+    // Si tiene referencia de entidad directa a Truck o Driver, se omite porque la alerta nativa ya lo cubre
+    if (notif.referencia_tipo === 'Truck' || notif.referencia_tipo === 'Driver') {
+      return;
+    }
+
+    const titleLower = (notif.titulo || '').toLowerCase();
+    const msgLower = (notif.mensaje || '').toLowerCase();
+
+    // Omitir si menciona mantenimiento de un camión ya conocido
+    const mentionsTruck = trackedTruckPlates.some(placa => placa && (titleLower.includes(placa) || msgLower.includes(placa)));
+    if (mentionsTruck && (titleLower.includes('mantenimiento') || titleLower.includes('camion') || titleLower.includes('camión'))) {
+      return;
+    }
+
+    // Omitir si menciona suspensión o documentos de un conductor ya conocido
+    const mentionsDriver = trackedDriverNames.some(name => name && (titleLower.includes(name) || msgLower.includes(name)));
+    if (mentionsDriver && (titleLower.includes('suspensi') || titleLower.includes('vencid') || titleLower.includes('conductor'))) {
+      return;
+    }
+
     const isError =
       notif.prioridad === 'alta' ||
       notif.prioridad === 'Alta' ||

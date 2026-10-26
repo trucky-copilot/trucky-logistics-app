@@ -216,19 +216,8 @@ export default function Fleet() {
         targetId = created.id;
       }
 
-      if (cleanData.estado === 'mantenimiento') {
-        await base44.entities.Notification.create(withOrg(orgId, {
-          profile_id: activeProfileId || '1',
-          tipo: 'cambio_asignacion',
-          titulo: `Camión en mantenimiento: ${cleanData.placa}`,
-          mensaje: `El camión con placa ${cleanData.placa}${cleanData.conductor_nombre ? ` (${cleanData.conductor_nombre})` : ''} está en mantenimiento.`,
-          prioridad: 'alta',
-          leido: false,
-          referencia_id: targetId,
-          referencia_tipo: 'Truck'
-        })).catch(console.error);
-        window.dispatchEvent(new CustomEvent('notifications-updated'));
-      }
+      // Notificar a los observadores de alertas operacionales
+      window.dispatchEvent(new CustomEvent('notifications-updated'));
 
       setShowForm(false); setEditTruck(null); loadData();
     } catch (err) {

@@ -232,17 +232,19 @@ export default function Notifications() {
 
   const markRead = async (id) => {
     const cleanId = id.startsWith('sys-notif-') ? id.replace('sys-notif-', '') : id;
-    await base44.entities.Notification.update(cleanId, { leido: true });
-    setDbNotifications(prev => prev.map(n => n.id === cleanId ? { ...n, leido: true } : n));
-    setOperationalAlerts(prev => prev.map(a => a.id === `sys-notif-${cleanId}` ? { ...a, leido: true } : a));
+    if (id.startsWith('sys-notif-')) {
+      await base44.entities.Notification.update(cleanId, { leido: true }).catch(console.error);
+      setDbNotifications(prev => prev.map(n => n.id === cleanId ? { ...n, leido: true } : n));
+    }
+    setOperationalAlerts(prev => prev.map(a => (a.id === id || a.id === `sys-notif-${cleanId}`) ? { ...a, leido: true } : a));
     window.dispatchEvent(new CustomEvent('notifications-updated'));
   };
 
   const markAllRead = async () => {
     const unread = dbNotifications.filter(n => !n.leido);
-    await Promise.all(unread.map(n => base44.entities.Notification.update(n.id, { leido: true })));
+    await Promise.all(unread.map(n => base44.entities.Notification.update(n.id, { leido: true }))).catch(console.error);
     setDbNotifications(prev => prev.map(n => ({ ...n, leido: true })));
-    setOperationalAlerts(prev => prev.map(a => a.modulo === 'sistema' ? { ...a, leido: true } : a));
+    setOperationalAlerts(prev => prev.map(a => ({ ...a, leido: true })));
     window.dispatchEvent(new CustomEvent('notifications-updated'));
   };
 
@@ -262,22 +264,14 @@ export default function Notifications() {
     }
   };
 
-  // Filtrado de alertas operacionales
+  // Filtrado de alertas: solo Todas, Sin leer, Alta, Media (como en la segunda imagen)
   const filtered = operationalAlerts.filter(a => {
     if (filter === 'all') return true;
-    if (filter === 'rojo') return a.nivel === 'rojo';
-    if (filter === 'amarillo') return a.nivel === 'amarillo';
-    if (filter === 'flota') return a.modulo === 'flota';
-    if (filter === 'conductores') return a.modulo === 'conductores';
-    if (filter === 'brokers') return a.modulo === 'brokers';
-    if (filter === 'cargas') return a.modulo === 'cargas';
-    if (filter === 'sistema') return a.modulo === 'sistema';
+    if (filter === 'unread') return !a.leido;
+    if (filter === 'alta') return a.nivel === 'rojo';
+    if (filter === 'media') return a.nivel === 'amarillo';
     return true;
   });
-
-  const criticalCount = operationalAlerts.filter(a => a.nivel === 'rojo').length;
-  const warningCount = operationalAlerts.filter(a => a.nivel === 'amarillo').length;
-  const unreadSysCount = dbNotifications.filter(n => !n.leido).length;
 
   return (
     <div className="p-4 md:p-6 space-y-4 max-w-3xl mx-auto">
@@ -292,41 +286,32 @@ export default function Notifications() {
               </span>
             )}
           </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {isEn
-              ? 'Showing alerts in RED and YELLOW across all operational modules (green excluded).'
-              : 'Mostrando alertas en ROJO y AMARILLO de todos los módulos (verdes excluidas).'}
-          </p>
         </div>
         <div className="flex gap-2">
-          {unreadSysCount > 0 && (
-            <button onClick={markAllRead} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground">
-              <CheckCheck className="w-3.5 h-3.5" />{t.notifications.markAll}
-            </button>
-          )}
+          <button onClick={markAllRead} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground">
+            <CheckCheck className="w-3.5 h-3.5" />{t.notifications.markAll}
+          </button>
           <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
             <Plus className="w-3.5 h-3.5" />{t.notifications.new}
           </button>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-1.5 flex-wrap">
+      {/* Filters: exactamente 4 filtros como en la segunda imagen */}
+      <div className="flex gap-2 flex-wrap">
         {[
-          { key: 'all', label: `${t.notifications.all} (${operationalAlerts.length})` },
-          { key: 'rojo', label: `🔴 ${isEn ? 'Critical' : 'Rojas'} (${criticalCount})` },
-          { key: 'amarillo', label: `🟡 ${isEn ? 'Warnings' : 'Amarillas'} (${warningCount})` },
-          { key: 'flota', label: `🚚 ${isEn ? 'Fleet' : 'Flota'}` },
-          { key: 'conductores', label: `👤 ${isEn ? 'Drivers' : 'Conductores'}` },
-          { key: 'brokers', label: `🏢 Brokers` },
-          { key: 'cargas', label: `📦 ${isEn ? 'Loads' : 'Cargas'}` },
-          { key: 'sistema', label: `🔔 ${isEn ? 'Messages' : 'Mensajes'}` },
+          { key: 'all', label: t.notifications.all },
+          { key: 'unread', label: t.notifications.unread },
+          { key: 'alta', label: `🔴 ${t.notifications.high}` },
+          { key: 'media', label: `🟡 ${t.notifications.medium}` },
         ].map(f => (
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
-              filter === f.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
+            className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-all ${
+              filter === f.key
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
             {f.label}
