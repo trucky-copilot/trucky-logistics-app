@@ -1,5 +1,6 @@
 import { ShieldAlert, ExternalLink, LogOut } from 'lucide-react';
 import { useAuth } from '@/lib/AuthContext';
+import { base44 } from '@/api/base44Client';
 
 export default function DemoExpiredScreen({ reason }) {
   const { logout, user } = useAuth();
@@ -38,7 +39,6 @@ export default function DemoExpiredScreen({ reason }) {
 
           <button
             onClick={() => {
-              // Limpiar absolutamente todas las credenciales locales y recargar inmediatamente en la misma URL (Welcome)
               try {
                 localStorage.removeItem('base44_access_token');
                 localStorage.removeItem('token');
@@ -48,7 +48,6 @@ export default function DemoExpiredScreen({ reason }) {
                 sessionStorage.clear();
               } catch (_) {}
               logout(false);
-              // Mantener la misma URL local (/ o /welcome) y recargar limpio
               window.location.replace('/');
             }}
             className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 hover:border-zinc-600 transition-all flex items-center justify-center gap-2 shadow-sm"
