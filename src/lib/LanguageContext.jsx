@@ -114,7 +114,31 @@ const translations = {
     },
     documents: { title: 'Verificador de Documentos', subtitle: 'Rate Confirmations · Delivery Orders — análisis operativo, comercial e identidad', carrierMode: 'Modo Carrier — rentabilidad y operación', dispatcherMode: 'Modo Dispatcher — completitud y asignación', pasteOrUpload: 'Pegar texto o subir documento', upload: 'Subir PDF / JPG / PNG / TXT', accepted: 'Acepta PDF, JPG, PNG, TXT — Solo Rate Confirmations y Delivery Orders', placeholder: 'Pega el texto del Rate Confirmation o Delivery Order aquí...', verify: 'Verificar Documento', extract: 'Extrayendo datos del documento...', validate: 'Validando reglas de negocio...', verifyBroker: 'Verificando broker y carrier...', process: 'Procesando archivo...', processError: 'No se pudo procesar el archivo. Intenta pegar el texto directo.', unsupported: 'Formato no soportado. Usa PDF, JPG, PNG o TXT.', sensitive: 'Por seguridad, no se procesan datos bancarios ni documentos sensibles.', newAnalysis: 'Análisis nuevo', fromCache: 'Desde caché', confidence: 'Confianza', risk: 'Riesgo', registerLoad: 'Registrar carga', mainAlerts: 'ALERTAS PRINCIPALES', analysisByCategory: 'ANÁLISIS POR CATEGORÍA', stepsToFollow: 'PASOS A SEGUIR', critical: 'Crítico', review: 'Revisar', ok: 'OK' },
     map: { title: 'Mapa de Rutas', geolocated: 'cargas geolocalizadas · origen → destino', empty: 'Sin cargas con ubicaciones reconocidas aún', origin: 'Origen', destination: 'Destino', rate: 'Tarifa' },
-    notifications: { title: 'Notificaciones', markAll: 'Marcar todas', new: 'Nueva', all: 'Todas', unread: 'Sin leer', high: 'Alta', medium: 'Media', noNotifications: 'No hay notificaciones', formTitle: 'Nueva Notificación', titleLabel: 'Título', message: 'Mensaje', type: 'Tipo', priority: 'Prioridad', send: 'Enviar', cancel: 'Cancelar', justNow: 'hace un momento', hoursAgo: 'hace', assignment: 'Cambio de asignación', delay: 'Retraso en ruta', dispatch: 'Mensaje de despacho', documentExpired: 'Documento vencido', rateAlert: 'Alerta de tarifa', general: 'General' },
+    notifications: { title: 'Notificaciones', markAll: 'Marcar todas', new: 'Nueva', all: 'Todas', unread: 'Sin leer', high: 'Alta', medium: 'Media', noNotifications: 'No hay notificaciones', formTitle: 'Nueva Notificación', titleLabel: 'Título', message: 'Mensaje', type: 'Tipo', priority: 'Prioridad', send: 'Enviar', cancel: 'Cancelar', justNow: 'hace un momento', hoursAgo: 'hace', assignment: 'Cambio de asignación', delay: 'Retraso en ruta', dispatch: 'Mensaje de despacho', documentoExpired: 'Documento vencido', rateAlert: 'Alerta de tarifa', general: 'General' },
+    profiles: {
+      loading: 'Cargando Perfil...',
+      yourProfiles: 'Tus Perfiles',
+      addNewProfile: 'Agregar nuevo perfil',
+      rename: 'Renombrar',
+      delete: 'Eliminar',
+      createTitle: 'Crear Nuevo Perfil',
+      renameTitle: 'Renombrar Perfil',
+      createDesc: 'Ingresa un nombre para tu nuevo perfil de configuración.',
+      renameDesc: 'Ingresa un nuevo nombre para este perfil.',
+      namePlaceholder: 'Nombre del perfil',
+      duplicateError: 'Ya existe un perfil con este nombre.',
+      cancel: 'Cancelar',
+      save: 'Guardar',
+      limitTitle: 'Alcanzaste el límite de la cantidad de perfiles',
+      limitDesc: (max) => `Has alcanzado el límite máximo de ${max} perfiles permitidos en tu cuenta. Para agregar uno nuevo, elimina o renombra alguno de los existentes.`,
+      accept: 'Aceptar',
+      deleteTitle: '¿Eliminar Perfil?',
+      deleteDesc: (name) => `¿Estás seguro de que deseas eliminar el perfil "${name}"? Esta acción no se puede deshacer.`,
+      onlyOneError: 'No puedes eliminar el único perfil que queda.',
+      unsavedTitle: 'Cambios sin guardar',
+      unsavedDesc: 'Tienes cambios sin guardar en esta página. Si cambias de perfil, se perderán. ¿Quieres continuar y descartarlos?',
+      discard: 'Descartar Cambios',
+    },
   },
 
   en: {
@@ -227,29 +251,57 @@ const translations = {
     documents: { title: 'Document Checker', subtitle: 'Rate Confirmations · Delivery Orders — operational, commercial and identity analysis', carrierMode: 'Carrier Mode — profitability and operations', dispatcherMode: 'Dispatcher Mode — completeness and assignment', pasteOrUpload: 'Paste text or upload the document', upload: 'Upload PDF / JPG / PNG / TXT', accepted: 'Accepts PDF, JPG, PNG, TXT — Rate Confirmations and Delivery Orders only', placeholder: 'Paste the Rate Confirmation or Delivery Order text here...', verify: 'Verify Document', extract: 'Extracting document data...', validate: 'Validating business rules...', verifyBroker: 'Verifying broker and carrier...', process: 'Processing file...', processError: 'Could not process the file. Try pasting the text directly.', unsupported: 'Unsupported format. Use PDF, JPG, PNG or TXT.', sensitive: 'For security, banking information and sensitive documents are not processed.', newAnalysis: 'New analysis', fromCache: 'From cache', confidence: 'Confidence', risk: 'Risk', registerLoad: 'Register load', mainAlerts: 'MAIN ALERTS', analysisByCategory: 'ANALYSIS BY CATEGORY', stepsToFollow: 'STEPS TO FOLLOW', critical: 'Critical', review: 'Review', ok: 'OK' },
     map: { title: 'Route Map', geolocated: 'geolocated loads · origin → destination', empty: 'No loads with recognized locations yet', origin: 'Origin', destination: 'Destination', rate: 'Rate' },
     notifications: { title: 'Notifications', markAll: 'Mark all', new: 'New', all: 'All', unread: 'Unread', high: 'High', medium: 'Medium', noNotifications: 'No notifications', formTitle: 'New Notification', titleLabel: 'Title', message: 'Message', type: 'Type', priority: 'Priority', send: 'Send', cancel: 'Cancel', justNow: 'just now', hoursAgo: 'ago', assignment: 'Assignment change', delay: 'Route delay', dispatch: 'Dispatch message', documentExpired: 'Document expired', rateAlert: 'Rate alert', general: 'General' },
+    profiles: {
+      loading: 'Loading Profile...',
+      yourProfiles: 'Your Profiles',
+      addNewProfile: 'Add new profile',
+      rename: 'Rename',
+      delete: 'Delete',
+      createTitle: 'Create New Profile',
+      renameTitle: 'Rename Profile',
+      createDesc: 'Enter a name for your new configuration profile.',
+      renameDesc: 'Enter a new name for this profile.',
+      namePlaceholder: 'Profile name',
+      duplicateError: 'A profile with this name already exists.',
+      cancel: 'Cancel',
+      save: 'Save',
+      limitTitle: "You've reached the profile limit",
+      limitDesc: (max) => `You have reached the maximum limit of ${max} profiles allowed on your account. To add a new one, delete or rename an existing profile.`,
+      accept: 'Got it',
+      deleteTitle: 'Delete Profile?',
+      deleteDesc: (name) => `Are you sure you want to delete profile "${name}"? This action cannot be undone.`,
+      onlyOneError: 'You cannot delete the only remaining profile.',
+      unsavedTitle: 'Unsaved changes',
+      unsavedDesc: 'You have unsaved changes on this page. If you switch profiles, they will be lost. Do you want to continue and discard them?',
+      discard: 'Discard Changes',
+    },
   },
 };
 
 export function LanguageProvider({ children }) {
   const { userProfile } = useAppState();
 
-  const [locale, setLocaleState] = useState(
-    userProfile?.idioma_chat === 'en' ? 'en' : 'es'
-  );
+  const [locale, setLocaleState] = useState(() => {
+    return localStorage.getItem('trucky_locale') || (userProfile?.idioma_chat === 'en' ? 'en' : 'es');
+  });
 
   useEffect(() => {
     if (userProfile?.idioma_chat) {
       setLocaleState(userProfile.idioma_chat === 'en' ? 'en' : 'es');
+      localStorage.setItem('trucky_locale', userProfile.idioma_chat === 'en' ? 'en' : 'es');
     }
   }, [userProfile?.idioma_chat]);
 
   const setLocale = async (nextLocale) => {
-    if (!nextLocale || nextLocale === locale) return;
+    if (!nextLocale) return;
 
+    localStorage.setItem('trucky_locale', nextLocale);
     setLocaleState(nextLocale);
+    window.dispatchEvent(new CustomEvent('trucky-locale-changed', { detail: nextLocale }));
 
     try {
       const user = await base44.auth.me();
+      if (!user?.email) return;
       const profiles = await base44.entities.UserProfile.filter({
         usuario: user.email,
       });
@@ -272,7 +324,7 @@ export function LanguageProvider({ children }) {
   const value = {
     locale,
     setLocale,
-    t: translations[locale],
+    t: translations[locale] || translations.es,
   };
 
   return (

@@ -126,11 +126,11 @@ function App() {
         <Router>
         <AppStateProvider>
           <DemoProvider>
-            <ProfileProvider>
-              <LanguageProvider>
+            <LanguageProvider>
+              <ProfileProvider>
                 <AppContent />
-              </LanguageProvider>
-            </ProfileProvider>
+              </ProfileProvider>
+            </LanguageProvider>
           </DemoProvider>
         </AppStateProvider>
         </Router>

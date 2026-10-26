@@ -4,6 +4,7 @@ import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 import { withOrg } from '@/lib/orgScope';
 import { useDemo } from '@/lib/DemoContext';
+import { useLanguage } from '@/lib/LanguageContext';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 
 const ProfileContext = createContext(null);
@@ -14,6 +15,7 @@ export function ProfileProvider({ children }) {
   const { user } = useAuth();
   const { organization } = useAppState();
   const { isDemoUser, limits } = useDemo();
+  const { t } = useLanguage();
   
   const maxProfilesAllowed = isDemoUser ? (limits?.PROFILES || 3) : MAX_PROFILES;
   
@@ -230,14 +232,16 @@ export function ProfileProvider({ children }) {
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cambios sin guardar</AlertDialogTitle>
+            <AlertDialogTitle>{t?.profiles?.unsavedTitle || 'Cambios sin guardar'}</AlertDialogTitle>
             <AlertDialogDescription>
-              Tienes cambios sin guardar en esta página. Si cambias de perfil, se perderán. ¿Quieres continuar y descartarlos?
+              {t?.profiles?.unsavedDesc || 'Tienes cambios sin guardar en esta página. Si cambias de perfil, se perderán. ¿Quieres continuar y descartarlos?'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setConfirmOpen(false)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmSwitch} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Descartar Cambios</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setConfirmOpen(false)}>{t?.profiles?.cancel || 'Cancelar'}</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmSwitch} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t?.profiles?.discard || 'Descartar Cambios'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

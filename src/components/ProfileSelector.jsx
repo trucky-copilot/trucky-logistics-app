@@ -17,6 +17,8 @@ import { ChevronDown, Plus, Trash2, Edit2, AlertCircle } from 'lucide-react';
 
 export default function ProfileSelector() {
   const { profiles, activeProfile, activeProfileId, switchProfile, addProfile, renameProfile, deleteProfile, maxProfilesAllowed = 3 } = useProfile();
+  const { t, locale } = useLanguage();
+  const isEn = locale === 'en';
   
   // States for dialogs
   const [promptOpen, setPromptOpen] = useState(false);
@@ -32,7 +34,7 @@ export default function ProfileSelector() {
   if (!activeProfile) {
     return (
       <div className="bg-red-500 text-white px-2 py-1 text-xs font-bold rounded">
-        Cargando Perfil...
+        {t?.profiles?.loading || (isEn ? 'Loading Profile...' : 'Cargando Perfil...')}
       </div>
     );
   }
@@ -53,7 +55,7 @@ export default function ProfileSelector() {
       return;
     }
     if (checkDuplicate(val)) {
-      setNameError('Ya existe un perfil con este nombre.');
+      setNameError(t?.profiles?.duplicateError || (isEn ? 'A profile with this name already exists.' : 'Ya existe un perfil con este nombre.'));
     } else {
       setNameError('');
     }
@@ -85,7 +87,7 @@ export default function ProfileSelector() {
     if (!trimmed) return;
 
     if (checkDuplicate(trimmed)) {
-      setNameError('Ya existe un perfil con este nombre.');
+      setNameError(t?.profiles?.duplicateError || (isEn ? 'A profile with this name already exists.' : 'Ya existe un perfil con este nombre.'));
       return;
     }
 
@@ -100,7 +102,7 @@ export default function ProfileSelector() {
 
   const openDeleteConfirm = (id, name) => {
     if (profiles.length <= 1) {
-      alert("No puedes eliminar el único perfil que queda.");
+      alert(t?.profiles?.onlyOneError || (isEn ? 'You cannot delete the only remaining profile.' : 'No puedes eliminar el único perfil que queda.'));
       return;
     }
     setDeleteProfileData({ id, name });
@@ -125,7 +127,9 @@ export default function ProfileSelector() {
         </DropdownMenuTrigger>
         
         <DropdownMenuContent align="end" className="w-64">
-          <DropdownMenuLabel className="text-xs text-muted-foreground">Tus Perfiles ({profiles.length}/{MAX_PROFILES})</DropdownMenuLabel>
+          <DropdownMenuLabel className="text-xs text-muted-foreground">
+            {t?.profiles?.yourProfiles || (isEn ? 'Your Profiles' : 'Tus Perfiles')} ({profiles.length}/{MAX_PROFILES})
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
           
           {profiles.map(p => (
@@ -147,7 +151,7 @@ export default function ProfileSelector() {
                 <button 
                   onClick={(e) => { e.stopPropagation(); openRenamePrompt(p.id, p.name); }}
                   className="p-1 text-muted-foreground hover:text-foreground focus:outline-none"
-                  title="Renombrar"
+                  title={t?.profiles?.rename || (isEn ? 'Rename' : 'Renombrar')}
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
@@ -155,7 +159,7 @@ export default function ProfileSelector() {
                   <button 
                     onClick={(e) => { e.stopPropagation(); openDeleteConfirm(p.id, p.name); }}
                     className="p-1 text-red-400 hover:text-red-500 focus:outline-none"
-                    title="Eliminar"
+                    title={t?.profiles?.delete || (isEn ? 'Delete' : 'Eliminar')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -171,7 +175,7 @@ export default function ProfileSelector() {
             className="text-sm cursor-pointer"
           >
             <Plus className="w-4 h-4 mr-2" />
-            Agregar nuevo perfil
+            {t?.profiles?.addNewProfile || (isEn ? 'Add new profile' : 'Agregar nuevo perfil')}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -181,19 +185,21 @@ export default function ProfileSelector() {
         <DialogContent className="sm:max-w-md bg-card border border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground">
-              {promptType === 'add' ? 'Crear Nuevo Perfil' : 'Renombrar Perfil'}
+              {promptType === 'add' 
+                ? (t?.profiles?.createTitle || (isEn ? 'Create New Profile' : 'Crear Nuevo Perfil'))
+                : (t?.profiles?.renameTitle || (isEn ? 'Rename Profile' : 'Renombrar Perfil'))}
             </DialogTitle>
             <DialogDescription className="text-muted-foreground text-xs">
               {promptType === 'add' 
-                ? 'Ingresa un nombre para tu nuevo perfil de configuración.'
-                : 'Ingresa un nuevo nombre para este perfil.'}
+                ? (t?.profiles?.createDesc || (isEn ? 'Enter a name for your new configuration profile.' : 'Ingresa un nombre para tu nuevo perfil de configuración.'))
+                : (t?.profiles?.renameDesc || (isEn ? 'Enter a new name for this profile.' : 'Ingresa un nuevo nombre para este perfil.'))}
             </DialogDescription>
           </DialogHeader>
           <div className="py-2">
             <Input 
               value={promptValue} 
               onChange={(e) => handleNameChange(e.target.value)} 
-              placeholder="Nombre del perfil"
+              placeholder={t?.profiles?.namePlaceholder || (isEn ? 'Profile name' : 'Nombre del perfil')}
               className={`w-full bg-muted border ${nameError ? 'border-red-500 focus-visible:ring-red-500/50' : 'border-border'}`}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !nameError && promptValue.trim()) handlePromptSubmit();
@@ -208,14 +214,14 @@ export default function ProfileSelector() {
           </div>
           <DialogFooter className="sm:justify-end gap-2">
             <Button variant="outline" onClick={() => { setPromptOpen(false); setNameError(''); }}>
-              Cancelar
+              {t?.profiles?.cancel || (isEn ? 'Cancel' : 'Cancelar')}
             </Button>
             <Button 
               onClick={handlePromptSubmit} 
               disabled={!!nameError || !promptValue.trim()}
               className="bg-primary hover:bg-primary/90 text-primary-foreground"
             >
-              Guardar
+              {t?.profiles?.save || (isEn ? 'Save' : 'Guardar')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -229,10 +235,14 @@ export default function ProfileSelector() {
           </div>
           <DialogHeader>
             <DialogTitle className="text-base font-semibold text-center text-foreground">
-              Alcanzaste el límite de la cantidad de perfiles
+              {t?.profiles?.limitTitle || (isEn ? "You've reached the profile limit" : 'Alcanzaste el límite de la cantidad de perfiles')}
             </DialogTitle>
             <DialogDescription className="text-center text-xs text-muted-foreground mt-1.5">
-              Has alcanzado el límite máximo de {maxProfilesAllowed} perfiles permitidos en tu cuenta. Para agregar uno nuevo, elimina o renombra alguno de los existentes.
+              {typeof t?.profiles?.limitDesc === 'function'
+                ? t.profiles.limitDesc(maxProfilesAllowed)
+                : (isEn 
+                  ? `You have reached the maximum limit of ${maxProfilesAllowed} profiles allowed on your account. To add a new one, delete or rename an existing profile.`
+                  : `Has alcanzado el límite máximo de ${maxProfilesAllowed} perfiles permitidos en tu cuenta. Para agregar uno nuevo, elimina o renombra alguno de los existentes.`)}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="sm:justify-center mt-4">
@@ -240,7 +250,7 @@ export default function ProfileSelector() {
               onClick={() => setLimitOpen(false)} 
               className="px-6 py-2 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground"
             >
-              Aceptar
+              {t?.profiles?.accept || (isEn ? 'Got it' : 'Aceptar')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -250,14 +260,24 @@ export default function ProfileSelector() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent className="bg-card border border-border">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-foreground">¿Eliminar Perfil?</AlertDialogTitle>
+            <AlertDialogTitle className="text-foreground">
+              {t?.profiles?.deleteTitle || (isEn ? 'Delete Profile?' : '¿Eliminar Perfil?')}
+            </AlertDialogTitle>
             <AlertDialogDescription className="text-muted-foreground text-xs">
-              ¿Estás seguro de que deseas eliminar el perfil "{deleteProfileData?.name}"? Esta acción no se puede deshacer.
+              {typeof t?.profiles?.deleteDesc === 'function'
+                ? t.profiles.deleteDesc(deleteProfileData?.name || '')
+                : (isEn
+                  ? `Are you sure you want to delete profile "${deleteProfileData?.name}"? This action cannot be undone.`
+                  : `¿Estás seguro de que deseas eliminar el perfil "${deleteProfileData?.name}"? Esta acción no se puede deshacer.`)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setDeleteOpen(false)}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Eliminar</AlertDialogAction>
+            <AlertDialogCancel onClick={() => setDeleteOpen(false)}>
+              {t?.profiles?.cancel || (isEn ? 'Cancel' : 'Cancelar')}
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {t?.profiles?.delete || (isEn ? 'Delete' : 'Eliminar')}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
