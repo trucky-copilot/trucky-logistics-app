@@ -4,7 +4,7 @@
   "properties": {
     "name": {
       "type": "string",
-      "description": "Nombre de la empresa u organizaci\u00f3n"
+      "description": "Nombre de la empresa u organización"
     },
     "account_type": {
       "type": "string",
@@ -13,7 +13,7 @@
         "dispatcher",
         "ambos"
       ],
-      "description": "Tipo de cuenta de la organizaci\u00f3n"
+      "description": "Tipo de cuenta de la organización"
     },
     "workspace_status": {
       "type": "string",
@@ -29,17 +29,17 @@
     "onboarding_completed": {
       "type": "boolean",
       "default": false,
-      "description": "Si la organizaci\u00f3n complet\u00f3 el proceso de onboarding"
+      "description": "Si la organización completó el proceso de onboarding"
     },
     "production_ready": {
       "type": "boolean",
       "default": false,
-      "description": "Si el workspace est\u00e1 listo para operar con datos reales"
+      "description": "Si el workspace está listo para operar con datos reales"
     },
     "active": {
       "type": "boolean",
       "default": true,
-      "description": "Si la organizaci\u00f3n est\u00e1 activa"
+      "description": "Si la organización está activa"
     },
     "created_by_user": {
       "type": "string",
@@ -96,6 +96,28 @@
       "type": "integer",
       "default": 0,
       "description": "Versión monótona para control de concurrencia optimista (OCC)"
+    },
+    "stripe_live_customer_id": {
+      "type": "string"
+    },
+    "stripe_live_subscription_id": {
+      "type": "string"
+    },
+    "live_trial_ends_at": {
+      "type": "string"
+    },
+    "live_subscription_status": {
+      "type": "string",
+      "enum": [
+        "trialing",
+        "active",
+        "past_due",
+        "canceled",
+        "unpaid",
+        "incomplete",
+        "none"
+      ],
+      "default": "none"
     }
   },
   "required": [
