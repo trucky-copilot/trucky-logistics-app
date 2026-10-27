@@ -29,6 +29,7 @@ export default async function linkBillingIdentity(req:Request,_ctx:unknown){
   // separate database reads. Unknown writes retain the binding for recovery.
   await reserveNativeBinding(demoRedis,identity.sub,native.id);
   if(!member.base44_user_id)await db.OrganizationMember.update(member.id,{base44_user_id:native.id});
+  await demoRedis(['SET',`trucky:billing:native:v1:${native.id}`,identity.sub,'NX']);
   return reply('IDENTITY_LINKED');
  }catch{return reply('LINK_REQUIRES_REVIEW',503);}
 }

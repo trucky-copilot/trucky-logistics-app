@@ -1,3 +1,4 @@
+import {liveBillingGuard} from "./liveBillingGuard.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import nodemailer from 'npm:nodemailer';
 
@@ -38,6 +39,8 @@ export default async function sendGmail(req: Request, ctx: any) {
 
   try {
     const base44 = createClientFromRequest(req);
+    const billingDenied=await liveBillingGuard(req,base44);
+    if(billingDenied)return billingDenied;
     const body = await req.json();
 
     const {

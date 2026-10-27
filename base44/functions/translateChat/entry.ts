@@ -1,3 +1,4 @@
+import {liveBillingGuard} from "./liveBillingGuard.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
 // CORS: antes se respondía con "Access-Control-Allow-Origin: *", lo que permitía
@@ -45,6 +46,8 @@ Deno.serve(async (req: Request) => {
     // Solo usuarios con sesión: sin esto cualquiera (humano o script) podía
     // consumir la cuota y la facturación de Google Cloud de la app.
     const base44 = createClientFromRequest(req);
+    const billingDenied=await liveBillingGuard(req,base44);
+    if(billingDenied)return billingDenied;
     let user;
     try {
       user = await base44.auth.me();
