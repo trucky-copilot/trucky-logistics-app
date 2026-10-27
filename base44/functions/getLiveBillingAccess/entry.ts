@@ -1,3 +1,4 @@
+import { assertMembershipProvenance } from "./provenance.mjs";
 import { demoRedis } from "./demoRegistry.ts";
 import { verifiedLivePlan } from "./live-plan.mjs";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
@@ -20,7 +21,7 @@ export default async function getLiveBillingAccess(req: Request,_ctx:unknown){
   const verified=[];
   for(const member of members){
     if(typeof member.google_sub==='string' &&
-      await demoRedis(['GET',`trucky:billing:identity:v1:${member.google_sub}`])===user.id) verified.push(member);
+      await demoRedis(['GET',`trucky:billing:identity:v1:${member.google_sub}`])===user.id) { await assertMembershipProvenance(demoRedis,member); verified.push(member); }
   }
   if(!verified.length)return reply({code:'IDENTITY_LINK_REQUIRED'},403);
   const org=(await db.Organization.filter({id:body.organization_id}))?.[0];

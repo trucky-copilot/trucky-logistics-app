@@ -1,3 +1,4 @@
+import { assertMembershipProvenance } from "./provenance.mjs";
 import { reserveNativeBinding } from "./binding.mjs";
 import { demoRedis } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
@@ -22,6 +23,7 @@ export default async function linkBillingIdentity(req:Request,_ctx:unknown){
   const members=await db.OrganizationMember.filter({organization_id:body.organization_id,google_sub:identity.sub,active:true});
   if(members.length!==1)return reply('VERIFIED_MEMBERSHIP_REQUIRED',403);
   const member=members[0];
+  await assertMembershipProvenance(demoRedis,member);
   if(member.base44_user_id&&member.base44_user_id!==native.id)return reply('IDENTITY_ALREADY_BOUND',409);
   // Persistent atomic registry prevents concurrent native identities winning
   // separate database reads. Unknown writes retain the binding for recovery.
