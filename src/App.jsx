@@ -1,3 +1,4 @@
+import BillingLinkConfirmation from "@/components/BillingLinkConfirmation";
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
@@ -128,6 +129,7 @@ function App() {
           <DemoProvider>
             <LanguageProvider>
               <ProfileProvider>
+                <BillingLinkConfirmation />
                 <AppContent />
               </ProfileProvider>
             </LanguageProvider>
