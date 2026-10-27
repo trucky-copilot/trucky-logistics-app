@@ -191,13 +191,23 @@ export default function Notifications() {
       setDbNotifications(profileNotifs);
 
       // Calculamos todas las alertas operacionales rojas y amarillas de los 4 módulos + notifs
-      const alerts = getOperationalAlerts({
+      const rawAlerts = getOperationalAlerts({
         trucks,
         drivers,
         brokers,
         loads,
         notifications: profileNotifs,
         locale,
+      });
+
+      const readKey = `read_alerts_${orgId}_${activeProfileId || '1'}`;
+      const readIds = new Set(JSON.parse(localStorage.getItem(readKey) || '[]'));
+      const alerts = rawAlerts.map(a => {
+        const cleanId = a.id.startsWith('sys-notif-') ? a.id.replace('sys-notif-', '') : a.id;
+        return {
+          ...a,
+          leido: !!a.leido || readIds.has(a.id) || readIds.has(cleanId) || readIds.has(`sys-notif-${cleanId}`),
+        };
       });
 
       setOperationalAlerts(alerts);
@@ -230,20 +240,39 @@ export default function Notifications() {
     }
   };
 
-  const markRead = async (id) => {
+  const markRead = async (id, e) => {
+    if (e) e.stopPropagation();
     const cleanId = id.startsWith('sys-notif-') ? id.replace('sys-notif-', '') : id;
     if (id.startsWith('sys-notif-')) {
       await base44.entities.Notification.update(cleanId, { leido: true }).catch(console.error);
       setDbNotifications(prev => prev.map(n => n.id === cleanId ? { ...n, leido: true } : n));
     }
+    const readKey = `read_alerts_${orgId}_${activeProfileId || '1'}`;
+    const readIds = new Set(JSON.parse(localStorage.getItem(readKey) || '[]'));
+    readIds.add(id);
+    readIds.add(`sys-notif-${cleanId}`);
+    localStorage.setItem(readKey, JSON.stringify([...readIds]));
+
     setOperationalAlerts(prev => prev.map(a => (a.id === id || a.id === `sys-notif-${cleanId}`) ? { ...a, leido: true } : a));
     window.dispatchEvent(new CustomEvent('notifications-updated'));
   };
 
   const markAllRead = async () => {
-    const unread = dbNotifications.filter(n => !n.leido);
-    await Promise.all(unread.map(n => base44.entities.Notification.update(n.id, { leido: true }))).catch(console.error);
-    setDbNotifications(prev => prev.map(n => ({ ...n, leido: true })));
+    const unreadDb = dbNotifications.filter(n => !n.leido);
+    if (unreadDb.length > 0) {
+      await Promise.all(unreadDb.map(n => base44.entities.Notification.update(n.id, { leido: true }))).catch(console.error);
+      setDbNotifications(prev => prev.map(n => ({ ...n, leido: true })));
+    }
+    const readKey = `read_alerts_${orgId}_${activeProfileId || '1'}`;
+    const readIds = new Set(JSON.parse(localStorage.getItem(readKey) || '[]'));
+    operationalAlerts.forEach(a => {
+      readIds.add(a.id);
+      if (a.id.startsWith('sys-notif-')) {
+        readIds.add(a.id.replace('sys-notif-', ''));
+      }
+    });
+    localStorage.setItem(readKey, JSON.stringify([...readIds]));
+
     setOperationalAlerts(prev => prev.map(a => ({ ...a, leido: true })));
     window.dispatchEvent(new CustomEvent('notifications-updated'));
   };
@@ -280,9 +309,9 @@ export default function Notifications() {
           <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
             <Bell className="w-5 h-5 text-primary" />
             {t.notifications.title}
-            {operationalAlerts.length > 0 && (
+            {operationalAlerts.filter(a => !a.leido).length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
-                {operationalAlerts.length}
+                {operationalAlerts.filter(a => !a.leido).length}
               </span>
             )}
           </h1>
@@ -297,11 +326,11 @@ export default function Notifications() {
         </div>
       </div>
 
-      {/* Filters: exactamente 4 filtros como en la segunda imagen */}
+      {/* Filters */}
       <div className="flex gap-2 flex-wrap">
         {[
-          { key: 'all', label: t.notifications.all },
-          { key: 'unread', label: t.notifications.unread },
+          { key: 'all', label: `${t.notifications.all} (${operationalAlerts.length})` },
+          { key: 'unread', label: `${t.notifications.unread} (${operationalAlerts.filter(a => !a.leido).length})` },
           { key: 'alta', label: `🔴 ${t.notifications.high}` },
           { key: 'media', label: `🟡 ${t.notifications.medium}` },
         ].map(f => (
@@ -349,11 +378,11 @@ export default function Notifications() {
             return (
               <div
                 key={alert.id}
-                className={`rounded-xl border-l-4 border p-4 transition-all ${
+                className={`rounded-xl border-l-4 border p-4 transition-all cursor-pointer ${
                   isRed ? 'border-l-red-400 bg-red-400/5 border-border' : 'border-l-yellow-400 bg-yellow-400/5 border-border'
-                } ${isSys && alert.leido ? 'opacity-70' : ''}`}
+                } ${alert.leido ? 'opacity-60 bg-muted/10' : ''}`}
                 onClick={() => {
-                  if (isSys && !alert.leido) {
+                  if (!alert.leido) {
                     markRead(alert.id);
                   }
                 }}
@@ -374,7 +403,24 @@ export default function Notifications() {
                           {alert.moduloLabel || alert.modulo}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                        {!alert.leido ? (
+                          <button
+                            type="button"
+                            onClick={(e) => markRead(alert.id, e)}
+                            title={isEn ? 'Mark as read' : 'Marcar como leída'}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-muted hover:bg-primary hover:text-primary-foreground text-[11px] font-medium text-muted-foreground transition-all border border-border"
+                          >
+                            <CheckCheck className="w-3.5 h-3.5" />
+                            <span>{isEn ? 'Mark read' : 'Marcar leída'}</span>
+                          </button>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground/60 font-medium px-2 py-1">
+                            <CheckCheck className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>{isEn ? 'Read' : 'Leída'}</span>
+                          </span>
+                        )}
+
                         {alert.link && alert.link !== '/notificaciones' ? (
                           <Link
                             to={alert.link}

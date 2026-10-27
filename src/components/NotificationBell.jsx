@@ -74,8 +74,16 @@ export default function NotificationBell() {
         notifications: profileNotifs,
       });
 
-      // El badge de la campanita muestra el conteo de notificaciones y alertas operacionales activas
-      setUnreadCount(alerts.length);
+      // Contar solo las notificaciones y alertas operacionales no leídas
+      const readKey = `read_alerts_${orgId}_${activeProfileId || '1'}`;
+      const readIds = new Set(JSON.parse(localStorage.getItem(readKey) || '[]'));
+      const unreadAlerts = alerts.filter(a => {
+        const cleanId = a.id.startsWith('sys-notif-') ? a.id.replace('sys-notif-', '') : a.id;
+        const isRead = !!a.leido || readIds.has(a.id) || readIds.has(cleanId) || readIds.has(`sys-notif-${cleanId}`);
+        return !isRead;
+      });
+
+      setUnreadCount(unreadAlerts.length);
     } catch (e) {
       // mantener último conteo en caso de error de red
     }

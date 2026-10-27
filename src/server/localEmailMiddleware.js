@@ -155,33 +155,79 @@ export function createLocalEmailMiddleware(rootPath) {
       req.on('end', async () => {
         try {
           const body = JSON.parse(bodyStr || '{}');
-          const { to, subject, content, organization_id, profile_id, remitente_nombre, categoria } = body;
-
-          const { user, pass } = getGmailCredentials(rootPath);
-          if (!user || !pass) {
-            res.statusCode = 400;
-            res.setHeader('Content-Type', 'application/json');
-            res.end(JSON.stringify({ error: 'Credenciales de Gmail no configuradas en base44/.env' }));
-            return;
-          }
-
-          // Carga dinámica de nodemailer en Node
-          const nodemailer = (await import('nodemailer')).default;
-          const transporter = nodemailer.createTransport({
-            host: 'smtp.gmail.com',
-            port: 465,
-            secure: true,
-            auth: { user, pass }
-          });
+          const { to, subject, content, organization_id, profile_id, remitente_nombre, categoria, accessToken, gmailUser: reqGmailUser } = body;
 
           const senderName = remitente_nombre || 'Trucky Logistics';
-          const info = await transporter.sendMail({
-            from: `"${senderName}" <${user}>`,
-            to: Array.isArray(to) ? to.join(', ') : to,
-            subject: subject,
-            text: content,
-            html: content.replace(/\n/g, '<br/>')
-          });
+          const toAddress = Array.isArray(to) ? to.join(', ') : to;
+          let effectiveEmail = reqGmailUser || 'me';
+          let messageId = null;
+
+          if (accessToken) {
+            const encodeBase64Utf8 = (str) => {
+              const bytes = new TextEncoder().encode(str);
+              let binary = '';
+              for (let i = 0; i < bytes.byteLength; i++) binary += String.fromCharCode(bytes[i]);
+              return Buffer.from(binary, 'binary').toString('base64');
+            };
+            const utf8Subject = `=?utf-8?B?${encodeBase64Utf8(subject)}?=`;
+            const fromHeader = effectiveEmail !== 'me' ? `"${senderName}" <${effectiveEmail}>` : senderName;
+            const rfcRaw = [
+              `From: ${fromHeader}`,
+              `To: ${toAddress}`,
+              `Subject: ${utf8Subject}`,
+              'MIME-Version: 1.0',
+              'Content-Type: text/html; charset=utf-8',
+              '',
+              content.replace(/\n/g, '<br/>')
+            ].join('\r\n');
+            const encodedRaw = encodeBase64Utf8(rfcRaw).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+            const googleRes = await fetch('https://gmail.googleapis.com/gmail/v1/users/me/messages/send', {
+              method: 'POST',
+              headers: {
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ raw: encodedRaw })
+            });
+
+            if (!googleRes.ok) {
+              const errJson = await googleRes.json().catch(() => ({}));
+              res.statusCode = googleRes.status;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: errJson?.error?.message || 'Error de Google al enviar correo' }));
+              return;
+            }
+
+            const sendData = await googleRes.json();
+            messageId = sendData.id || `loc_${Date.now()}`;
+          } else {
+            const { user, pass } = getGmailCredentials(rootPath);
+            if (!user || !pass) {
+              res.statusCode = 400;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: 'Credenciales de Gmail no configuradas en base44/.env' }));
+              return;
+            }
+
+            effectiveEmail = user;
+            const nodemailer = (await import('nodemailer')).default;
+            const transporter = nodemailer.createTransport({
+              host: 'smtp.gmail.com',
+              port: 465,
+              secure: true,
+              auth: { user, pass }
+            });
+
+            const info = await transporter.sendMail({
+              from: `"${senderName}" <${user}>`,
+              to: toAddress,
+              subject: subject,
+              text: content,
+              html: content.replace(/\n/g, '<br/>')
+            });
+            messageId = info.messageId;
+          }
 
           // Registrar en almacén local
           const emailRecord = {

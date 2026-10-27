@@ -31,6 +31,36 @@ async function loadEnv() {
 
 await loadEnv();
 
+function encodeBase64Utf8(str: string): string {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+function encodeBase64Url(str: string): string {
+  return encodeBase64Utf8(str)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function buildRfc822Message(from: string, to: string, subject: string, bodyText: string): string {
+  const utf8Subject = `=?utf-8?B?${encodeBase64Utf8(subject)}?=`;
+  return [
+    `From: ${from}`,
+    `To: ${to}`,
+    `Subject: ${utf8Subject}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+    '',
+    bodyText.replace(/\n/g, '<br/>'),
+  ].join('\r\n');
+}
+
 export default async function sendGmail(req: Request, ctx: any) {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -49,6 +79,8 @@ export default async function sendGmail(req: Request, ctx: any) {
       remitente_nombre,
       categoria = 'cargas',
       load_id,
+      accessToken,
+      gmailUser: reqGmailUser,
     } = body;
 
     if (!to || !subject || !content) {
@@ -58,38 +90,83 @@ export default async function sendGmail(req: Request, ctx: any) {
       );
     }
 
-    const gmailUser = Deno.env.get("GMAIL_USER");
-    const rawPass = Deno.env.get("GMAIL_APP_PASSWORD");
-    const gmailPass = rawPass ? rawPass.replace(/\s+/g, '') : null;
-
-    if (!gmailUser || !gmailPass) {
-      return new Response(
-        JSON.stringify({ error: "Credenciales de Gmail no configuradas en el entorno (GMAIL_USER, GMAIL_APP_PASSWORD)" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // Configuración del transporte seguro SMTP de Gmail
-    const transporter = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 465,
-      secure: true,
-      auth: {
-        user: gmailUser,
-        pass: gmailPass,
-      },
-    });
-
+    const toAddress = Array.isArray(to) ? to.join(', ') : to;
     const senderDisplayName = remitente_nombre || "Trucky Logistics";
-    const mailOptions = {
-      from: `"${senderDisplayName}" <${gmailUser}>`,
-      to: Array.isArray(to) ? to.join(', ') : to,
-      subject: subject,
-      text: content,
-      html: content.replace(/\n/g, '<br/>'),
-    };
+    let messageId: string | null = null;
+    let effectiveSenderEmail = reqGmailUser || "me";
 
-    const info = await transporter.sendMail(mailOptions);
+    // ─────────────────────────────────────────────────────────────────────────
+    // CASO 1: Envío vía Google OAuth 2.0 (REST API de Gmail)
+    // ─────────────────────────────────────────────────────────────────────────
+    if (accessToken) {
+      console.log("[sendGmail] Despachando vía Google OAuth 2.0 REST API...");
+      const fromAddress = effectiveSenderEmail !== 'me'
+        ? `"${senderDisplayName}" <${effectiveSenderEmail}>`
+        : senderDisplayName;
+
+      const rawRfc = buildRfc822Message(fromAddress, toAddress, subject, content);
+      const encodedRaw = encodeBase64Url(rawRfc);
+
+      const googleRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ raw: encodedRaw }),
+      });
+
+      if (!googleRes.ok) {
+        const errJson = await googleRes.json().catch(() => ({}));
+        const errMsg = errJson?.error?.message || `Error ${googleRes.status} de Google Gmail API`;
+        console.error("[sendGmail] Error devuelto por Google:", errJson);
+        return new Response(
+          JSON.stringify({ error: `Fallo al enviar con Google: ${errMsg}` }),
+          { status: googleRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      const sendData = await googleRes.json();
+      messageId = sendData.id || `g_${Date.now()}`;
+    } else {
+      // ─────────────────────────────────────────────────────────────────────────
+      // CASO 2: Fallback a SMTP mediante nodemailer
+      // ─────────────────────────────────────────────────────────────────────────
+      const gmailUser = Deno.env.get("GMAIL_USER");
+      const rawPass = Deno.env.get("GMAIL_APP_PASSWORD");
+      const gmailPass = rawPass ? rawPass.replace(/\s+/g, '') : null;
+
+      if (!gmailUser || !gmailPass) {
+        return new Response(
+          JSON.stringify({
+            error: "No se proporcionó un token de Google OAuth activo ni están configuradas credenciales SMTP (GMAIL_USER, GMAIL_APP_PASSWORD) en el entorno."
+          }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      effectiveSenderEmail = gmailUser;
+      const transporter = nodemailer.createTransport({
+        host: "smtp.gmail.com",
+        port: 465,
+        secure: true,
+        auth: {
+          user: gmailUser,
+          pass: gmailPass,
+        },
+      });
+
+      const mailOptions = {
+        from: `"${senderDisplayName}" <${gmailUser}>`,
+        to: toAddress,
+        subject: subject,
+        text: content,
+        html: content.replace(/\n/g, '<br/>'),
+      };
+
+      const info = await transporter.sendMail(mailOptions);
+      messageId = info.messageId;
+    }
 
     // Registro del correo enviado en Base44 para visualización inmediata en /emails
     let emailRecord = null;
@@ -98,8 +175,8 @@ export default async function sendGmail(req: Request, ctx: any) {
         organization_id: organization_id || null,
         profile_id: profile_id || null,
         remitente_nombre: senderDisplayName,
-        remitente_email: gmailUser,
-        destinatario_email: Array.isArray(to) ? to.join(', ') : to,
+        remitente_email: effectiveSenderEmail,
+        destinatario_email: toAddress,
         asunto: subject,
         cuerpo: content,
         snippet: content.slice(0, 160).replace(/\r?\n/g, ' '),
@@ -118,7 +195,7 @@ export default async function sendGmail(req: Request, ctx: any) {
     return new Response(
       JSON.stringify({
         success: true,
-        messageId: info.messageId,
+        messageId: messageId,
         email: emailRecord,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

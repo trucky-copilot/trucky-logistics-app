@@ -240,7 +240,7 @@ export default function Emails() {
     try {
       const client = window.google.accounts.oauth2.initTokenClient({
         client_id: GOOGLE_CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/userinfo.email',
+        scope: 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email',
         callback: async (tokenResponse) => {
           if (tokenResponse?.error) {
             console.error('[Google OAuth error]:', tokenResponse);
@@ -322,6 +322,10 @@ export default function Emails() {
       const data = res?.data || {};
       if (data.error) {
         const errorText = String(data.error).toLowerCase();
+        const diagnostics = data.diagnostics;
+        const diagnosticText = diagnostics
+          ? ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} mensajes recibidos, ${diagnostics.detallesCargados} revisados, ${diagnostics.coincidenciasTrucky} con “Trucky”, ${diagnostics.duplicados} ya existentes.`
+          : '';
         // Si el token expiró o las credenciales no son válidas, limpiar y pedir reautorización
         if (
           errorText.includes('autenticación') ||
@@ -340,17 +344,23 @@ export default function Emails() {
 
         toast({
           title: isEs ? 'Error de sincronización' : 'Sync Error',
-          description: data.error,
+          description: `${data.error}${diagnosticText}`,
           variant: 'destructive',
         });
       } else {
         const nuevos = data.nuevosGuardados || 0;
         const omitidos = data.omitidosNoLogisticos || 0;
+        const diagnostics = data.diagnostics;
+        const diagnosticText = diagnostics
+          ? isEs
+            ? ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} recibidos, ${diagnostics.coincidenciasTrucky} con “Trucky”, ${diagnostics.duplicados} existentes actualizados.`
+            : ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} received, ${diagnostics.coincidenciasTrucky} with “Trucky”, ${diagnostics.reparados} existing emails refreshed.`
+          : '';
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
           description: isEs
-            ? `${nuevos} correos logísticos importados (${omitidos} personales/spam filtrados).`
-            : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).`,
+            ? `${nuevos} correos logísticos importados (${omitidos} personales/spam filtrados).${diagnosticText}`
+            : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).${diagnosticText}`,
         });
         
         // Refrescar desde la base de datos aplicando los filtros de perfil y cuenta actual
@@ -461,18 +471,57 @@ export default function Emails() {
     e.preventDefault();
     if (!composeForm.to || !composeForm.subject || !composeForm.content) return;
 
+    const token = oauthToken || localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || localStorage.getItem('trucky_google_token');
+    const senderEmail = googleConnectedEmail || localStorage.getItem(`trucky_oauth_email_${activeProfileId}`);
+
+    if (!token) {
+      toast({
+        title: isEs ? 'Cuenta de Google no conectada' : 'Google account not connected',
+        description: isEs
+          ? 'Por favor conecta tu cuenta de Google arriba para autorizar el envío de correos.'
+          : 'Please connect your Google account above to authorize sending emails.',
+        variant: 'destructive',
+      });
+      handleConnectGoogle('select_account');
+      return;
+    }
+
     setSendingCompose(true);
     try {
       const res = await base44.functions.invoke('sendGmail', {
+        accessToken: token,
+        gmailUser: senderEmail,
         to: composeForm.to,
         subject: composeForm.subject,
         content: composeForm.content,
         categoria: composeForm.categoria,
         organization_id: orgId,
         profile_id: activeProfileId,
+        remitente_nombre: user?.full_name || 'Trucky User',
       });
 
       if (res?.data?.error) {
+        const errorText = String(res.data.error).toLowerCase();
+        if (
+          errorText.includes('autenticación') ||
+          errorText.includes('401') ||
+          errorText.includes('403') ||
+          errorText.includes('invalid authentication') ||
+          errorText.includes('insufficient permissions') ||
+          errorText.includes('insufficient permission') ||
+          errorText.includes('invalid_grant')
+        ) {
+          clearExpiredToken();
+          toast({
+            title: isEs ? 'Permiso requerido de Google' : 'Google permission required',
+            description: isEs
+              ? 'Por favor vuelve a autorizar Google marcando la casilla de permisos de envío.'
+              : 'Please re-authorize Google with send permissions.',
+          });
+          handleConnectGoogle('select_account');
+          return;
+        }
+
         toast({
           title: isEs ? 'Error al enviar' : 'Send error',
           description: res.data.error,
@@ -485,12 +534,33 @@ export default function Emails() {
         });
         setComposeOpen(false);
         setComposeForm({ to: '', subject: '', content: '', categoria: 'cargas' });
-        await fetchEmails();
+        await fetchEmails(senderEmail);
       }
     } catch (err) {
+      const serverMsg = err?.response?.data?.error || err?.message || 'Fallo en el despacho';
+      const msgLower = String(serverMsg).toLowerCase();
+      if (
+        msgLower.includes('autenticación') ||
+        msgLower.includes('401') ||
+        msgLower.includes('403') ||
+        msgLower.includes('insufficient permissions') ||
+        msgLower.includes('invalid authentication') ||
+        msgLower.includes('invalid_grant')
+      ) {
+        clearExpiredToken();
+        toast({
+          title: isEs ? 'Permiso de envío requerido' : 'Send permission required',
+          description: isEs
+            ? 'Por favor autoriza los permisos de envío en la ventana de Google.'
+            : 'Please authorize send permissions in Google.',
+        });
+        handleConnectGoogle('select_account');
+        return;
+      }
+
       toast({
         title: isEs ? 'Fallo en el despacho' : 'Dispatch failed',
-        description: err.message,
+        description: serverMsg,
         variant: 'destructive',
       });
     } finally {

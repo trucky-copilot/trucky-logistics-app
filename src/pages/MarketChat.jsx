@@ -114,7 +114,11 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
     if (!to || !subject || !content) return;
     setSending(true);
     try {
+      const token = localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || localStorage.getItem('trucky_google_token');
+      const senderEmail = localStorage.getItem(`trucky_oauth_email_${activeProfileId}`);
       const res = await base44.functions.invoke('sendGmail', {
+        accessToken: token || undefined,
+        gmailUser: senderEmail || undefined,
         to,
         subject,
         content,

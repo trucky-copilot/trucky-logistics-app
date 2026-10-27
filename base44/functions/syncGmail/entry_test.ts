@@ -1,8 +1,37 @@
-import { classifyEmail, getFetchLimit, getPlainText } from './entry.ts';
+import { buildEmailDedupeKey, classifyEmail, getFetchLimit, getPlainText } from './entry.ts';
 
 Deno.test('limits Gmail search to at most 45 messages', () => {
   if (getFetchLimit(100) !== 45) throw new Error('Gmail search exceeded 45 messages');
   if (getFetchLimit(undefined) !== 45) throw new Error('Default Gmail search limit is not 45');
+});
+
+Deno.test('keeps duplicate detection isolated by organization and profile', () => {
+  const key = buildEmailDedupeKey(
+    'sender@example.com',
+    'Trucky load',
+    '2026-10-26T14:30:00.000Z',
+    'user@gmail.com',
+    'org-1',
+    'profile-1',
+  );
+  const sameScopeKey = buildEmailDedupeKey(
+    'sender@example.com',
+    'Trucky load',
+    '2026-10-26T14:30:59.000Z',
+    'user@gmail.com',
+    'org-1',
+    'profile-1',
+  );
+  const differentProfileKey = buildEmailDedupeKey(
+    'sender@example.com',
+    'Trucky load',
+    '2026-10-26T14:30:00.000Z',
+    'user@gmail.com',
+    'org-1',
+    'profile-2',
+  );
+  if (key !== sameScopeKey) throw new Error('Same-scope email was not deduplicated');
+  if (key === differentProfileKey) throw new Error('Email from another profile was incorrectly deduplicated');
 });
 
 Deno.test('classifies a Trucky logistics email from its content', () => {
@@ -12,6 +41,24 @@ Deno.test('classifies a Trucky logistics email from its content', () => {
     'lanatanbermudez@gmail.com',
   );
   if (!result.es_logistico) throw new Error('Trucky logistics message was filtered out');
+});
+
+Deno.test('classifies the Trucky email subject shown in the inbox screenshot', () => {
+  const result = classifyEmail(
+    'logistica Trucky - carrier flota fleet loads brokers',
+    'carrier flota fleet loads brokers',
+    'lanatanbermudez@gmail.com',
+  );
+  if (!result.es_logistico) throw new Error('The Trucky inbox example was filtered out');
+});
+
+Deno.test('keeps Trucky logistics emails with generic privacy or footer text', () => {
+  const result = classifyEmail(
+    'Logistica Trucky',
+    'carrier flota fleet loads brokers. Review our privacy policy and unsubscribe.',
+    'lanatanbermudez@gmail.com',
+  );
+  if (!result.es_logistico) throw new Error('Trucky email was rejected because of generic footer text');
 });
 
 Deno.test('does not classify download notifications as logistics loads', () => {
