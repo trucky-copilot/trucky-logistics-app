@@ -122,6 +122,16 @@
         "paused"
       ],
       "default": "none"
+    },
+    "stripe_live_price_id": {
+      "type": "string"
+    },
+    "live_plan_code": {
+      "type": "string",
+      "enum": [
+        "owner_op",
+        "fleet"
+      ]
     }
   },
   "required": [
