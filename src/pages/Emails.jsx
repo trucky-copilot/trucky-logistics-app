@@ -15,6 +15,24 @@ import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
 
+const LOGISTICS_EMAIL_TERMS = [
+  'trucky', 'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
+  'flete', 'fletes', 'carga', 'cargas', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
+  'detention', 'layover', 'tonu', 'lumper', 'carrier', 'broker', 'dispatcher', 'dispatch',
+  'pickup', 'delivery', 'container', 'factoring', 'quickpay', 'camion', 'flota', 'tarifa de flete',
+];
+
+function hasLogisticsSignal(email) {
+  const text = `${email.asunto || ''} ${email.snippet || ''} ${email.cuerpo || ''}`
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+  return LOGISTICS_EMAIL_TERMS.some(term => {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(text);
+  });
+}
+
 export default function Emails() {
   const { user } = useAuth();
   const orgId = useOrganizationId();
@@ -77,25 +95,20 @@ export default function Emails() {
       const cleanList = profileScoped.filter(e => {
         const sender = (e.remitente_email || '').toLowerCase();
         const subject = (e.asunto || '').toLowerCase();
+        const senderIsNonLogistics = [
+          'google.com', 'accounts.google', 'openai.com', 'linkedin.com', 'github.com',
+          'amazon.com', 'uber.com', 'microsoft.com', 'temu.com',
+        ].some(domain => sender.includes(domain));
+
+        if (e.es_logistico === false || senderIsNonLogistics || !hasLogisticsSignal(e)) {
+          return false;
+        }
 
         // Si se especificó cuenta de Google y el registro tiene google_account, verificar coincidencia
         if (activeGoogleAcc && e.google_account) {
           if (e.google_account.toLowerCase().trim() !== activeGoogleAcc) {
             return false;
           }
-        }
-
-        // Excluir dominios conocidos no logísticos
-        if (
-          sender.includes('google.com') ||
-          sender.includes('accounts.google') ||
-          sender.includes('openai.com') ||
-          sender.includes('linkedin.com') ||
-          sender.includes('github.com') ||
-          sender.includes('amazon.com') ||
-          sender.includes('uber.com')
-        ) {
-          return false;
         }
 
         // Excluir alertas de seguridad, códigos y marketing genérico
@@ -303,7 +316,7 @@ export default function Emails() {
         organization_id: orgId,
         profile_id: activeProfileId,
         user_id: user?.id || null,
-        limit: 35,
+        limit: 45,
       });
 
       const data = res?.data || {};

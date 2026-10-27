@@ -70,11 +70,24 @@ const EXCLUDED_SENDERS = [
   'stripe.com'
 ];
 
+function normalizeForMatching(value: string) {
+  return (value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function containsTerm(text: string, term: string) {
+  const normalizedText = normalizeForMatching(text);
+  const normalizedTerm = normalizeForMatching(term).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^a-z0-9])${normalizedTerm}(?=$|[^a-z0-9])`).test(normalizedText);
+}
+
 /**
  * Clasificador inteligente de correos:
  * Discrimina correos operativos del transporte y Trucky de mensajes personales, spam o marketing.
  */
-function classifyEmail(subject: string, text: string, fromAddress = '') {
+export function classifyEmail(subject: string, text: string, fromAddress = '') {
   const sender = (fromAddress || '').toLowerCase();
   const subj = (subject || '').toLowerCase();
   const content = `${subj} ${text || ''}`.toLowerCase();
@@ -85,19 +98,19 @@ function classifyEmail(subject: string, text: string, fromAddress = '') {
   }
 
   // 2. Si tiene palabras de exclusión (ocio, seguridad, e-commerce, promociones)
-  const tieneExclusion = EXCLUSION_KEYWORDS.some(k => content.includes(k) || sender.includes(k));
+  const tieneExclusion = EXCLUSION_KEYWORDS.some(k => containsTerm(content, k) || sender.includes(k));
   if (tieneExclusion) {
     // Solo permitir si explícitamente es un flete o rate confirmation inconfundible
-    const esFleteInconfundible = content.includes('rate con') || content.includes('bill of lading') || content.includes('flete') || content.includes('freight load');
+    const esFleteInconfundible = ['rate con', 'bill of lading', 'flete', 'freight load'].some(term => containsTerm(content, term));
     if (!esFleteInconfundible) {
       return { es_logistico: false, categoria: 'general' };
     }
   }
 
   // 3. Evaluar presencia de términos clave de flete y transporte
-  const hasMandatory = MANDATORY_LOGISTICS_TERMS.some(term => content.includes(term));
-  const hasSubjectMatch = LOGISTICS_KEYWORDS.some(k => subj.includes(k));
-  const hasTrucky = content.includes('trucky');
+  const hasMandatory = MANDATORY_LOGISTICS_TERMS.some(term => containsTerm(content, term));
+  const hasSubjectMatch = LOGISTICS_KEYWORDS.some(term => containsTerm(subj, term));
+  const hasTrucky = containsTerm(content, 'trucky');
 
   // Si no coincide con ningún término obligatorio ni en el asunto ni es de Trucky, se descarta
   if (!hasMandatory && !hasSubjectMatch && !hasTrucky) {
@@ -106,11 +119,28 @@ function classifyEmail(subject: string, text: string, fromAddress = '') {
 
   // 4. Categorización
   let categoria = 'cargas';
-  if (content.includes('broker') || content.includes('rate') || content.includes('tarifa') || content.includes('packet') || content.includes('setup')) {
+  if (['broker', 'rate', 'tarifa', 'packet', 'setup'].some(term => containsTerm(content, term))) {
     categoria = 'brokers';
   }
 
   return { es_logistico: true, categoria };
+}
+
+export function getPlainText(payload: any): string {
+  if (payload?.mimeType === 'text/plain' && payload.body?.data) {
+    const base64 = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
+    const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+    return new TextDecoder().decode(bytes);
+  }
+
+  return (payload?.parts || [])
+    .map((part: any) => getPlainText(part))
+    .filter(Boolean)
+    .join('\n');
+}
+
+export function getFetchLimit(limit: unknown) {
+  return Math.max(Math.min(Number(limit) || 45, 45), 30);
 }
 
 export default async function syncGmail(req: Request, ctx: any) {
@@ -142,9 +172,10 @@ export default async function syncGmail(req: Request, ctx: any) {
     // ─────────────────────────────────────────────────────────────────────────────
     if (accessToken) {
       console.log("[syncGmail] Sincronizando vía Google OAuth 2.0...");
-      const fetchLimit = Math.max(Math.min(limit || 30, 50), 30);
+      const fetchLimit = getFetchLimit(limit);
+      const searchQuery = '{trucky logistics logistica freight freights flete fletes load loads carrier carriers broker brokers dispatch pickup delivery reefer "rate confirmation" "bill of lading"}';
       const listRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}`,
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}&q=${encodeURIComponent(searchQuery)}`,
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
 
@@ -194,7 +225,8 @@ export default async function syncGmail(req: Request, ctx: any) {
         const fromHeader = getHeader('From') || 'desconocido@correo.com';
         const toHeader = getHeader('To') || 'usuario@gmail.com';
         const dateHeader = getHeader('Date') ? new Date(getHeader('Date')).toISOString() : new Date().toISOString();
-        const snippet = detail.snippet || subject;
+        const bodyText = getPlainText(detail.payload);
+        const snippet = (bodyText || detail.snippet || subject).replace(/\s+/g, ' ').trim().slice(0, 500);
 
         // Extraer remitente nombre y email
         const fromMatch = fromHeader.match(/^(.*?)\s*<(.+?)>$/);
@@ -210,7 +242,7 @@ export default async function syncGmail(req: Request, ctx: any) {
         }
 
         // Clasificar logística pasando fromAddress
-        const { es_logistico, categoria } = classifyEmail(subject, snippet, fromAddress);
+        const { es_logistico, categoria } = classifyEmail(subject, `${bodyText}\n${detail.snippet || ''}`, fromAddress);
         if (!es_logistico) {
           omitidosNoLogisticos++;
           continue;
@@ -227,14 +259,14 @@ export default async function syncGmail(req: Request, ctx: any) {
             remitente_email: fromAddress,
             destinatario_email: toHeader,
             asunto: subject,
-            cuerpo: snippet,
+            cuerpo: (bodyText || detail.snippet || subject).slice(0, 50000),
             snippet: snippet,
             fecha: dateHeader,
             leido: false,
             destacado: false,
             categoria,
             es_logistico: true,
-            tipo_flujo: 'inbox',
+            tipo_flujo: detail.labelIds?.includes('SENT') ? 'sent' : 'inbox',
           });
 
           syncedEmails.push(nuevoRegistro);
