@@ -1,3 +1,4 @@
+import { provenanceKey } from "./provenance.mjs";
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
@@ -176,13 +177,23 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
 
     // 6) Crear la membresía atómica como 'owner'
     stage = 'membership_create';
-    await db.OrganizationMember.create({
+    const createdMember = await db.OrganizationMember.create({
       organization_id: newOrg.id,
       user_email: identity.email,
       google_sub: identity.sub,
       role: 'owner',
       active: true
     });
+
+    // Only mint proof immediately after a server-created membership.
+    // Do not backfill legacy rows merely because they exist or emails match.
+    if (Deno.env.get('BILLING_MEMBERSHIP_PROVENANCE_ENABLED') === 'true') {
+      stage = 'membership_provenance';
+      if (!createdMember?.id) throw Error('MEMBERSHIP_CREATION_UNCONFIRMED');
+      await demoRedis(['SET', provenanceKey(newOrg.id, identity.sub), JSON.stringify({
+        memberId: createdMember.id, orgId: newOrg.id, googleSub: identity.sub, role: 'owner',
+      }), 'NX']);
+    }
 
     if (publicDemo) {
     stage = 'registry_register';

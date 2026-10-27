@@ -102,7 +102,7 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
   if (!isAuthorizedServer(req)) return json({ error: 'Unauthorized' }, 401);
 
   // 2) Validación del body
-  let body: { google_id_token?: unknown };
+  let body: { google_id_token?: unknown; mode?: unknown };
   try {
     body = await req.json();
   } catch {
@@ -143,7 +143,8 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
       const org = orgs?.[0];
       if (!org || org.active === false) continue;
 
-      const status: string = org.subscription_status ?? 'none';
+      const live = body.mode === 'live';
+      const status: string = (live ? org.live_subscription_status : org.subscription_status) ?? 'none';
       organizations.push({
         id: org.id,
         billing_demo_enabled: await isDemoOrganization(org.id),

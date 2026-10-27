@@ -1,3 +1,4 @@
+import {liveBillingGuard} from "./liveBillingGuard.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -32,6 +33,8 @@ function isAppOwnedFileUrl(value) {
 export default async function (req) {
   try {
     const base44 = createClientFromRequest(req);
+    const billingDenied=await liveBillingGuard(req,base44);
+    if(billingDenied)return billingDenied;
     let user;
     try {
       user = await base44.auth.me();
