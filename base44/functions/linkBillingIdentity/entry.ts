@@ -1,5 +1,5 @@
-import { assertMembershipProvenance } from "./provenance.mjs";
-import { reserveNativeBinding } from "./binding.mjs";
+import { assertMembershipProvenance } from "./provenance.ts";
+import { reserveNativeBinding } from "./binding.ts";
 import { demoRedis } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 export default async function linkBillingIdentity(req:Request,_ctx:unknown){

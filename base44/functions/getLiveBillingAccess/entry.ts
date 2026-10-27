@@ -1,9 +1,9 @@
-import { assertMembershipProvenance } from "./provenance.mjs";
+import { assertMembershipProvenance } from "./provenance.ts";
 import { demoRedis } from "./demoRegistry.ts";
-import { verifiedLivePlan } from "./live-plan.mjs";
+import { verifiedLivePlan } from "./live-plan.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
-import { liveBillingDecision } from './policy.mjs';
+import { liveBillingDecision } from './policy.ts';
 export default async function getLiveBillingAccess(req: Request,_ctx:unknown){
  const reply=(data:unknown,status=200)=>new Response(JSON.stringify(data),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
  if(req.method!=='POST')return reply({code:'METHOD_NOT_ALLOWED'},405);

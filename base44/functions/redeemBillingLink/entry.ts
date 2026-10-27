@@ -1,7 +1,7 @@
 import {createClientFromRequest} from 'npm:@base44/sdk@0.8.54';
 import {demoRedis} from './demoRegistry.ts';
-import {reserveNativeBinding} from './binding.mjs';
-import {assertMembershipProvenance} from './provenance.mjs';
+import {reserveNativeBinding} from './binding.ts';
+import {assertMembershipProvenance} from './provenance.ts';
 export default async function redeemBillingLink(req:Request,_ctx:unknown){
  const reply=(code:string,status=200)=>new Response(JSON.stringify({code}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
  if(req.method!=='POST')return reply('METHOD_NOT_ALLOWED',405);
