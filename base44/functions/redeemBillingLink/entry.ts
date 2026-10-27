@@ -27,7 +27,6 @@ export default async function redeemBillingLink(req:Request,_ctx:unknown){
   if(member.base44_user_id&&member.base44_user_id!==user.id)return reply('IDENTITY_ALREADY_BOUND',409);
   await reserveNativeBinding(demoRedis,identity.sub,user.id);
   if(!member.base44_user_id)await db.OrganizationMember.update(member.id,{base44_user_id:user.id});
-  await demoRedis(['SET',`trucky:billing:native:v1:${user.id}`,identity.sub,'NX']);
   return reply('IDENTITY_LINKED');
  }catch{return reply('LINK_REQUIRES_REVIEW',503);}
 }

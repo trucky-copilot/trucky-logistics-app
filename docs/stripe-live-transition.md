@@ -49,3 +49,6 @@ IMPORTANT deployment coordination: publish getBillingLinkState BEFORE the fronte
 
 ## Local verification update
 npm ci --ignore-scripts completed without changing lockfiles. Vite build with public app identifiers exited 0 and generated dist/index.html. It does not exercise cloud APIs or establish native linking correctness. 16 selected policy/wiring tests pass, including source regression checks for flag-off early return and identical independently packaged guards. npm reported 22 dependency vulnerabilities (12 high); no blind audit fix or dependency upgrades applied. Review separately before launch. Browser/real cloud acceptance remains pending, especially existing-user behavior, native login, direct entities and multi-company handling. No production deployment or live flag change performed.
+
+## Bidirectional binding correction
+Native/Google bindings now use one Lua operation checking both keys before writing either. No partial inverse update and no silent NX failure. Model tests cover conflicting Google and native identities. Actual Upstash EVAL and Base44-session acceptance remain pending; local mocks are not a live concurrency certification. This code is still gated and not deployed. Retain existing production behavior until acceptance, not a blanket user migration.
