@@ -6,30 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Carga robusta de variables de entorno locales (.env)
-async function loadEnv() {
-  const envUrls = [
-    new URL('./.env', import.meta.url),
-    new URL('../../.env', import.meta.url),
-    new URL('../../../.env', import.meta.url),
-  ];
 
-  for (const url of envUrls) {
-    try {
-      const text = await Deno.readTextFile(url);
-      for (const line of text.split('\n')) {
-        const m = line.match(/^\s*([^#=\s][^=]*?)\s*=\s*(.*)\s*$/);
-        if (m && !Deno.env.get(m[1])) {
-          Deno.env.set(m[1], m[2].trim());
-        }
-      }
-    } catch (_) {
-      // Ignorar archivos que no existen en este path
-    }
-  }
-}
-
-await loadEnv();
 
 function encodeBase64Utf8(str: string): string {
   const bytes = new TextEncoder().encode(str);

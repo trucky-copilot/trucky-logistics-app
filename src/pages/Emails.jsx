@@ -507,8 +507,9 @@ export default function Emails() {
           errorText.includes('401') ||
           errorText.includes('403') ||
           errorText.includes('invalid authentication') ||
-          errorText.includes('insufficient permissions') ||
           errorText.includes('insufficient permission') ||
+          errorText.includes('insufficient scope') ||
+          errorText.includes('scope') ||
           errorText.includes('invalid_grant')
         ) {
           clearExpiredToken();
@@ -543,7 +544,9 @@ export default function Emails() {
         msgLower.includes('autenticación') ||
         msgLower.includes('401') ||
         msgLower.includes('403') ||
-        msgLower.includes('insufficient permissions') ||
+        msgLower.includes('insufficient permission') ||
+        msgLower.includes('insufficient scope') ||
+        msgLower.includes('scope') ||
         msgLower.includes('invalid authentication') ||
         msgLower.includes('invalid_grant')
       ) {
