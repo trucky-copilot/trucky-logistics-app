@@ -35,10 +35,10 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     const org = (await db.Organization.filter({ id: body.organization_id }))?.[0];
     if (!org) return reply('ORGANIZATION_NOT_FOUND', 404);
     let projection;
-    try { projection = { ...subscriptionProjection(org, sub, mode), ...(live ? verifiedLivePlan(sub) : {}) }; }
+    try { projection = { ...subscriptionProjection(org, sub, mode), ...(live ? verifiedLivePlan(sub, {owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')}) : {}) }; }
     catch (error) {
       const code = error instanceof Error ? error.message : 'SUBSCRIPTION_MISMATCH';
-      const allowed = ['SUBSCRIPTION_MISMATCH','STATUS_REQUIRES_MIGRATION','BILLING_MAPPING_CONFLICT','CUSTOMER_REQUIRED','LIVE_PLAN_MISMATCH','PAID_PLAN_TRIAL_NOT_ALLOWED'];
+      const allowed = ['SUBSCRIPTION_MISMATCH','STATUS_REQUIRES_MIGRATION','BILLING_MAPPING_CONFLICT','CUSTOMER_REQUIRED','LIVE_PLAN_MISMATCH','PAID_PLAN_TRIAL_NOT_ALLOWED','LIVE_PRICES_NOT_CONFIGURED'];
       return reply(allowed.includes(code) ? code : 'SUBSCRIPTION_MISMATCH',409);
     }
     await db.Organization.update(org.id, projection);

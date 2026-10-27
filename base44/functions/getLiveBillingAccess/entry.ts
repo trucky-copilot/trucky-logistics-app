@@ -1,3 +1,4 @@
+import { verifiedLivePlan } from "./live-plan.mjs";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
 import { liveBillingDecision } from './policy.mjs';
@@ -22,6 +23,9 @@ export default async function getLiveBillingAccess(req: Request,_ctx:unknown){
   if(!key || !/^(sk|rk)_live_.+/.test(key || ''))return reply({code:'LIVE_CONFIGURATION_REQUIRED'},503);
   const stripe=new Stripe(key);
   const subscription=await stripe.subscriptions.retrieve(org.stripe_live_subscription_id);
-  return reply(liveBillingDecision(subscription,org.id,org.stripe_live_customer_id));
+  const plan=verifiedLivePlan(subscription,{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')});
+  const access=liveBillingDecision(subscription,org.id,org.stripe_live_customer_id);
+  return reply({...access,...(access.allowed?{plan:plan.live_plan_code}:{})});
+
  }catch{return reply({code:'BILLING_CHECK_UNAVAILABLE'},503);}
 }

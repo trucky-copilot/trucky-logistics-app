@@ -25,3 +25,6 @@ This endpoint needs an app-side OAuth ID-token acquisition/secure handoff; do NO
 Safe to ADD (not replace) STRIPE_LIVE_SECRET_KEY, STRIPE_LIVE_PRICE_OWNER_OP, STRIPE_LIVE_PRICE_FLEET and STRIPE_LIVE_WEBHOOK_SECRET in Vercel Production. Add STRIPE_LIVE_SECRET_KEY in Base44. Keep all live enable flags false and STRIPE_MODE=test until actual acceptance. Existing test configuration continues unchanged.
 
 checkLiveBillingConfiguration uses S2S auth, reads prices through live Stripe key and verifies exact 29/99 USD monthly settings; performs no Stripe writes/charges. Website live checkout requires this check before session creation. This only validates configuration, not app access, RLS or schema migration. Backend function must be published before enabling live. New staged variable names prevent accidentally breaking test mode while preparing credentials.
+
+## Exact price allowlist
+Base44 sync and live access additionally require STRIPE_LIVE_PRICE_OWNER_OP and STRIPE_LIVE_PRICE_FLEET. Use the same real price IDs as Vercel. Matching currency/amount alone is insufficient. Missing or identical IDs fail closed; no automatic configuration or real charge performed. Live access response includes plan code only after canonical subscription/mapping verification. Operational entitlement enforcement and native linking remain gated pending work.
