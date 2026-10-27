@@ -19,7 +19,7 @@ export default async function getLiveBillingAccess(req: Request,_ctx:unknown){
   if(!org||org.active===false)return reply({code:'ORGANIZATION_UNAVAILABLE'},403);
   if(!org.stripe_live_subscription_id)return reply({allowed:false,reason:'NO_LIVE_SUBSCRIPTION'});
   const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');
-  if(!key?.startsWith('sk_live_'))return reply({code:'LIVE_CONFIGURATION_REQUIRED'},503);
+  if(!key || !/^(sk|rk)_live_.+/.test(key || ''))return reply({code:'LIVE_CONFIGURATION_REQUIRED'},503);
   const stripe=new Stripe(key);
   const subscription=await stripe.subscriptions.retrieve(org.stripe_live_subscription_id);
   return reply(liveBillingDecision(subscription,org.id,org.stripe_live_customer_id));

@@ -9,7 +9,7 @@ export default async function checkLiveBillingConfiguration(req:Request,_ctx:unk
  let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];
  if(diff)return reply('UNAUTHORIZED',401);
  const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');
- if(!key?.startsWith('sk_live_'))return reply('LIVE_KEY_REQUIRED',503);
+ if(!key || !/^(sk|rk)_live_.+/.test(key || ''))return reply('LIVE_KEY_REQUIRED',503);
  try{
   const body=await req.json();
   if(!Array.isArray(body.prices)||body.prices.length!==2)return reply('PRICES_REQUIRED',400);

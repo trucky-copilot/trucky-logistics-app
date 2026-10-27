@@ -25,7 +25,7 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     if (typeof body.organization_id !== 'string' || (!live && !allowed.has(body.organization_id) && !await isDemoOrganization(body.organization_id))) return reply('TEST_ORGANIZATION_NOT_ALLOWED', 403);
     if (typeof body.subscription_id !== 'string' || !/^sub_[a-zA-Z0-9]+$/.test(body.subscription_id)) return reply('INVALID_SUBSCRIPTION', 400);
     const key = Deno.env.get(live ? 'STRIPE_LIVE_SECRET_KEY' : 'STRIPE_SECRET_KEY');
-    if (!key?.startsWith(live ? 'sk_live_' : 'sk_test_')) return reply('TEST_CONFIGURATION_REQUIRED', 503);
+    if (!key || !(live ? /^(sk|rk)_live_.+/.test(key || '') : key?.startsWith('sk_test_'))) return reply('TEST_CONFIGURATION_REQUIRED', 503);
     // Never trust status/customer/trial dates received from the caller.
     const sub = await new Stripe(key).subscriptions.retrieve(body.subscription_id);
     if (sub.livemode !== live || sub.metadata.org_id !== body.organization_id) return reply('SUBSCRIPTION_MISMATCH', 409);
