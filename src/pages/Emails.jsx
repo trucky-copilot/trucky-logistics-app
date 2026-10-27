@@ -633,17 +633,21 @@ export default function Emails() {
             <span>{refreshing ? (isEs ? 'Actualizando...' : 'Refreshing...') : (isEs ? 'Actualizar' : 'Refresh')}</span>
           </button>
 
-          {!googleConnectedEmail && (
-            <button
-              onClick={handleSyncGmail}
-              disabled={syncing || isDemoUser}
-              className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
-              title={isEs ? 'Conectar cuenta de Google' : 'Connect Google account'}
-            >
-              <Mail className="w-3.5 h-3.5 text-primary" />
-              <span>{isEs ? 'Conectar Gmail' : 'Connect Gmail'}</span>
-            </button>
-          )}
+          <button
+            onClick={handleSyncGmail}
+            disabled={syncing || isDemoUser}
+            className={`flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground transition-colors whitespace-nowrap ${
+              isDemoUser ? 'opacity-40 cursor-not-allowed hover:bg-card' : 'hover:bg-muted/80 disabled:opacity-50'
+            }`}
+            title={
+              isDemoUser
+                ? (isEs ? 'Sincronización deshabilitada en la versión Demo' : 'Sync disabled in Demo version')
+                : (isEs ? 'Sincronizar correos de tu cuenta de Google' : 'Sync emails from your Google account')
+            }
+          >
+            <RotateCw className={`w-3.5 h-3.5 text-primary ${syncing ? 'animate-spin' : ''}`} />
+            <span>{syncing ? (isEs ? 'Sincronizando...' : 'Syncing...') : (isEs ? 'Sincronizar' : 'Sync')}</span>
+          </button>
 
           <button
             onClick={() => {
