@@ -28,3 +28,6 @@ checkLiveBillingConfiguration uses S2S auth, reads prices through live Stripe ke
 
 ## Exact price allowlist
 Base44 sync and live access additionally require STRIPE_LIVE_PRICE_OWNER_OP and STRIPE_LIVE_PRICE_FLEET. Use the same real price IDs as Vercel. Matching currency/amount alone is insufficient. Missing or identical IDs fail closed; no automatic configuration or real charge performed. Live access response includes plan code only after canonical subscription/mapping verification. Operational entitlement enforcement and native linking remain gated pending work.
+
+## Atomic identity-binding registry
+linkBillingIdentity now reserves Google subject -> native Base44 user ID atomically via Redis SET NX with no TTL. Same identity retries are allowed; competing identities rejected. getLiveBillingAccess additionally verifies this server-owned registry instead of trusting native ID fields alone. Do not delete identity registry entries casually; uncertain writes require operator review. Public native-Google handoff and trusted origin/provenance of memberships remain pending. This does NOT make client-creatable OrganizationMember rows safe; RLS/onboarding restrictions are still mandatory before enable. No production bindings created.

@@ -1,3 +1,5 @@
+import { reserveNativeBinding } from "./binding.mjs";
+import { demoRedis } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 export default async function linkBillingIdentity(req:Request,_ctx:unknown){
  const reply=(code:string,status=200)=>new Response(JSON.stringify({code}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
@@ -21,6 +23,9 @@ export default async function linkBillingIdentity(req:Request,_ctx:unknown){
   if(members.length!==1)return reply('VERIFIED_MEMBERSHIP_REQUIRED',403);
   const member=members[0];
   if(member.base44_user_id&&member.base44_user_id!==native.id)return reply('IDENTITY_ALREADY_BOUND',409);
+  // Persistent atomic registry prevents concurrent native identities winning
+  // separate database reads. Unknown writes retain the binding for recovery.
+  await reserveNativeBinding(demoRedis,identity.sub,native.id);
   if(!member.base44_user_id)await db.OrganizationMember.update(member.id,{base44_user_id:native.id});
   return reply('IDENTITY_LINKED');
  }catch{return reply('LINK_REQUIRES_REVIEW',503);}

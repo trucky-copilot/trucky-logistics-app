@@ -1,3 +1,4 @@
+import { demoRedis } from "./demoRegistry.ts";
 import { verifiedLivePlan } from "./live-plan.mjs";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
@@ -16,6 +17,12 @@ export default async function getLiveBillingAccess(req: Request,_ctx:unknown){
   // Require server-established native identity binding, not email alone.
   const members=await db.OrganizationMember.filter({organization_id:body.organization_id,base44_user_id:user.id,active:true});
   if(!members?.length)return reply({code:'VERIFIED_MEMBERSHIP_REQUIRED'},403);
+  const verified=[];
+  for(const member of members){
+    if(typeof member.google_sub==='string' &&
+      await demoRedis(['GET',`trucky:billing:identity:v1:${member.google_sub}`])===user.id) verified.push(member);
+  }
+  if(!verified.length)return reply({code:'IDENTITY_LINK_REQUIRED'},403);
   const org=(await db.Organization.filter({id:body.organization_id}))?.[0];
   if(!org||org.active===false)return reply({code:'ORGANIZATION_UNAVAILABLE'},403);
   if(!org.stripe_live_subscription_id)return reply({allowed:false,reason:'NO_LIVE_SUBSCRIPTION'});
