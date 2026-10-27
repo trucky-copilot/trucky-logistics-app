@@ -8,6 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
 import { useDemo } from '@/lib/DemoContext';
+import { sendEmailWithAutoAuth } from '@/lib/googleAuthHelper';
 
 const SESSION_KEY = 'trucky_chat_session';
 
@@ -114,18 +115,16 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
     if (!to || !subject || !content) return;
     setSending(true);
     try {
-      const token = localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || localStorage.getItem('trucky_google_token');
-      const senderEmail = localStorage.getItem(`trucky_oauth_email_${activeProfileId}`);
-      const res = await base44.functions.invoke('sendGmail', {
-        accessToken: token || undefined,
-        gmailUser: senderEmail || undefined,
+      const res = await sendEmailWithAutoAuth({
         to,
         subject,
         content,
         organization_id: orgId,
         profile_id: activeProfileId,
-        categoria: 'brokers'
+        remitente_nombre: currentUser?.full_name || 'Trucky User',
+        categoria: 'brokers',
       });
+
       if (res?.data?.error) {
         toast?.({
           title: locale === 'en' ? 'Send error' : 'Error al enviar',

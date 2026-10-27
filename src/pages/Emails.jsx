@@ -14,6 +14,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
+import { sendEmailWithAutoAuth, getStoredGoogleAuth } from '@/lib/googleAuthHelper';
 
 const LOGISTICS_EMAIL_TERMS = [
   'trucky', 'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
@@ -466,31 +467,42 @@ export default function Emails() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ─── Enviar correo desde el modal ────────────────────────────────────────────
+  // ─── Actualizar correos recientes (base de datos + sync silencioso) ───────────
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshInbox = async () => {
+    setRefreshing(true);
+    try {
+      await fetchEmails();
+      const { token, email } = getStoredGoogleAuth(activeProfileId);
+      if (token) {
+        try {
+          await base44.functions.invoke('syncGmail', {
+            accessToken: token,
+            gmailUser: email || googleConnectedEmail,
+            organization_id: orgId,
+            profile_id: activeProfileId,
+            user_id: user?.id || null,
+            limit: 45,
+          });
+          await fetchEmails(email || googleConnectedEmail);
+        } catch (_) {
+          // Si falla en segundo plano, no interrumpir al usuario
+        }
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // ─── Enviar correo desde el modal (auto-renovación transparente) ──────────────
   const handleSendEmail = async (e) => {
     e.preventDefault();
     if (!composeForm.to || !composeForm.subject || !composeForm.content) return;
 
-    const token = oauthToken || localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || localStorage.getItem('trucky_google_token');
-    const senderEmail = googleConnectedEmail || localStorage.getItem(`trucky_oauth_email_${activeProfileId}`);
-
-    if (!token) {
-      toast({
-        title: isEs ? 'Cuenta de Google no conectada' : 'Google account not connected',
-        description: isEs
-          ? 'Por favor conecta tu cuenta de Google arriba para autorizar el envío de correos.'
-          : 'Please connect your Google account above to authorize sending emails.',
-        variant: 'destructive',
-      });
-      handleConnectGoogle('select_account');
-      return;
-    }
-
     setSendingCompose(true);
     try {
-      const res = await base44.functions.invoke('sendGmail', {
-        accessToken: token,
-        gmailUser: senderEmail,
+      const res = await sendEmailWithAutoAuth({
         to: composeForm.to,
         subject: composeForm.subject,
         content: composeForm.content,
@@ -501,28 +513,6 @@ export default function Emails() {
       });
 
       if (res?.data?.error) {
-        const errorText = String(res.data.error).toLowerCase();
-        if (
-          errorText.includes('autenticación') ||
-          errorText.includes('401') ||
-          errorText.includes('403') ||
-          errorText.includes('invalid authentication') ||
-          errorText.includes('insufficient permission') ||
-          errorText.includes('insufficient scope') ||
-          errorText.includes('scope') ||
-          errorText.includes('invalid_grant')
-        ) {
-          clearExpiredToken();
-          toast({
-            title: isEs ? 'Permiso requerido de Google' : 'Google permission required',
-            description: isEs
-              ? 'Por favor vuelve a autorizar Google marcando la casilla de permisos de envío.'
-              : 'Please re-authorize Google with send permissions.',
-          });
-          handleConnectGoogle('select_account');
-          return;
-        }
-
         toast({
           title: isEs ? 'Error al enviar' : 'Send error',
           description: res.data.error,
@@ -535,35 +525,12 @@ export default function Emails() {
         });
         setComposeOpen(false);
         setComposeForm({ to: '', subject: '', content: '', categoria: 'cargas' });
-        await fetchEmails(senderEmail);
+        await fetchEmails();
       }
     } catch (err) {
-      const serverMsg = err?.response?.data?.error || err?.message || 'Fallo en el despacho';
-      const msgLower = String(serverMsg).toLowerCase();
-      if (
-        msgLower.includes('autenticación') ||
-        msgLower.includes('401') ||
-        msgLower.includes('403') ||
-        msgLower.includes('insufficient permission') ||
-        msgLower.includes('insufficient scope') ||
-        msgLower.includes('scope') ||
-        msgLower.includes('invalid authentication') ||
-        msgLower.includes('invalid_grant')
-      ) {
-        clearExpiredToken();
-        toast({
-          title: isEs ? 'Permiso de envío requerido' : 'Send permission required',
-          description: isEs
-            ? 'Por favor autoriza los permisos de envío en la ventana de Google.'
-            : 'Please authorize send permissions in Google.',
-        });
-        handleConnectGoogle('select_account');
-        return;
-      }
-
       toast({
         title: isEs ? 'Fallo en el despacho' : 'Dispatch failed',
-        description: serverMsg,
+        description: err.message || 'Error al conectar con el servicio de correo.',
         variant: 'destructive',
       });
     } finally {
@@ -657,20 +624,26 @@ export default function Emails() {
 
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
           <button
-            onClick={handleSyncGmail}
-            disabled={syncing || isDemoUser}
-            className={`flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground transition-colors whitespace-nowrap ${
-              isDemoUser ? 'opacity-40 cursor-not-allowed hover:bg-card' : 'hover:bg-muted/80 disabled:opacity-50'
-            }`}
-            title={
-              isDemoUser
-                ? (isEs ? 'Sincronización deshabilitada en la versión Demo' : 'Sync disabled in Demo version')
-                : (isEs ? 'Sincronizar correos de tu cuenta de Google' : 'Sync emails from your Google account')
-            }
+            onClick={handleRefreshInbox}
+            disabled={refreshing || loading}
+            className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
+            title={isEs ? 'Actualizar para ver correos recientes' : 'Refresh to view recent emails'}
           >
-            <RotateCw className={`w-3.5 h-3.5 text-primary ${syncing ? 'animate-spin' : ''}`} />
-            <span>{syncing ? (isEs ? 'Sincronizando...' : 'Syncing...') : (isEs ? 'Sincronizar' : 'Sync')}</span>
+            <RotateCw className={`w-3.5 h-3.5 text-primary ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{refreshing ? (isEs ? 'Actualizando...' : 'Refreshing...') : (isEs ? 'Actualizar' : 'Refresh')}</span>
           </button>
+
+          {!googleConnectedEmail && (
+            <button
+              onClick={handleSyncGmail}
+              disabled={syncing || isDemoUser}
+              className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium bg-card border border-border text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
+              title={isEs ? 'Conectar cuenta de Google' : 'Connect Google account'}
+            >
+              <Mail className="w-3.5 h-3.5 text-primary" />
+              <span>{isEs ? 'Conectar Gmail' : 'Connect Gmail'}</span>
+            </button>
+          )}
 
           <button
             onClick={() => {
