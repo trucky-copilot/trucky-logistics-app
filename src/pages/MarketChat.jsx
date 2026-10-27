@@ -77,6 +77,7 @@ const UI_STRINGS = {
 };
 
 const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) => {
+  const { currentUser } = useAppState();
   const [copied, setCopied] = useState(false);
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const [sending, setSending] = useState(false);
