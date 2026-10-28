@@ -127,7 +127,7 @@ export default function Loads() {
         </div>
         <button
           onClick={() => {
-            if (isDemoUser && loads.length >= (limits?.LOADS || 3)) {
+            if (limits?.LOADS && loads.length >= limits.LOADS) {
               setShowLimitModal(true);
               return;
             }
@@ -145,7 +145,8 @@ export default function Loads() {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         entityName="cargas"
-        limit={limits?.LOADS || 3}
+        currentCount={loads.length}
+        maxLimit={limits?.LOADS || 5}
       />
 
       {/* Summary strip - Ganancia estimada removida */}

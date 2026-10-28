@@ -643,21 +643,25 @@ export default function MarketChat() {
     }
   }, [locale]);
 
-  // Límite de mensajes para usuarios demo
+  // Límite de mensajes por perfil según el plan activo
   const userMessagesCount = useMemo(() => {
-    return messages.filter(m => m.role === 'user').length;
-  }, [messages]);
+    const email = currentUser?.email || userProfile?.usuario || userProfile?.email;
+    const profileKey = email && activeProfileId ? `chat_msgs_count_${email}_${activeProfileId}` : null;
+    const stored = profileKey ? parseInt(localStorage.getItem(profileKey) || '0', 10) : 0;
+    const sessionCount = messages.filter(m => m.role === 'user').length;
+    return Math.max(stored, sessionCount);
+  }, [messages, currentUser?.email, userProfile, activeProfileId]);
 
-  const maxMessages = limits?.CHAT_MESSAGES || 15;
-  const isChatLimitReached = isDemoUser && userMessagesCount >= maxMessages;
+  const maxMessages = limits?.CHAT_MESSAGES ?? 15;
+  const isChatLimitReached = maxMessages !== Infinity && userMessagesCount >= maxMessages;
 
   const sendMessage = async (text) => {
     if (isChatLimitReached) {
       toast?.({
-        title: locale === 'en' ? 'Demo Limit Reached' : 'Límite de la versión demo',
+        title: locale === 'en' ? 'Message Limit Reached' : 'Límite de mensajes alcanzado',
         description: locale === 'en'
-          ? `You have reached the maximum of ${maxMessages} messages in demo mode. Upgrade to unlock full access.`
-          : `Has alcanzado el máximo de ${maxMessages} mensajes en modo demo. Activa la versión completa para continuar.`,
+          ? `You have reached the maximum of ${maxMessages} messages for this profile on your plan.`
+          : `Has alcanzado el límite de ${maxMessages} mensajes para este perfil en tu plan actual.`,
         variant: 'destructive',
       });
       return;
@@ -665,6 +669,13 @@ export default function MarketChat() {
 
     const userMessage = text || input.trim();
     if (!userMessage || loading || translatingHistory) return;
+
+    // Incrementar y persistir contador del perfil
+    const email = currentUser?.email || userProfile?.usuario || userProfile?.email;
+    if (email && activeProfileId) {
+      const profileKey = `chat_msgs_count_${email}_${activeProfileId}`;
+      localStorage.setItem(profileKey, String(userMessagesCount + 1));
+    }
 
     const newMessages = [
       ...messages,
@@ -1035,12 +1046,14 @@ export default function MarketChat() {
           <div className="p-4 rounded-xl bg-gradient-to-r from-violet-950/60 via-purple-900/40 to-indigo-950/60 border border-violet-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
             <div>
               <p className="text-sm font-semibold text-white">
-                {locale === 'en' ? 'Demo Limit Reached (15 / 15 messages)' : 'Límite de la demo alcanzado (15 / 15 mensajes)'}
+                {locale === 'en'
+                  ? `Message Limit Reached (${userMessagesCount} / ${maxMessages} messages)`
+                  : `Límite alcanzado (${userMessagesCount} / ${maxMessages} mensajes)`}
               </p>
               <p className="text-xs text-zinc-300">
                 {locale === 'en'
-                  ? 'Unlock unlimited AI market queries and deep freight analysis.'
-                  : 'Desbloquea consultas ilimitadas con IA y análisis profundo de tarifas.'}
+                  ? 'Upgrade your plan to get more AI market queries for this profile.'
+                  : 'Has alcanzado el límite de mensajes para este perfil. Actualiza tu plan en trucky.site para continuar.'}
               </p>
             </div>
             <a
@@ -1049,15 +1062,15 @@ export default function MarketChat() {
               rel="noopener noreferrer"
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs whitespace-nowrap shadow-md transition-all flex items-center gap-1.5"
             >
-              <span>{locale === 'en' ? 'Upgrade Plan →' : 'Activar versión completa →'}</span>
+              <span>{locale === 'en' ? 'Upgrade Plan →' : 'Actualizar Plan →'}</span>
             </a>
           </div>
         ) : (
           <div>
-            {isDemoUser && (
+            {maxMessages !== Infinity && (
               <div className="flex items-center justify-between mb-2 text-[11px] text-zinc-400">
                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20 font-medium">
-                  DEMO · {userMessagesCount} de {maxMessages} mensajes
+                  {limits?.name || 'Plan'} · {userMessagesCount} de {maxMessages} mensajes en este perfil
                 </span>
                 <a
                   href="https://trucky.site"

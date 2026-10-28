@@ -236,7 +236,7 @@ export default function Fleet() {
           <p className="text-sm text-muted-foreground">{trucks.length} {t.fleet.trucks}</p>
         </div>
         <button onClick={() => {
-          if (isDemoUser && trucks.length >= (limits?.FLEET || 3)) {
+          if (limits?.FLEET && trucks.length >= limits.FLEET) {
             setShowLimitModal(true);
             return;
           }
@@ -252,7 +252,8 @@ export default function Fleet() {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         entityName="camiones"
-        limit={limits?.FLEET || 3}
+        currentCount={trucks.length}
+        maxLimit={limits?.FLEET || 5}
       />
 
       {/* Status summary */}

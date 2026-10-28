@@ -276,7 +276,7 @@ export default function Drivers() {
           <p className="text-sm text-muted-foreground">{drivers.length} {t.drivers.registered}</p>
         </div>
         <button onClick={() => {
-          if (isDemoUser && drivers.length >= (limits?.DRIVERS || 3)) {
+          if (limits?.DRIVERS && drivers.length >= limits.DRIVERS) {
             setShowLimitModal(true);
             return;
           }
@@ -292,7 +292,8 @@ export default function Drivers() {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         entityName="conductores"
-        limit={limits?.DRIVERS || 3}
+        currentCount={drivers.length}
+        maxLimit={limits?.DRIVERS || 5}
       />
 
       {showForm && <DriverForm driver={editDriver} onSave={handleSave} onClose={() => { setShowForm(false); setEditDriver(null); }} />}

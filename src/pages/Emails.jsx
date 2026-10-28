@@ -40,7 +40,7 @@ export default function Emails() {
   const { activeProfileId } = useProfile();
   const { locale } = useLanguage();
   const { toast } = useToast();
-  const { isDemoUser } = useDemo();
+  const { isDemoUser, canAnalyzeInChat } = useDemo();
   const navigate = useNavigate();
 
   const [emails, setEmails] = useState([]);
@@ -896,15 +896,20 @@ export default function Emails() {
 
                 {/* Botonera de Acción Destacada */}
                 <div className="flex items-center gap-2 pt-2 flex-wrap">
-                  {/* Botón Estrella: Analizar en Chat (Inhabilitado) */}
+                  {/* Botón Amarillo: Analizar en Chat de Mercado (Habilitado en Plan $99) */}
                   <button
-                    disabled
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                    }}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 opacity-50 cursor-not-allowed select-none shadow-none"
-                    title={isEs ? 'Función inhabilitada' : 'Feature disabled'}
+                    disabled={!canAnalyzeInChat}
+                    onClick={() => handleAnalyzeInChat(selectedEmail)}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 transition-all ${
+                      !canAnalyzeInChat
+                        ? 'opacity-40 cursor-not-allowed select-none shadow-none'
+                        : 'hover:brightness-110 active:scale-95 cursor-pointer shadow-md shadow-amber-500/20'
+                    }`}
+                    title={
+                      !canAnalyzeInChat
+                        ? (isEs ? 'Función disponible en el Plan $99 / Flota' : 'Feature available on $99 / Fleet Plan')
+                        : (isEs ? 'Analizar esta carga en el Chat de Mercado con IA' : 'Analyze this load in Market Chat with AI')
+                    }
                   >
                     <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
                     <span>{isEs ? 'Analizar en Chat de Mercado' : 'Analyze in Market Chat'}</span>

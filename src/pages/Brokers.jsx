@@ -259,7 +259,7 @@ export default function Brokers() {
           <p className="text-sm text-muted-foreground">{brokers.length} {t.brokers.registered}</p>
         </div>
         <button onClick={() => {
-          if (isDemoUser && brokers.length >= (limits?.BROKERS || 3)) {
+          if (limits?.BROKERS && brokers.length >= limits.BROKERS) {
             setShowLimitModal(true);
             return;
           }
@@ -275,7 +275,8 @@ export default function Brokers() {
         isOpen={showLimitModal}
         onClose={() => setShowLimitModal(false)}
         entityName="brokers"
-        limit={limits?.BROKERS || 3}
+        currentCount={brokers.length}
+        maxLimit={limits?.BROKERS || 5}
       />
 
       {showForm && <BrokerForm broker={editBroker} onSave={handleSave} onClose={() => { setShowForm(false); setEditBroker(null); }} />}

@@ -1,7 +1,19 @@
 import { Sparkles, X, ShieldAlert } from 'lucide-react';
 
-export default function DemoLimitModal({ isOpen, onClose, title, message, currentCount, maxLimit }) {
+export default function DemoLimitModal({
+  isOpen,
+  onClose,
+  title,
+  message,
+  currentCount,
+  maxLimit,
+  entityName,
+  limit,
+}) {
   if (!isOpen) return null;
+
+  const effectiveLimit = maxLimit ?? limit ?? 3;
+  const entityLabel = entityName ? ` ${entityName}` : ' elementos';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
@@ -22,17 +34,17 @@ export default function DemoLimitModal({ isOpen, onClose, title, message, curren
 
         <div className="space-y-1.5">
           <h3 className="text-lg font-bold text-foreground">
-            {title || 'Límite de la versión demo'}
+            {title || 'Límite alcanzado'}
           </h3>
           <p className="text-xs text-muted-foreground leading-relaxed">
-            {message || `Has alcanzado el límite máximo de ${maxLimit} elementos permitidos en la versión de demostración.`}
+            {message || `Has alcanzado el límite máximo de ${effectiveLimit}${entityLabel} permitidos en tu plan actual.`}
           </p>
         </div>
 
-        {currentCount !== undefined && maxLimit !== undefined && (
+        {currentCount !== undefined && effectiveLimit !== undefined && (
           <div className="py-2 px-3 rounded-xl bg-muted/50 border border-border text-xs text-muted-foreground flex items-center justify-between">
             <span>Uso actual:</span>
-            <span className="font-semibold text-foreground">{currentCount} de {maxLimit} permitidos</span>
+            <span className="font-semibold text-foreground">{currentCount} de {effectiveLimit} permitidos</span>
           </div>
         )}
 
@@ -44,7 +56,7 @@ export default function DemoLimitModal({ isOpen, onClose, title, message, curren
             className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
           >
             <Sparkles className="w-4 h-4" />
-            <span>Activar versión completa en trucky.site →</span>
+            <span>Actualizar plan en trucky.site →</span>
           </a>
 
           <button

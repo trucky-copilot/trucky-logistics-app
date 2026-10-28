@@ -14,26 +14,111 @@ export const WHITELISTED_ADMIN_EMAILS = new Set([
   'ianruizmora@gmail.com',
 ]);
 
-// Límites definidos para usuarios demo
-export const DEMO_LIMITS = {
-  CHAT_MESSAGES: 15,
-  PROFILES: 3,
-  BROKERS: 3,
-  DRIVERS: 3,
-  FLEET: 3,
-  LOADS: 3,
-  DOCUMENTS: 3,
+// Límites exactos definidos para cada plan
+export const PLAN_LIMITS = {
+  demo: {
+    CHAT_MESSAGES: 15,
+    FLEET: 3,
+    BROKERS: 3,
+    LOADS: 3,
+    DRIVERS: 3,
+    PROFILES: 3,
+    DOCUMENTS_PER_MONTH: 3,
+    ANALYZE_IN_CHAT: false,
+    EMAIL_MODULE: false,
+    name: 'Demo',
+  },
+  plan_29: {
+    CHAT_MESSAGES: 1000,
+    FLEET: 5,
+    BROKERS: 5,
+    LOADS: 5,
+    DRIVERS: 5,
+    PROFILES: 5,
+    DOCUMENTS_PER_MONTH: 50,
+    ANALYZE_IN_CHAT: false,
+    EMAIL_MODULE: true,
+    name: 'Plan $29 (Carrier)',
+  },
+  plan_99: {
+    CHAT_MESSAGES: 2000,
+    FLEET: 15,
+    BROKERS: 15,
+    LOADS: 15,
+    DRIVERS: 15,
+    PROFILES: 10,
+    DOCUMENTS_PER_MONTH: Infinity,
+    ANALYZE_IN_CHAT: true,
+    EMAIL_MODULE: true,
+    name: 'Plan $99 (Flota / Dispatcher)',
+  },
+  admin: {
+    CHAT_MESSAGES: Infinity,
+    FLEET: Infinity,
+    BROKERS: Infinity,
+    LOADS: Infinity,
+    DRIVERS: Infinity,
+    PROFILES: Infinity,
+    DOCUMENTS_PER_MONTH: Infinity,
+    ANALYZE_IN_CHAT: true,
+    EMAIL_MODULE: true,
+    name: 'Admin',
+  },
 };
+
+export const DEMO_LIMITS = PLAN_LIMITS.demo;
 
 export function DemoProvider({ children }) {
   const { user } = useAuth();
-  const { currentUser } = useAppState();
+  const { currentUser, organization: appOrg } = useAppState();
   const [trialData, setTrialData] = useState(null);
   const [loadingTrial, setLoadingTrial] = useState(true);
+  const [userOrg, setUserOrg] = useState(null);
 
   // Obtener email priorizando auth user y fallback a currentUser
   const userEmail = (user?.email || currentUser?.email || '').toLowerCase().trim();
   const isWhitelisted = WHITELISTED_ADMIN_EMAILS.has(userEmail);
+
+  // Carga complementaria de Organización si appOrg no está disponible aún
+  useEffect(() => {
+    let isMounted = true;
+    if (!userEmail) return;
+
+    base44.entities.OrganizationMember.filter({ user_email: userEmail, active: true })
+      .then(async (members) => {
+        if (!isMounted || !members?.[0]?.organization_id) return;
+        const orgs = await base44.entities.Organization.filter({ id: members[0].organization_id });
+        if (isMounted && orgs?.[0]) {
+          setUserOrg(orgs[0]);
+        }
+      })
+      .catch(() => {});
+
+    return () => { isMounted = false; };
+  }, [userEmail]);
+
+  const activeOrg = appOrg || userOrg;
+
+  // Resolución de Plan Activo
+  const planType = useMemo(() => {
+    if (isWhitelisted) return 'admin';
+    const status = activeOrg?.subscription_status;
+    const isSubscribed = status === 'active' || status === 'trialing';
+
+    if (isSubscribed) {
+      if (activeOrg?.plan_type === 'plan_99') return 'plan_99';
+      return 'plan_29';
+    }
+
+    return 'demo';
+  }, [isWhitelisted, activeOrg?.subscription_status, activeOrg?.plan_type]);
+
+  const isDemoUser = planType === 'demo';
+  const isPlan29 = planType === 'plan_29';
+  const isPlan99 = planType === 'plan_99';
+  const isSubscribed = isPlan29 || isPlan99 || isWhitelisted;
+  const currentLimits = PLAN_LIMITS[planType] || PLAN_LIMITS.demo;
+  const canAnalyzeInChat = Boolean(currentLimits.ANALYZE_IN_CHAT);
 
   useEffect(() => {
     let isMounted = true;
@@ -42,7 +127,7 @@ export function DemoProvider({ children }) {
       return;
     }
 
-    if (isWhitelisted) {
+    if (isWhitelisted || isSubscribed) {
       setTrialData({ isWhitelisted: true, isExpired: false });
       setLoadingTrial(false);
       return;
@@ -53,23 +138,17 @@ export function DemoProvider({ children }) {
       try {
         setLoadingTrial(true);
 
-        // 1. Intentar validar mediante la función de servidor checkDemoTrialStatus
-        console.log('[DemoContext] Checking demo trial status for:', userEmail);
-
         let serverStatus = null;
         try {
           const res = await base44.functions.invoke('checkDemoTrialStatus');
           if (res?.data && !res.data.error) {
             serverStatus = res.data;
           }
-        } catch (fnErr) {
-          console.warn('[DemoContext] checkDemoTrialStatus invocation failed or pending deployment:', fnErr);
-        }
+        } catch (_) {}
 
         if (!isMounted) return;
 
         if (serverStatus) {
-          console.log('[DemoContext] Server response for demo trial:', serverStatus);
           setTrialData({
             hasTrial: Boolean(serverStatus.has_trial),
             isExpired: Boolean(serverStatus.is_expired),
@@ -79,7 +158,7 @@ export function DemoProvider({ children }) {
           return;
         }
 
-        // 2. Fallback directo a la entidad DemoTrial
+        // Fallback directo a la entidad DemoTrial
         let trials = [];
         const cleanEmail = userEmail.toLowerCase().trim();
         try {
@@ -90,15 +169,11 @@ export function DemoProvider({ children }) {
               (item.user_email || '').toLowerCase().trim() === cleanEmail
             );
           }
-        } catch (e) {
-          console.warn('[DemoContext] Error al consultar DemoTrial:', e);
-        }
+        } catch (_) {}
 
         if (!isMounted) return;
 
-        // 3. Resultado estricto: Solo si existe registro en DemoTrial y no ha expirado
         if (trials && trials.length > 0) {
-          console.log('[DemoContext] DemoTrial record found:', trials[0]);
           const t = trials[0];
           const endsAtMs = Date.parse(t.trial_ends_at);
           const isExpired = !isNaN(endsAtMs) && endsAtMs <= Date.now();
@@ -109,13 +184,12 @@ export function DemoProvider({ children }) {
             trialEndsAt: t.trial_ends_at,
           });
         } else {
-          console.log('[DemoContext] Cuenta sin registro de DemoTrial:', cleanEmail);
           setTrialData({
             hasTrial: false,
             isExpired: true,
           });
         }
-      } catch (err) {
+      } catch (_) {
         if (!isMounted) return;
         setTrialData({ hasTrial: false, isExpired: true });
       } finally {
@@ -125,20 +199,34 @@ export function DemoProvider({ children }) {
 
     checkTrial();
     return () => { isMounted = false; };
-  }, [userEmail, isWhitelisted]);
+  }, [userEmail, isWhitelisted, isSubscribed]);
 
-  // Si no está en whitelist, es usuario demo
-  const isDemoUser = !isWhitelisted;
-  const isTrialExpired = !isWhitelisted && (trialData?.isExpired || !trialData?.hasTrial);
+  const isTrialExpired = isDemoUser && (trialData?.isExpired || !trialData?.hasTrial);
 
   const value = useMemo(() => ({
+    planType,
     isDemoUser,
-    isTrialExpired,
+    isPlan29,
+    isPlan99,
     isWhitelisted,
+    isSubscribed,
+    canAnalyzeInChat,
     trialData,
     loadingTrial,
-    limits: DEMO_LIMITS,
-  }), [isDemoUser, isTrialExpired, isWhitelisted, trialData, loadingTrial]);
+    limits: currentLimits,
+    planLimits: PLAN_LIMITS,
+  }), [
+    planType,
+    isDemoUser,
+    isPlan29,
+    isPlan99,
+    isWhitelisted,
+    isSubscribed,
+    canAnalyzeInChat,
+    trialData,
+    loadingTrial,
+    currentLimits,
+  ]);
 
   return (
     <DemoContext.Provider value={value}>
@@ -151,13 +239,21 @@ export function useDemo() {
   const ctx = useContext(DemoContext);
   if (!ctx) {
     return {
-      isDemoUser: false,
-      isTrialExpired: false,
-      isWhitelisted: true,
+      planType: 'demo',
+      isDemoUser: true,
+      isPlan29: false,
+      isPlan99: false,
+      isWhitelisted: false,
+      isSubscribed: false,
+      canAnalyzeInChat: false,
       trialData: null,
       loadingTrial: false,
-      limits: DEMO_LIMITS,
+      limits: PLAN_LIMITS.demo,
+      planLimits: PLAN_LIMITS,
     };
   }
   return ctx;
 }
+
+export const usePlan = useDemo;
+

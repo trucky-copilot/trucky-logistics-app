@@ -15,13 +15,16 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useDemo } from '@/lib/DemoContext';
+import DemoLimitModal from '@/components/DemoLimitModal';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
 
 export default function DocumentAnalyzer() {
   const orgId = useOrganizationId();
   const { t, locale } = useLanguage();
-  const { isDemoUser } = useDemo();
+  const { isDemoUser, limits } = useDemo();
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [monthlyDocCount, setMonthlyDocCount] = useState(0);
   const [documentText, setDocumentText] = useState('');
   const [fileName, setFileName] = useState('');
   const [loading, setLoading] = useState(false);
@@ -164,8 +167,31 @@ export default function DocumentAnalyzer() {
     }
   }, [locale]);
 
+  // Cargar total de verificaciones de este mes
+  useEffect(() => {
+    if (!orgId) return;
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const startIso = startOfMonth.toISOString();
+
+    base44.entities.DocumentVerification.filter({ organization_id: orgId })
+      .then(docs => {
+        const thisMonth = (docs || []).filter(d => (d.created_date || '') >= startIso);
+        setMonthlyDocCount(thisMonth.length);
+      })
+      .catch(() => {});
+  }, [orgId]);
+
   const analyze = async () => {
     if (!documentText.trim() || loading) return;
+
+    const maxDocs = limits?.DOCUMENTS_PER_MONTH ?? 3;
+    if (monthlyDocCount >= maxDocs) {
+      setShowLimitModal(true);
+      return;
+    }
+
     setLoading(true);
     setLoadingMsg(t.documents.extract);
     setError(null);
@@ -185,6 +211,7 @@ export default function DocumentAnalyzer() {
       clearTimeout(t2);
 
       if (res.data?.analysis) {
+        setMonthlyDocCount(prev => prev + 1);
         const rawAnalysis = { ...res.data.analysis, cached: res.data.cached || false };
         // Guardamos la versión canónica en español
         translationsCacheRef.current = { es: rawAnalysis, en: null };
@@ -292,6 +319,14 @@ export default function DocumentAnalyzer() {
           {t.documents.subtitle}
         </p>
       </div>
+
+      <DemoLimitModal
+        isOpen={showLimitModal}
+        onClose={() => setShowLimitModal(false)}
+        entityName="verificaciones este mes"
+        currentCount={monthlyDocCount}
+        maxLimit={limits?.DOCUMENTS_PER_MONTH || 50}
+      />
 
       {/* Badge de rol */}
       {contextLoaded && userRole && (
