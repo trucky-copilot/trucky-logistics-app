@@ -266,10 +266,39 @@ export default async function syncGmail(req: Request, ctx: any) {
       currentUser = null;
     }
 
+    // Solo usuarios con sesión: esta función escribe en la entidad Email y no
+    // puede quedar abierta a llamadas anónimas.
+    if (!currentUser) {
+      return new Response(
+        JSON.stringify({ error: 'No autorizado' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const body = await req.json().catch(() => ({}));
     const { organization_id, profile_id, limit = 80, gmailUser: reqGmailUser, accessToken, user_id: reqUserId } = body;
     const finalUserId = currentUser?.id || reqUserId || null;
     const finalProfileId = profile_id ? String(profile_id) : null;
+
+    // La organización destino debe pertenecer al usuario autenticado: sin esta
+    // comprobación un llamador podía depositar correos en la bandeja de otra
+    // organización.
+    const requestedOrganizationId = organization_id ? String(organization_id) : null;
+    if (requestedOrganizationId && currentUser.role !== 'admin') {
+      const memberships = await base44.entities.OrganizationMember.filter({
+        user_email: currentUser.email,
+        active: true,
+      });
+      const belongsToOrganization = (memberships || []).some(
+        (m: any) => String(m.organization_id) === requestedOrganizationId
+      );
+      if (!belongsToOrganization) {
+        return new Response(
+          JSON.stringify({ error: 'La organización indicada no pertenece a tu cuenta.' }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     // ─────────────────────────────────────────────────────────────────────────────
     // CASO 1: SINCRONIZACIÓN OFICIAL GOOGLE OAUTH 2.0 (REST API) — SIN CONTRASEÑAS
@@ -456,7 +485,7 @@ export default async function syncGmail(req: Request, ctx: any) {
         if (existingEmail && es_logistico) {
           duplicados++;
           try {
-            const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+            const emailEntity = base44.entities.Email;
             const updatedEmail = await emailEntity.update(existingEmail.id, {
               google_account: connectedGoogleAccount || existingEmail.google_account || null,
               remitente_nombre: fromName,
@@ -490,7 +519,7 @@ export default async function syncGmail(req: Request, ctx: any) {
         }
 
         try {
-          const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+          const emailEntity = base44.entities.Email;
           const nuevoRegistro = await emailEntity.create({
             organization_id: organization_id || null,
             profile_id: finalProfileId,
@@ -561,6 +590,13 @@ export default async function syncGmail(req: Request, ctx: any) {
     // ─────────────────────────────────────────────────────────────────────────────
     // CASO 2: FALLBACK IMAP (Sólo si se especifica usuario y contraseña de entorno)
     // ─────────────────────────────────────────────────────────────────────────────
+    if (currentUser.role !== 'admin') {
+      return new Response(
+        JSON.stringify({ error: "Conecta tu cuenta de Google (OAuth 2.0) para sincronizar tu buzón." }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const gmailUser = (reqGmailUser && String(reqGmailUser).trim()) || Deno.env.get("GMAIL_USER");
     const rawPass = Deno.env.get("GMAIL_APP_PASSWORD");
     const gmailPass = rawPass ? rawPass.replace(/\s+/g, '') : null;
@@ -618,7 +654,7 @@ export default async function syncGmail(req: Request, ctx: any) {
 
         let existingEmails: any[] = [];
         try {
-          const emailQueryClient = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+          const emailQueryClient = base44.entities.Email;
           existingEmails = await emailQueryClient.filter();
         } catch (filterErr: any) {
           console.warn("[syncGmail] No se pudieron precargar emails para deduplicar:", filterErr?.message || filterErr);
@@ -653,11 +689,10 @@ export default async function syncGmail(req: Request, ctx: any) {
           }
 
           try {
-            const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+            const emailEntity = base44.entities.Email;
             const nuevoRegistro = await emailEntity.create({
               organization_id: organization_id || null,
               profile_id: profile_id || null,
-              created_by_id: currentUser?.id || null,
               remitente_nombre: fromName,
               remitente_email: fromAddress,
               destinatario_email: toAddress,

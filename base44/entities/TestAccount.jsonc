@@ -1,0 +1,51 @@
+{
+  "name": "TestAccount",
+  "type": "object",
+  "properties": {
+    "user_email": {
+      "type": "string",
+      "description": "Correo de la cuenta de prueba. Entra sin trial ni suscripci\u00f3n y con plan completo."
+    },
+    "nota": {
+      "type": "string",
+      "description": "Para qu\u00e9 se usa esta cuenta (demo, QA, soporte\u2026)"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Si est\u00e1 en false, la cuenta deja de tener acceso especial sin borrar el registro."
+    }
+  },
+  "required": [
+    "user_email"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.user_email": "{{user.email}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

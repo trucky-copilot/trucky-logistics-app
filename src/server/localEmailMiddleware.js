@@ -1,4 +1,5 @@
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 // Palabras clave logísticas con coincidencia estricta de palabra completa
@@ -85,31 +86,32 @@ function getGmailCredentials(rootPath) {
   return { user, pass };
 }
 
-// Persistencia en archivo JSON local aislado en scratch
-function getStorageFile(rootPath) {
-  const scratchDir = path.resolve(rootPath, 'scratch');
-  if (!fs.existsSync(scratchDir)) {
-    fs.mkdirSync(scratchDir, { recursive: true });
+// Persistencia en el directorio temporal del sistema, NUNCA dentro del proyecto:
+// este archivo guarda cuerpos de correo reales y no debe viajar con el código.
+function getStorageFile() {
+  const baseDir = path.join(os.tmpdir(), 'trucky-local-mail');
+  if (!fs.existsSync(baseDir)) {
+    fs.mkdirSync(baseDir, { recursive: true });
   }
-  const file = path.join(scratchDir, 'local_emails.json');
+  const file = path.join(baseDir, 'local_emails.json');
   if (!fs.existsSync(file)) {
     fs.writeFileSync(file, JSON.stringify([]), 'utf-8');
   }
   return file;
 }
 
-function readLocalEmails(rootPath) {
+function readLocalEmails() {
   try {
-    const file = getStorageFile(rootPath);
+    const file = getStorageFile();
     return JSON.parse(fs.readFileSync(file, 'utf-8') || '[]');
   } catch (_) {
     return [];
   }
 }
 
-function writeLocalEmails(rootPath, emails) {
+function writeLocalEmails(emails) {
   try {
-    const file = getStorageFile(rootPath);
+    const file = getStorageFile();
     fs.writeFileSync(file, JSON.stringify(emails, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error guardando correos locales:', err);
@@ -120,7 +122,7 @@ export function createLocalEmailMiddleware(rootPath) {
   return async (req, res, next) => {
     // ─── GET /api/local-emails (Listar correos) ──────────────────────────────
     if (req.url.startsWith('/api/local-emails') && req.method === 'GET') {
-      const emails = readLocalEmails(rootPath);
+      const emails = readLocalEmails();
       res.setHeader('Content-Type', 'application/json');
       res.end(JSON.stringify(emails));
       return;
@@ -133,11 +135,11 @@ export function createLocalEmailMiddleware(rootPath) {
       req.on('end', () => {
         const id = req.url.split('/api/local-emails/')[1];
         const patch = JSON.parse(body || '{}');
-        const emails = readLocalEmails(rootPath);
+        const emails = readLocalEmails();
         const index = emails.findIndex(e => e.id === id);
         if (index !== -1) {
           emails[index] = { ...emails[index], ...patch };
-          writeLocalEmails(rootPath, emails);
+          writeLocalEmails(emails);
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify(emails[index]));
         } else {
@@ -235,7 +237,7 @@ export function createLocalEmailMiddleware(rootPath) {
             organization_id: organization_id || null,
             profile_id: profile_id || null,
             remitente_nombre: senderName,
-            remitente_email: user,
+            remitente_email: effectiveEmail,
             destinatario_email: Array.isArray(to) ? to.join(', ') : to,
             asunto: subject,
             cuerpo: content,
@@ -248,14 +250,14 @@ export function createLocalEmailMiddleware(rootPath) {
             tipo_flujo: 'sent'
           };
 
-          const localEmails = readLocalEmails(rootPath);
+          const localEmails = readLocalEmails();
           localEmails.unshift(emailRecord);
-          writeLocalEmails(rootPath, localEmails);
+          writeLocalEmails(localEmails);
 
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({
             success: true,
-            messageId: info.messageId,
+            messageId: messageId,
             email: emailRecord
           }));
         } catch (err) {
@@ -314,7 +316,7 @@ export function createLocalEmailMiddleware(rootPath) {
               const startSeq = Math.max(1, totalMessages - fetchCount + 1);
               const range = `${startSeq}:${totalMessages}`;
 
-              const localEmails = readLocalEmails(rootPath);
+              const localEmails = readLocalEmails();
               const existingSet = new Set(
                 localEmails.map(e => `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`)
               );
@@ -363,7 +365,7 @@ export function createLocalEmailMiddleware(rootPath) {
                 nuevosGuardados++;
               }
 
-              writeLocalEmails(rootPath, localEmails);
+              writeLocalEmails(localEmails);
             }
           } finally {
             lock.release();

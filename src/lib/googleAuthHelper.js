@@ -3,28 +3,55 @@ import { base44 } from '@/api/base44Client';
 export const GOOGLE_CLIENT_ID = '940005071153-h3ec1g6i15qo8nkabvrlgijbsas8g9ks.apps.googleusercontent.com';
 export const GOOGLE_SCOPES = 'https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/userinfo.email';
 
+// ── Almacenamiento del token ────────────────────────────────────────────────
+// El access token de Google permite leer y enviar desde el buzón personal del
+// usuario. Nunca se guarda en localStorage (persistente y legible por cualquier
+// script de la página): vive solo en sessionStorage, que se borra al cerrar la
+// pestaña y al cerrar sesión.
+const TOKEN_PREFIX = 'trucky_oauth_token_';
+const EMAIL_PREFIX = 'trucky_oauth_email_';
+
+// Borra las claves que versiones anteriores dejaban en localStorage.
+function purgeLegacyGoogleStorage() {
+  try {
+    const legacyKeys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key) continue;
+      if (
+        key.startsWith(TOKEN_PREFIX) ||
+        key.startsWith(EMAIL_PREFIX) ||
+        key === 'trucky_google_token' ||
+        key === 'trucky_google_email'
+      ) {
+        legacyKeys.push(key);
+      }
+    }
+    legacyKeys.forEach((key) => localStorage.removeItem(key));
+  } catch (_) {}
+}
+
+if (typeof window !== 'undefined') {
+  purgeLegacyGoogleStorage();
+}
+
 export function getStoredGoogleAuth(profileId = '1') {
-  const token = localStorage.getItem(`trucky_oauth_token_${profileId}`) || localStorage.getItem('trucky_google_token') || null;
-  const email = localStorage.getItem(`trucky_oauth_email_${profileId}`) || localStorage.getItem('trucky_google_email') || null;
+  if (typeof window === 'undefined') return { token: null, email: null };
+  const token = sessionStorage.getItem(`${TOKEN_PREFIX}${profileId}`) || null;
+  const email = sessionStorage.getItem(`${EMAIL_PREFIX}${profileId}`) || null;
   return { token, email };
 }
 
 export function saveStoredGoogleAuth(token, email, profileId = '1') {
-  if (profileId) {
-    localStorage.setItem(`trucky_oauth_token_${profileId}`, token);
-    if (email) localStorage.setItem(`trucky_oauth_email_${profileId}`, email);
-  }
-  localStorage.setItem('trucky_google_token', token);
-  if (email) localStorage.setItem('trucky_google_email', email);
+  if (!token) return;
+  sessionStorage.setItem(`${TOKEN_PREFIX}${profileId}`, token);
+  if (email) sessionStorage.setItem(`${EMAIL_PREFIX}${profileId}`, email);
 }
 
 export function clearStoredGoogleAuth(profileId = '1') {
-  if (profileId) {
-    localStorage.removeItem(`trucky_oauth_token_${profileId}`);
-    localStorage.removeItem(`trucky_oauth_email_${profileId}`);
-  }
-  localStorage.removeItem('trucky_google_token');
-  localStorage.removeItem('trucky_google_email');
+  if (typeof window === 'undefined') return;
+  sessionStorage.removeItem(`${TOKEN_PREFIX}${profileId}`);
+  sessionStorage.removeItem(`${EMAIL_PREFIX}${profileId}`);
 }
 
 /**
@@ -70,6 +97,26 @@ export function requestGoogleToken(promptMode = '') {
 }
 
 /**
+ * Obtiene un token válido sin obligar al usuario a pasar por "Sincronizar":
+ * primero intenta en silencio (permisos ya otorgados) y, si Google exige que el
+ * usuario confirme la cuenta, abre la ventana de selección desde el mismo envío.
+ */
+async function obtainGoogleToken() {
+  try {
+    return await requestGoogleToken('');
+  } catch (_) {
+    try {
+      return await requestGoogleToken('select_account');
+    } catch (err) {
+      throw new Error(
+        err?.message ||
+        'No se pudo conectar con Google. Autoriza el acceso a Gmail para enviar el correo.'
+      );
+    }
+  }
+}
+
+/**
  * Despacho transparente de correo:
  * Si el token no existe o expiró (401/403/scope), renueva internamente sin necesidad de
  * ir manualmente a la sección de correos ni hacer clic en sincronizar.
@@ -93,7 +140,7 @@ export async function sendEmailWithAutoAuth({
 
   // Si no hay token guardado en el navegador, solicitarlo antes del envío
   if (!token) {
-    const authResult = await requestGoogleToken('');
+    const authResult = await obtainGoogleToken();
     token = authResult.token;
     email = authResult.email || email;
     saveStoredGoogleAuth(token, email, profile_id);
@@ -132,7 +179,7 @@ export async function sendEmailWithAutoAuth({
         errorText.includes('scope')
       ) {
         // Renovar automáticamente y reintentar de inmediato
-        const fresh = await requestGoogleToken('');
+        const fresh = await obtainGoogleToken();
         saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
         return await callSend(fresh.token, fresh.email || email);
       }
@@ -152,7 +199,7 @@ export async function sendEmailWithAutoAuth({
       msg.includes('invalid_grant')
     ) {
       // Renovar automáticamente y reintentar
-      const fresh = await requestGoogleToken('');
+      const fresh = await obtainGoogleToken();
       saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
       return await callSend(fresh.token, fresh.email || email);
     }

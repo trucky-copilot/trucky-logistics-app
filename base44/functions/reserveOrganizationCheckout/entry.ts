@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
+import { logAndSanitizeError } from '../../shared/safeError.ts';
 
 /**
  * reserveOrganizationCheckout
@@ -711,7 +712,6 @@ export default async function reserveOrganizationCheckout(req: Request, _ctx: un
     }, 201);
 
   } catch (err: any) {
-    console.error('[reserveOrganizationCheckout Exception]:', err);
-    return json({ error: err?.message || 'Error interno al procesar reserva de checkout' }, 500);
+    return json(logAndSanitizeError('reserveOrganizationCheckout', err), 500);
   }
 }

@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { logAndSanitizeError } from '../../shared/safeError.ts';
 
 const SCHEMA = {
   type: "object",
@@ -157,7 +158,9 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
       containerRoutesParsed: containerRoutesCount
     });
   } catch (e: any) {
-    console.error("CRITICAL BACKEND ERROR:", e);
-    return new Response(JSON.stringify({ error: String(e), stack: e.stack }), { status: 500 });
+    return new Response(JSON.stringify(logAndSanitizeError('adminUploadStateData', e)), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
 }

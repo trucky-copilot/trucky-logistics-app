@@ -14,7 +14,13 @@ import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
-import { sendEmailWithAutoAuth, getStoredGoogleAuth, saveStoredGoogleAuth, requestGoogleToken } from '@/lib/googleAuthHelper';
+import {
+  sendEmailWithAutoAuth,
+  getStoredGoogleAuth,
+  saveStoredGoogleAuth,
+  clearStoredGoogleAuth,
+  requestGoogleToken,
+} from '@/lib/googleAuthHelper';
 
 const LOGISTICS_EMAIL_TERMS = [
   'trucky', 'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
@@ -366,7 +372,7 @@ export default function Emails() {
   const clearExpiredToken = () => {
     setOauthToken('');
     if (activeProfileId) {
-      localStorage.removeItem(`trucky_oauth_token_${activeProfileId}`);
+      clearStoredGoogleAuth(activeProfileId);
     }
   };
 
@@ -670,8 +676,6 @@ export default function Emails() {
     const lastMessage = msgs[msgs.length - 1] || threadOrEmail;
     if (!lastMessage) return;
 
-    // Si el último mensaje del hilo fue enviado por nosotros mismos, responder al destinatario de ese correo
-    // o al último remitente externo del hilo para no respondernos a nuestra propia dirección
     const myEmail = (googleConnectedEmail || user?.email || '').toLowerCase().trim();
     let replyToAddress = lastMessage.remitente_email;
     if (lastMessage.tipo_flujo === 'sent' || (myEmail && replyToAddress?.toLowerCase().trim() === myEmail)) {
@@ -758,7 +762,6 @@ export default function Emails() {
           es_importante: false,
         });
 
-        // Insertar inmediatamente en el estado local para que se vea al instante en el hilo y en la bandeja
         if (createdEmail) {
           setEmails(prev => [createdEmail, ...prev]);
           setSelectedEmail(createdEmail);

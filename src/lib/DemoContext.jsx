@@ -5,14 +5,8 @@ import { base44 } from '@/api/base44Client';
 
 const DemoContext = createContext(null);
 
-// Correos administradores / exceptuados de restricciones y expiración demo
-export const WHITELISTED_ADMIN_EMAILS = new Set([
-  'daniel.vargas@ogm.com.co',
-  'luisbermudezacero@gmail.com',
-  'juan.grau@ogm.com.co',
-  'luis.bermudez@ogm.com.co',
-  'ianruizmora@gmail.com',
-]);
+// Las cuentas de prueba ya no viven en el código: se administran en la lista
+// TestAccount de la base de datos y aquí cada usuario solo lee su propio registro.
 
 // Límites exactos definidos para cada plan
 export const PLAN_LIMITS = {
@@ -77,7 +71,33 @@ export function DemoProvider({ children }) {
 
   // Obtener email priorizando auth user y fallback a currentUser
   const userEmail = (user?.email || currentUser?.email || '').toLowerCase().trim();
-  const isWhitelisted = WHITELISTED_ADMIN_EMAILS.has(userEmail);
+
+  // ¿Esta cuenta está en la lista de cuentas de prueba? Se pregunta al servidor:
+  // la lista no está en el código y solo devuelve el registro propio.
+  const [isWhitelisted, setIsWhitelisted] = useState(false);
+  const [loadingTestAccount, setLoadingTestAccount] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    if (!userEmail) {
+      setIsWhitelisted(false);
+      setLoadingTestAccount(false);
+      return;
+    }
+    setLoadingTestAccount(true);
+    base44.entities.TestAccount.filter({ user_email: userEmail })
+      .then((rows) => {
+        if (!active) return;
+        setIsWhitelisted(Array.isArray(rows) && rows.some((r) => r.active !== false));
+      })
+      .catch(() => {
+        if (active) setIsWhitelisted(false);
+      })
+      .finally(() => {
+        if (active) setLoadingTestAccount(false);
+      });
+    return () => { active = false; };
+  }, [userEmail]);
 
   // Carga complementaria de Organización si appOrg no está disponible aún
   useEffect(() => {
@@ -129,6 +149,9 @@ export function DemoProvider({ children }) {
       setLoadingTrial(false);
       return;
     }
+
+    // Esperar a saber si es cuenta de prueba antes de decidir el trial.
+    if (loadingTestAccount) return;
 
     if (isWhitelisted || isSubscribed) {
       setTrialData({ isWhitelisted: true, isExpired: false });
@@ -202,7 +225,7 @@ export function DemoProvider({ children }) {
 
     checkTrial();
     return () => { isMounted = false; };
-  }, [userEmail, isWhitelisted, isSubscribed]);
+  }, [userEmail, isWhitelisted, isSubscribed, loadingTestAccount]);
 
   const isTrialExpired = isDemoUser && (trialData?.isExpired || !trialData?.hasTrial);
 
@@ -215,7 +238,7 @@ export function DemoProvider({ children }) {
     isSubscribed,
     canAnalyzeInChat,
     trialData,
-    loadingTrial,
+    loadingTrial: loadingTrial || loadingTestAccount,
     limits: currentLimits,
     planLimits: PLAN_LIMITS,
   }), [
@@ -228,6 +251,7 @@ export function DemoProvider({ children }) {
     canAnalyzeInChat,
     trialData,
     loadingTrial,
+    loadingTestAccount,
     currentLimits,
   ]);
 
@@ -259,4 +283,3 @@ export function useDemo() {
 }
 
 export const usePlan = useDemo;
-

@@ -1,10 +1,42 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import nodemailer from 'npm:nodemailer';
+import { authorizePlanFeature } from '../../shared/entitlements.ts';
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// CORS: solo se refleja el Origin cuando es un origen propio de la app (nunca
+// el comodín "*"), igual que en translateChat, marketChat y syncGmail, para que
+// un sitio ajeno no pueda disparar envíos desde el navegador de un visitante.
+const ALLOWED_ORIGIN_SUFFIXES = ['.base44.app', '.base44.com'];
+const ALLOWED_ORIGIN_PREFIXES = ['http://localhost:', 'http://127.0.0.1:'];
+
+function corsHeadersFor(req: Request) {
+  const origin = req.headers.get('Origin') || '';
+  const allowed =
+    !!origin &&
+    (ALLOWED_ORIGIN_SUFFIXES.some((suffix) => origin.endsWith(suffix)) ||
+      ALLOWED_ORIGIN_PREFIXES.some((prefix) => origin.startsWith(prefix)));
+
+  return {
+    ...(allowed ? { 'Access-Control-Allow-Origin': origin, 'Vary': 'Origin' } : {}),
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  };
+}
+
+// El remitente se resuelve con el token de Google, nunca con un valor que venga
+// en el cuerpo de la petición: así el "From" siempre es el dueño real del token.
+async function resolveTokenOwnerEmail(accessToken: string): Promise<string | null> {
+  try {
+    const res = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!res.ok) return null;
+    const info = await res.json();
+    const email = typeof info?.email === 'string' ? info.email.trim() : '';
+    return email || null;
+  } catch (_) {
+    return null;
+  }
+}
 
 function encodeBase64Utf8(str: string): string {
   const bytes = new TextEncoder().encode(str);
@@ -58,12 +90,39 @@ function buildRfc822Message(
 }
 
 export default async function sendGmail(req: Request, ctx: any) {
+  const corsHeaders = corsHeadersFor(req);
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     const base44 = createClientFromRequest(req);
+
+    // Solo usuarios con sesión: sin esto cualquier persona en internet podía
+    // enviar correo con las credenciales de la app (phishing en su nombre).
+    let user;
+    try {
+      user = await base44.auth.me();
+    } catch (_) {
+      user = null;
+    }
+    if (!user) {
+      return new Response(
+        JSON.stringify({ error: 'No autorizado' }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Control de plan en el servidor: la pantalla del navegador no autoriza nada.
+    const access = await authorizePlanFeature(base44, user, 'email_module');
+    if (!access.allowed) {
+      return new Response(
+        JSON.stringify({ error: access.error, code: access.code }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const body = await req.json();
 
     const {
@@ -102,6 +161,8 @@ export default async function sendGmail(req: Request, ctx: any) {
     // ─────────────────────────────────────────────────────────────────────────
     if (accessToken) {
       console.log("[sendGmail] Despachando vía Google OAuth 2.0 REST API...");
+      // El buzón remitente es el dueño verificado del token, no un dato del body.
+      effectiveSenderEmail = (await resolveTokenOwnerEmail(accessToken)) || effectiveSenderEmail;
       const fromAddress = effectiveSenderEmail !== 'me'
         ? `"${senderDisplayName}" <${effectiveSenderEmail}>`
         : senderDisplayName;
@@ -139,7 +200,16 @@ export default async function sendGmail(req: Request, ctx: any) {
     } else {
       // ─────────────────────────────────────────────────────────────────────────
       // CASO 2: Fallback a SMTP mediante nodemailer
+      // Usa el buzón compartido de la app, así que queda limitado a admins: un
+      // usuario normal envía siempre desde su propia cuenta de Google.
       // ─────────────────────────────────────────────────────────────────────────
+      if (user.role !== 'admin') {
+        return new Response(
+          JSON.stringify({ error: "Conecta tu cuenta de Google para enviar correo desde tu propio buzón." }),
+          { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
       const gmailUser = Deno.env.get("GMAIL_USER");
       const rawPass = Deno.env.get("GMAIL_APP_PASSWORD");
       const gmailPass = rawPass ? rawPass.replace(/\s+/g, '') : null;
