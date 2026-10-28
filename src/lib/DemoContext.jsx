@@ -86,10 +86,13 @@ export function DemoProvider({ children }) {
 
     base44.entities.OrganizationMember.filter({ user_email: userEmail, active: true })
       .then(async (members) => {
-        if (!isMounted || !members?.[0]?.organization_id) return;
-        const orgs = await base44.entities.Organization.filter({ id: members[0].organization_id });
-        if (isMounted && orgs?.[0]) {
-          setUserOrg(orgs[0]);
+        if (!isMounted || !members?.length) return;
+        const orgIds = members.map(m => m.organization_id).filter(Boolean);
+        const results = await Promise.all(orgIds.map(id => base44.entities.Organization.filter({ id })));
+        const allOrgs = results.map(r => r?.[0]).filter(Boolean);
+        const subscribedOrg = allOrgs.find(o => o.subscription_status === 'active' || o.subscription_status === 'trialing');
+        if (isMounted && (subscribedOrg || allOrgs[0])) {
+          setUserOrg(subscribedOrg || allOrgs[0]);
         }
       })
       .catch(() => {});
@@ -106,12 +109,12 @@ export function DemoProvider({ children }) {
     const isSubscribed = status === 'active' || status === 'trialing';
 
     if (isSubscribed) {
-      if (activeOrg?.plan_type === 'plan_99') return 'plan_99';
+      if (activeOrg?.plan_type === 'plan_99' || activeOrg?.account_type === 'dispatcher') return 'plan_99';
       return 'plan_29';
     }
 
     return 'demo';
-  }, [isWhitelisted, activeOrg?.subscription_status, activeOrg?.plan_type]);
+  }, [isWhitelisted, activeOrg?.subscription_status, activeOrg?.plan_type, activeOrg?.account_type]);
 
   const isDemoUser = planType === 'demo';
   const isPlan29 = planType === 'plan_29';

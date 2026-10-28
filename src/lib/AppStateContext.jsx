@@ -46,13 +46,16 @@ export function AppStateProvider({ children }) {
       }
 
       // 5. Onboarding completado → production
-      // Cargar organización de forma no bloqueante
+      // Cargar organización de forma no bloqueante (priorizando suscripción activa)
       base44.entities.OrganizationMember
         .filter({ user_email: user.email, active: true })
         .then(async (members) => {
-          if (!members[0]?.organization_id) return;
-          const orgs = await base44.entities.Organization.filter({ id: members[0].organization_id });
-          setOrganization(orgs[0] || null);
+          if (!members?.length) return;
+          const orgIds = members.map(m => m.organization_id).filter(Boolean);
+          const results = await Promise.all(orgIds.map(id => base44.entities.Organization.filter({ id })));
+          const allOrgs = results.map(r => r?.[0]).filter(Boolean);
+          const subscribedOrg = allOrgs.find(o => o.subscription_status === 'active' || o.subscription_status === 'trialing');
+          setOrganization(subscribedOrg || allOrgs[0] || null);
         })
         .catch(() => {});
 
