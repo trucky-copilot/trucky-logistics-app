@@ -14,7 +14,7 @@ import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
-import { sendEmailWithAutoAuth, getStoredGoogleAuth } from '@/lib/googleAuthHelper';
+import { sendEmailWithAutoAuth, getStoredGoogleAuth, saveStoredGoogleAuth, clearStoredGoogleAuth } from '@/lib/googleAuthHelper';
 
 const LOGISTICS_EMAIL_TERMS = [
   'trucky', 'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
@@ -98,10 +98,9 @@ export default function Emails() {
 
   useEffect(() => {
     if (activeProfileId) {
-      const savedEmail = localStorage.getItem(`trucky_oauth_email_${activeProfileId}`) || '';
-      const savedToken = localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || '';
-      setGoogleConnectedEmail(savedEmail);
-      setOauthToken(savedToken);
+      const { token, email } = getStoredGoogleAuth(activeProfileId);
+      setGoogleConnectedEmail(email || '');
+      setOauthToken(token || '');
     }
   }, [activeProfileId]);
 
@@ -318,8 +317,7 @@ export default function Emails() {
               setGoogleConnectedEmail(connectedEmail);
 
               if (activeProfileId) {
-                localStorage.setItem(`trucky_oauth_token_${activeProfileId}`, token);
-                localStorage.setItem(`trucky_oauth_email_${activeProfileId}`, connectedEmail);
+                saveStoredGoogleAuth(token, connectedEmail, activeProfileId);
               }
 
               toast({
@@ -351,7 +349,7 @@ export default function Emails() {
   const clearExpiredToken = () => {
     setOauthToken('');
     if (activeProfileId) {
-      localStorage.removeItem(`trucky_oauth_token_${activeProfileId}`);
+      clearStoredGoogleAuth(activeProfileId);
     }
   };
 

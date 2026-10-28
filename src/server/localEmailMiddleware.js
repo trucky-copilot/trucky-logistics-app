@@ -235,7 +235,7 @@ export function createLocalEmailMiddleware(rootPath) {
             organization_id: organization_id || null,
             profile_id: profile_id || null,
             remitente_nombre: senderName,
-            remitente_email: user,
+            remitente_email: effectiveEmail,
             destinatario_email: Array.isArray(to) ? to.join(', ') : to,
             asunto: subject,
             cuerpo: content,
@@ -255,7 +255,7 @@ export function createLocalEmailMiddleware(rootPath) {
           res.setHeader('Content-Type', 'application/json');
           res.end(JSON.stringify({
             success: true,
-            messageId: info.messageId,
+            messageId: messageId,
             email: emailRecord
           }));
         } catch (err) {
