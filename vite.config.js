@@ -15,6 +15,7 @@ function localEmailPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   logLevel: 'error', // Suppress warnings, only show errors
+  envPrefix: ['VITE_', 'GOOGLE_MAPS_'],
   plugins: [
     localEmailPlugin(),
     base44({
@@ -28,4 +29,4 @@ export default defineConfig({
     }),
     react(),
   ]
-});
+});

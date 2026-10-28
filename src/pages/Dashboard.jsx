@@ -10,6 +10,7 @@ import { getOperationalAlerts } from '@/lib/operationalAlerts';
 import KpiCard from '@/components/KpiCard';
 import StatusBadge from '@/components/StatusBadge';
 import OperationalStatusCard from '@/components/OperationalStatusCard';
+import DashboardGoogleMap from '@/components/DashboardGoogleMap';
 import { Link } from 'react-router-dom';
 import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -480,6 +481,7 @@ export default function Dashboard() {
         {activeSection === 'overview' && (
           <motion.div key="overview" {...SECTION_TRANSITION} className="space-y-5">
             {renderOperationalPanels()}
+            <DashboardGoogleMap loads={recentLoads} trucks={trucks} locale={locale} />
             {renderRecentLoadsPanel()}
           </motion.div>
         )}
@@ -487,11 +489,13 @@ export default function Dashboard() {
         {activeSection === 'operations' && (
           <motion.div key="operations" {...SECTION_TRANSITION} className="space-y-5">
             {renderOperationalPanels()}
+            <DashboardGoogleMap loads={recentLoads} trucks={trucks} locale={locale} />
           </motion.div>
         )}
 
         {activeSection === 'loads' && (
           <motion.div key="loads" {...SECTION_TRANSITION} className="space-y-5">
+            <DashboardGoogleMap loads={recentLoads} trucks={trucks} locale={locale} />
             {renderRecentLoadsPanel()}
           </motion.div>
         )}
