@@ -87,3 +87,30 @@ Deno.test('extracts nested Gmail text/plain payloads', () => {
   });
   if (text !== 'Carrier load') throw new Error('Gmail plain text body was not decoded');
 });
+
+Deno.test('shows email when it has both importante and broker/carrier/trucky labels', () => {
+  const result = classifyEmail(
+    'Actualización de cuenta',
+    'Hola adjunto información de la cuenta.',
+    'contacto@empresa.com',
+    ['IMPORTANT', 'broker']
+  );
+  if (!result.es_logistico) throw new Error('Email with both importante and broker label was not shown');
+  if (result.categoria !== 'brokers') throw new Error('Category should be brokers');
+
+  const resultCarrier = classifyEmail(
+    'Aviso general',
+    'Por favor revisar.',
+    'contacto@empresa.com',
+    ['importante', 'carrier']
+  );
+  if (!resultCarrier.es_logistico) throw new Error('Email with both importante and carrier label was not shown');
+
+  const resultTrucky = classifyEmail(
+    'Notificación interna',
+    'Mensaje directo',
+    'info@customdomain.com',
+    ['IMPORTANT', 'trucky']
+  );
+  if (!resultTrucky.es_logistico) throw new Error('Email with both importante and trucky label was not shown');
+});

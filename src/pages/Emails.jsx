@@ -23,7 +23,47 @@ const LOGISTICS_EMAIL_TERMS = [
   'pickup', 'delivery', 'container', 'factoring', 'quickpay', 'camion', 'flota', 'tarifa de flete',
 ];
 
+/**
+ * Evalúa si el correo tiene una etiqueta de Importante Y TAMBIÉN una etiqueta de broker/carrier/trucky/etc.
+ * Si ambas condiciones están presentes, la regla de negocio exige MOSTRAR esos correos siempre.
+ */
+export function hasImportantAndLogisticsTags(email) {
+  if (!email) return false;
+
+  const rawLabels = [
+    ...(Array.isArray(email.etiquetas) ? email.etiquetas : []),
+    ...(Array.isArray(email.labelIds) ? email.labelIds : []),
+    email.categoria || '',
+  ].map(l => String(l).toLowerCase().trim());
+
+  const subject = String(email.asunto || '').toLowerCase();
+  const allText = `${subject} ${email.remitente_nombre || ''} ${email.snippet || ''} ${email.cuerpo || ''}`.toLowerCase();
+
+  // 1. Etiqueta de Importante:
+  // Detecta etiqueta IMPORTANT de Gmail, etiqueta 'importante', o flags es_importante/destacado
+  const isImportante =
+    rawLabels.some(l => l === 'important' || l === 'importante' || l.includes('important') || l.includes('importante')) ||
+    Boolean(email.es_importante) ||
+    Boolean(email.destacado) ||
+    /\b(importante|important|prioritario|urgente)\b/i.test(subject);
+
+  // 2. Etiqueta de Broker, Carrier, Trucky, etc.:
+  const hasLogisticsTag =
+    rawLabels.some(l =>
+      ['broker', 'carrier', 'trucky', 'carga', 'cargas', 'flete', 'freight', 'dispatcher', 'dispatch', 'load'].some(k => l.includes(k))
+    ) ||
+    Boolean(email.categoria === 'brokers' || email.categoria === 'cargas') ||
+    /\b(broker|carrier|trucky|carga|cargas|flete|fletes|dispatcher)\b/i.test(
+      `${subject} ${email.remitente_nombre || ''} ${email.snippet || ''}`
+    );
+
+  return Boolean(isImportante && hasLogisticsTag);
+}
+
 function hasLogisticsSignal(email) {
+  if (hasImportantAndLogisticsTags(email)) {
+    return true;
+  }
   const text = `${email.asunto || ''} ${email.snippet || ''} ${email.cuerpo || ''}`
     .toLowerCase()
     .normalize('NFD')
@@ -94,6 +134,11 @@ export default function Emails() {
 
       // Filtrar correos no deseados de Google/sistema y correos no logísticos
       const cleanList = profileScoped.filter(e => {
+        // REGLA: Si tiene etiqueta de importante y también etiqueta de broker/carrier/trucky etc. -> Mostrar siempre
+        if (hasImportantAndLogisticsTags(e)) {
+          return true;
+        }
+
         const sender = (e.remitente_email || '').toLowerCase();
         const subject = (e.asunto || '').toLowerCase();
         const senderIsNonLogistics = [
@@ -139,6 +184,8 @@ export default function Emails() {
             asunto: 'Pickup Confirmation – 04/14/2026',
             fecha: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
             categoria: 'cargas',
+            etiquetas: ['IMPORTANT', 'carrier', 'trucky'],
+            es_importante: true,
             tipo_flujo: 'received',
             leido: false,
             destacado: true,
@@ -153,6 +200,8 @@ export default function Emails() {
             asunto: 'Rate request – 20ft container PortMiami to Orlando',
             fecha: new Date(Date.now() - 1000 * 60 * 180).toISOString(),
             categoria: 'cargas',
+            etiquetas: ['carrier', 'cargas'],
+            es_importante: false,
             tipo_flujo: 'received',
             leido: false,
             destacado: false,
@@ -167,6 +216,8 @@ export default function Emails() {
             asunto: 'Terminal update – Extended gate hours next week',
             fecha: new Date(Date.now() - 1000 * 60 * 60 * 24).toISOString(),
             categoria: 'brokers',
+            etiquetas: ['broker'],
+            es_importante: false,
             tipo_flujo: 'received',
             leido: true,
             destacado: false,
@@ -181,6 +232,8 @@ export default function Emails() {
             asunto: 'Shipping documents & Delivery Order #90214',
             fecha: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
             categoria: 'brokers',
+            etiquetas: ['IMPORTANT', 'broker'],
+            es_importante: true,
             tipo_flujo: 'received',
             leido: true,
             destacado: true,
@@ -195,6 +248,8 @@ export default function Emails() {
             asunto: 'New load opportunity – 3 loads per week contract',
             fecha: new Date(Date.now() - 1000 * 60 * 60 * 72).toISOString(),
             categoria: 'cargas',
+            etiquetas: ['cargas', 'trucky'],
+            es_importante: false,
             tipo_flujo: 'received',
             leido: true,
             destacado: false,
@@ -538,14 +593,27 @@ export default function Emails() {
     }
   };
 
-  // ─── Filtros y búsqueda (Se eliminó únicamente 'equipos') ────────────────────
+  // ─── Filtros y búsqueda ─────────────────────────────────────────────────────
   const filteredEmails = useMemo(() => {
     return emails.filter(item => {
+      const hasBothTags = hasImportantAndLogisticsTags(item);
+
       // Filtro por pestaña
+      if (activeTab === 'important_logistics') {
+        return hasBothTags;
+      }
       if (activeTab === 'unread' && item.leido) return false;
-      if (activeTab === 'starred' && !item.destacado) return false;
-      if (activeTab === 'brokers' && item.categoria !== 'brokers') return false;
-      if (activeTab === 'cargas' && item.categoria !== 'cargas') return false;
+      if (activeTab === 'starred' && !item.destacado && !item.es_importante) return false;
+      if (activeTab === 'brokers') {
+        const isBroker = item.categoria === 'brokers' || 
+          (Array.isArray(item.etiquetas) && item.etiquetas.some(l => l.toLowerCase().includes('broker')));
+        if (!isBroker) return false;
+      }
+      if (activeTab === 'cargas') {
+        const isCarga = item.categoria === 'cargas' || 
+          (Array.isArray(item.etiquetas) && item.etiquetas.some(l => ['carga', 'load', 'flete', 'freight', 'trucky'].some(k => l.toLowerCase().includes(k))));
+        if (!isCarga) return false;
+      }
       if (activeTab === 'sent' && item.tipo_flujo !== 'sent') return false;
 
       // Filtro de búsqueda
@@ -554,22 +622,25 @@ export default function Emails() {
         const matchesSender = item.remitente_nombre?.toLowerCase().includes(q) || item.remitente_email?.toLowerCase().includes(q);
         const matchesSubject = item.asunto?.toLowerCase().includes(q);
         const matchesBody = item.cuerpo?.toLowerCase().includes(q);
-        return matchesSender || matchesSubject || matchesBody;
+        const matchesTags = Array.isArray(item.etiquetas) && item.etiquetas.some(t => t.toLowerCase().includes(q));
+        return matchesSender || matchesSubject || matchesBody || matchesTags;
       }
       return true;
     });
   }, [emails, activeTab, searchQuery]);
 
+  const importantLogisticsCount = useMemo(() => emails.filter(e => hasImportantAndLogisticsTags(e)).length, [emails]);
   const unreadCount = useMemo(() => emails.filter(e => !e.leido && e.tipo_flujo !== 'sent').length, [emails]);
   const allCount = emails.length;
-  const starredCount = useMemo(() => emails.filter(e => e.destacado).length, [emails]);
-  const brokersCount = useMemo(() => emails.filter(e => e.categoria === 'brokers').length, [emails]);
-  const cargasCount = useMemo(() => emails.filter(e => e.categoria === 'cargas').length, [emails]);
+  const starredCount = useMemo(() => emails.filter(e => e.destacado || e.es_importante).length, [emails]);
+  const brokersCount = useMemo(() => emails.filter(e => e.categoria === 'brokers' || (Array.isArray(e.etiquetas) && e.etiquetas.some(l => l.toLowerCase().includes('broker')))).length, [emails]);
+  const cargasCount = useMemo(() => emails.filter(e => e.categoria === 'cargas' || (Array.isArray(e.etiquetas) && e.etiquetas.some(l => ['carga', 'load', 'flete', 'freight', 'trucky'].some(k => l.toLowerCase().includes(k))))).length, [emails]);
   const sentCount = useMemo(() => emails.filter(e => e.tipo_flujo === 'sent').length, [emails]);
 
-  // Lista de filtros: Todos, No leídos, Destacados, Brokers, Cargas, Enviados (sin Equipos)
+  // Lista de filtros: Todos, Importantes (con broker/carrier/trucky), No leídos, Destacados, Brokers, Cargas, Enviados
   const TABS = [
     { id: 'all', label: isEs ? 'Todos' : 'All', icon: Inbox, badge: allCount },
+    { id: 'important_logistics', label: isEs ? 'Importantes' : 'Important', icon: Sparkles, badge: importantLogisticsCount },
     { id: 'unread', label: isEs ? 'No leídos' : 'Unread', icon: CheckCircle2, badge: unreadCount },
     { id: 'starred', label: isEs ? 'Destacados' : 'Starred', icon: Star, badge: starredCount },
     { id: 'brokers', label: isEs ? 'Brokers' : 'Brokers', icon: Building2, badge: brokersCount },
@@ -810,10 +881,18 @@ export default function Emails() {
                         </p>
 
                         {/* Badges y Estrella */}
-                        <div className="flex items-center justify-between mt-2 pt-1">
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${badge.color}`}>
-                            {badge.label}
-                          </span>
+                        <div className="flex items-center justify-between mt-2 pt-1 gap-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${badge.color}`}>
+                              {badge.label}
+                            </span>
+                            {hasImportantAndLogisticsTags(item) && (
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-red-400" />
+                                {isEs ? 'Importante' : 'Important'}
+                              </span>
+                            )}
+                          </div>
 
                           <button
                             onClick={(e) => handleToggleStar(item, e)}
@@ -843,6 +922,22 @@ export default function Emails() {
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${getCategoryBadge(selectedEmail.categoria).color}`}>
                         {getCategoryBadge(selectedEmail.categoria).label}
                       </span>
+
+                      {hasImportantAndLogisticsTags(selectedEmail) && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1 shadow-sm">
+                          <Sparkles className="w-3 h-3 text-red-400" />
+                          {isEs ? 'Importante' : 'Important'}
+                        </span>
+                      )}
+
+                      {Array.isArray(selectedEmail.etiquetas) && selectedEmail.etiquetas
+                        .filter(tag => !['inbox', 'unread', 'important', 'sent', 'category_personal', 'category_updates'].includes(tag.toLowerCase()))
+                        .slice(0, 3)
+                        .map(tag => (
+                          <span key={tag} className="text-[10px] font-medium px-2 py-0.5 rounded-md border bg-muted/60 text-muted-foreground border-border">
+                            #{tag}
+                          </span>
+                      ))}
 
                       {selectedEmail.tipo_flujo === 'sent' && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md border bg-primary/10 text-primary border-primary/30">

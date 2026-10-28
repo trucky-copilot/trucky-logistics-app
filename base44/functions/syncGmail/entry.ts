@@ -87,14 +87,33 @@ function containsTerm(text: string, term: string) {
  * Clasificador inteligente de correos:
  * Discrimina correos operativos del transporte y Trucky de mensajes personales, spam o marketing.
  */
-export function classifyEmail(subject: string, text: string, fromAddress = '') {
+export function classifyEmail(subject: string, text: string, fromAddress = '', labels: string[] = []) {
   const sender = (fromAddress || '').toLowerCase();
   const subj = (subject || '').toLowerCase();
   const content = `${subj} ${text || ''}`.toLowerCase();
 
+  const labelsLower = labels.map(l => (l || '').toLowerCase().trim());
+  const isImportante = labelsLower.some(l => 
+    l === 'important' || l === 'importante' || l.includes('important') || l.includes('importante')
+  ) || /\b(importante|important|urgente)\b/i.test(subj);
+
+  const hasLogisticsLabel = labelsLower.some(l =>
+    ['broker', 'carrier', 'trucky', 'carga', 'cargas', 'flete', 'freight', 'dispatcher', 'load'].some(k => l.includes(k))
+  );
+
+  // REGLA: Si tiene etiqueta de importante y también una etiqueta de broker/carrier/trucky etc.
+  // Si están las dos -> MOSTRAR SIEMPRE ESOS CORREOS (garantiza es_logistico = true)
+  if (isImportante && hasLogisticsLabel) {
+    let categoria = 'cargas';
+    if (labelsLower.some(l => l.includes('broker'))) {
+      categoria = 'brokers';
+    }
+    return { es_logistico: true, categoria, isImportante: true, hasBothTags: true };
+  }
+
   // 1. Descartar automáticamente correos de sistema, Google, redes o tiendas
   if (EXCLUDED_SENDERS.some(dom => sender.includes(dom)) || sender.includes('google.com') || sender.includes('accounts.google')) {
-    return { es_logistico: false, categoria: 'general' };
+    return { es_logistico: false, categoria: 'general', isImportante };
   }
 
   const hasMandatory = MANDATORY_LOGISTICS_TERMS.some(term => containsTerm(content, term));
@@ -102,11 +121,11 @@ export function classifyEmail(subject: string, text: string, fromAddress = '') {
   const hasTrucky = containsTerm(content, 'trucky');
 
   if (!hasMandatory && !hasSubjectMatch && !hasTrucky) {
-    return { es_logistico: false, categoria: 'general' };
+    return { es_logistico: false, categoria: 'general', isImportante };
   }
 
   if (hasTrucky) {
-    return { es_logistico: true, categoria: 'cargas' };
+    return { es_logistico: true, categoria: 'cargas', isImportante };
   }
 
   // 2. Si tiene palabras de exclusión (ocio, seguridad, e-commerce, promociones)
@@ -117,17 +136,17 @@ export function classifyEmail(subject: string, text: string, fromAddress = '') {
       ['rate con', 'bill of lading', 'flete', 'freight load'].some(term => containsTerm(content, term)) ||
       (hasTrucky && (hasMandatory || hasSubjectMatch));
     if (!esFleteInconfundible) {
-      return { es_logistico: false, categoria: 'general' };
+      return { es_logistico: false, categoria: 'general', isImportante };
     }
   }
 
   // 4. Categorización
   let categoria = 'cargas';
-  if (['broker', 'rate', 'tarifa', 'packet', 'setup'].some(term => containsTerm(content, term))) {
+  if (['broker', 'rate', 'tarifa', 'packet', 'setup'].some(term => containsTerm(content, term)) || labelsLower.some(l => l.includes('broker'))) {
     categoria = 'brokers';
   }
 
-  return { es_logistico: true, categoria };
+  return { es_logistico: true, categoria, isImportante };
 }
 
 export function getPlainText(payload: any): string {
@@ -243,6 +262,25 @@ export default async function syncGmail(req: Request, ctx: any) {
       let reparados = 0;
       let erroresGuardado = 0;
 
+      // Cargar mapeo de etiquetas de Gmail (para resolver etiquetas personalizadas como "broker", "trucky", "carrier")
+      const labelMap = new Map<string, string>();
+      try {
+        const labelsRes = await fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/labels`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (labelsRes.ok) {
+          const labelsData = await labelsRes.json();
+          for (const lb of (labelsData.labels || [])) {
+            if (lb.id && lb.name) {
+              labelMap.set(lb.id, lb.name);
+            }
+          }
+        }
+      } catch (errLabels) {
+        console.warn("[syncGmail] No se pudieron cargar etiquetas de Gmail:", errLabels);
+      }
+
       for (const msgMeta of messages) {
         const detailRes = await fetch(
           `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgMeta.id}?format=full`,
@@ -265,12 +303,21 @@ export default async function syncGmail(req: Request, ctx: any) {
           coincidenciasTrucky++;
         }
 
+        // Mapear etiquetas recibidas desde Gmail
+        const rawLabelIds: string[] = Array.isArray(detail.labelIds) ? detail.labelIds : [];
+        const resolvedLabels: string[] = rawLabelIds.map((id: string) => labelMap.get(id) || id);
+
         // Extraer remitente nombre y email
         const fromMatch = fromHeader.match(/^(.*?)\s*<(.+?)>$/);
         const fromName = fromMatch ? fromMatch[1].replace(/["']/g, '').trim() : fromHeader.split('@')[0];
         const fromAddress = fromMatch ? fromMatch[2].trim() : fromHeader;
         const connectedGoogleAccount = (reqGmailUser || '').toLowerCase().trim();
-        const { es_logistico, categoria } = classifyEmail(subject, `${bodyText}\n${detail.snippet || ''}`, fromAddress);
+        const { es_logistico, categoria, isImportante } = classifyEmail(
+          subject,
+          `${bodyText}\n${detail.snippet || ''}`,
+          fromAddress,
+          resolvedLabels
+        );
 
         const dedupeKey = buildEmailDedupeKey(
           fromAddress,
@@ -295,6 +342,8 @@ export default async function syncGmail(req: Request, ctx: any) {
               categoria,
               es_logistico: true,
               tipo_flujo: detail.labelIds?.includes('SENT') ? 'sent' : 'inbox',
+              etiquetas: resolvedLabels,
+              es_importante: Boolean(isImportante || rawLabelIds.includes('IMPORTANT')),
             });
             syncedEmails.push(updatedEmail);
             reparados++;
@@ -330,6 +379,8 @@ export default async function syncGmail(req: Request, ctx: any) {
             categoria,
             es_logistico: true,
             tipo_flujo: detail.labelIds?.includes('SENT') ? 'sent' : 'inbox',
+            etiquetas: resolvedLabels,
+            es_importante: Boolean(isImportante || rawLabelIds.includes('IMPORTANT')),
           });
 
           syncedEmails.push(nuevoRegistro);

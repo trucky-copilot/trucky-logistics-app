@@ -79,6 +79,18 @@
     "google_account": {
       "type": "string",
       "description": "Cuenta de Google (ej. correo@gmail.com) desde la cual se sincronizó este mensaje"
+    },
+    "etiquetas": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Lista de etiquetas del correo (ej. IMPORTANTE, broker, carrier, trucky)"
+    },
+    "es_importante": {
+      "type": "boolean",
+      "description": "Indica si el correo tiene la etiqueta de Importante de Gmail o del usuario",
+      "default": false
     }
   },
   "required": [
