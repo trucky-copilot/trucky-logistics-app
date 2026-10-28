@@ -150,6 +150,7 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
         name: org.name,
         role: m.role,
         subscription_status: status,
+        plan_type: org.plan_type ?? 'none',
         // Solo informativo: el bloqueo real contra doble checkout se hará con
         // una reserva atómica en la función de checkout (paso posterior).
         can_checkout: !ACTIVE_STATUSES.has(status),

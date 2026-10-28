@@ -96,6 +96,20 @@
       "type": "integer",
       "default": 0,
       "description": "Versión monótona para control de concurrencia optimista (OCC)"
+    },
+    "plan_type": {
+      "type": "string",
+      "enum": [
+        "none",
+        "plan_29",
+        "plan_99"
+      ],
+      "default": "none",
+      "description": "Plan activo de Stripe contratado: plan_29 ($29 USD/mes) o plan_99 ($99 USD/mes)"
+    },
+    "stripe_price_id": {
+      "type": "string",
+      "description": "ID del precio contratado en Stripe (price_xxx)"
     }
   },
   "required": [

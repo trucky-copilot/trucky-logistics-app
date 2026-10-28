@@ -29,10 +29,23 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     const org = (await db.Organization.filter({ id: body.organization_id }))?.[0];
     if (!org) return reply('ORGANIZATION_NOT_FOUND', 404);
     const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
-    if ((org.stripe_subscription_id && org.stripe_subscription_id !== sub.id) || (org.stripe_customer_id && org.stripe_customer_id !== customer)) return reply('BILLING_MAPPING_CONFLICT', 409);
+    const firstItem = sub.items?.data?.[0];
+    const unitAmount = firstItem?.price?.unit_amount;
+    const priceId = typeof firstItem?.price?.id === 'string' ? firstItem.price.id : null;
+
+    let planType = 'none';
+    if (unitAmount === 2900) {
+      planType = 'plan_29';
+    } else if (unitAmount === 9900) {
+      planType = 'plan_99';
+    }
+
     await db.Organization.update(org.id, {
-      subscription_status: sub.status, stripe_subscription_id: sub.id,
+      subscription_status: sub.status,
+      stripe_subscription_id: sub.id,
       stripe_customer_id: customer,
+      plan_type: planType,
+      stripe_price_id: priceId,
       trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
     });
     return reply('SUBSCRIPTION_RECONCILED');

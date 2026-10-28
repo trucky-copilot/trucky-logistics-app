@@ -92,10 +92,23 @@ export default async function billingWebhook(req: Request, _ctx: unknown) {
     // globally for this isolated test deployment.
     if (['paused', 'incomplete_expired'].includes(subscription.status)) throw Error('STATUS_REQUIRES_SCHEMA_MIGRATION');
     databaseWriteStarted = true;
+    const firstItem = subscription.items?.data?.[0];
+    const unitAmount = firstItem?.price?.unit_amount;
+    const priceId = typeof firstItem?.price?.id === 'string' ? firstItem.price.id : null;
+
+    let planType = 'none';
+    if (unitAmount === 2900) {
+      planType = 'plan_29';
+    } else if (unitAmount === 9900) {
+      planType = 'plan_99';
+    }
+
     await db.Organization.update(org.id, {
       stripe_subscription_id: subscription.id,
       stripe_customer_id: customerId,
       subscription_status: subscription.status,
+      plan_type: planType,
+      stripe_price_id: priceId,
       trial_ends_at: subscription.trial_end ? new Date(subscription.trial_end * 1000).toISOString() : null,
     });
     await redis(['SET', eventKey, subscription.id]);
