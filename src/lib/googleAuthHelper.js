@@ -83,6 +83,11 @@ export async function sendEmailWithAutoAuth({
   remitente_nombre = 'Trucky User',
   categoria = 'cargas',
   load_id = null,
+  threadId = null,
+  inReplyTo = null,
+  references = null,
+  etiquetas = null,
+  es_importante = false,
 }) {
   let { token, email } = getStoredGoogleAuth(profile_id);
 
@@ -106,6 +111,11 @@ export async function sendEmailWithAutoAuth({
       profile_id,
       remitente_nombre,
       load_id,
+      threadId,
+      inReplyTo,
+      references,
+      etiquetas,
+      es_importante,
     });
   };
 

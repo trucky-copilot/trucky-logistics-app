@@ -28,15 +28,19 @@ const MANDATORY_LOGISTICS_TERMS = [
   'flete', 'fletes', 'carga', 'cargas', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
   'detention', 'layover', 'tonu', 'lumper', 'carrier setup', 'broker packet', 'delivery order',
   'proof of delivery', 'pod', 'deadhead', 'all-in rate', 'rpm', 'tarifa de flete', 'orden de carga',
-  'carta porte', 'remolque', 'trailer', 'tractor'
+  'carta porte', 'remolque', 'trailer', 'tractor', 'rfq', 'quote', 'quotes', 'rate request',
+  'rate inquiry', 'overweight', 'tri-axle', 'tri axle', 'port', 'puerto', 'terminal', 'container',
+  'containers', '20ft', '40ft', '40hc', '45hc', '20dc', '40dc', 'soc', 'shipment', 'shipments',
+  'pickup', 'delivery', 'dispatch', 'dispatcher', 'carrier', 'broker'
 ];
 
-// Palabras clave generales del ecosistema de logística (requieren al menos un término clave o remitente especializado)
+// Palabras clave generales del ecosistema de logística
 const LOGISTICS_KEYWORDS = [
   ...MANDATORY_LOGISTICS_TERMS,
-  'carrier', 'carriers', 'broker', 'brokers', 'dispatcher', 'dispatchers', 'dispatch',
-  'pickup', 'delivery', 'lane', 'lanes', 'container', 'containers', 'mc#', 'mc number', 'dot#',
-  'factoring', 'quickpay', 'camion', 'camiones', 'flota', 'flotas', 'trucky', 'cotizacion flete'
+  'carriers', 'brokers', 'dispatchers',
+  'lane', 'lanes', 'mc#', 'mc number', 'dot#',
+  'factoring', 'quickpay', 'camion', 'camiones', 'flota', 'flotas', 'trucky', 'cotizacion flete',
+  'tarifa', 'rate', 'rates', 'cotizacion'
 ];
 
 // Palabras clave personales, ocio, marketing o servicios corporativos ajenos al flete
@@ -50,7 +54,8 @@ const EXCLUSION_KEYWORDS = [
   'política de privacidad', 'privacy policy', 'actualización de términos', 'terms of service',
   'newsletter', 'boletín', 'resumen semanal', 'weekly digest', 'promoción', 'oferta especial',
   'descuento', 'factura de compra', 'recibo de pago', 'order confirmation', 'amazon.com',
-  'mercadolibre', 'ebay', 'aliexpress', 'linkedin', 'facebook', 'instagram', 'twitter', 'x.com'
+  'mercadolibre', 'ebay', 'aliexpress', 'linkedin', 'facebook', 'instagram', 'twitter', 'x.com',
+  'grok for startups', 'xai'
 ];
 
 // Dominios o remitentes de sistema o no logísticos que nunca son cargas
@@ -67,7 +72,8 @@ const EXCLUDED_SENDERS = [
   'microsoft.com',
   'twitter.com',
   'x.com',
-  'stripe.com'
+  'stripe.com',
+  'x.ai'
 ];
 
 function normalizeForMatching(value: string) {
@@ -94,12 +100,17 @@ export function classifyEmail(subject: string, text: string, fromAddress = '', l
 
   const labelsLower = labels.map(l => (l || '').toLowerCase().trim());
   const isImportante = labelsLower.some(l => 
-    l === 'important' || l === 'importante' || l.includes('important') || l.includes('importante')
+    l === 'important' || l === 'importante' || l.includes('important') || l.includes('importante') || l === 'starred'
   ) || /\b(importante|important|urgente)\b/i.test(subj);
 
   const hasLogisticsLabel = labelsLower.some(l =>
     ['broker', 'carrier', 'trucky', 'carga', 'cargas', 'flete', 'freight', 'dispatcher', 'load'].some(k => l.includes(k))
   );
+
+  // 1. Descartar automáticamente correos de sistema, Google, redes o tiendas
+  if (EXCLUDED_SENDERS.some(dom => sender.includes(dom)) || sender.includes('google.com') || sender.includes('accounts.google')) {
+    return { es_logistico: false, categoria: 'general', isImportante: false };
+  }
 
   // REGLA: Si tiene etiqueta de importante y también una etiqueta de broker/carrier/trucky etc.
   // Si están las dos -> MOSTRAR SIEMPRE ESOS CORREOS (garantiza es_logistico = true)
@@ -111,16 +122,11 @@ export function classifyEmail(subject: string, text: string, fromAddress = '', l
     return { es_logistico: true, categoria, isImportante: true, hasBothTags: true };
   }
 
-  // 1. Descartar automáticamente correos de sistema, Google, redes o tiendas
-  if (EXCLUDED_SENDERS.some(dom => sender.includes(dom)) || sender.includes('google.com') || sender.includes('accounts.google')) {
-    return { es_logistico: false, categoria: 'general', isImportante };
-  }
-
   const hasMandatory = MANDATORY_LOGISTICS_TERMS.some(term => containsTerm(content, term));
   const hasSubjectMatch = LOGISTICS_KEYWORDS.some(term => containsTerm(subj, term));
   const hasTrucky = containsTerm(content, 'trucky');
 
-  if (!hasMandatory && !hasSubjectMatch && !hasTrucky) {
+  if (!hasMandatory && !hasSubjectMatch && !hasTrucky && !hasLogisticsLabel) {
     return { es_logistico: false, categoria: 'general', isImportante };
   }
 
@@ -131,9 +137,8 @@ export function classifyEmail(subject: string, text: string, fromAddress = '', l
   // 2. Si tiene palabras de exclusión (ocio, seguridad, e-commerce, promociones)
   const tieneExclusion = EXCLUSION_KEYWORDS.some(k => containsTerm(content, k) || sender.includes(k));
   if (tieneExclusion) {
-    // Solo permitir si explícitamente es un flete o rate confirmation inconfundible
     const esFleteInconfundible =
-      ['rate con', 'bill of lading', 'flete', 'freight load'].some(term => containsTerm(content, term)) ||
+      ['rate con', 'bill of lading', 'flete', 'freight load', 'drayage', 'rate request', 'rfq'].some(term => containsTerm(content, term)) ||
       (hasTrucky && (hasMandatory || hasSubjectMatch));
     if (!esFleteInconfundible) {
       return { es_logistico: false, categoria: 'general', isImportante };
@@ -142,28 +147,87 @@ export function classifyEmail(subject: string, text: string, fromAddress = '', l
 
   // 4. Categorización
   let categoria = 'cargas';
-  if (['broker', 'rate', 'tarifa', 'packet', 'setup'].some(term => containsTerm(content, term)) || labelsLower.some(l => l.includes('broker'))) {
+  if (['broker', 'rate', 'tarifa', 'packet', 'setup', 'rfq', 'quote'].some(term => containsTerm(content, term)) || labelsLower.some(l => l.includes('broker'))) {
     categoria = 'brokers';
   }
 
   return { es_logistico: true, categoria, isImportante };
 }
 
+function decodeHtmlEntities(html: string): string {
+  return html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(p|div|tr|li|h[1-6])>/gi, '\n')
+    .replace(/<td[^>]*>/gi, '  ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 export function getPlainText(payload: any): string {
+  if (!payload) return '';
+
   if (payload?.mimeType === 'text/plain' && payload.body?.data) {
-    const base64 = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
-    const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
+    try {
+      const base64 = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
+      const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    } catch (_) {}
   }
 
+  if (Array.isArray(payload?.parts) && payload.parts.length > 0) {
+    const plainParts = payload.parts
+      .filter((p: any) => p.mimeType !== 'text/html')
+      .map((part: any) => getPlainText(part))
+      .filter(Boolean)
+      .join('\n');
+    if (plainParts.trim()) return plainParts;
+
+    // Fallback a HTML si el correo solo tiene cuerpo HTML (muy común en tablas de brokers/drayage)
+    const htmlParts = payload.parts
+      .map((part: any) => getHtmlText(part))
+      .filter(Boolean)
+      .join('\n');
+    if (htmlParts.trim()) return decodeHtmlEntities(htmlParts);
+  }
+
+  if (payload?.mimeType === 'text/html' && payload.body?.data) {
+    try {
+      const base64 = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
+      const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+      const rawHtml = new TextDecoder().decode(bytes);
+      return decodeHtmlEntities(rawHtml);
+    } catch (_) {}
+  }
+
+  return '';
+}
+
+function getHtmlText(payload: any): string {
+  if (!payload) return '';
+  if (payload?.mimeType === 'text/html' && payload.body?.data) {
+    try {
+      const base64 = payload.body.data.replace(/-/g, '+').replace(/_/g, '/');
+      const bytes = Uint8Array.from(atob(base64), char => char.charCodeAt(0));
+      return new TextDecoder().decode(bytes);
+    } catch (_) {}
+  }
   return (payload?.parts || [])
-    .map((part: any) => getPlainText(part))
+    .map((p: any) => getHtmlText(p))
     .filter(Boolean)
     .join('\n');
 }
 
 export function getFetchLimit(limit: unknown) {
-  return Math.max(Math.min(Number(limit) || 45, 45), 30);
+  return Math.max(Math.min(Number(limit) || 80, 100), 40);
 }
 
 export function buildEmailDedupeKey(
@@ -178,14 +242,13 @@ export function buildEmailDedupeKey(
     organizationId || '',
     profileId || '',
     fromAddress.toLowerCase().trim(),
-    subject,
+    subject.trim(),
     date.slice(0, 16),
     googleAccount.toLowerCase().trim(),
   ].join('__');
 }
 
 export default async function syncGmail(req: Request, ctx: any) {
-  // Cabeceras CORS por request: dependen del Origin que envía el navegador.
   const corsHeaders = corsHeadersFor(req);
 
   if (req.method === "OPTIONS") {
@@ -204,7 +267,7 @@ export default async function syncGmail(req: Request, ctx: any) {
     }
 
     const body = await req.json().catch(() => ({}));
-    const { organization_id, profile_id, limit = 10, gmailUser: reqGmailUser, accessToken, user_id: reqUserId } = body;
+    const { organization_id, profile_id, limit = 80, gmailUser: reqGmailUser, accessToken, user_id: reqUserId } = body;
     const finalUserId = currentUser?.id || reqUserId || null;
     const finalProfileId = profile_id ? String(profile_id) : null;
 
@@ -214,34 +277,57 @@ export default async function syncGmail(req: Request, ctx: any) {
     if (accessToken) {
       console.log("[syncGmail] Sincronizando vía Google OAuth 2.0...");
       const fetchLimit = getFetchLimit(limit);
-      const listRes = await fetch(
-        `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}`,
-        { headers: { Authorization: `Bearer ${accessToken}` } }
-      );
 
-      if (!listRes.ok) {
-        const errJson = await listRes.json().catch(() => ({}));
-        const msg = errJson?.error?.message || `Error ${listRes.status} de Google OAuth`;
+      // Consultar tanto Recibidos/Enviados recientes como explícitamente correos IMPORTANTES para no perder ninguno por spam/promociones
+      const [inboxListRes, importantListRes] = await Promise.all([
+        fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}&q=${encodeURIComponent('in:inbox OR in:sent OR label:important')}`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        ),
+        fetch(
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=35&labelIds=IMPORTANT`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        ).catch(() => null),
+      ]);
+
+      if (!inboxListRes.ok) {
+        const errJson = await inboxListRes.json().catch(() => ({}));
+        const msg = errJson?.error?.message || `Error ${inboxListRes.status} de Google OAuth`;
         return new Response(
           JSON.stringify({ error: `Fallo de autenticación con Google: ${msg}. Por favor vuelve a conectar tu cuenta.` }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
-      const listData = await listRes.json();
-      const messages = listData.messages || [];
-      console.log(`[syncGmail] Gmail devolvió ${messages.length} mensajes (límite ${fetchLimit}).`);
+      const listData = await inboxListRes.json();
+      const impData = importantListRes && importantListRes.ok ? await importantListRes.json().catch(() => ({})) : {};
+
+      // Combinar ambos listados sin duplicar IDs de Gmail
+      const seenMsgIds = new Set<string>();
+      const messages: Array<{ id: string; threadId?: string }> = [];
+      for (const m of [...(listData.messages || []), ...(impData.messages || [])]) {
+        if (m?.id && !seenMsgIds.has(m.id)) {
+          seenMsgIds.add(m.id);
+          messages.push(m);
+        }
+      }
+
+      console.log(`[syncGmail] Gmail devolvió ${messages.length} mensajes únicos para procesar.`);
 
       // Obtener emails existentes en Base44 para deduplicar
       let existingEmails: any[] = [];
       try {
         const emailQueryClient = base44.asServiceRole?.entities?.Email || base44.entities.Email;
-        existingEmails = await emailQueryClient.filter({}, '-fecha', 100);
+        existingEmails = await emailQueryClient.filter({}, '-fecha', 400);
       } catch (_) {
         existingEmails = [];
       }
       const existingMap = new Map();
+      const existingByGmailId = new Map();
       existingEmails.forEach((e: any) => {
+        if (e.gmail_message_id) {
+          existingByGmailId.set(`${e.profile_id || ''}__${e.gmail_message_id}`, e);
+        }
         const k = buildEmailDedupeKey(
           e.remitente_email || '',
           e.asunto || '',
@@ -262,7 +348,7 @@ export default async function syncGmail(req: Request, ctx: any) {
       let reparados = 0;
       let erroresGuardado = 0;
 
-      // Cargar mapeo de etiquetas de Gmail (para resolver etiquetas personalizadas como "broker", "trucky", "carrier")
+      // Cargar mapeo de etiquetas de Gmail
       const labelMap = new Map<string, string>();
       try {
         const labelsRes = await fetch(
@@ -281,14 +367,31 @@ export default async function syncGmail(req: Request, ctx: any) {
         console.warn("[syncGmail] No se pudieron cargar etiquetas de Gmail:", errLabels);
       }
 
-      for (const msgMeta of messages) {
-        const detailRes = await fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgMeta.id}?format=full`,
-          { headers: { Authorization: `Bearer ${accessToken}` } }
+      // Descargar detalles de mensajes en lotes paralelos de 10 para alta velocidad
+      const BATCH_SIZE = 10;
+      const detailsList: any[] = [];
+      for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+        const batch = messages.slice(i, i + BATCH_SIZE);
+        const batchResults = await Promise.all(
+          batch.map(async (msgMeta) => {
+            try {
+              const detailRes = await fetch(
+                `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msgMeta.id}?format=full`,
+                { headers: { Authorization: `Bearer ${accessToken}` } }
+              );
+              if (!detailRes.ok) return null;
+              return await detailRes.json();
+            } catch (_) {
+              return null;
+            }
+          })
         );
-        if (!detailRes.ok) continue;
+        for (const d of batchResults) {
+          if (d) detailsList.push(d);
+        }
+      }
 
-        const detail = await detailRes.json();
+      for (const detail of detailsList) {
         detallesCargados++;
         const headers = detail.payload?.headers || [];
         const getHeader = (name: string) => headers.find((h: any) => h.name.toLowerCase() === name.toLowerCase())?.value || '';
@@ -296,9 +399,21 @@ export default async function syncGmail(req: Request, ctx: any) {
         const subject = getHeader('Subject') || '(Sin asunto)';
         const fromHeader = getHeader('From') || 'desconocido@correo.com';
         const toHeader = getHeader('To') || 'usuario@gmail.com';
-        const dateHeader = getHeader('Date') ? new Date(getHeader('Date')).toISOString() : new Date().toISOString();
+        const rfcMessageId = getHeader('Message-ID') || getHeader('Message-Id') || '';
+
+        // Usar internalDate de Gmail como fuente primaria infalible para evitar desfases de zonas horarias en el header Date
+        let dateHeader = new Date().toISOString();
+        if (detail.internalDate && !isNaN(Number(detail.internalDate))) {
+          dateHeader = new Date(Number(detail.internalDate)).toISOString();
+        } else if (getHeader('Date')) {
+          const parsedDate = new Date(getHeader('Date'));
+          if (!isNaN(parsedDate.getTime())) {
+            dateHeader = parsedDate.toISOString();
+          }
+        }
+
         const bodyText = getPlainText(detail.payload);
-        const snippet = (bodyText || detail.snippet || subject).replace(/\s+/g, ' ').trim().slice(0, 500);
+        const snippet = (detail.snippet || bodyText || subject).replace(/\s+/g, ' ').trim().slice(0, 500);
         if (containsTerm(`${subject}\n${bodyText}\n${detail.snippet || ''}`, 'trucky')) {
           coincidenciasTrucky++;
         }
@@ -327,13 +442,23 @@ export default async function syncGmail(req: Request, ctx: any) {
           organization_id || null,
           finalProfileId,
         );
-        const existingEmail = existingMap.get(dedupeKey);
+        const existingEmail =
+          existingByGmailId.get(`${finalProfileId || ''}__${detail.id}`) ||
+          existingMap.get(dedupeKey);
+
+        const isImportantFlag = Boolean(
+          isImportante ||
+          rawLabelIds.includes('IMPORTANT') ||
+          rawLabelIds.includes('STARRED') ||
+          resolvedLabels.some(l => l.toLowerCase().includes('important') || l.toLowerCase().includes('importante'))
+        );
+
         if (existingEmail && es_logistico) {
           duplicados++;
           try {
             const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
             const updatedEmail = await emailEntity.update(existingEmail.id, {
-              google_account: connectedGoogleAccount || null,
+              google_account: connectedGoogleAccount || existingEmail.google_account || null,
               remitente_nombre: fromName,
               destinatario_email: toHeader,
               cuerpo: (bodyText || detail.snippet || subject).slice(0, 50000),
@@ -343,11 +468,15 @@ export default async function syncGmail(req: Request, ctx: any) {
               es_logistico: true,
               tipo_flujo: detail.labelIds?.includes('SENT') ? 'sent' : 'inbox',
               etiquetas: resolvedLabels,
-              es_importante: Boolean(isImportante || rawLabelIds.includes('IMPORTANT')),
+              es_importante: isImportantFlag,
+              thread_id: detail.threadId || existingEmail.thread_id || detail.id,
+              gmail_message_id: detail.id,
+              rfc_message_id: rfcMessageId || existingEmail.rfc_message_id || '',
             });
             syncedEmails.push(updatedEmail);
             reparados++;
             existingMap.set(dedupeKey, updatedEmail);
+            existingByGmailId.set(`${finalProfileId || ''}__${detail.id}`, updatedEmail);
           } catch (dbErr: any) {
             erroresGuardado++;
             console.error("[syncGmail OAuth] Error actualizando correo existente:", dbErr);
@@ -374,18 +503,22 @@ export default async function syncGmail(req: Request, ctx: any) {
             cuerpo: (bodyText || detail.snippet || subject).slice(0, 50000),
             snippet: snippet,
             fecha: dateHeader,
-            leido: false,
-            destacado: false,
+            leido: !rawLabelIds.includes('UNREAD'),
+            destacado: rawLabelIds.includes('STARRED'),
             categoria,
             es_logistico: true,
             tipo_flujo: detail.labelIds?.includes('SENT') ? 'sent' : 'inbox',
             etiquetas: resolvedLabels,
-            es_importante: Boolean(isImportante || rawLabelIds.includes('IMPORTANT')),
+            es_importante: isImportantFlag,
+            thread_id: detail.threadId || detail.id,
+            gmail_message_id: detail.id,
+            rfc_message_id: rfcMessageId || '',
           });
 
           syncedEmails.push(nuevoRegistro);
           nuevosGuardados++;
           existingMap.set(dedupeKey, nuevoRegistro);
+          existingByGmailId.set(`${finalProfileId || ''}__${detail.id}`, nuevoRegistro);
         } catch (dbErr: any) {
           erroresGuardado++;
           console.error("[syncGmail OAuth] Error guardando:", dbErr);
@@ -402,7 +535,7 @@ export default async function syncGmail(req: Request, ctx: any) {
         erroresGuardado,
       };
 
-      if (erroresGuardado > 0) {
+      if (erroresGuardado > 0 && nuevosGuardados === 0 && reparados === 0) {
         return new Response(
           JSON.stringify({
             error: `${erroresGuardado} correo(s) de logística coincidieron, pero Base44 no pudo guardarlos.`,
@@ -435,7 +568,7 @@ export default async function syncGmail(req: Request, ctx: any) {
     if (!gmailUser || !gmailPass) {
       return new Response(
         JSON.stringify({ 
-          error: "Para sincronizar sin contraseña, haz clic en 'Conectar con Google (OAuth 2.0)' arriba a la derecha." 
+          error: "Para sincronizar sin contraseña, haz clic en 'Sincronizar' arriba a la derecha." 
         }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -453,7 +586,6 @@ export default async function syncGmail(req: Request, ctx: any) {
     });
 
     try {
-      // Timeout estricto de 10 segundos para conexión IMAP
       const connectPromise = client.connect();
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error("Tiempo de espera agotado al conectar a imap.gmail.com (10s)")), 10000)
@@ -480,12 +612,10 @@ export default async function syncGmail(req: Request, ctx: any) {
       const totalMessages = status.messages || 0;
 
       if (totalMessages > 0) {
-        // Consultar los correos más recientes (máximo 10 para garantizar respuesta en <3 segundos)
         const fetchCount = Math.min(Math.max(1, limit), 10, totalMessages);
         const startSeq = Math.max(1, totalMessages - fetchCount + 1);
         const range = `${startSeq}:${totalMessages}`;
 
-        // Obtener los correos existentes en Base44 para deduplicar (con fallback seguro)
         let existingEmails: any[] = [];
         try {
           const emailQueryClient = base44.asServiceRole?.entities?.Email || base44.entities.Email;
@@ -510,21 +640,18 @@ export default async function syncGmail(req: Request, ctx: any) {
           const plainText = parsed.text || '';
           const snippet = plainText.slice(0, 180).replace(/\r?\n+/g, ' ').trim();
 
-          // Deduplicación contra la base de datos
           const dedupeKey = `${fromAddress}__${subject}__${date.slice(0, 16)}`;
           if (existingSet.has(dedupeKey)) {
             continue;
           }
 
-          // Aplicar Filtro Inteligente Anti-Ruido
           const { es_logistico, categoria } = classifyEmail(subject, plainText);
 
           if (!es_logistico) {
             omitidosNoLogisticos++;
-            continue; // Se excluye de la bandeja de entrada según el requisito
+            continue;
           }
 
-          // Guardar el correo logístico verificado en Base44
           try {
             const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
             const nuevoRegistro = await emailEntity.create({
@@ -538,7 +665,7 @@ export default async function syncGmail(req: Request, ctx: any) {
               cuerpo: plainText || snippet,
               snippet: snippet || subject,
               fecha: date,
-              leido: false, // Inicia como no leído (punto azul)
+              leido: false,
               destacado: false,
               categoria,
               es_logistico: true,

@@ -14,18 +14,28 @@ import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
-import { sendEmailWithAutoAuth, getStoredGoogleAuth } from '@/lib/googleAuthHelper';
+import { sendEmailWithAutoAuth, getStoredGoogleAuth, saveStoredGoogleAuth, requestGoogleToken } from '@/lib/googleAuthHelper';
 
 const LOGISTICS_EMAIL_TERMS = [
   'trucky', 'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
   'flete', 'fletes', 'carga', 'cargas', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
   'detention', 'layover', 'tonu', 'lumper', 'carrier', 'broker', 'dispatcher', 'dispatch',
   'pickup', 'delivery', 'container', 'factoring', 'quickpay', 'camion', 'flota', 'tarifa de flete',
+  'rfq', 'quote', 'quotes', 'rate request', 'rate inquiry', 'overweight', 'tri-axle', 'tri axle',
+  'port', 'puerto', 'terminal', 'containers', '20ft', '40ft', '40hc', '45hc', '20dc', '40dc', 'soc',
+  'shipment', 'shipments', 'rate', 'rates', 'tarifa', 'cotizacion'
 ];
 
+export function normalizeSubjectForThread(subject = '') {
+  return String(subject || '')
+    .replace(/^(\s*(re|fwd|rv|fw)\s*:\s*)+/gi, '')
+    .trim()
+    .toLowerCase();
+}
+
 /**
- * Evalúa si el correo tiene una etiqueta de Importante Y TAMBIÉN una etiqueta de broker/carrier/trucky/etc.
- * Si ambas condiciones están presentes, la regla de negocio exige MOSTRAR esos correos siempre.
+ * Evalúa si el correo tiene etiqueta de Importante (Gmail IMPORTANT, etiqueta importante, o es_importante)
+ * junto con contexto logístico (broker, carrier, trucky, carga, drayage, rate request, etc.).
  */
 export function hasImportantAndLogisticsTags(email) {
   if (!email) return false;
@@ -37,7 +47,6 @@ export function hasImportantAndLogisticsTags(email) {
   ].map(l => String(l).toLowerCase().trim());
 
   const subject = String(email.asunto || '').toLowerCase();
-  const allText = `${subject} ${email.remitente_nombre || ''} ${email.snippet || ''} ${email.cuerpo || ''}`.toLowerCase();
 
   // 1. Etiqueta de Importante:
   // Detecta etiqueta IMPORTANT de Gmail, etiqueta 'importante', o flags es_importante/destacado
@@ -47,13 +56,14 @@ export function hasImportantAndLogisticsTags(email) {
     Boolean(email.destacado) ||
     /\b(importante|important|prioritario|urgente)\b/i.test(subject);
 
-  // 2. Etiqueta de Broker, Carrier, Trucky, etc.:
+  // 2. Contexto o etiqueta logística (como todos los correos sincronizados ya pasan el filtro logístico):
   const hasLogisticsTag =
+    Boolean(email.es_logistico) ||
     rawLabels.some(l =>
       ['broker', 'carrier', 'trucky', 'carga', 'cargas', 'flete', 'freight', 'dispatcher', 'dispatch', 'load'].some(k => l.includes(k))
     ) ||
     Boolean(email.categoria === 'brokers' || email.categoria === 'cargas') ||
-    /\b(broker|carrier|trucky|carga|cargas|flete|fletes|dispatcher)\b/i.test(
+    /\b(broker|carrier|trucky|carga|cargas|flete|fletes|dispatcher|rate|drayage|rfq|load|container|pickup|port)\b/i.test(
       `${subject} ${email.remitente_nombre || ''} ${email.snippet || ''}`
     );
 
@@ -61,7 +71,7 @@ export function hasImportantAndLogisticsTags(email) {
 }
 
 function hasLogisticsSignal(email) {
-  if (hasImportantAndLogisticsTags(email)) {
+  if (email?.es_logistico === true || hasImportantAndLogisticsTags(email)) {
     return true;
   }
   const text = `${email.asunto || ''} ${email.snippet || ''} ${email.cuerpo || ''}`
@@ -80,7 +90,7 @@ export default function Emails() {
   const { activeProfileId } = useProfile();
   const { locale } = useLanguage();
   const { toast } = useToast();
-  const { isDemoUser, canAnalyzeInChat } = useDemo();
+  const { isDemoUser } = useDemo();
   const navigate = useNavigate();
 
   const [emails, setEmails] = useState([]);
@@ -98,21 +108,25 @@ export default function Emails() {
 
   useEffect(() => {
     if (activeProfileId) {
-      const savedEmail = localStorage.getItem(`trucky_oauth_email_${activeProfileId}`) || '';
-      const savedToken = localStorage.getItem(`trucky_oauth_token_${activeProfileId}`) || '';
-      setGoogleConnectedEmail(savedEmail);
-      setOauthToken(savedToken);
+      const { token, email } = getStoredGoogleAuth(activeProfileId);
+      setGoogleConnectedEmail(email || '');
+      setOauthToken(token || '');
     }
   }, [activeProfileId]);
 
-  // Modal de redacción rápida
+  // Modal de redacción / respuesta
   const [composeOpen, setComposeOpen] = useState(false);
   const [sendingCompose, setSendingCompose] = useState(false);
   const [composeForm, setComposeForm] = useState({
     to: '',
     subject: '',
     content: '',
-    categoria: 'cargas'
+    categoria: 'cargas',
+    threadId: null,
+    inReplyTo: null,
+    references: null,
+    etiquetas: null,
+    es_importante: false,
   });
 
   const isEs = locale === 'es';
@@ -121,7 +135,7 @@ export default function Emails() {
   const fetchEmails = async (overrideAccount) => {
     try {
       setLoading(true);
-      const all = await base44.entities.Email.filter({}, '-fecha', 100);
+      const all = await base44.entities.Email.filter({}, '-fecha', 350);
       const emailList = Array.isArray(all) ? all : [];
       // Filtrar por organización
       const scoped = emailList.filter(e => !orgId || !e.organization_id || e.organization_id === orgId);
@@ -134,7 +148,6 @@ export default function Emails() {
 
       // Filtrar correos no deseados de Google/sistema y correos no logísticos
       const cleanList = profileScoped.filter(e => {
-        // REGLA: Si tiene etiqueta de importante y también etiqueta de broker/carrier/trucky etc. -> Mostrar siempre
         if (hasImportantAndLogisticsTags(e)) {
           return true;
         }
@@ -143,21 +156,19 @@ export default function Emails() {
         const subject = (e.asunto || '').toLowerCase();
         const senderIsNonLogistics = [
           'google.com', 'accounts.google', 'openai.com', 'linkedin.com', 'github.com',
-          'amazon.com', 'uber.com', 'microsoft.com', 'temu.com',
+          'amazon.com', 'uber.com', 'microsoft.com', 'temu.com', 'x.ai',
         ].some(domain => sender.includes(domain));
 
         if (e.es_logistico === false || senderIsNonLogistics || !hasLogisticsSignal(e)) {
           return false;
         }
 
-        // Si se especificó cuenta de Google y el registro tiene google_account, verificar coincidencia
         if (activeGoogleAcc && e.google_account) {
           if (e.google_account.toLowerCase().trim() !== activeGoogleAcc) {
             return false;
           }
         }
 
-        // Excluir alertas de seguridad, códigos y marketing genérico
         if (
           subject.includes('alerta de seguridad') ||
           subject.includes('security alert') ||
@@ -173,11 +184,14 @@ export default function Emails() {
         return true;
       });
 
+      // Ordenar siempre del más reciente al más antiguo
+      cleanList.sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
+
       if (isDemoUser) {
-        // En modo DEMO, usar los correos de ejemplo enriquecidos para la interfaz estándar
         const sampleEmails = [
           {
             id: 'demo-1',
+            thread_id: 'thread-demo-1',
             remitente_nombre: 'Miami Cargo Express',
             remitente_email: 'dispatch@miamicargo.com',
             destinatario_email: 'operations@trucky.site',
@@ -186,7 +200,7 @@ export default function Emails() {
             categoria: 'cargas',
             etiquetas: ['IMPORTANT', 'carrier', 'trucky'],
             es_importante: true,
-            tipo_flujo: 'received',
+            tipo_flujo: 'inbox',
             leido: false,
             destacado: true,
             snippet: 'Please confirm the pickup for 1 container in Miami Yard...',
@@ -194,6 +208,7 @@ export default function Emails() {
           },
           {
             id: 'demo-2',
+            thread_id: 'thread-demo-2',
             remitente_nombre: 'DHL Logistics',
             remitente_email: 'freight-quote@dhl.com',
             destinatario_email: 'operations@trucky.site',
@@ -202,7 +217,7 @@ export default function Emails() {
             categoria: 'cargas',
             etiquetas: ['carrier', 'cargas'],
             es_importante: false,
-            tipo_flujo: 'received',
+            tipo_flujo: 'inbox',
             leido: false,
             destacado: false,
             snippet: 'Hi, can you provide your best rate for 20ft container...',
@@ -210,6 +225,7 @@ export default function Emails() {
           },
           {
             id: 'demo-3',
+            thread_id: 'thread-demo-3',
             remitente_nombre: 'Port of Miami',
             remitente_email: 'terminal-updates@portmiami.gov',
             destinatario_email: 'operations@trucky.site',
@@ -218,7 +234,7 @@ export default function Emails() {
             categoria: 'brokers',
             etiquetas: ['broker'],
             es_importante: false,
-            tipo_flujo: 'received',
+            tipo_flujo: 'inbox',
             leido: true,
             destacado: false,
             snippet: 'Important information regarding terminal gate hours...',
@@ -226,6 +242,7 @@ export default function Emails() {
           },
           {
             id: 'demo-4',
+            thread_id: 'thread-demo-4',
             remitente_nombre: 'Seaboard Marine',
             remitente_email: 'docs@seaboardmarine.com',
             destinatario_email: 'operations@trucky.site',
@@ -234,7 +251,7 @@ export default function Emails() {
             categoria: 'brokers',
             etiquetas: ['IMPORTANT', 'broker'],
             es_importante: true,
-            tipo_flujo: 'received',
+            tipo_flujo: 'inbox',
             leido: true,
             destacado: true,
             snippet: 'Attached you will find the BOL and customs release...',
@@ -242,6 +259,7 @@ export default function Emails() {
           },
           {
             id: 'demo-5',
+            thread_id: 'thread-demo-5',
             remitente_nombre: 'Customer USA',
             remitente_email: 'loads@customerusa.com',
             destinatario_email: 'operations@trucky.site',
@@ -250,7 +268,7 @@ export default function Emails() {
             categoria: 'cargas',
             etiquetas: ['cargas', 'trucky'],
             es_importante: false,
-            tipo_flujo: 'received',
+            tipo_flujo: 'inbox',
             leido: true,
             destacado: false,
             snippet: 'We have an upcoming weekly contracted lane ready for dispatch...',
@@ -266,7 +284,10 @@ export default function Emails() {
       setEmails(cleanList);
       if (cleanList.length > 0) {
         setSelectedEmail(prev => {
-          if (prev && cleanList.some(p => p.id === prev.id)) return prev;
+          if (prev) {
+            const matchById = cleanList.find(p => p.id === prev.id);
+            if (matchById) return matchById;
+          }
           return cleanList[0];
         });
       } else {
@@ -283,7 +304,7 @@ export default function Emails() {
     fetchEmails();
   }, [orgId, activeProfileId, googleConnectedEmail, isDemoUser]);
 
-  // Iniciar popup oficial de Google OAuth 2.0 (permite prompt configurable para renovación silenciosa o explícita)
+  // Iniciar popup oficial de Google OAuth 2.0
   const handleConnectGoogle = (promptMode = 'select_account') => {
     if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
       toast({
@@ -300,7 +321,6 @@ export default function Emails() {
         callback: async (tokenResponse) => {
           if (tokenResponse?.error) {
             console.error('[Google OAuth error]:', tokenResponse);
-            // Si el modo silencioso falla, no bloquear; requerir interacción en siguiente intento
             return;
           }
 
@@ -308,7 +328,6 @@ export default function Emails() {
             const token = tokenResponse.access_token;
             setOauthToken(token);
 
-            // Obtener el correo del usuario conectado
             try {
               const infoRes = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${token}` }
@@ -316,21 +335,17 @@ export default function Emails() {
               const info = await infoRes.json();
               const connectedEmail = info.email || googleConnectedEmail || 'Google Account';
               setGoogleConnectedEmail(connectedEmail);
-
-              if (activeProfileId) {
-                localStorage.setItem(`trucky_oauth_token_${activeProfileId}`, token);
-                localStorage.setItem(`trucky_oauth_email_${activeProfileId}`, connectedEmail);
-              }
+              saveStoredGoogleAuth(token, connectedEmail, activeProfileId);
 
               toast({
                 title: isEs ? 'Cuenta de Google Conectada' : 'Google Account Connected',
                 description: isEs ? `Conectado como ${connectedEmail}. Sincronizando...` : `Connected as ${connectedEmail}. Syncing...`,
               });
 
-              // Sincronizar automáticamente tras conectar con el nuevo token
               triggerSync(token, connectedEmail);
             } catch (_) {
               setGoogleConnectedEmail('Cuenta Conectada');
+              saveStoredGoogleAuth(token, googleConnectedEmail, activeProfileId);
               triggerSync(token, googleConnectedEmail);
             }
           }
@@ -372,7 +387,7 @@ export default function Emails() {
         organization_id: orgId,
         profile_id: activeProfileId,
         user_id: user?.id || null,
-        limit: 45,
+        limit: 80,
       });
 
       const data = res?.data || {};
@@ -382,7 +397,6 @@ export default function Emails() {
         const diagnosticText = diagnostics
           ? ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} mensajes recibidos, ${diagnostics.detallesCargados} revisados, ${diagnostics.coincidenciasTrucky} con “Trucky”, ${diagnostics.duplicados} ya existentes.`
           : '';
-        // Si el token expiró o las credenciales no son válidas, limpiar y pedir reautorización
         if (
           errorText.includes('autenticación') ||
           errorText.includes('401') ||
@@ -409,8 +423,8 @@ export default function Emails() {
         const diagnostics = data.diagnostics;
         const diagnosticText = diagnostics
           ? isEs
-            ? ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} recibidos, ${diagnostics.coincidenciasTrucky} con “Trucky”, ${diagnostics.duplicados} existentes actualizados.`
-            : ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} received, ${diagnostics.coincidenciasTrucky} with “Trucky”, ${diagnostics.reparados} existing emails refreshed.`
+            ? ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} recibidos, ${diagnostics.reparados || 0} existentes actualizados.`
+            : ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} received, ${diagnostics.reparados || 0} existing emails refreshed.`
           : '';
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
@@ -419,7 +433,6 @@ export default function Emails() {
             : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).${diagnosticText}`,
         });
         
-        // Refrescar desde la base de datos aplicando los filtros de perfil y cuenta actual
         await fetchEmails(emailToSync);
       }
     } catch (err) {
@@ -460,9 +473,164 @@ export default function Emails() {
       });
       return;
     }
-    // Abrir siempre la ventana oficial de Google para permitir seleccionar la cuenta deseada y renovar credenciales
     handleConnectGoogle('select_account');
   };
+
+  // ─── Actualizar correos recientes (renueva token automáticamente si expiró) ──
+  const [refreshing, setRefreshing] = useState(false);
+
+  const handleRefreshInbox = async () => {
+    setRefreshing(true);
+    try {
+      let { token, email } = getStoredGoogleAuth(activeProfileId);
+      const effectiveEmail = email || googleConnectedEmail;
+
+      if (!isDemoUser) {
+        // Si no hay token, solicitarlo de forma silenciosa/transparente
+        if (!token) {
+          try {
+            const fresh = await requestGoogleToken('');
+            token = fresh.token;
+            if (fresh.email) {
+              setGoogleConnectedEmail(fresh.email);
+            }
+            saveStoredGoogleAuth(token, fresh.email || effectiveEmail, activeProfileId);
+          } catch (_) {
+            // Si requiere selección explícita de cuenta
+            handleConnectGoogle('select_account');
+            return;
+          }
+        }
+
+        if (token) {
+          let syncRes = await base44.functions.invoke('syncGmail', {
+            accessToken: token,
+            gmailUser: effectiveEmail,
+            organization_id: orgId,
+            profile_id: activeProfileId,
+            user_id: user?.id || null,
+            limit: 80,
+          }).catch(err => ({ data: { error: err?.message || '401' } }));
+
+          // Si el token expiró (después de 1 hora), renovarlo automáticamente y reintentar
+          if (syncRes?.data?.error && /401|autenticaci|credentials|expired|token/i.test(String(syncRes.data.error))) {
+            try {
+              const fresh = await requestGoogleToken('');
+              token = fresh.token;
+              setOauthToken(token);
+              saveStoredGoogleAuth(token, fresh.email || effectiveEmail, activeProfileId);
+              syncRes = await base44.functions.invoke('syncGmail', {
+                accessToken: token,
+                gmailUser: fresh.email || effectiveEmail,
+                organization_id: orgId,
+                profile_id: activeProfileId,
+                user_id: user?.id || null,
+                limit: 80,
+              });
+            } catch (_) {
+              clearExpiredToken();
+              handleConnectGoogle('select_account');
+              return;
+            }
+          }
+        }
+      }
+
+      await fetchEmails(effectiveEmail);
+      toast({
+        title: isEs ? 'Bandeja actualizada' : 'Inbox refreshed',
+        description: isEs ? 'Se han cargado los correos e hilos más recientes de hoy.' : 'Latest emails and threads from today loaded.',
+      });
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // ─── Agrupación de correos en Hilos (Threads) estilo Gmail ──────────────────
+  const emailThreads = useMemo(() => {
+    const groups = new Map();
+
+    // Ordenar cronológicamente ascendente para armar cada hilo desde el primer correo hasta el último
+    const chronological = [...emails].sort(
+      (a, b) => new Date(a.fecha || 0).getTime() - new Date(b.fecha || 0).getTime()
+    );
+
+    for (const email of chronological) {
+      const normSubj = normalizeSubjectForThread(email.asunto);
+      // Agrupar por thread_id de Gmail o por asunto normalizado si pertenecen a la misma conversación
+      const key = email.thread_id || (normSubj ? `subj__${normSubj}` : `id__${email.id}`);
+
+      if (!groups.has(key)) {
+        groups.set(key, {
+          threadKey: key,
+          threadId: email.thread_id || null,
+          messages: [],
+        });
+      }
+      const g = groups.get(key);
+      if (email.thread_id && !g.threadId) {
+        g.threadId = email.thread_id;
+      }
+      g.messages.push(email);
+    }
+
+    const threadList = [];
+    for (const [, group] of groups.entries()) {
+      const msgs = group.messages;
+      const latestMsg = msgs[msgs.length - 1];
+      const hasUnread = msgs.some(m => !m.leido && m.tipo_flujo !== 'sent');
+      const isStarred = msgs.some(m => m.destacado);
+      const isImportant = msgs.some(m => hasImportantAndLogisticsTags(m));
+      const hasSent = msgs.some(m => m.tipo_flujo === 'sent');
+      const hasInbox = msgs.some(m => m.tipo_flujo !== 'sent');
+
+      // Participantes únicos del hilo (estilo Gmail: "Vince, yo 2")
+      const participants = [];
+      for (const m of msgs) {
+        const name = m.tipo_flujo === 'sent'
+          ? (isEs ? 'yo' : 'me')
+          : (m.remitente_nombre || m.remitente_email || '').split(' ')[0];
+        if (name && !participants.includes(name)) {
+          participants.push(name);
+        }
+      }
+
+      threadList.push({
+        ...latestMsg,
+        threadKey: group.threadKey,
+        thread_id: group.threadId || latestMsg.thread_id || null,
+        threadMessages: msgs,
+        threadCount: msgs.length,
+        participantsLabel: participants.join(', ') || latestMsg.remitente_nombre || latestMsg.remitente_email,
+        leido: !hasUnread,
+        destacado: isStarred,
+        hasImportantThread: isImportant,
+        hasSentInThread: hasSent,
+        hasInboxInThread: hasInbox,
+      });
+    }
+
+    // Ordenar hilos por la fecha del último mensaje (más reciente primero)
+    threadList.sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
+    return threadList;
+  }, [emails, isEs]);
+
+  // Obtener el hilo completo seleccionado actualmente
+  const selectedThread = useMemo(() => {
+    if (!selectedEmail) return null;
+    const found = emailThreads.find(
+      t =>
+        t.id === selectedEmail.id ||
+        (selectedEmail.thread_id && t.thread_id === selectedEmail.thread_id) ||
+        t.threadMessages.some(m => m.id === selectedEmail.id)
+    );
+    return found || {
+      ...selectedEmail,
+      threadKey: selectedEmail.thread_id || selectedEmail.id,
+      threadMessages: [selectedEmail],
+      threadCount: 1,
+    };
+  }, [selectedEmail, emailThreads]);
 
   // ─── Marcar / Desmarcar como favorito ────────────────────────────────────────
   const handleToggleStar = async (email, e) => {
@@ -479,78 +647,69 @@ export default function Emails() {
     }
   };
 
-  // ─── Seleccionar correo y marcarlo leído ─────────────────────────────────────
-  const handleSelectEmail = async (email) => {
-    setSelectedEmail(email);
-    if (!email.leido) {
-      setEmails(prev => prev.map(item => item.id === email.id ? { ...item, leido: true } : item));
-      try {
-        await base44.entities.Email.update(email.id, { leido: true });
-      } catch (err) {
-        console.error('Error al marcar leído:', err);
+  // ─── Seleccionar hilo de correo y marcar sus mensajes como leídos ────────────
+  const handleSelectEmail = async (threadItem) => {
+    setSelectedEmail(threadItem);
+    const msgsToMark = (threadItem.threadMessages || [threadItem]).filter(m => !m.leido);
+    if (msgsToMark.length > 0) {
+      const idsToMark = new Set(msgsToMark.map(m => m.id));
+      setEmails(prev => prev.map(item => idsToMark.has(item.id) ? { ...item, leido: true } : item));
+      for (const m of msgsToMark) {
+        try {
+          await base44.entities.Email.update(m.id, { leido: true });
+        } catch (err) {
+          console.error('Error al marcar leído:', err);
+        }
       }
     }
   };
 
-  // ─── Llevar la carga directo al Chat de Mercado ──────────────────────────────
-  const handleAnalyzeInChat = (email) => {
-    if (!email) return;
-    const prompt = isEs
-      ? `Tengo esta oportunidad de flete recibida por correo de ${email.remitente_nombre}:\n\n"${email.asunto}"\n\n${email.cuerpo}\n\n¿Cuál es la tarifa recomendada para esta ruta y equipo?`
-      : `I have this load opportunity received via email from ${email.remitente_nombre}:\n\n"${email.asunto}"\n\n${email.cuerpo}\n\nWhat is the recommended rate for this route and equipment?`;
+  // ─── Abrir respuesta sobre el ÚLTIMO correo del hilo ─────────────────────────
+  const handleReply = (threadOrEmail) => {
+    const msgs = threadOrEmail?.threadMessages || [threadOrEmail];
+    const lastMessage = msgs[msgs.length - 1] || threadOrEmail;
+    if (!lastMessage) return;
 
-    localStorage.setItem('prefill_chat_prompt', prompt);
-    navigate('/chat', { state: { prefillPrompt: prompt } });
-  };
+    // Si el último mensaje del hilo fue enviado por nosotros mismos, responder al destinatario de ese correo
+    // o al último remitente externo del hilo para no respondernos a nuestra propia dirección
+    const myEmail = (googleConnectedEmail || user?.email || '').toLowerCase().trim();
+    let replyToAddress = lastMessage.remitente_email;
+    if (lastMessage.tipo_flujo === 'sent' || (myEmail && replyToAddress?.toLowerCase().trim() === myEmail)) {
+      const lastExternal = [...msgs].reverse().find(
+        m => m.tipo_flujo !== 'sent' && m.remitente_email?.toLowerCase().trim() !== myEmail
+      );
+      replyToAddress = lastExternal ? lastExternal.remitente_email : lastMessage.destinatario_email;
+    }
 
-  // ─── Abrir respuesta ─────────────────────────────────────────────────────────
-  const handleReply = (email) => {
+    const baseSubj = lastMessage.asunto || '';
+    const replySubject = /^re:/i.test(baseSubj) ? baseSubj : `Re: ${baseSubj}`;
+    const rfcId = lastMessage.rfc_message_id || null;
+
     setComposeForm({
-      to: email.remitente_email,
-      subject: email.asunto.startsWith('Re:') ? email.asunto : `Re: ${email.asunto}`,
-      content: `\n\n---\nOn ${new Date(email.fecha).toLocaleString()}, ${email.remitente_nombre} wrote:\n>${email.cuerpo?.replace(/\n/g, '\n>')}`,
-      categoria: email.categoria || 'cargas'
+      to: replyToAddress || '',
+      subject: replySubject,
+      content: `\n\n---\nOn ${new Date(lastMessage.fecha).toLocaleString()}, ${lastMessage.remitente_nombre || lastMessage.remitente_email} wrote:\n> ${(lastMessage.cuerpo || lastMessage.snippet || '').replace(/\n/g, '\n> ')}`,
+      categoria: lastMessage.categoria || 'cargas',
+      threadId: lastMessage.thread_id || threadOrEmail?.thread_id || null,
+      inReplyTo: rfcId,
+      references: rfcId,
+      etiquetas: Array.from(new Set([...(Array.isArray(lastMessage.etiquetas) ? lastMessage.etiquetas : []), 'INBOX', 'SENT'])),
+      es_importante: Boolean(lastMessage.es_importante || hasImportantAndLogisticsTags(lastMessage)),
     });
     setComposeOpen(true);
   };
 
   // ─── Copiar contenido al portapapeles ────────────────────────────────────────
   const handleCopyBody = () => {
-    if (!selectedEmail) return;
-    navigator.clipboard.writeText(selectedEmail.cuerpo || selectedEmail.snippet || '');
+    if (!selectedThread) return;
+    const msgs = selectedThread.threadMessages || [selectedThread];
+    const lastMsg = msgs[msgs.length - 1];
+    navigator.clipboard.writeText(lastMsg.cuerpo || lastMsg.snippet || '');
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ─── Actualizar correos recientes (base de datos + sync silencioso) ───────────
-  const [refreshing, setRefreshing] = useState(false);
-
-  const handleRefreshInbox = async () => {
-    setRefreshing(true);
-    try {
-      await fetchEmails();
-      const { token, email } = getStoredGoogleAuth(activeProfileId);
-      if (token) {
-        try {
-          await base44.functions.invoke('syncGmail', {
-            accessToken: token,
-            gmailUser: email || googleConnectedEmail,
-            organization_id: orgId,
-            profile_id: activeProfileId,
-            user_id: user?.id || null,
-            limit: 45,
-          });
-          await fetchEmails(email || googleConnectedEmail);
-        } catch (_) {
-          // Si falla en segundo plano, no interrumpir al usuario
-        }
-      }
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
-  // ─── Enviar correo desde el modal (auto-renovación transparente) ──────────────
+  // ─── Enviar correo / respuesta desde el modal (se agrega al hilo en Trucky y Gmail) ──
   const handleSendEmail = async (e) => {
     e.preventDefault();
     if (!composeForm.to || !composeForm.subject || !composeForm.content) return;
@@ -565,6 +724,11 @@ export default function Emails() {
         organization_id: orgId,
         profile_id: activeProfileId,
         remitente_nombre: user?.full_name || 'Trucky User',
+        threadId: composeForm.threadId || null,
+        inReplyTo: composeForm.inReplyTo || null,
+        references: composeForm.references || null,
+        etiquetas: composeForm.etiquetas || ['INBOX', 'SENT', composeForm.categoria || 'cargas'],
+        es_importante: composeForm.es_importante || false,
       });
 
       if (res?.data?.error) {
@@ -574,12 +738,31 @@ export default function Emails() {
           variant: 'destructive',
         });
       } else {
+        const createdEmail = res?.data?.email;
         toast({
           title: isEs ? 'Correo enviado con éxito' : 'Email sent successfully',
-          description: isEs ? `Despachado a ${composeForm.to}` : `Delivered to ${composeForm.to}`,
+          description: isEs
+            ? `Respuesta enviada a ${composeForm.to} y agregada al hilo en Trucky y Gmail.`
+            : `Reply sent to ${composeForm.to} and added to thread in Trucky and Gmail.`,
         });
         setComposeOpen(false);
-        setComposeForm({ to: '', subject: '', content: '', categoria: 'cargas' });
+        setComposeForm({
+          to: '',
+          subject: '',
+          content: '',
+          categoria: 'cargas',
+          threadId: null,
+          inReplyTo: null,
+          references: null,
+          etiquetas: null,
+          es_importante: false,
+        });
+
+        // Insertar inmediatamente en el estado local para que se vea al instante en el hilo y en la bandeja
+        if (createdEmail) {
+          setEmails(prev => [createdEmail, ...prev]);
+          setSelectedEmail(createdEmail);
+        }
         await fetchEmails();
       }
     } catch (err) {
@@ -593,58 +776,63 @@ export default function Emails() {
     }
   };
 
-  // ─── Filtros y búsqueda ─────────────────────────────────────────────────────
-  const filteredEmails = useMemo(() => {
-    return emails.filter(item => {
-      const hasBothTags = hasImportantAndLogisticsTags(item);
+  // ─── Filtros y búsqueda sobre los Hilos (Threads) ───────────────────────────
+  const isConversationReplyThread = (thread) => {
+    if (!thread) return false;
+    return (
+      thread.threadCount > 1 ||
+      Boolean(thread.hasSentInThread && thread.hasInboxInThread) ||
+      (thread.threadMessages || []).some(m => /^\s*(re|rv)\s*:/i.test(String(m.asunto || '')))
+    );
+  };
 
-      // Filtro por pestaña
+  const filteredThreads = useMemo(() => {
+    return emailThreads.filter(thread => {
+      const hasImportant = thread.hasImportantThread || hasImportantAndLogisticsTags(thread);
+
       if (activeTab === 'important_logistics') {
-        return hasBothTags;
+        if (!hasImportant) return false;
       }
-      if (activeTab === 'unread' && item.leido) return false;
-      if (activeTab === 'starred' && !item.destacado && !item.es_importante) return false;
-      if (activeTab === 'brokers') {
-        const isBroker = item.categoria === 'brokers' || 
-          (Array.isArray(item.etiquetas) && item.etiquetas.some(l => l.toLowerCase().includes('broker')));
-        if (!isBroker) return false;
+      if (activeTab === 'unread' && thread.leido) return false;
+      if (activeTab === 'starred' && !thread.destacado && !thread.es_importante) return false;
+      if (activeTab === 'replies') {
+        if (!isConversationReplyThread(thread)) return false;
       }
-      if (activeTab === 'cargas') {
-        const isCarga = item.categoria === 'cargas' || 
-          (Array.isArray(item.etiquetas) && item.etiquetas.some(l => ['carga', 'load', 'flete', 'freight', 'trucky'].some(k => l.toLowerCase().includes(k))));
-        if (!isCarga) return false;
-      }
-      if (activeTab === 'sent' && item.tipo_flujo !== 'sent') return false;
+      if (activeTab === 'sent' && !thread.hasSentInThread) return false;
 
-      // Filtro de búsqueda
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const matchesSender = item.remitente_nombre?.toLowerCase().includes(q) || item.remitente_email?.toLowerCase().includes(q);
-        const matchesSubject = item.asunto?.toLowerCase().includes(q);
-        const matchesBody = item.cuerpo?.toLowerCase().includes(q);
-        const matchesTags = Array.isArray(item.etiquetas) && item.etiquetas.some(t => t.toLowerCase().includes(q));
-        return matchesSender || matchesSubject || matchesBody || matchesTags;
+        return thread.threadMessages.some(item => {
+          const matchesSender = item.remitente_nombre?.toLowerCase().includes(q) || item.remitente_email?.toLowerCase().includes(q);
+          const matchesSubject = item.asunto?.toLowerCase().includes(q);
+          const matchesBody = item.cuerpo?.toLowerCase().includes(q);
+          const matchesTags = Array.isArray(item.etiquetas) && item.etiquetas.some(t => t.toLowerCase().includes(q));
+          return matchesSender || matchesSubject || matchesBody || matchesTags;
+        });
       }
       return true;
     });
-  }, [emails, activeTab, searchQuery]);
+  }, [emailThreads, activeTab, searchQuery]);
 
-  const importantLogisticsCount = useMemo(() => emails.filter(e => hasImportantAndLogisticsTags(e)).length, [emails]);
-  const unreadCount = useMemo(() => emails.filter(e => !e.leido && e.tipo_flujo !== 'sent').length, [emails]);
-  const allCount = emails.length;
-  const starredCount = useMemo(() => emails.filter(e => e.destacado || e.es_importante).length, [emails]);
-  const brokersCount = useMemo(() => emails.filter(e => e.categoria === 'brokers' || (Array.isArray(e.etiquetas) && e.etiquetas.some(l => l.toLowerCase().includes('broker')))).length, [emails]);
-  const cargasCount = useMemo(() => emails.filter(e => e.categoria === 'cargas' || (Array.isArray(e.etiquetas) && e.etiquetas.some(l => ['carga', 'load', 'flete', 'freight', 'trucky'].some(k => l.toLowerCase().includes(k))))).length, [emails]);
-  const sentCount = useMemo(() => emails.filter(e => e.tipo_flujo === 'sent').length, [emails]);
+  const importantLogisticsCount = useMemo(
+    () => emailThreads.filter(t => t.hasImportantThread || hasImportantAndLogisticsTags(t)).length,
+    [emailThreads]
+  );
+  const unreadCount = useMemo(() => emailThreads.filter(t => !t.leido).length, [emailThreads]);
+  const allCount = emailThreads.length;
+  const starredCount = useMemo(() => emailThreads.filter(t => t.destacado || t.es_importante).length, [emailThreads]);
+  const repliesCount = useMemo(
+    () => emailThreads.filter(t => isConversationReplyThread(t)).length,
+    [emailThreads]
+  );
+  const sentCount = useMemo(() => emailThreads.filter(t => t.hasSentInThread).length, [emailThreads]);
 
-  // Lista de filtros: Todos, Importantes (con broker/carrier/trucky), No leídos, Destacados, Brokers, Cargas, Enviados
   const TABS = [
     { id: 'all', label: isEs ? 'Todos' : 'All', icon: Inbox, badge: allCount },
     { id: 'important_logistics', label: isEs ? 'Importantes' : 'Important', icon: Sparkles, badge: importantLogisticsCount },
     { id: 'unread', label: isEs ? 'No leídos' : 'Unread', icon: CheckCircle2, badge: unreadCount },
     { id: 'starred', label: isEs ? 'Destacados' : 'Starred', icon: Star, badge: starredCount },
-    { id: 'brokers', label: isEs ? 'Brokers' : 'Brokers', icon: Building2, badge: brokersCount },
-    { id: 'cargas', label: isEs ? 'Cargas' : 'Loads', icon: Package, badge: cargasCount },
+    { id: 'replies', label: isEs ? 'Respuestas' : 'Replies', icon: MessageSquare, badge: repliesCount },
     { id: 'sent', label: isEs ? 'Enviados' : 'Sent', icon: Send, badge: sentCount },
   ];
 
@@ -659,7 +847,22 @@ export default function Emails() {
     }
   };
 
+  // Formatear fecha/hora amigable en la lista (si es hoy muestra hora, si es de otro día muestra fecha corta + hora)
+  const formatEmailListDate = (isoDate) => {
+    if (!isoDate) return '';
+    const d = new Date(isoDate);
+    if (isNaN(d.getTime())) return '';
+    const now = new Date();
+    const isToday =
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate();
 
+    if (isToday) {
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+    return `${d.toLocaleDateString([], { day: '2-digit', month: 'short' })} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  };
 
   return (
     <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
@@ -698,7 +901,7 @@ export default function Emails() {
             onClick={handleRefreshInbox}
             disabled={refreshing || loading}
             className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
-            title={isEs ? 'Actualizar para ver correos recientes' : 'Refresh to view recent emails'}
+            title={isEs ? 'Actualizar para ver correos recientes de hoy' : 'Refresh to view today’s recent emails'}
           >
             <RotateCw className={`w-3.5 h-3.5 text-primary ${refreshing ? 'animate-spin' : ''}`} />
             <span>{refreshing ? (isEs ? 'Actualizando...' : 'Refreshing...') : (isEs ? 'Actualizar' : 'Refresh')}</span>
@@ -722,7 +925,17 @@ export default function Emails() {
 
           <button
             onClick={() => {
-              setComposeForm({ to: '', subject: '', content: '', categoria: 'cargas' });
+              setComposeForm({
+                to: '',
+                subject: '',
+                content: '',
+                categoria: 'cargas',
+                threadId: null,
+                inReplyTo: null,
+                references: null,
+                etiquetas: null,
+                es_importante: false,
+              });
               setComposeOpen(true);
             }}
             className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all whitespace-nowrap"
@@ -785,12 +998,12 @@ export default function Emails() {
         </div>
       </div>
 
-      {/* ─── Panel Master-Detail (Feed de Correos + Lector) ─────────────────────── */}
+      {/* ─── Panel Master-Detail (Feed de Hilos + Lector de Conversación) ─────── */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0 overflow-hidden">
-        {/* Columna Izquierda: Lista de Correos (5 columnas) */}
+        {/* Columna Izquierda: Lista de Hilos de Correo (5 columnas) */}
         <div className="lg:col-span-5 flex flex-col bg-card/60 border border-border rounded-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-border/60 bg-card flex items-center justify-between text-xs text-muted-foreground">
-            <span>{filteredEmails.length} {isEs ? 'correos' : 'emails'}</span>
+            <span>{filteredThreads.length} {isEs ? 'conversaciones' : 'threads'}</span>
             <span className="text-[11px] opacity-70">
               {activeTab === 'all' ? (isEs ? 'Bandeja principal' : 'Main inbox') : ''}
             </span>
@@ -802,7 +1015,7 @@ export default function Emails() {
                 <Loader2 className="w-6 h-6 animate-spin text-primary" />
                 <span className="text-xs">{isEs ? 'Cargando correos...' : 'Loading emails...'}</span>
               </div>
-            ) : filteredEmails.length === 0 ? (
+            ) : filteredThreads.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-56 p-6 text-center text-muted-foreground">
                 <div className="w-12 h-12 rounded-2xl bg-muted/50 flex items-center justify-center mb-3">
                   <Inbox className="w-6 h-6 opacity-40" />
@@ -812,8 +1025,8 @@ export default function Emails() {
                 </p>
                 <p className="text-xs text-muted-foreground mt-1 max-w-[260px]">
                   {isEs
-                    ? 'Haz clic en "Sincronizar Gmail" para verificar nuevos mensajes o redacta un correo nuevo.'
-                    : 'Click "Sync Gmail" to check for new messages or compose a new email.'}
+                    ? 'Haz clic en "Actualizar" o "Sincronizar" para verificar nuevos mensajes o redacta un correo nuevo.'
+                    : 'Click "Refresh" or "Sync" to check for new messages or compose a new email.'}
                 </p>
                 {activeTab !== 'all' && (
                   <button
@@ -825,8 +1038,8 @@ export default function Emails() {
                 )}
               </div>
             ) : (
-              filteredEmails.map(item => {
-                const isSelected = selectedEmail?.id === item.id;
+              filteredThreads.map(item => {
+                const isSelected = selectedThread?.threadKey === item.threadKey;
                 const badge = getCategoryBadge(item.categoria);
                 const initials = (item.remitente_nombre || 'TL')
                   .split(' ')
@@ -836,13 +1049,11 @@ export default function Emails() {
                   .join('')
                   .toUpperCase();
 
-                const timeStr = item.fecha
-                  ? new Date(item.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                  : '';
+                const timeStr = formatEmailListDate(item.fecha);
 
                 return (
                   <div
-                    key={item.id}
+                    key={item.threadKey || item.id}
                     onClick={() => handleSelectEmail(item)}
                     className={`p-3.5 transition-colors cursor-pointer relative group ${
                       isSelected
@@ -861,8 +1072,13 @@ export default function Emails() {
                         <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1.5 truncate">
                             <span className={`text-xs truncate ${!item.leido ? 'font-black text-foreground' : 'font-medium text-zinc-300'}`}>
-                              {item.remitente_nombre || item.remitente_email}
+                              {item.threadCount > 1 ? item.participantsLabel : (item.remitente_nombre || item.remitente_email)}
                             </span>
+                            {item.threadCount > 1 && (
+                              <span className="px-1.5 py-0.2 rounded-md bg-primary/20 text-primary border border-primary/30 text-[10px] font-bold flex-shrink-0">
+                                {item.threadCount}
+                              </span>
+                            )}
                             {!item.leido && (
                               <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" title={isEs ? 'No leído' : 'Unread'} />
                             )}
@@ -886,10 +1102,15 @@ export default function Emails() {
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${badge.color}`}>
                               {badge.label}
                             </span>
-                            {hasImportantAndLogisticsTags(item) && (
+                            {(item.hasImportantThread || hasImportantAndLogisticsTags(item)) && (
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
                                 <Sparkles className="w-2.5 h-2.5 text-red-400" />
                                 {isEs ? 'Importante' : 'Important'}
+                              </span>
+                            )}
+                            {item.hasSentInThread && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-primary border-primary/30">
+                                {isEs ? 'Respondido' : 'Replied'}
                               </span>
                             )}
                           </div>
@@ -910,101 +1131,69 @@ export default function Emails() {
           </div>
         </div>
 
-        {/* Columna Derecha: Lector de Correo (7 columnas) */}
+        {/* Columna Derecha: Lector de Hilo de Correo (7 columnas) */}
         <div className="lg:col-span-7 flex flex-col bg-card/60 border border-border rounded-2xl overflow-hidden">
-          {selectedEmail ? (
+          {selectedThread ? (
             <div className="flex flex-col h-full">
-              {/* Header del Correo */}
+              {/* Header del Hilo */}
               <div className="p-4 md:p-5 border-b border-border/60 bg-card space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${getCategoryBadge(selectedEmail.categoria).color}`}>
-                        {getCategoryBadge(selectedEmail.categoria).label}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${getCategoryBadge(selectedThread.categoria).color}`}>
+                        {getCategoryBadge(selectedThread.categoria).label}
                       </span>
 
-                      {hasImportantAndLogisticsTags(selectedEmail) && (
+                      {(selectedThread.hasImportantThread || hasImportantAndLogisticsTags(selectedThread)) && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1 shadow-sm">
                           <Sparkles className="w-3 h-3 text-red-400" />
                           {isEs ? 'Importante' : 'Important'}
                         </span>
                       )}
 
-                      {Array.isArray(selectedEmail.etiquetas) && selectedEmail.etiquetas
-                        .filter(tag => !['inbox', 'unread', 'important', 'sent', 'category_personal', 'category_updates'].includes(tag.toLowerCase()))
-                        .slice(0, 3)
-                        .map(tag => (
-                          <span key={tag} className="text-[10px] font-medium px-2 py-0.5 rounded-md border bg-muted/60 text-muted-foreground border-border">
-                            #{tag}
-                          </span>
-                      ))}
-
-                      {selectedEmail.tipo_flujo === 'sent' && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-md border bg-primary/10 text-primary border-primary/30">
-                          {isEs ? 'Enviado por Trucky' : 'Sent via Trucky'}
+                      {selectedThread.threadCount > 1 && (
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-primary/15 text-primary border-primary/30 flex items-center gap-1">
+                          <MessageSquare className="w-3 h-3" />
+                          {selectedThread.threadCount} {isEs ? 'mensajes en el hilo' : 'messages in thread'}
                         </span>
                       )}
+
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {new Date(selectedEmail.fecha).toLocaleString()}
+                        {new Date(selectedThread.fecha).toLocaleString()}
                       </span>
                     </div>
 
                     <h2 className="text-base md:text-lg font-bold text-foreground tracking-tight leading-snug">
-                      {selectedEmail.asunto}
+                      {selectedThread.asunto}
                     </h2>
                   </div>
 
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
-                      onClick={(e) => handleToggleStar(selectedEmail, e)}
+                      onClick={(e) => handleToggleStar(selectedThread, e)}
                       className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-amber-400 transition-colors"
                       title={isEs ? 'Destacar' : 'Star'}
                     >
-                      <Star className={`w-4 h-4 ${selectedEmail.destacado ? 'fill-amber-400 text-amber-400' : ''}`} />
+                      <Star className={`w-4 h-4 ${selectedThread.destacado ? 'fill-amber-400 text-amber-400' : ''}`} />
                     </button>
                     <button
                       onClick={handleCopyBody}
                       className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      title={isEs ? 'Copiar texto' : 'Copy text'}
+                      title={isEs ? 'Copiar texto del último correo' : 'Copy latest email text'}
                     >
                       {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
 
-                {/* Remitente y Destinatario */}
-                <div className="flex items-center gap-3 pt-2 border-t border-border/40 text-xs">
-                  <div className="w-9 h-9 rounded-xl bg-primary/15 border border-primary/30 flex items-center justify-center font-bold text-xs text-primary">
-                    {(selectedEmail.remitente_nombre || 'TL').slice(0, 2).toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-foreground truncate">
-                      {selectedEmail.remitente_nombre || selectedEmail.remitente_email}
-                      <span className="text-muted-foreground font-normal ml-1.5">&lt;{selectedEmail.remitente_email}&gt;</span>
-                    </p>
-                    <p className="text-[11px] text-muted-foreground truncate">
-                      {isEs ? 'Para:' : 'To:'} {selectedEmail.destinatario_email}
-                    </p>
-                  </div>
-                </div>
-
                 {/* Botonera de Acción Destacada */}
                 <div className="flex items-center gap-2 pt-2 flex-wrap">
-                  {/* Botón Amarillo: Analizar en Chat de Mercado (Habilitado en Plan $99) */}
+                  {/* Botón Amarillo: Analizar en Chat de Mercado (Deshabilitado) */}
                   <button
-                    disabled={!canAnalyzeInChat}
-                    onClick={() => handleAnalyzeInChat(selectedEmail)}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 transition-all ${
-                      !canAnalyzeInChat
-                        ? 'opacity-40 cursor-not-allowed select-none shadow-none'
-                        : 'hover:brightness-110 active:scale-95 cursor-pointer shadow-md shadow-amber-500/20'
-                    }`}
-                    title={
-                      !canAnalyzeInChat
-                        ? (isEs ? 'Función disponible en el Plan $99 / Flota' : 'Feature available on $99 / Fleet Plan')
-                        : (isEs ? 'Analizar esta carga en el Chat de Mercado con IA' : 'Analyze this load in Market Chat with AI')
-                    }
+                    disabled={true}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 transition-all opacity-40 cursor-not-allowed select-none shadow-none"
+                    title={isEs ? 'Función disponible en el Plan $99 / Flota' : 'Feature available on $99 / Fleet Plan'}
                   >
                     <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
                     <span>{isEs ? 'Analizar en Chat de Mercado' : 'Analyze in Market Chat'}</span>
@@ -1012,20 +1201,89 @@ export default function Emails() {
                   </button>
 
                   <button
-                    onClick={() => handleReply(selectedEmail)}
-                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground transition-colors"
+                    onClick={() => handleReply(selectedThread)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
                   >
                     <Send className="w-3.5 h-3.5 text-primary" />
-                    <span>{isEs ? 'Responder' : 'Reply'}</span>
+                    <span>
+                      {isEs
+                        ? (selectedThread.threadCount > 1 ? 'Responder al último correo' : 'Responder')
+                        : (selectedThread.threadCount > 1 ? 'Reply to latest email' : 'Reply')}
+                    </span>
                   </button>
                 </div>
               </div>
 
-              {/* Cuerpo del Mensaje */}
-              <div className="flex-1 p-5 overflow-y-auto bg-card/20 space-y-5">
-                <div className="prose prose-invert max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-zinc-200">
-                  {selectedEmail.cuerpo || selectedEmail.snippet || '(Sin contenido)'}
-                </div>
+              {/* Historial de Mensajes del Hilo */}
+              <div className="flex-1 p-4 md:p-5 overflow-y-auto bg-card/20 space-y-4">
+                {(selectedThread.threadMessages || [selectedThread]).map((msg, idx, arr) => {
+                  const isLast = idx === arr.length - 1;
+                  const isSentByMe = msg.tipo_flujo === 'sent';
+                  const msgInitials = (msg.remitente_nombre || 'TL').slice(0, 2).toUpperCase();
+
+                  return (
+                    <div
+                      key={msg.id || idx}
+                      className={`rounded-2xl border p-4 transition-all ${
+                        isLast
+                          ? 'bg-card/90 border-primary/40 shadow-md'
+                          : 'bg-card/40 border-border/60 opacity-90'
+                      }`}
+                    >
+                      {/* Encabezado de cada mensaje individual en el hilo */}
+                      <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border/40 text-xs">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <div className={`w-8 h-8 rounded-xl border flex items-center justify-center font-bold text-xs flex-shrink-0 ${
+                            isSentByMe
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                              : 'bg-primary/15 border-primary/30 text-primary'
+                          }`}>
+                            {msgInitials}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-semibold text-foreground truncate">
+                                {msg.remitente_nombre || msg.remitente_email}
+                              </span>
+                              <span className="text-muted-foreground font-normal text-[11px] truncate">
+                                &lt;{msg.remitente_email}&gt;
+                              </span>
+                              {isSentByMe && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-primary border-primary/30">
+                                  {isEs ? 'Enviado desde Trucky / Gmail' : 'Sent via Trucky / Gmail'}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-muted-foreground truncate">
+                              {isEs ? 'Para:' : 'To:'} {msg.destinatario_email}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-[11px] text-muted-foreground">
+                            {new Date(msg.fecha).toLocaleString()}
+                          </span>
+                          {isLast && (
+                            <button
+                              onClick={() => handleReply(selectedThread)}
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 transition-colors flex items-center gap-1"
+                              title={isEs ? 'Responder a este último mensaje' : 'Reply to this latest message'}
+                            >
+                              <Send className="w-3 h-3" />
+                              <span>{isEs ? 'Responder' : 'Reply'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Cuerpo del correo */}
+                      <div className="prose prose-invert max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-zinc-200">
+                        {msg.cuerpo || msg.snippet || '(Sin contenido)'}
+                      </div>
+                    </div>
+                  );
+                })}
 
                 {/* Si es usuario demo, mostramos la tarjeta de desbloqueo al pie del correo */}
                 {isDemoUser && (
@@ -1083,15 +1341,15 @@ export default function Emails() {
               </h3>
               <p className="text-xs text-muted-foreground mt-1 max-w-xs">
                 {isEs
-                  ? 'Elige un mensaje del panel izquierdo para leer los detalles o cotizarlo en el Chat de Mercado.'
-                  : 'Select a message from the left panel to read details or quote it in Market Chat.'}
+                  ? 'Elige una conversación del panel izquierdo para leer el hilo completo o responder.'
+                  : 'Select a conversation from the left panel to read the full thread or reply.'}
               </p>
             </div>
           )}
         </div>
       </div>
 
-      {/* ─── Modal de Redacción Rápida ─────────────────────────────────────────── */}
+      {/* ─── Modal de Redacción / Respuesta en Hilo ────────────────────────────── */}
       {composeOpen && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
@@ -1099,7 +1357,9 @@ export default function Emails() {
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-primary" />
                 <h3 className="text-sm font-bold text-foreground">
-                  {isEs ? 'Nuevo Correo (Gmail)' : 'New Email (Gmail)'}
+                  {composeForm.threadId
+                    ? (isEs ? 'Responder en el Hilo (Trucky + Gmail)' : 'Reply in Thread (Trucky + Gmail)')
+                    : (isEs ? 'Nuevo Correo (Gmail)' : 'New Email (Gmail)')}
                 </h3>
               </div>
               <button

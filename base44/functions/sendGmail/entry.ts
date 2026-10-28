@@ -6,8 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-
-
 function encodeBase64Utf8(str: string): string {
   const bytes = new TextEncoder().encode(str);
   let binary = '';
@@ -25,17 +23,38 @@ function encodeBase64Url(str: string): string {
     .replace(/=+$/, '');
 }
 
-function buildRfc822Message(from: string, to: string, subject: string, bodyText: string): string {
+function buildRfc822Message(
+  from: string,
+  to: string,
+  subject: string,
+  bodyText: string,
+  inReplyTo?: string | null,
+  references?: string | null
+): string {
   const utf8Subject = `=?utf-8?B?${encodeBase64Utf8(subject)}?=`;
-  return [
+  const headers = [
     `From: ${from}`,
     `To: ${to}`,
     `Subject: ${utf8Subject}`,
+  ];
+
+  if (inReplyTo) {
+    headers.push(`In-Reply-To: ${inReplyTo}`);
+  }
+  if (references) {
+    headers.push(`References: ${references}`);
+  } else if (inReplyTo) {
+    headers.push(`References: ${inReplyTo}`);
+  }
+
+  headers.push(
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
     '',
-    bodyText.replace(/\n/g, '<br/>'),
-  ].join('\r\n');
+    bodyText.replace(/\n/g, '<br/>')
+  );
+
+  return headers.join('\r\n');
 }
 
 export default async function sendGmail(req: Request, ctx: any) {
@@ -58,6 +77,11 @@ export default async function sendGmail(req: Request, ctx: any) {
       load_id,
       accessToken,
       gmailUser: reqGmailUser,
+      threadId,
+      inReplyTo,
+      references,
+      etiquetas,
+      es_importante,
     } = body;
 
     if (!to || !subject || !content) {
@@ -70,6 +94,7 @@ export default async function sendGmail(req: Request, ctx: any) {
     const toAddress = Array.isArray(to) ? to.join(', ') : to;
     const senderDisplayName = remitente_nombre || "Trucky Logistics";
     let messageId: string | null = null;
+    let resolvedThreadId: string | null = threadId || null;
     let effectiveSenderEmail = reqGmailUser || "me";
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -81,8 +106,13 @@ export default async function sendGmail(req: Request, ctx: any) {
         ? `"${senderDisplayName}" <${effectiveSenderEmail}>`
         : senderDisplayName;
 
-      const rawRfc = buildRfc822Message(fromAddress, toAddress, subject, content);
+      const rawRfc = buildRfc822Message(fromAddress, toAddress, subject, content, inReplyTo, references);
       const encodedRaw = encodeBase64Url(rawRfc);
+
+      const sendPayload: Record<string, any> = { raw: encodedRaw };
+      if (threadId && !String(threadId).startsWith('demo-')) {
+        sendPayload.threadId = threadId;
+      }
 
       const googleRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
         method: "POST",
@@ -90,7 +120,7 @@ export default async function sendGmail(req: Request, ctx: any) {
           "Authorization": `Bearer ${accessToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ raw: encodedRaw }),
+        body: JSON.stringify(sendPayload),
       });
 
       if (!googleRes.ok) {
@@ -105,6 +135,7 @@ export default async function sendGmail(req: Request, ctx: any) {
 
       const sendData = await googleRes.json();
       messageId = sendData.id || `g_${Date.now()}`;
+      resolvedThreadId = sendData.threadId || threadId || messageId;
     } else {
       // ─────────────────────────────────────────────────────────────────────────
       // CASO 2: Fallback a SMTP mediante nodemailer
@@ -133,24 +164,28 @@ export default async function sendGmail(req: Request, ctx: any) {
         },
       });
 
-      const mailOptions = {
+      const mailOptions: Record<string, any> = {
         from: `"${senderDisplayName}" <${gmailUser}>`,
         to: toAddress,
         subject: subject,
         text: content,
         html: content.replace(/\n/g, '<br/>'),
       };
+      if (inReplyTo) mailOptions.inReplyTo = inReplyTo;
+      if (references) mailOptions.references = references;
 
       const info = await transporter.sendMail(mailOptions);
       messageId = info.messageId;
     }
 
-    // Registro del correo enviado en Base44 para visualización inmediata en /emails
+    // Registro del correo enviado en Base44 para visualización inmediata en /emails y en el hilo
     let emailRecord = null;
     try {
-      emailRecord = await base44.entities.Email.create({
+      const emailEntity = base44.asServiceRole?.entities?.Email || base44.entities.Email;
+      emailRecord = await emailEntity.create({
         organization_id: organization_id || null,
-        profile_id: profile_id || null,
+        profile_id: profile_id ? String(profile_id) : null,
+        google_account: effectiveSenderEmail !== 'me' ? effectiveSenderEmail.toLowerCase().trim() : null,
         remitente_nombre: senderDisplayName,
         remitente_email: effectiveSenderEmail,
         destinatario_email: toAddress,
@@ -164,6 +199,10 @@ export default async function sendGmail(req: Request, ctx: any) {
         es_logistico: true,
         tipo_flujo: 'sent',
         load_id: load_id || null,
+        thread_id: resolvedThreadId || null,
+        gmail_message_id: messageId || null,
+        etiquetas: Array.isArray(etiquetas) ? etiquetas : ['SENT', categoria || 'cargas'],
+        es_importante: Boolean(es_importante),
       });
     } catch (dbErr) {
       console.error("No se pudo registrar correo en Base44:", dbErr);
@@ -173,6 +212,7 @@ export default async function sendGmail(req: Request, ctx: any) {
       JSON.stringify({
         success: true,
         messageId: messageId,
+        threadId: resolvedThreadId,
         email: emailRecord,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }

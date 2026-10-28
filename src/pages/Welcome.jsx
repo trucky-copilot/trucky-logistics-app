@@ -1,5 +1,6 @@
 import { useReducer } from 'react';
 import { Truck, Shield, BarChart3, FileSearch, Loader2, ArrowLeft, MailCheck } from 'lucide-react';
+import { TruckyLogoIcon } from '@/components/TruckyLogo';
 import { base44 } from '@/api/base44Client';
 import {
   AUTH_STEP,
@@ -176,8 +177,8 @@ export default function Welcome() {
       <div className="min-h-full flex flex-col items-center justify-center p-6">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-2xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-500 to-indigo-700 shadow-xl shadow-violet-500/30">
-            <span className="text-white font-black text-3xl leading-none">t</span>
+          <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] shadow-xl shadow-[#5B2BA0]/40">
+            <TruckyLogoIcon className="w-14 h-14" rounded="rounded-2xl" />
           </div>
           <div className="leading-tight">
             <div className="text-3xl font-black text-foreground tracking-tight lowercase">trucky</div>

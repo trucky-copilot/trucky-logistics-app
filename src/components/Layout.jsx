@@ -19,6 +19,7 @@ import NotificationBell from './NotificationBell';
 import OperationalReadinessBanner from './OperationalReadinessBanner';
 import MarketTicker from './MarketTicker';
 import ProfileSelector from './ProfileSelector';
+import { TruckyLogoIcon } from './TruckyLogo';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { base44 } from '@/api/base44Client';
 import { useDemo } from '@/lib/DemoContext';
@@ -51,7 +52,6 @@ export default function Layout() {
   const showAdminPanel = user?.role === 'admin' && !nonAdminOperationalEmails.has(userEmail);
 
   const visibleNavItems = NAV_ITEMS;
-
 
   useEffect(() => {
     if (typeof window === 'undefined' || !user || !user.id) return;
@@ -89,10 +89,6 @@ export default function Layout() {
     }
   };
 
-
-  // El correo identifica la cuenta activa. Es lo único que se muestra: el nombre
-  // de la empresa no se pone acá a propósito, para no repetir el problema de
-  // mostrar identidad que no corresponde (F1-10).
   const correo = user?.email || '';
   const inicial = (correo.trim()[0] || 't').toLowerCase();
 
@@ -117,16 +113,14 @@ export default function Layout() {
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50 lg:z-auto
         w-64 flex flex-col
-        bg-card border-r border-border
+        bg-card/85 backdrop-blur-xl border-r border-white/10
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
-        <div className="flex items-center justify-between p-5 border-b border-border">
+        <div className="flex items-center justify-between p-5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 bg-gradient-to-br from-violet-500 to-indigo-700 shadow-lg shadow-violet-500/20">
-              <span className="text-white font-black text-lg leading-none">t</span>
-            </div>
+            <TruckyLogoIcon className="w-9 h-9" rounded="rounded-xl" />
             <div className="leading-tight">
               <div className="flex items-center gap-2">
                 <div className="text-base font-bold text-foreground tracking-tight lowercase">trucky</div>
@@ -187,7 +181,8 @@ export default function Layout() {
             </Link>
           )}
         </nav>
-        {/* --- NUEVO: Botón de Idioma --- */}
+
+        {/* Botón de Idioma */}
         <div className="px-4 pb-4">
           <ToggleGroup
             type="single"
@@ -204,17 +199,15 @@ export default function Layout() {
             <ToggleGroupItem value="en" size="sm" className="text-xs px-3 h-7 flex-1">EN</ToggleGroupItem>
           </ToggleGroup>
         </div>
-        {/* --- FIN NUEVO --- */}
-        {/* Perfil — antes era branding estático... */}
 
-        {/* Perfil — antes era branding estático; ahora abre el menú de la cuenta */}
-        <div className="p-4 border-t border-border">
+        {/* Perfil */}
+        <div className="p-4 border-t border-white/10">
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label={t.nav.openProfile}
               className="w-full flex items-center gap-2 rounded-lg p-1.5 -m-1.5 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             >
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-violet-500 to-indigo-700 flex items-center justify-center flex-shrink-0">
+              <div className="w-7 h-7 rounded-full bg-[#5B2BA0] border border-white/20 flex items-center justify-center flex-shrink-0">
                 <span className="text-xs font-bold text-white">{inicial}</span>
               </div>
               <div className="flex-1 min-w-0">
@@ -246,7 +239,7 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-border bg-card/50 backdrop-blur-sm flex-shrink-0">
+        <header className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-card/55 backdrop-blur-xl flex-shrink-0">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"

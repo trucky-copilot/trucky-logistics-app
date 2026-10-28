@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    /* ── Trucky brand: deep violet / purple ───────────────────────────── */
+    /* ── Trucky brand: deep violet / purple (#5B2BA0 & white) ──────────── */
     --background: 268 45% 5%;
     --foreground: 260 30% 96%;
     --card: 257 45% 10%;
@@ -32,6 +32,7 @@
     --navy: 268 45% 5%;
     --navy-light: 257 45% 10%;
     --cyan: 270 86% 42%;
+    --trucky-brand: #5B2BA0;
   }
 }
 
@@ -42,7 +43,10 @@
 
   body {
     @apply bg-background text-foreground font-inter;
-    background-image: radial-gradient(circle at 50% 40%, hsl(257 45% 11%) 0%, hsl(268 45% 5%) 70%);
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(91, 43, 160, 0.24) 0%, transparent 45%),
+      radial-gradient(circle at 80% 75%, rgba(91, 43, 160, 0.18) 0%, transparent 50%),
+      radial-gradient(circle at 50% 40%, hsl(257 45% 11%) 0%, hsl(268 45% 5%) 75%);
     background-attachment: fixed;
     font-feature-settings: "kern" 1, "liga" 1;
   }
@@ -52,6 +56,56 @@
   /* Subtle elevation for cards & panels */
   .bg-card {
     box-shadow: 0 1px 2px hsl(268 45% 2% / 0.35), 0 6px 18px hsl(268 45% 2% / 0.22);
+  }
+
+  /* ── Glassy Dashboard Classes (Frosted Glass + Purple Brand #5B2BA0) ── */
+  .glass-panel {
+    background: linear-gradient(
+      135deg,
+      rgba(91, 43, 160, 0.16) 0%,
+      rgba(26, 15, 46, 0.62) 55%,
+      rgba(18, 10, 32, 0.72) 100%
+    );
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px) saturate(160%);
+    border: 1px solid rgba(255, 255, 255, 0.11);
+    box-shadow:
+      0 10px 32px -4px rgba(8, 3, 18, 0.55),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+  }
+
+  .glass-card {
+    background: linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(91, 43, 160, 0.18) 48%,
+      rgba(22, 13, 38, 0.68) 100%
+    );
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 8px 26px -4px rgba(7, 2, 16, 0.5),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+  }
+
+  .glass-card:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    box-shadow:
+      0 16px 36px -6px rgba(91, 43, 160, 0.38),
+      0 8px 20px -4px rgba(7, 2, 16, 0.6),
+      inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+  }
+
+  .glass-pill-bar {
+    background: rgba(24, 14, 42, 0.65);
+    backdrop-filter: blur(24px) saturate(170%);
+    -webkit-backdrop-filter: blur(24px) saturate(170%);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow:
+      0 12px 32px rgba(5, 2, 12, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
   }
 
   /* Primary buttons get a soft glow */

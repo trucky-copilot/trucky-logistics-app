@@ -110,7 +110,7 @@ export default function OperationalStatusCard() {
   const pct        = Math.round((doneCount / totalCount) * 100);
 
   return (
-    <div className={`rounded-xl border ${meta.border} p-4 space-y-3`}>
+    <div className={`glass-panel rounded-2xl border ${meta.border} p-4 md:p-5 space-y-3`}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
