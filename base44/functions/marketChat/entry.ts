@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { authorizePlanFeature } from '../../shared/entitlements.ts';
 
 // Carga automática del .env local (desarrollo). Actualizado para re-bundling.
 // archivo y el bloque falla silenciosamente — las vars ya vienen del entorno
@@ -638,6 +639,12 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
     }
     if (!user) {
       return Response.json({ error: 'No autorizado' }, { status: 401, headers: corsHeaders });
+    }
+
+    // Control de plan en el servidor: la pantalla del navegador no autoriza nada.
+    const access = await authorizePlanFeature(base44, user, 'chat');
+    if (!access.allowed) {
+      return Response.json({ error: access.error, code: access.code }, { status: 403, headers: corsHeaders });
     }
 
     let body;

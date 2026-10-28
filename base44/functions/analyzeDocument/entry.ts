@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { authorizePlanFeature } from '../../shared/entitlements.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DETECCIÓN SIN IA — Regex sobre el texto crudo
@@ -907,6 +908,12 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'No autorizado' }, { status: 401 });
+
+    // Control de plan en el servidor: la pantalla del navegador no autoriza nada.
+    const access = await authorizePlanFeature(base44, user, 'document_analysis');
+    if (!access.allowed) {
+      return Response.json({ error: access.error, code: access.code }, { status: 403 });
+    }
 
     const { documentText, selectedCarrierId } = await req.json();
     if (!documentText || documentText.trim().length < 20) {

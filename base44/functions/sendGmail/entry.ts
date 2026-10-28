@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import nodemailer from 'npm:nodemailer';
+import { authorizePlanFeature } from '../../shared/entitlements.ts';
 
 // CORS: solo se refleja el Origin cuando es un origen propio de la app (nunca
 // el comodín "*"), igual que en translateChat, marketChat y syncGmail, para que
@@ -91,6 +92,15 @@ export default async function sendGmail(req: Request, ctx: any) {
       return new Response(
         JSON.stringify({ error: 'No autorizado' }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // Control de plan en el servidor: la pantalla del navegador no autoriza nada.
+    const access = await authorizePlanFeature(base44, user, 'email_module');
+    if (!access.allowed) {
+      return new Response(
+        JSON.stringify({ error: access.error, code: access.code }),
+        { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
