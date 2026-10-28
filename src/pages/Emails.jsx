@@ -555,6 +555,8 @@ export default function Emails() {
   // ─── Agrupación de correos en Hilos (Threads) estilo Gmail ──────────────────
   const emailThreads = useMemo(() => {
     const groups = new Map();
+    const threadIdToKey = new Map();
+    const subjToKey = new Map();
 
     // Ordenar cronológicamente ascendente para armar cada hilo desde el primer correo hasta el último
     const chronological = [...emails].sort(
@@ -563,19 +565,29 @@ export default function Emails() {
 
     for (const email of chronological) {
       const normSubj = normalizeSubjectForThread(email.asunto);
-      // Agrupar por thread_id de Gmail o por asunto normalizado si pertenecen a la misma conversación
-      const key = email.thread_id || (normSubj ? `subj__${normSubj}` : `id__${email.id}`);
+      const tId = email.thread_id ? String(email.thread_id).trim() : null;
 
-      if (!groups.has(key)) {
+      // Resolver si ya existe un hilo tanto por thread_id como por asunto normalizado (Re:/Fwd:)
+      let key =
+        (tId && threadIdToKey.get(tId)) ||
+        (normSubj && subjToKey.get(normSubj)) ||
+        null;
+
+      if (!key) {
+        key = tId ? `thread__${tId}` : (normSubj ? `subj__${normSubj}` : `id__${email.id}`);
         groups.set(key, {
           threadKey: key,
-          threadId: email.thread_id || null,
+          threadId: tId || null,
           messages: [],
         });
       }
+
+      if (tId) threadIdToKey.set(tId, key);
+      if (normSubj) subjToKey.set(normSubj, key);
+
       const g = groups.get(key);
-      if (email.thread_id && !g.threadId) {
-        g.threadId = email.thread_id;
+      if (tId && !g.threadId) {
+        g.threadId = tId;
       }
       g.messages.push(email);
     }
@@ -624,11 +636,13 @@ export default function Emails() {
   // Obtener el hilo completo seleccionado actualmente
   const selectedThread = useMemo(() => {
     if (!selectedEmail) return null;
+    const selNormSubj = normalizeSubjectForThread(selectedEmail.asunto);
     const found = emailThreads.find(
       t =>
         t.id === selectedEmail.id ||
         (selectedEmail.thread_id && t.thread_id === selectedEmail.thread_id) ||
-        t.threadMessages.some(m => m.id === selectedEmail.id)
+        t.threadMessages.some(m => m.id === selectedEmail.id) ||
+        (selNormSubj && normalizeSubjectForThread(t.asunto) === selNormSubj)
     );
     return found || {
       ...selectedEmail,
@@ -687,16 +701,23 @@ export default function Emails() {
 
     const baseSubj = lastMessage.asunto || '';
     const replySubject = /^re:/i.test(baseSubj) ? baseSubj : `Re: ${baseSubj}`;
-    const rfcId = lastMessage.rfc_message_id || null;
+    const rfcId = [...msgs].reverse().find(m => m.rfc_message_id)?.rfc_message_id || lastMessage.rfc_message_id || null;
+    const allRefs = msgs.map(m => m.rfc_message_id).filter(Boolean).join(' ') || rfcId;
+    const resolvedThreadId =
+      [...msgs].reverse().find(m => m.thread_id)?.thread_id ||
+      threadOrEmail?.thread_id ||
+      lastMessage.thread_id ||
+      null;
 
     setComposeForm({
       to: replyToAddress || '',
       subject: replySubject,
-      content: `\n\n---\nOn ${new Date(lastMessage.fecha).toLocaleString()}, ${lastMessage.remitente_nombre || lastMessage.remitente_email} wrote:\n> ${(lastMessage.cuerpo || lastMessage.snippet || '').replace(/\n/g, '\n> ')}`,
+      content: '',
       categoria: lastMessage.categoria || 'cargas',
-      threadId: lastMessage.thread_id || threadOrEmail?.thread_id || null,
+      threadId: resolvedThreadId,
+      threadMessages: msgs,
       inReplyTo: rfcId,
-      references: rfcId,
+      references: allRefs,
       etiquetas: Array.from(new Set([...(Array.isArray(lastMessage.etiquetas) ? lastMessage.etiquetas : []), 'INBOX', 'SENT'])),
       es_importante: Boolean(lastMessage.es_importante || hasImportantAndLogisticsTags(lastMessage)),
     });
@@ -756,6 +777,7 @@ export default function Emails() {
           content: '',
           categoria: 'cargas',
           threadId: null,
+          threadMessages: null,
           inReplyTo: null,
           references: null,
           etiquetas: null,
@@ -934,6 +956,7 @@ export default function Emails() {
                 content: '',
                 categoria: 'cargas',
                 threadId: null,
+                threadMessages: null,
                 inReplyTo: null,
                 references: null,
                 etiquetas: null,
@@ -1360,7 +1383,7 @@ export default function Emails() {
               <div className="flex items-center gap-2">
                 <Send className="w-4 h-4 text-primary" />
                 <h3 className="text-sm font-bold text-foreground">
-                  {composeForm.threadId
+                  {composeForm.threadId || (composeForm.threadMessages && composeForm.threadMessages.length > 0)
                     ? (isEs ? 'Responder en el Hilo (Trucky + Gmail)' : 'Reply in Thread (Trucky + Gmail)')
                     : (isEs ? 'Nuevo Correo (Gmail)' : 'New Email (Gmail)')}
                 </h3>
@@ -1374,6 +1397,35 @@ export default function Emails() {
             </div>
 
             <form onSubmit={handleSendEmail} className="p-5 space-y-3.5 flex-1 overflow-y-auto">
+              {/* Vista previa de los mensajes anteriores del hilo cuando se responde */}
+              {Array.isArray(composeForm.threadMessages) && composeForm.threadMessages.length > 0 && (
+                <div className="rounded-xl border border-primary/25 bg-muted/20 p-3 space-y-2 max-h-40 overflow-y-auto">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-primary">
+                    <span className="flex items-center gap-1.5">
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      {isEs
+                        ? `Hilo de conversación (${composeForm.threadMessages.length} ${composeForm.threadMessages.length === 1 ? 'mensaje anterior' : 'mensajes anteriores'})`
+                        : `Conversation thread (${composeForm.threadMessages.length} previous ${composeForm.threadMessages.length === 1 ? 'message' : 'messages'})`}
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {composeForm.threadMessages.map((m, i) => (
+                      <div key={m.id || i} className="rounded-lg bg-background/70 border border-border/60 p-2 text-[11px]">
+                        <div className="flex items-center justify-between text-muted-foreground mb-1">
+                          <span className="font-semibold text-foreground truncate">
+                            {m.remitente_nombre || m.remitente_email}
+                          </span>
+                          <span>{new Date(m.fecha).toLocaleString()}</span>
+                        </div>
+                        <p className="text-zinc-300 whitespace-pre-wrap line-clamp-3">
+                          {m.cuerpo || m.snippet}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
                   {isEs ? 'Destinatario (Broker / Cliente)' : 'To (Broker / Client)'}

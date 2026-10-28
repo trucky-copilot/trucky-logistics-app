@@ -11,7 +11,7 @@ export function TruckyLogoIcon({ className = 'w-9 h-9', rounded = 'rounded-xl' }
       className={`${className} ${rounded} relative overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] border border-white/15 shadow-lg shadow-[#5B2BA0]/35`}
     >
       <img
-        src="/trucky-symbol.png"
+        src="/trucky-symbol.png?v=2"
         alt="Trucky"
         className="w-full h-full object-contain select-none pointer-events-none p-0.5"
       />
