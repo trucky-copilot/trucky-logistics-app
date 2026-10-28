@@ -2,8 +2,8 @@ import React from 'react';
 
 /**
  * Componente de Marca Oficial de Trucky (#5B2BA0 y Blanco).
- * - variant="icon": Ícono cuadrado con el isotipo/camión de Trucky en blanco sobre fondo #5B2BA0.
- * - variant="full": Logotipo completo de Trucky.
+ * - TruckyLogoIcon: Ícono cuadrado exclusivamente con el símbolo/isotipo de Trucky en blanco sobre fondo #5B2BA0 (sin letras).
+ * - TruckyLogoBanner: Logotipo horizontal completo de Trucky.
  */
 export function TruckyLogoIcon({ className = 'w-9 h-9', rounded = 'rounded-xl' }) {
   return (
@@ -11,15 +11,9 @@ export function TruckyLogoIcon({ className = 'w-9 h-9', rounded = 'rounded-xl' }
       className={`${className} ${rounded} relative overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] border border-white/15 shadow-lg shadow-[#5B2BA0]/35`}
     >
       <img
-        src="/trucky-logo.png"
+        src="/trucky-symbol.png"
         alt="Trucky"
-        className="w-full h-full object-cover select-none pointer-events-none"
-        style={{
-          /* Enfoca el isotipo blanco izquierdo del logo oficial o muestra el emblema nítido */
-          objectPosition: '12% 50%',
-          transform: 'scale(2.85)',
-          transformOrigin: '14% 50%',
-        }}
+        className="w-full h-full object-contain select-none pointer-events-none p-0.5"
       />
     </div>
   );
@@ -44,4 +38,3 @@ export function TruckyLogoBanner({ className = 'h-9 w-28', rounded = 'rounded-xl
 }
 
 export default TruckyLogoIcon;
-
