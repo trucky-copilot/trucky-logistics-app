@@ -97,6 +97,26 @@ export function requestGoogleToken(promptMode = '') {
 }
 
 /**
+ * Obtiene un token válido sin obligar al usuario a pasar por "Sincronizar":
+ * primero intenta en silencio (permisos ya otorgados) y, si Google exige que el
+ * usuario confirme la cuenta, abre la ventana de selección desde el mismo envío.
+ */
+async function obtainGoogleToken() {
+  try {
+    return await requestGoogleToken('');
+  } catch (_) {
+    try {
+      return await requestGoogleToken('select_account');
+    } catch (err) {
+      throw new Error(
+        err?.message ||
+        'No se pudo conectar con Google. Autoriza el acceso a Gmail para enviar el correo.'
+      );
+    }
+  }
+}
+
+/**
  * Despacho transparente de correo:
  * Si el token no existe o expiró (401/403/scope), renueva internamente sin necesidad de
  * ir manualmente a la sección de correos ni hacer clic en sincronizar.
@@ -115,7 +135,7 @@ export async function sendEmailWithAutoAuth({
 
   // Si no hay token guardado en el navegador, solicitarlo antes del envío
   if (!token) {
-    const authResult = await requestGoogleToken('');
+    const authResult = await obtainGoogleToken();
     token = authResult.token;
     email = authResult.email || email;
     saveStoredGoogleAuth(token, email, profile_id);
@@ -149,7 +169,7 @@ export async function sendEmailWithAutoAuth({
         errorText.includes('scope')
       ) {
         // Renovar automáticamente y reintentar de inmediato
-        const fresh = await requestGoogleToken('');
+        const fresh = await obtainGoogleToken();
         saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
         return await callSend(fresh.token, fresh.email || email);
       }
@@ -169,7 +189,7 @@ export async function sendEmailWithAutoAuth({
       msg.includes('invalid_grant')
     ) {
       // Renovar automáticamente y reintentar
-      const fresh = await requestGoogleToken('');
+      const fresh = await obtainGoogleToken();
       saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
       return await callSend(fresh.token, fresh.email || email);
     }
