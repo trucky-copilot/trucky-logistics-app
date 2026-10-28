@@ -18,15 +18,6 @@ export interface Authorization {
   error?: string;
 }
 
-// Cuentas internas: operan el producto, no pasan por trial ni suscripción.
-const ADMIN_EMAILS = new Set([
-  'daniel.vargas@ogm.com.co',
-  'luisbermudezacero@gmail.com',
-  'juan.grau@ogm.com.co',
-  'luis.bermudez@ogm.com.co',
-  'ianruizmora@gmail.com',
-]);
-
 const SUBSCRIBED_STATUSES = new Set(['active', 'trialing']);
 
 // Qué funciones existen en cada plan. Los cupos de volumen (mensajes, documentos
@@ -50,12 +41,18 @@ async function resolvePlan(
 ): Promise<{ plan: PlanType; trialEndsAt: string | null }> {
   const email = String(user?.email || '').toLowerCase().trim();
 
-  if (user?.role === 'admin' || ADMIN_EMAILS.has(email)) {
+  if (user?.role === 'admin') {
     return { plan: 'admin', trialEndsAt: null };
   }
 
   // Lecturas con service role: el plan no depende de lo que el cliente pueda ver.
   const db = base44.asServiceRole.entities;
+
+  // Cuentas de prueba: la lista vive en la entidad TestAccount, nunca en el código.
+  const testAccounts = await db.TestAccount.filter({ user_email: email });
+  if ((testAccounts || []).some((t: any) => t.active !== false)) {
+    return { plan: 'admin', trialEndsAt: null };
+  }
 
   // Plan de pago: alguna organización del usuario con suscripción vigente.
   const members = await db.OrganizationMember.filter({ user_email: email, active: true });
