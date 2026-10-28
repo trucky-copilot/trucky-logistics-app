@@ -9,15 +9,15 @@ import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, A
 
 const ProfileContext = createContext(null);
 
-export const MAX_PROFILES = 5;
+export const MAX_PROFILES = 10;
 
 export function ProfileProvider({ children }) {
   const { user } = useAuth();
   const { organization } = useAppState();
-  const { isDemoUser, limits } = useDemo();
+  const { isDemoUser, isPlan99, limits } = useDemo();
   const { t } = useLanguage();
   
-  const maxProfilesAllowed = isDemoUser ? (limits?.PROFILES || 3) : MAX_PROFILES;
+  const maxProfilesAllowed = limits?.PROFILES ?? (isPlan99 ? 10 : (isDemoUser ? 3 : 5));
   
   const [profiles, setProfiles] = useState([]);
   const [activeProfileId, setActiveProfileId] = useState(null);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useProfile, MAX_PROFILES } from '@/lib/ProfileContext';
+import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import {
   DropdownMenu,
@@ -128,7 +128,7 @@ export default function ProfileSelector() {
         
         <DropdownMenuContent align="end" className="w-64">
           <DropdownMenuLabel className="text-xs text-muted-foreground">
-            {t?.profiles?.yourProfiles || (isEn ? 'Your Profiles' : 'Tus Perfiles')} ({profiles.length}/{MAX_PROFILES})
+            {t?.profiles?.yourProfiles || (isEn ? 'Your Profiles' : 'Tus Perfiles')} ({profiles.length}/{maxProfilesAllowed === Infinity ? '∞' : maxProfilesAllowed})
           </DropdownMenuLabel>
           <DropdownMenuSeparator />
           
