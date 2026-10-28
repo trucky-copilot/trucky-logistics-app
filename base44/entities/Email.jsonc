@@ -78,7 +78,7 @@
     },
     "google_account": {
       "type": "string",
-      "description": "Cuenta de Google (ej. correo@gmail.com) desde la cual se sincronizó este mensaje"
+      "description": "Cuenta de Google (ej. correo@gmail.com) desde la cual se sincroniz\u00f3 este mensaje"
     },
     "etiquetas": {
       "type": "array",
@@ -107,11 +107,6 @@
           "user_condition": {
             "role": "admin"
           }
-        },
-        {
-          "user_condition": {
-            "role": "user"
-          }
         }
       ]
     },
@@ -121,13 +116,11 @@
           "created_by_id": "{{user.id}}"
         },
         {
-          "user_condition": {
-            "role": "admin"
-          }
+          "data.google_account": "{{user.email}}"
         },
         {
           "user_condition": {
-            "role": "user"
+            "role": "admin"
           }
         }
       ]
@@ -140,11 +133,6 @@
         {
           "user_condition": {
             "role": "admin"
-          }
-        },
-        {
-          "user_condition": {
-            "role": "user"
           }
         }
       ]
