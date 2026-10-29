@@ -461,35 +461,6 @@ export default function DocumentAnalyzer() {
         maxLimit={limits?.DOCUMENTS_PER_MONTH || 50}
       />
 
-      {/* Banner de Automatización cuando viene desde el Correo */}
-      {emailAutomationCtx && (
-        <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent p-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-amber-300 uppercase tracking-wide">
-                {locale === 'en' ? 'Dispatcher Automation Active' : 'Automatización de Despacho Activa'}
-              </p>
-              <p className="text-xs text-foreground truncate">
-                {emailAutomationCtx.emailSubject || emailAutomationCtx.fileName} · {emailAutomationCtx.brokerName}
-              </p>
-            </div>
-          </div>
-          {analysis && (
-            <button
-              onClick={handleProceedToCreateLoad}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 shadow-md transition-all flex-shrink-0"
-            >
-              <Package className="w-3.5 h-3.5" />
-              <span>{locale === 'en' ? 'Create Load in My Loads' : 'Crear Carga en Mis Cargas'}</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      )}
-
       {/* Badge de rol */}
       {contextLoaded && userRole && (
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium ${roleBadge.color}`}>
@@ -584,37 +555,6 @@ Equipment: 20ft Dry...`}
               {locale === 'en' ? 'Translating analysis with Google Translate...' : 'Traduciendo análisis con Google Translate...'}
             </div>
           )}
-
-          {/* Barra de Acción Principal de Automatización una vez verificado el documento */}
-          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
-            <div className="space-y-0.5">
-              <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
-                <CheckCircle2 className="w-4 h-4" />
-                <span>
-                  {locale === 'en'
-                    ? 'Document Verified — Ready to create load'
-                    : 'Documento Verificado — Listo para crear la carga'}
-                </span>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {locale === 'en'
-                  ? 'Creates the load in My Loads with pre-filled addresses, dates, appointments, and thread summary.'
-                  : 'Crea la carga en Mis Cargas con los datos ya llenos y el hilo resumido (direcciones, fechas, citas).'}
-              </p>
-            </div>
-
-            <button
-              onClick={handleProceedToCreateLoad}
-              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 shadow-md transition-all whitespace-nowrap cursor-pointer"
-            >
-              <Package className="w-4 h-4" />
-              <span>
-                {locale === 'en'
-                  ? 'Create Load & Assign Driver →'
-                  : 'Crear Carga en Mis Cargas →'}
-              </span>
-            </button>
-          </div>
 
           {/* Encabezado y hallazgos principales visibles */}
           <ResultHeader analysis={analysis} onLinkToLoad={handleProceedToCreateLoad} cached={analysis.cached} />

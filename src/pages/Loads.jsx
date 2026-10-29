@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Plus, Package, Trash2, Pencil, Truck, Sparkles, Clock, FileText, ArrowRight } from 'lucide-react';
+import { Plus, Package, Trash2, Pencil, Truck, Clock } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import LoadForm from '@/components/LoadForm';
 import DeleteConfirmModal from '@/components/DeleteConfirmModal';
@@ -21,7 +21,7 @@ export default function Loads() {
   const orgId = useOrganizationId();
   const { t, locale } = useLanguage();
   const { activeProfileId } = useProfile();
-  const { isDemoUser, limits } = useDemo();
+  const { limits } = useDemo();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -33,7 +33,6 @@ export default function Loads() {
   const [deleteLoad, setDeleteLoad] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [filter, setFilter] = useState('all');
-  const [automatedLoadId, setAutomatedLoadId] = useState(null);
   const autoCreateHandledRef = useRef(false);
 
   const isEs = locale !== 'en';
@@ -61,6 +60,7 @@ export default function Loads() {
       const current = getProfileLoadIds() || [];
       localStorage.setItem(key, JSON.stringify(current.filter(id => id !== deleteLoad.id)));
       setDeleteLoad(null);
+      window.dispatchEvent(new CustomEvent('notifications-updated'));
       loadData();
     } catch (err) {
       console.error('Error eliminando carga:', err);
@@ -75,18 +75,50 @@ export default function Loads() {
     const data = await listByOrg(base44.entities.Load, orgId, '-created_date', 100);
     const profileIds = getProfileLoadIds();
 
-    // Prioridad 1 (Backend): si los registros tienen profile_id guardado en Base44, filtrar por él,
-    // PERO si la carga fue asignada a un conductor (shared_with_carrier === true o tiene conductor_nombre),
-    // también es visible en el perfil/rol de Carrier dentro de la misma organización.
-    let filtered = data.filter(l => {
-      if (l.shared_with_carrier === true || (l.conductor_nombre && String(l.conductor_nombre).trim() !== '')) {
-        return true;
+    let filtered;
+    if (activeProfileId === '1' && profileIds === null) {
+      const usedIds = [];
+      for (let i = 2; i <= 5; i++) {
+        const stored = localStorage.getItem(`profile_loads_${orgId}_${i}`);
+        if (stored) usedIds.push(...JSON.parse(stored));
       }
-      if (l.profile_id) {
-        return String(l.profile_id) === String(activeProfileId);
-      }
-      return Boolean(profileIds && profileIds.includes(l.id));
-    });
+      const unclaimed = data.filter(
+        l => (!l.profile_id || String(l.profile_id) === '1') && !usedIds.includes(l.id)
+      );
+      const unclaimedIds = unclaimed.map(l => l.id);
+      localStorage.setItem(`profile_loads_${orgId}_1`, JSON.stringify(unclaimedIds));
+      filtered = data.filter(
+        l =>
+          String(l.profile_id) === '1' ||
+          unclaimedIds.includes(l.id) ||
+          l.shared_with_carrier === true
+      );
+
+      unclaimed.forEach(l => {
+        if (!l.profile_id) {
+          base44.entities.Load.update(l.id, { profile_id: '1' }).catch(() => {});
+        }
+      });
+    } else {
+      filtered = data.filter(l => {
+        // Si la carga fue asignada explícitamente desde Flota para ser compartida con el rol Carrier
+        if (l.shared_with_carrier === true) {
+          return true;
+        }
+        // Prioridad principal en Base44: filtrar estrictamente por profile_id del registro en BD
+        if (l.profile_id) {
+          return String(l.profile_id) === String(activeProfileId);
+        }
+        // Respaldo secundario si el registro antiguo aún no tenía profile_id en BD
+        return Boolean(profileIds && profileIds.includes(l.id));
+      });
+
+      filtered.forEach(l => {
+        if (!l.profile_id && !l.shared_with_carrier) {
+          base44.entities.Load.update(l.id, { profile_id: String(activeProfileId) }).catch(() => {});
+        }
+      });
+    }
 
     setLoads(filtered);
     setLoading(false);
@@ -97,7 +129,7 @@ export default function Loads() {
     loadData();
   }, [orgId, activeProfileId]);
 
-  // ─── Automatización desde el Verificador de Documentos: Crear la carga con los datos llenos y el hilo resumido ───
+  // Si se llega desde el Verificador manual con una carga lista para crear
   useEffect(() => {
     if (!orgId || !activeProfileId || autoCreateHandledRef.current) return;
     const rawAutoLoad = sessionStorage.getItem(AUTOMATION_CHECKER_TO_LOAD_KEY);
@@ -132,9 +164,10 @@ export default function Loads() {
           citas: autoData.citas || '',
           numero_referencia: autoData.numero_referencia || '',
           notas: autoData.notas || '',
-          thread_id: autoData.thread_id || null,
+          thread_id: autoData.thread_id || '',
           estado: 'pendiente',
-          profile_id: activeProfileId,
+          profile_id: String(activeProfileId),
+          shared_with_carrier: false,
           revenue_por_milla: rpm,
           costo_estimado: dieselCost,
           ganancia_estimada: profit,
@@ -143,52 +176,28 @@ export default function Loads() {
 
         const created = await base44.entities.Load.create(withOrg(orgId, createPayload));
         addLoadToProfile(created.id);
-        setAutomatedLoadId(created.id);
-
-        // Guardar en sessionStorage la carga pendiente de asignar conductor en Flota
-        const pendingDispatch = {
-          loadId: created.id,
-          load: created,
-          brokerEmail: autoData.broker_email || '',
-          brokerName: createPayload.broker_nombre,
-          threadId: autoData.thread_id || null,
-          rfcMessageId: autoData.rfc_message_id || null,
-          threadMessages: autoData.threadMessages || [],
-          emailSubject: autoData.emailSubject || '',
-        };
-        sessionStorage.setItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY, JSON.stringify(pendingDispatch));
-
+        window.dispatchEvent(new CustomEvent('notifications-updated'));
         await loadData();
-        // Abrir el formulario con todos los datos llenos y el resumen del hilo para que el Dispatcher los vea de inmediato
-        setEditLoad(created);
-        setShowForm(true);
 
         toast({
-          title: isEs ? 'Carga creada en Mis Cargas' : 'Load created in My Loads',
+          title: isEs ? 'Automatización completada' : 'Automation completed',
           description: isEs
-            ? `${created.origen} → ${created.destino} registrada con el hilo resumido. Ahora puedes elegir el conductor disponible en Flota.`
-            : `${created.origen} → ${created.destino} registered with thread summary. You can now assign an available driver in Fleet.`,
+            ? 'Ya se terminó el proceso, revisa las cargas'
+            : 'The process has finished, check your loads',
         });
       } catch (err) {
-        console.error('[Loads] Error creando carga desde automatización:', err);
+        console.error('[Loads] Error creando carga:', err);
       }
     })();
   }, [orgId, activeProfileId]);
 
   const handleGoToFleetAssignDriver = (loadItem) => {
-    const existingPendingRaw = sessionStorage.getItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY);
-    let existingPending = {};
-    try {
-      existingPending = existingPendingRaw ? JSON.parse(existingPendingRaw) : {};
-    } catch (_) {}
-
     const pendingDispatch = {
-      ...existingPending,
       loadId: loadItem.id,
       load: loadItem,
-      brokerEmail: loadItem.broker_email || existingPending.brokerEmail || '',
-      brokerName: loadItem.broker_nombre || existingPending.brokerName || 'Broker',
-      threadId: loadItem.thread_id || existingPending.threadId || null,
+      brokerEmail: loadItem.broker_email || '',
+      brokerName: loadItem.broker_nombre || 'Broker',
+      threadId: loadItem.thread_id || null,
     };
     sessionStorage.setItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY, JSON.stringify(pendingDispatch));
     navigate('/flota?assign_load=' + encodeURIComponent(loadItem.id));
@@ -203,37 +212,23 @@ export default function Loads() {
       const profit = data.tarifa_negociada - dieselCost - (data.tarifa_negociada * 0.25);
       const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
 
-      const payload = { 
-        ...data, 
-        profile_id: editLoad?.profile_id || activeProfileId, 
-        revenue_por_milla: rpm, 
-        costo_estimado: dieselCost, 
-        ganancia_estimada: profit, 
+      const payload = {
+        ...data,
+        profile_id: String(editLoad?.profile_id || activeProfileId || '1'),
+        revenue_por_milla: rpm,
+        costo_estimado: dieselCost,
+        ganancia_estimada: profit,
         resultado,
-        shared_with_carrier: Boolean(data.shared_with_carrier || (data.conductor_nombre && String(data.conductor_nombre).trim() !== '')),
       };
 
-      let savedRecord = null;
       if (editLoad?.id) {
-        savedRecord = await base44.entities.Load.update(editLoad.id, payload);
+        await base44.entities.Load.update(editLoad.id, payload);
       } else {
-        savedRecord = await base44.entities.Load.create(withOrg(orgId, payload));
+        const savedRecord = await base44.entities.Load.create(withOrg(orgId, payload));
         addLoadToProfile(savedRecord.id);
       }
 
-      // Actualizar también el contexto de despacho pendiente si corresponde a esta carga
-      const rawPending = sessionStorage.getItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY);
-      if (rawPending && savedRecord) {
-        try {
-          const parsedPending = JSON.parse(rawPending);
-          if (!parsedPending.loadId || parsedPending.loadId === savedRecord.id) {
-            parsedPending.loadId = savedRecord.id;
-            parsedPending.load = savedRecord;
-            sessionStorage.setItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY, JSON.stringify(parsedPending));
-          }
-        } catch (_) {}
-      }
-
+      window.dispatchEvent(new CustomEvent('notifications-updated'));
       setShowForm(false);
       setEditLoad(null);
       loadData();
@@ -252,8 +247,6 @@ export default function Loads() {
   const totalMiles = filtered.reduce((s, l) => s + (l.millas || 0), 0);
   const avgRate = totalMiles > 0 ? totalRevenue / totalMiles : 0;
 
-  const targetAutomatedLoad = loads.find(l => l.id === automatedLoadId) || loads.find(l => !l.conductor_nombre);
-
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -267,8 +260,8 @@ export default function Loads() {
               setShowLimitModal(true);
               return;
             }
-            setEditLoad(null); 
-            setShowForm(true); 
+            setEditLoad(null);
+            setShowForm(true);
           }}
           className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground transition-all"
         >
@@ -276,35 +269,6 @@ export default function Loads() {
           {t.loadsPage.add}
         </button>
       </div>
-
-      {/* Banner de Automatización para ir a Flota a elegir conductor disponible */}
-      {targetAutomatedLoad && (
-        <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-start gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0 mt-0.5">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-amber-300 uppercase tracking-wide">
-                {isEs ? 'Siguiente Paso de Automatización: Asignar Conductor en Flota' : 'Next Automation Step: Assign Driver in Fleet'}
-              </p>
-              <p className="text-xs text-foreground mt-0.5">
-                {isEs
-                  ? `Carga lista: ${targetAutomatedLoad.origen} → ${targetAutomatedLoad.destino} ($${(targetAutomatedLoad.tarifa_negociada || 0).toLocaleString()}). Elige al conductor disponible en Flota para compartirla con el Carrier y generar el borrador de correo.`
-                  : `Load ready: ${targetAutomatedLoad.origen} → ${targetAutomatedLoad.destino}. Choose an available driver in Fleet to share with Carrier and generate the email draft.`}
-              </p>
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleGoToFleetAssignDriver(targetAutomatedLoad)}
-            className="flex items-center justify-center gap-2 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 shadow-md transition-all whitespace-nowrap flex-shrink-0 cursor-pointer"
-          >
-            <Truck className="w-3.5 h-3.5" />
-            <span>{isEs ? 'Elegir Conductor en Flota →' : 'Choose Driver in Fleet →'}</span>
-          </button>
-        </div>
-      )}
 
       <DemoLimitModal
         isOpen={showLimitModal}
@@ -422,13 +386,13 @@ export default function Loads() {
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition-colors"
                         >
                           <Truck className="w-3 h-3" />
-                          <span>{isEs ? 'Asignar en Flota' : 'Assign in Fleet'}</span>
+                          <span>{isEs ? 'Elegir Conductor' : 'Choose Driver'}</span>
                         </button>
                       )}
                     </td>
                     <td className="px-4 py-3 text-right text-xs font-mono text-muted-foreground hidden md:table-cell">{load.millas || '--'}</td>
                     <td className={`px-4 py-3 text-right text-xs font-mono font-semibold ${
-                      (load.revenue_por_milla || 0) >= 3 ? 'text-green-400' : 
+                      (load.revenue_por_milla || 0) >= 3 ? 'text-green-400' :
                       (load.revenue_por_milla || 0) >= 2.6 ? 'text-yellow-400' : 'text-red-400'
                     }`}>${load.revenue_por_milla?.toFixed(2) || '--'}</td>
                     <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${(load.tarifa_negociada || 0).toLocaleString()}</td>

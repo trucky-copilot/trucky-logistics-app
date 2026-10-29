@@ -11,12 +11,13 @@ import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
-import { filterByOrg } from '@/lib/orgScope';
+import { filterByOrg, withOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
 import {
   AUTOMATION_EMAIL_TO_CHECKER_KEY,
   AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,
+  buildThreadSummaryForLoad,
 } from '@/lib/dispatchAutomation';
 import {
   sendEmailWithAutoAuth,
@@ -1076,16 +1077,22 @@ export default function Emails() {
         [...msgs].reverse().find(m => m.remitente_email && m.remitente_email.toLowerCase().trim() !== myEmail) ||
         latestMsg;
 
-      const automationPayload = {
-        fromEmailAutomation: true,
-        autoVerify: true,
-        fileName: attachmentName || `${thread.asunto || 'Correo'}.txt`,
-        documentText: finalDocumentText,
-        emailSubject: thread.asunto || '',
-        threadId: thread.thread_id || latestMsg.thread_id || null,
-        rfcMessageId: latestMsg.rfc_message_id || null,
-        brokerName: externalMsg?.remitente_nombre || externalMsg?.remitente_email || 'Broker',
-        brokerEmail: externalMsg?.remitente_email || '',
+      // 4. Enviar internamente al Verificador de Documentos (analyzeDocument) y construir datos verificados
+      let extractedFromVerifier = {};
+      try {
+        const res = await base44.functions.invoke('analyzeDocument', {
+          documentText: finalDocumentText,
+          selectedCarrierId: null,
+        });
+        if (res?.data?.analysis?.datos_extraidos) {
+          extractedFromVerifier = res.data.analysis.datos_extraidos;
+        }
+      } catch (verifyErr) {
+        console.warn('[Automatización] Usando extracción directa de respaldo tras verificador:', verifyErr);
+      }
+
+      // 5. Construir los datos de la carga y el hilo resumido (direcciones, fechas, citas)
+      const prefilledLoad = buildThreadSummaryForLoad({
         threadMessages: msgs.map(m => ({
           id: m.id,
           remitente_nombre: m.remitente_nombre,
@@ -1096,22 +1103,83 @@ export default function Emails() {
           fecha: m.fecha,
           rfc_message_id: m.rfc_message_id || '',
         })),
-      };
-
-      sessionStorage.setItem(AUTOMATION_EMAIL_TO_CHECKER_KEY, JSON.stringify(automationPayload));
-
-      toast({
-        title: isEs ? 'Enviando al Verificador...' : 'Sending to Document Checker...',
-        description: isEs
-          ? 'Analizando documento e hilo para verificar y crear la carga automáticamente.'
-          : 'Analyzing document and thread to verify and create the load.',
+        extracted: extractedFromVerifier,
+        emailSubject: thread.asunto || '',
+        brokerEmail: externalMsg?.remitente_email || '',
       });
 
-      navigate('/documentos?auto_verify=1');
+      const millas = Number(prefilledLoad.millas) || 250;
+      const tarifa = Number(prefilledLoad.tarifa_negociada) || 850;
+      const dieselPrecio = 5.40;
+      const rpm = millas > 0 && tarifa > 0 ? tarifa / millas : 0;
+      const dieselCost = millas > 0 ? (millas / 6.5) * dieselPrecio : 0;
+      const profit = tarifa - dieselCost - tarifa * 0.25;
+      const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
+
+      // 6. Crear automáticamente la carga en la base de datos Base44 (Mis Cargas) para el perfil activo
+      const createPayload = {
+        origen: prefilledLoad.origen || 'Miami, FL',
+        destino: prefilledLoad.destino || 'Tampa, FL',
+        millas,
+        broker_nombre: prefilledLoad.broker_nombre || externalMsg?.remitente_nombre || 'Broker',
+        broker_email: externalMsg?.remitente_email || '',
+        tipo_cliente: 'broker_directo',
+        tarifa_ofrecida: Number(prefilledLoad.tarifa_ofrecida) || tarifa,
+        tarifa_negociada: tarifa,
+        diesel_precio_dia: dieselPrecio,
+        fecha_carga: prefilledLoad.fecha_carga || new Date().toISOString().slice(0, 10),
+        fecha_entrega: prefilledLoad.fecha_entrega || new Date().toISOString().slice(0, 10),
+        citas: prefilledLoad.citas || '',
+        numero_referencia: prefilledLoad.numero_referencia || '',
+        notas: prefilledLoad.notas || '',
+        thread_id: thread.thread_id || latestMsg.thread_id || '',
+        estado: 'pendiente',
+        profile_id: String(activeProfileId || '1'),
+        shared_with_carrier: false,
+        revenue_por_milla: rpm,
+        costo_estimado: dieselCost,
+        ganancia_estimada: profit,
+        resultado,
+      };
+
+      const createdLoad = await base44.entities.Load.create(withOrg(orgId, createPayload));
+
+      // Respaldo secundario en localStorage del perfil actual
+      try {
+        const key = `profile_loads_${orgId}_${activeProfileId || '1'}`;
+        const existing = JSON.parse(localStorage.getItem(key) || '[]');
+        if (Array.isArray(existing) && !existing.includes(createdLoad.id)) {
+          localStorage.setItem(key, JSON.stringify([...existing, createdLoad.id]));
+        }
+      } catch (_) {}
+
+      // Guardar referencia en Base44 Notification y disparar evento para campana
+      try {
+        await base44.entities.Notification.create(
+          withOrg(orgId, {
+            titulo: isEs ? 'Automatización completada' : 'Automation completed',
+            mensaje: isEs
+              ? 'Ya se terminó el proceso, revisa las cargas.'
+              : 'The process has finished, check your loads.',
+            tipo: 'mensaje_despacho',
+            prioridad: 'media',
+            leido: false,
+            profile_id: String(activeProfileId || '1'),
+          })
+        );
+        window.dispatchEvent(new CustomEvent('notifications-updated'));
+      } catch (_) {}
+
+      toast({
+        title: isEs ? 'Automatización completada' : 'Automation completed',
+        description: isEs
+          ? 'Ya se terminó el proceso, revisa las cargas'
+          : 'The process has finished, check your loads',
+      });
     } catch (err) {
       toast({
         title: isEs ? 'Error en Automatización' : 'Automation Error',
-        description: err?.message || 'No se pudo enviar el documento al verificador.',
+        description: err?.message || 'No se pudo completar el proceso.',
         variant: 'destructive',
       });
     } finally {
@@ -1704,11 +1772,7 @@ export default function Emails() {
                     ) : (
                       <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
                     )}
-                    <span>
-                      {runningAutomation
-                        ? (isEs ? 'Enviando al Verificador...' : 'Sending to Checker...')
-                        : (isEs ? 'Automatización' : 'Automation')}
-                    </span>
+                    <span>{isEs ? 'Automatización' : 'Automation'}</span>
                     <ArrowUpRight className="w-3 h-3 ml-0.5" />
                   </button>
 
