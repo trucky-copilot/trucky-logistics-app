@@ -392,7 +392,7 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-full p-4 md:p-6 space-y-6 overflow-hidden">
+    <div className="relative p-4 md:p-6 space-y-6 max-w-full">
       {/* Resplandores ambientales morados (#5B2BA0) detrás del vidrio esmerilado */}
       <div className="pointer-events-none fixed top-20 left-1/3 w-96 h-96 rounded-full bg-[#5B2BA0]/25 blur-[120px] -z-10" />
       <div className="pointer-events-none fixed bottom-12 right-16 w-80 h-80 rounded-full bg-[#5B2BA0]/20 blur-[110px] -z-10" />
