@@ -100,7 +100,7 @@ export default function Layout() {
   const isChat = location.pathname.startsWith('/chat');
 
   return (
-    <div className="flex h-screen w-full max-w-full bg-background overflow-hidden font-inter relative">
+    <div className="flex h-screen bg-background overflow-hidden font-inter">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -112,7 +112,7 @@ export default function Layout() {
       {/* Sidebar */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50 lg:z-auto
-        w-64 flex-shrink-0 flex flex-col
+        w-64 flex flex-col
         bg-card/85 backdrop-blur-xl border-r border-white/10
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
@@ -260,7 +260,7 @@ export default function Layout() {
         <OperationalReadinessBanner />
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
+        <main className="flex-1 overflow-y-auto">
           <Outlet />
         </main>
       </div>
