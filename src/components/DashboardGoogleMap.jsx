@@ -1,22 +1,40 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Navigation, Layers, Compass, AlertCircle } from 'lucide-react';
+import { MapPin, Navigation, Layers, Compass, AlertCircle, Loader2 } from 'lucide-react';
+import { base44 } from '@/api/base44Client';
 
 /**
  * Componente de Mapa Interactivo de Google Maps en Modo Oscuro para el Dashboard de Trucky.
- * Cumple con las directrices de Google Maps Platform:
- * - Uso de importLibrary('maps'), importLibrary('marker') e importLibrary('geocoding').
- * - Uso exclusivo de AdvancedMarkerElement (con mapId="DEMO_MAP_ID") y ColorScheme.DARK.
- * - Incluye internalUsageAttributionIds: ['gmp_git_agentskills_v1'].
- * - Las coordenadas se resuelven en tiempo real mediante Geocoding API a partir del origen/destino de las cargas del usuario.
+ * - En local: toma GOOGLE_MAPS_API_KEY o VITE_GOOGLE_MAPS_API_KEY del archivo .env.
+ * - En producción (Base44): obtiene automáticamente el secreto GOOGLE_MAPS_API_KEY de Base44 Secrets
+ *   mediante la función backend `getGoogleMapsConfig`.
+ * - Usa ColorScheme.DARK, AdvancedMarkerElement con mapId="DEMO_MAP_ID" e internalUsageAttributionIds: ['gmp_git_agentskills_v1'].
  */
 
-const GOOGLE_MAPS_API_KEY =
+const ENV_GOOGLE_MAPS_API_KEY =
   import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
   import.meta.env.GOOGLE_MAPS_API_KEY ||
   '';
 
+let cachedRuntimeApiKey = ENV_GOOGLE_MAPS_API_KEY || '';
 let googleMapsLoaderPromise = null;
+
+async function resolveGoogleMapsApiKey() {
+  if (cachedRuntimeApiKey) {
+    return cachedRuntimeApiKey;
+  }
+  try {
+    const res = await base44.functions.invoke('getGoogleMapsConfig', {});
+    const secretKey = res?.data?.apiKey || res?.apiKey || '';
+    if (secretKey) {
+      cachedRuntimeApiKey = String(secretKey).trim();
+      return cachedRuntimeApiKey;
+    }
+  } catch (err) {
+    console.warn('[DashboardGoogleMap] No se pudo obtener GOOGLE_MAPS_API_KEY desde getGoogleMapsConfig:', err);
+  }
+  return '';
+}
 
 function loadGoogleMapsBootstrap(apiKey, locale = 'es') {
   if (typeof window === 'undefined') return Promise.reject(new Error('No window'));
@@ -28,7 +46,6 @@ function loadGoogleMapsBootstrap(apiKey, locale = 'es') {
   }
 
   googleMapsLoaderPromise = new Promise((resolve, reject) => {
-    // Inline bootstrap loader oficial de Google Maps JavaScript API (Dynamic Library Import)
     ((g) => {
       var h,
         a,
@@ -88,6 +105,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const geocodeCacheRef = useRef(new Map());
 
   const [mapReady, setMapReady] = useState(false);
+  const [loadingKey, setLoadingKey] = useState(true);
   const [mapError, setMapError] = useState(null);
   const [trafficEnabled, setTrafficEnabled] = useState(true);
   const trafficLayerRef = useRef(null);
@@ -97,28 +115,33 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const activeLoads = loads.slice(0, 6);
   const inTransitCount = loads.filter((l) => l.estado === 'en_transito').length;
 
-  // 1. Inicializar el mapa de Google Maps en Modo Oscuro (ColorScheme.DARK)
+  // 1. Obtener API Key (.env local o Secreto GOOGLE_MAPS_API_KEY de Base44 en producción) e inicializar el mapa en Modo Oscuro
   useEffect(() => {
-    if (!GOOGLE_MAPS_API_KEY) {
-      setMapError(
-        isEs
-          ? 'Configura VITE_GOOGLE_MAPS_API_KEY o GOOGLE_MAPS_API_KEY en tu archivo .env para visualizar el mapa.'
-          : 'Configure VITE_GOOGLE_MAPS_API_KEY or GOOGLE_MAPS_API_KEY in your .env file to display the map.'
-      );
-      return;
-    }
-
     let cancelled = false;
 
     async function initMap() {
+      setLoadingKey(true);
+      setMapError(null);
+
+      const apiKey = await resolveGoogleMapsApiKey();
+      if (cancelled) return;
+
+      if (!apiKey) {
+        setLoadingKey(false);
+        setMapError(
+          isEs
+            ? 'No se encontró el secreto GOOGLE_MAPS_API_KEY en el entorno de Base44 ni en .env.'
+            : 'GOOGLE_MAPS_API_KEY secret was not found in Base44 environment or .env.'
+        );
+        return;
+      }
+
       try {
-        await loadGoogleMapsBootstrap(GOOGLE_MAPS_API_KEY, locale);
+        await loadGoogleMapsBootstrap(apiKey, locale);
         const { Map, ColorScheme, TrafficLayer } = await window.google.maps.importLibrary('maps');
 
         if (cancelled || !mapContainerRef.current) return;
 
-        // Crear instancia del mapa con ColorScheme.DARK, mapId requerido para AdvancedMarkerElement
-        // e internalUsageAttributionIds requerido por Google Maps Platform.
         const map = new Map(mapContainerRef.current, {
           center: { lat: 28.5383, lng: -81.3792 },
           zoom: 6,
@@ -139,13 +162,15 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
 
         mapInstanceRef.current = map;
         setMapReady(true);
+        setLoadingKey(false);
       } catch (err) {
         if (!cancelled) {
           console.error('[DashboardGoogleMap] Error cargando Google Maps:', err);
+          setLoadingKey(false);
           setMapError(
             isEs
-              ? 'No se pudo cargar Google Maps. Verifica que Maps JavaScript API esté habilitada en tu Google Cloud Console.'
-              : 'Could not load Google Maps. Verify that Maps JavaScript API is enabled in your Google Cloud Console.'
+              ? 'No se pudo cargar el mapa interactivo. Verifica que Maps JavaScript API esté habilitada para GOOGLE_MAPS_API_KEY en Google Cloud.'
+              : 'Could not load interactive map. Verify that Maps JavaScript API is enabled for GOOGLE_MAPS_API_KEY in Google Cloud.'
           );
         }
       }
@@ -164,7 +189,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
     trafficLayerRef.current.setMap(trafficEnabled ? mapInstanceRef.current : null);
   }, [trafficEnabled]);
 
-  // 3. Geocodificar y dibujar en el mapa las rutas de las cargas recientes usando Geocoding API + AdvancedMarkerElement
+  // 3. Geocodificar y dibujar en el mapa las rutas de las cargas recientes
   useEffect(() => {
     if (!mapReady || !mapInstanceRef.current) return;
 
@@ -178,7 +203,6 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
 
         if (cancelled) return;
 
-        // Limpiar marcadores y líneas previas
         markersRef.current.forEach((m) => {
           m.map = null;
         });
@@ -209,9 +233,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
               geocodeCacheRef.current.set(key, point);
               return point;
             }
-          } catch (_) {
-            // Ignorar si una dirección específica no pudo geocodificarse
-          }
+          } catch (_) {}
           return null;
         };
 
@@ -310,7 +332,6 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
       className="glass-panel rounded-2xl p-5 relative overflow-hidden"
     >
-      {/* Brillo superior de tarjeta Glassy */}
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
 
       {/* Encabezado del Mapa */}
@@ -363,15 +384,24 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         </div>
       </div>
 
-      {/* Contenedor del Mapa con altura explícita (CF2: 380px) */}
+      {/* Contenedor del Mapa con altura explícita (380px) */}
       <div className="relative w-full h-[380px] rounded-2xl overflow-hidden border border-white/15 bg-[#0f0b1a] shadow-inner">
-        {mapError ? (
-          <div className="w-full h-full flex flex-col items-center justify-center p-6 text-center space-y-2">
+        <div ref={mapContainerRef} className="w-full h-full" />
+
+        {loadingKey && !mapError && (
+          <div className="absolute inset-0 bg-[#0f0b1a]/90 flex flex-col items-center justify-center p-6 text-center space-y-2">
+            <Loader2 className="w-6 h-6 text-violet-400 animate-spin" />
+            <p className="text-xs text-white/70">
+              {isEs ? 'Cargando Google Maps en modo oscuro...' : 'Loading Google Maps in dark mode...'}
+            </p>
+          </div>
+        )}
+
+        {mapError && (
+          <div className="absolute inset-0 bg-[#0f0b1a] flex flex-col items-center justify-center p-6 text-center space-y-2">
             <AlertCircle className="w-8 h-8 text-amber-400" />
             <p className="text-sm font-medium text-white">{mapError}</p>
           </div>
-        ) : (
-          <div ref={mapContainerRef} className="w-full h-full" />
         )}
 
         {/* Tarjeta flotante cuando se selecciona un marcador de carga */}
@@ -402,4 +432,3 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
     </motion.div>
   );
 }
-
