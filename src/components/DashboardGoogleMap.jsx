@@ -338,12 +338,8 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-white truncate">
-                {isEs ? 'Mapa Operativo de Rutas y Flota' : 'Live Fleet & Routes Map'}
+                {isEs ? 'Mapa Operativo de Rutas y Flota' : 'Fleet & Routes Map'}
               </h2>
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-400/25">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                LIVE
-              </span>
             </div>
             <p className="text-xs text-white/60 truncate">
               {isEs
