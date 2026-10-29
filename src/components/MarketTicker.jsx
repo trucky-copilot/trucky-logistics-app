@@ -17,13 +17,11 @@ function useMarketTickerData() {
   const [items, setItems] = useState([]);
 
   useEffect(() => {
-    // Carga inicial desde BD
     base44.entities.GlobalMarketTicker.filter().then(records => {
       const res = records.find(r => r.id === 'global') || records[0];
       if (res) setItems(buildItems(res));
     }).catch(err => console.error('[MarketTicker] fetch error:', err));
 
-    // Escucha el evento del AdminDashboard para actualizar al instante
     const onUpdated = (e) => {
       if (e.detail) setItems(buildItems(e.detail));
     };
@@ -62,7 +60,7 @@ export default function MarketTicker() {
 
   return (
     <div
-      className="hidden lg:flex items-center flex-1 min-w-0 mx-4 h-8 rounded-lg bg-background/40 border border-border/60 overflow-hidden"
+      className="hidden lg:flex items-center flex-1 min-w-0 w-0 mx-4 h-8 rounded-lg bg-background/40 border border-border/60 overflow-hidden relative"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}
@@ -70,7 +68,7 @@ export default function MarketTicker() {
       title={paused ? 'Cinta en pausa' : 'Cinta de mercado en vivo'}
     >
       <div
-        className="flex items-center flex-shrink-0 animate-trucky-ticker"
+        className="absolute left-0 top-0 bottom-0 flex items-center flex-shrink-0 animate-trucky-ticker"
         style={{ animationPlayState: paused ? 'paused' : 'running', willChange: 'transform' }}
       >
         {/* Dos copias idénticas para un loop continuo y sin saltos */}
