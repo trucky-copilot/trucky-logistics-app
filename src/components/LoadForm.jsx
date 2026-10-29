@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react';
-import { X, TrendingUp, TrendingDown, Clock, FileText } from 'lucide-react';
+import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
 
 export default function LoadForm({ load, onSave, onClose }) {
   const { setUnsavedChanges } = useProfile();
-  const { t, locale } = useLanguage();
-  const isEs = locale !== 'en';
+  const { t } = useLanguage();
 
   const TIPO_OPTIONS = [
     { value: 'broker_directo', label: t.loadForm.directBroker },
@@ -21,24 +20,10 @@ export default function LoadForm({ load, onSave, onClose }) {
   ];
 
   const initialState = {
-    origen: '',
-    destino: '',
-    millas: '',
-    broker_nombre: '',
-    broker_email: '',
-    tipo_cliente: 'broker_directo',
-    tarifa_ofrecida: '',
-    tarifa_negociada: '',
-    diesel_precio_dia: 5.40,
-    fecha_carga: '',
-    fecha_entrega: '',
-    citas: '',
-    truck_placa: '',
-    conductor_nombre: '',
-    carrier_email: '',
-    estado: 'pendiente',
-    notas: '',
-    numero_referencia: '',
+    origen: '', destino: '', millas: '', broker_nombre: '', tipo_cliente: 'broker_directo',
+    tarifa_ofrecida: '', tarifa_negociada: '', diesel_precio_dia: 5.40,
+    fecha_carga: '', fecha_entrega: '', truck_placa: '', conductor_nombre: '',
+    estado: 'pendiente', notas: '', numero_referencia: '',
     ...load
   };
   
@@ -89,7 +74,7 @@ export default function LoadForm({ load, onSave, onClose }) {
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">
-            {load?.id ? t.loadForm.editTitle : t.loadForm.newTitle}
+            {load ? t.loadForm.editTitle : t.loadForm.newTitle}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />
@@ -221,34 +206,6 @@ export default function LoadForm({ load, onSave, onClose }) {
             </div>
           </div>
 
-          {/* Citas / Ventana Horaria y Número de Referencia */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                <Clock className="w-3 h-3 text-primary" />
-                <span>{isEs ? 'Citas / Ventana Horaria' : 'Appointments / Time Window'}</span>
-              </label>
-              <input
-                value={form.citas || ''}
-                onChange={e => set('citas', e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                placeholder={isEs ? 'Ej. 08:00 AM - 02:00 PM' : 'e.g. 08:00 AM - 02:00 PM'}
-              />
-            </div>
-            <div>
-              <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
-                <FileText className="w-3 h-3 text-primary" />
-                <span>{isEs ? 'Load # / Referencia' : 'Load # / Reference'}</span>
-              </label>
-              <input
-                value={form.numero_referencia || ''}
-                onChange={e => set('numero_referencia', e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50"
-                placeholder="RC-2026-001"
-              />
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.truckPlate}</label>
@@ -263,11 +220,9 @@ export default function LoadForm({ load, onSave, onClose }) {
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">
-              {isEs ? 'Notas y Resumen del Hilo (Direcciones, Fechas, Citas)' : 'Notes & Thread Summary (Addresses, Dates, Appointments)'}
-            </label>
-            <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={4}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-y leading-relaxed" />
+            <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.notes}</label>
+            <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={2}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
           </div>
 
           <div className="flex gap-2 pt-2">

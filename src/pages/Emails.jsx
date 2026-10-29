@@ -1016,7 +1016,7 @@ export default function Emails() {
       const msgs = thread.threadMessages || [thread];
       const latestMsg = msgs[msgs.length - 1] || thread;
 
-      // 1. Buscar cualquier adjunto en los mensajes del hilo (priorizando PDFs)
+      // 1. Buscar cualquier adjunto en los mensajes del hilo (o consultarlo al instante en Gmail si aún no estaba en memoria)
       let targetAttachment = null;
       let targetMsg = latestMsg;
       for (const m of [...msgs].reverse()) {
@@ -1027,6 +1027,31 @@ export default function Emails() {
           targetAttachment = pdfAtt || m.adjuntos[0];
           targetMsg = m;
           break;
+        }
+      }
+
+      if (!targetAttachment) {
+        for (const m of [...msgs].reverse()) {
+          if (!m.gmail_message_id) continue;
+          try {
+            const { token } = await ensureValidGoogleToken();
+            const detailRes = await fetch(
+              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.gmail_message_id}?format=full`,
+              { headers: { Authorization: `Bearer ${token}` } }
+            );
+            if (detailRes.ok) {
+              const detail = await detailRes.json();
+              const extracted = extractAttachmentsFromGmailPayload(detail?.payload, m.gmail_message_id);
+              if (extracted.length > 0) {
+                const pdfAtt = extracted.find(
+                  a => /pdf/i.test(a.mimeType || '') || /\.pdf$/i.test(a.filename || '')
+                );
+                targetAttachment = pdfAtt || extracted[0];
+                targetMsg = m;
+                break;
+              }
+            }
+          } catch (_) {}
         }
       }
 
@@ -1091,7 +1116,7 @@ export default function Emails() {
         console.warn('[Automatización] Usando extracción directa de respaldo tras verificador:', verifyErr);
       }
 
-      // 5. Construir los datos de la carga y el hilo resumido (direcciones, fechas, citas)
+      // 5. Construir los datos de la carga extrayendo fielmente los datos del PDF verificado
       const prefilledLoad = buildThreadSummaryForLoad({
         threadMessages: msgs.map(m => ({
           id: m.id,
@@ -1104,6 +1129,7 @@ export default function Emails() {
           rfc_message_id: m.rfc_message_id || '',
         })),
         extracted: extractedFromVerifier,
+        rawDocumentText: extractedDocText || finalDocumentText,
         emailSubject: thread.asunto || '',
         brokerEmail: externalMsg?.remitente_email || '',
       });

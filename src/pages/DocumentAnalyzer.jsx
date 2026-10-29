@@ -461,14 +461,6 @@ export default function DocumentAnalyzer() {
         maxLimit={limits?.DOCUMENTS_PER_MONTH || 50}
       />
 
-      {/* Badge de rol */}
-      {contextLoaded && userRole && (
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-xs font-medium ${roleBadge.color}`}>
-          <roleBadge.icon className="w-3.5 h-3.5 flex-shrink-0" />
-          {roleBadge.label}
-        </div>
-      )}
-
       {/* Selector de carrier (solo dispatchers multi-carrier) */}
       {contextLoaded && userRole === 'dispatcher' && dispatchMode === 'multi_carrier' && (
         <CarrierSelector

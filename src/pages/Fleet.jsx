@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Truck, Plus, X, Pencil, Trash2, Loader2, UserCheck } from 'lucide-react';
+import { Truck, Plus, X, Pencil, Trash2, Loader2, UserCheck, ChevronDown } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import DeleteConfirmModal from '@/components/DeleteConfirmModal';
 import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
@@ -160,8 +160,8 @@ export default function Fleet() {
   const [trucks, setTrucks] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [profileLoads, setProfileLoads] = useState([]);
-  const [selectedDriverKey, setSelectedDriverKey] = useState({});
-  const [assigningTruckId, setAssigningTruckId] = useState(null);
+  const [driverMenuOpen, setDriverMenuOpen] = useState(false);
+  const [assigningDriver, setAssigningDriver] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [showLimitModal, setShowLimitModal] = useState(false);
@@ -177,19 +177,9 @@ export default function Fleet() {
     return stored ? JSON.parse(stored) : null;
   };
 
-  // Filtrado estricto por profile_id en Base44 (con respaldo secundario si aún no tenía profile_id)
+  // Filtrado estricto por profile_id en Base44
   const filterByActiveProfile = (items, entity) => {
     const profileIds = getProfileIds(entity);
-    if (activeProfileId === '1' && profileIds === null) {
-      const usedIds = [];
-      for (let i = 2; i <= 5; i++) {
-        const stored = localStorage.getItem(`profile_${entity}_${orgId}_${i}`);
-        if (stored) usedIds.push(...JSON.parse(stored));
-      }
-      return (items || []).filter(
-        item => (!item.profile_id || String(item.profile_id) === '1') && !usedIds.includes(item.id)
-      );
-    }
     return (items || []).filter(item => {
       if (item.profile_id) {
         return String(item.profile_id) === String(activeProfileId);
@@ -233,87 +223,97 @@ export default function Fleet() {
       listByOrg(base44.entities.Load, orgId, '-created_date', 100),
     ]);
 
-    const filteredTrucks = filterByActiveProfile(rawTrucks, 'trucks');
-    const filteredDrivers = filterByActiveProfile(rawDrivers, 'drivers');
-    const filteredLoads = filterByActiveProfile(rawLoads, 'loads');
-
-    setTrucks(filteredTrucks);
-    setDrivers(filteredDrivers);
-    setProfileLoads(filteredLoads);
+    setTrucks(filterByActiveProfile(rawTrucks, 'trucks'));
+    setDrivers(filterByActiveProfile(rawDrivers, 'drivers'));
+    setProfileLoads(filterByActiveProfile(rawLoads, 'loads'));
     setLoading(false);
   };
 
   useEffect(() => {
+    setDriverMenuOpen(false);
     loadData();
   }, [orgId, activeProfileId]);
 
-  // Conductores disponibles que pertenecen exclusivamente a este perfil (activeProfileId)
-  const availableDriversInProfile = drivers.filter(d => !d.estado || d.estado === 'activo');
+  // Construir lista de conductores disponibles únicamente de ESTE perfil (activeProfileId)
+  const availableDriverOptions = (() => {
+    const options = [];
+    const seen = new Set();
 
-  // Carga pendiente de asignar perteneciente a este perfil (activeProfileId)
-  const getTargetLoadForProfile = () => {
-    try {
-      const rawPending = sessionStorage.getItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY);
-      if (rawPending) {
-        const parsed = JSON.parse(rawPending);
-        const matchInProfile = profileLoads.find(l => l.id === parsed?.loadId);
-        if (matchInProfile) return matchInProfile;
-      }
-    } catch (_) {}
+    drivers
+      .filter(d => !d.estado || d.estado === 'activo')
+      .forEach(d => {
+        const name = `${d.nombre || ''} ${d.apellido || ''}`.trim();
+        if (!name) return;
+        const matchedTruck =
+          trucks.find(
+            tr =>
+              (d.truck_asignado && String(d.truck_asignado).toLowerCase() === String(tr.placa || '').toLowerCase()) ||
+              (tr.conductor_nombre && String(tr.conductor_nombre).toLowerCase() === name.toLowerCase())
+          ) || trucks.find(tr => tr.estado === 'disponible');
 
-    return (
+        const key = name.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          options.push({
+            id: d.id,
+            driverName: name,
+            driverPhone: d.telefono || '',
+            truck: matchedTruck || null,
+            placa: matchedTruck?.placa || d.truck_asignado || '',
+          });
+        }
+      });
+
+    trucks
+      .filter(tr => tr.estado === 'disponible' && tr.conductor_nombre)
+      .forEach(tr => {
+        const name = String(tr.conductor_nombre).trim();
+        const key = name.toLowerCase();
+        if (name && !seen.has(key)) {
+          seen.add(key);
+          options.push({
+            id: `truck-${tr.id}`,
+            driverName: name,
+            driverPhone: '',
+            truck: tr,
+            placa: tr.placa || '',
+          });
+        }
+      });
+
+    return options;
+  })();
+
+  const handleSelectAvailableDriver = async (option) => {
+    setDriverMenuOpen(false);
+    const loadToAssign =
       profileLoads.find(l => l.estado === 'pendiente' && !l.conductor_nombre) ||
       profileLoads.find(l => l.estado === 'pendiente') ||
       profileLoads[0] ||
-      null
-    );
-  };
+      null;
 
-  // Elegir al conductor disponible -> guardar en Base44 -> compartir con el rol Carrier -> abrir borrador en Emails
-  const handleChooseDriverAndGoToEmail = async (truck) => {
-    const loadToAssign = getTargetLoadForProfile();
     if (!loadToAssign) {
       toast({
-        title: isEs ? 'No hay cargas en este perfil' : 'No loads in this profile',
-        description: isEs
-          ? 'Primero crea una carga en este perfil para asignarle un conductor.'
-          : 'First create a load in this profile to assign a driver.',
+        title: isEs ? 'No hay cargas pendientes en este perfil' : 'No pending loads in this profile',
+        description: isEs ? 'Primero crea una carga para asignarle el conductor.' : 'First create a load to assign the driver.',
         variant: 'destructive',
       });
       return;
     }
 
-    setAssigningTruckId(truck.id);
+    setAssigningDriver(true);
     try {
-      const chosenDriverId = selectedDriverKey[truck.id];
-      const selectedDriverObj =
-        availableDriversInProfile.find(d => d.id === chosenDriverId) ||
-        availableDriversInProfile.find(
-          d =>
-            (d.truck_asignado &&
-              String(d.truck_asignado).toLowerCase() === String(truck.placa || '').toLowerCase()) ||
-            (truck.conductor_nombre &&
-              `${d.nombre || ''} ${d.apellido || ''}`
-                .toLowerCase()
-                .includes(String(truck.conductor_nombre).toLowerCase()))
-        ) ||
-        availableDriversInProfile[0] ||
-        null;
+      const driverName = option.driverName;
+      const placa = option.placa || '';
 
-      const driverName = selectedDriverObj
-        ? `${selectedDriverObj.nombre || ''} ${selectedDriverObj.apellido || ''}`.trim()
-        : truck.conductor_nombre || 'Conductor';
-      const driverPhone = selectedDriverObj?.telefono || '';
-
-      // 1. Guardar en Base44 (Load): asignar conductor, camión y marcar shared_with_carrier: true para que se vea en el rol Carrier
+      // 1. Actualizar la carga en Base44 y marcar shared_with_carrier: true para que sea visible en el rol Carrier
       const updatedLoad = await base44.entities.Load.update(loadToAssign.id, {
         conductor_nombre: driverName,
-        truck_placa: truck.placa,
+        truck_placa: placa,
         estado: 'en_transito',
         shared_with_carrier: true,
       });
 
-      // Respaldo secundario en localStorage de los perfiles
       const allProfileIds = Array.from(
         new Set(['1', '2', '3', '4', '5', ...(profiles || []).map(p => String(p.id))])
       );
@@ -327,13 +327,15 @@ export default function Fleet() {
         } catch (_) {}
       }
 
-      // 2. Actualizar el camión en Base44 con el conductor elegido y estado "en_ruta"
-      await base44.entities.Truck.update(truck.id, {
-        conductor_nombre: driverName,
-        estado: 'en_ruta',
-      });
+      // 2. Si tiene camión asociado en el perfil, actualizarlo en Base44
+      if (option.truck?.id) {
+        await base44.entities.Truck.update(option.truck.id, {
+          conductor_nombre: driverName,
+          estado: 'en_ruta',
+        });
+      }
 
-      // 3. Preparar el borrador de correo para el Broker y el Carrier
+      // 3. Construir borrador en Emails para el Broker y el Carrier
       const brokerEmail = loadToAssign.broker_email || '';
       const carrierEmail = loadToAssign.carrier_email || currentUser?.email || '';
       const refLabel = loadToAssign.numero_referencia ? ` (Ref: ${loadToAssign.numero_referencia})` : '';
@@ -344,24 +346,22 @@ export default function Fleet() {
           `• Ruta: ${loadToAssign.origen} → ${loadToAssign.destino} (${loadToAssign.millas || '--'} millas)\n` +
           `• Fecha de Recogida (Pickup): ${loadToAssign.fecha_carga || 'Confirmada'}\n` +
           `• Fecha de Entrega (Delivery): ${loadToAssign.fecha_entrega || 'Confirmada'}\n` +
-          `• Citas / Ventana Horaria: ${loadToAssign.citas || 'Según Rate Confirmation'}\n` +
           (loadToAssign.numero_referencia ? `• Load # / Referencia: ${loadToAssign.numero_referencia}\n` : '') +
           `• Tarifa Acordada: $${(loadToAssign.tarifa_negociada || 0).toLocaleString()}\n\n` +
-          `DATOS DEL CONDUCTOR Y UNIDAD ASIGNADA:\n` +
-          `• Conductor: ${driverName}${driverPhone ? ' (Tel: ' + driverPhone + ')' : ''}\n` +
-          `• Camión / Placa: ${truck.placa} (${truck.modelo || 'Tractor'})\n\n` +
-          `Saludos cordiales,\nDepartamento de Despacho — Trucky`
-        : `Hello team (${loadToAssign.broker_nombre || 'Broker'} & Carrier),\n\nWe confirm the driver and truck assignment for the load:\n\n` +
+          `DATOS DEL CONDUCTOR ASIGNADO:\n` +
+          `• Conductor: ${driverName}${option.driverPhone ? ' (Tel: ' + option.driverPhone + ')' : ''}\n` +
+          (placa ? `• Camión / Placa: ${placa}\n` : '') +
+          `\nSaludos cordiales,\nDepartamento de Despacho — Trucky`
+        : `Hello team (${loadToAssign.broker_nombre || 'Broker'} & Carrier),\n\nWe confirm the driver and unit assignment for the load:\n\n` +
           `• Route: ${loadToAssign.origen} → ${loadToAssign.destino} (${loadToAssign.millas || '--'} miles)\n` +
           `• Pickup Date: ${loadToAssign.fecha_carga || 'Confirmed'}\n` +
           `• Delivery Date: ${loadToAssign.fecha_entrega || 'Confirmed'}\n` +
-          `• Appointments / Window: ${loadToAssign.citas || 'Per Rate Confirmation'}\n` +
           (loadToAssign.numero_referencia ? `• Load # / Reference: ${loadToAssign.numero_referencia}\n` : '') +
           `• Agreed Rate: $${(loadToAssign.tarifa_negociada || 0).toLocaleString()}\n\n` +
-          `ASSIGNED DRIVER & TRUCK DETAILS:\n` +
-          `• Driver: ${driverName}${driverPhone ? ' (Phone: ' + driverPhone + ')' : ''}\n` +
-          `• Truck / Plate: ${truck.placa} (${truck.modelo || 'Tractor'})\n\n` +
-          `Best regards,\nDispatch Department — Trucky`;
+          `ASSIGNED DRIVER DETAILS:\n` +
+          `• Driver: ${driverName}${option.driverPhone ? ' (Phone: ' + option.driverPhone + ')' : ''}\n` +
+          (placa ? `• Truck / Plate: ${placa}\n` : '') +
+          `\nBest regards,\nDispatch Department — Trucky`;
 
       sessionStorage.setItem(
         AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,
@@ -372,7 +372,7 @@ export default function Fleet() {
           brokerEmail,
           carrierEmail,
           conductorNombre: driverName,
-          truckPlaca: truck.placa,
+          truckPlaca: placa,
           subject: draftSubject,
           content: draftBody,
           threadId: loadToAssign.thread_id || null,
@@ -383,14 +383,14 @@ export default function Fleet() {
 
       navigate('/emails?dispatch_draft=1');
     } catch (err) {
-      console.error('Error asignando conductor:', err);
+      console.error('Error al elegir conductor:', err);
       toast({
-        title: isEs ? 'Error al elegir conductor' : 'Failed to assign driver',
+        title: isEs ? 'Error al elegir conductor' : 'Failed to choose driver',
         description: err?.message || 'Intenta nuevamente.',
         variant: 'destructive',
       });
     } finally {
-      setAssigningTruckId(null);
+      setAssigningDriver(false);
     }
   };
 
@@ -418,22 +418,67 @@ export default function Fleet() {
 
   return (
     <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-foreground">{t.fleet.title}</h1>
           <p className="text-sm text-muted-foreground">{trucks.length} {t.fleet.trucks}</p>
         </div>
-        <button onClick={() => {
-          if (limits?.FLEET && trucks.length >= limits.FLEET) {
-            setShowLimitModal(true);
-            return;
-          }
-          setEditTruck(null);
-          setShowForm(true);
-        }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
-          <Plus className="w-3.5 h-3.5" />{t.fleet.add}
-        </button>
+
+        <div className="flex items-center gap-2">
+          {/* Solo mostrar el botón de elegir conductor en la esquina al lado de "+ Agregar camión" si existen conductores en este perfil */}
+          {availableDriverOptions.length > 0 && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setDriverMenuOpen(prev => !prev)}
+                disabled={assigningDriver}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-xs font-bold text-zinc-950 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+              >
+                {assigningDriver ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-950" />
+                ) : (
+                  <UserCheck className="w-3.5 h-3.5" />
+                )}
+                <span>{isEs ? 'Elegir conductor' : 'Choose driver'}</span>
+                <ChevronDown className="w-3.5 h-3.5" />
+              </button>
+
+              {driverMenuOpen && (
+                <div className="absolute right-0 mt-1.5 w-56 rounded-xl bg-card border border-border shadow-xl z-40 py-1">
+                  {availableDriverOptions.map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => handleSelectAvailableDriver(opt)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between gap-2"
+                    >
+                      <span className="font-semibold text-foreground truncate">{opt.driverName}</span>
+                      {opt.placa && (
+                        <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
+                          {opt.placa}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              if (limits?.FLEET && trucks.length >= limits.FLEET) {
+                setShowLimitModal(true);
+                return;
+              }
+              setEditTruck(null);
+              setShowForm(true);
+            }}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground"
+          >
+            <Plus className="w-3.5 h-3.5" />{t.fleet.add}
+          </button>
+        </div>
       </div>
 
       <DemoLimitModal
@@ -470,98 +515,46 @@ export default function Fleet() {
         </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {trucks.map(truck => {
-            const isAvailable = truck.estado === 'disponible';
-            const isAssigningThis = assigningTruckId === truck.id;
-
-            return (
-              <div
-                key={truck.id}
-                className="bg-card border border-border hover:border-primary/30 rounded-xl p-4 transition-all"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-primary" />
-                      <span className="font-bold text-foreground font-mono">{truck.placa}</span>
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-0.5">{truck.modelo} {truck.año || ''}</div>
+          {trucks.map(truck => (
+            <div key={truck.id} className="bg-card border border-border rounded-xl p-4 hover:border-primary/30 transition-colors">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <Truck className="w-4 h-4 text-primary" />
+                    <span className="font-bold text-foreground font-mono">{truck.placa}</span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <StatusBadge status={truck.estado} />
-                    <button onClick={() => { setEditTruck(truck); setShowForm(true); }}
-                      className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
-                      title={locale === 'en' ? 'Edit' : 'Editar'}>
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button onClick={() => setDeleteTruck(truck)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
-                      title={locale === 'en' ? 'Delete' : 'Eliminar'}>
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{truck.modelo} {truck.año || ''}</div>
                 </div>
-
-                <div className="space-y-1.5 text-xs text-muted-foreground">
-                  <div className="flex justify-between">
-                    <span>{t.fleet.assignedDriver}:</span>
-                    <span className="text-foreground font-semibold">{truck.conductor_nombre || t.fleet.noAssigned}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>{t.fleet.chassis}:</span>
-                    <span className={truck.chasis_disponible ? 'text-green-400' : 'text-red-400'}>
-                      {truck.chasis_disponible ? t.fleet.availableText : t.fleet.unavailable}
-                      {truck.chasis_numero ? ` (${truck.chasis_numero})` : ''}
-                    </span>
-                  </div>
-                  {truck.notas && <div className="text-muted-foreground/70 italic truncate">{truck.notas}</div>}
+                <div className="flex items-center gap-1.5">
+                  <StatusBadge status={truck.estado} />
+                  <button onClick={() => { setEditTruck(truck); setShowForm(true); }}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground"
+                    title={locale === 'en' ? 'Edit' : 'Editar'}>
+                    <Pencil className="w-3 h-3" />
+                  </button>
+                  <button onClick={() => setDeleteTruck(truck)}
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                    title={locale === 'en' ? 'Delete' : 'Eliminar'}>
+                    <Trash2 className="w-3 h-3" />
+                  </button>
                 </div>
-
-                {/* Selector de conductor del perfil actual (si hay varios) + Un solo botón limpio para elegir conductor disponible */}
-                {isAvailable && (
-                  <div className="mt-3.5 pt-3 border-t border-border/60 space-y-2">
-                    {availableDriversInProfile.length > 0 && (
-                      <select
-                        value={selectedDriverKey[truck.id] || ''}
-                        onChange={(e) =>
-                          setSelectedDriverKey(prev => ({ ...prev, [truck.id]: e.target.value }))
-                        }
-                        className="w-full bg-muted border border-border rounded-lg px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                      >
-                        {truck.conductor_nombre && (
-                          <option value="">
-                            {truck.conductor_nombre}
-                          </option>
-                        )}
-                        {availableDriversInProfile.map(d => {
-                          const fullName = `${d.nombre || ''} ${d.apellido || ''}`.trim();
-                          return (
-                            <option key={d.id} value={d.id}>
-                              {fullName}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    )}
-
-                    <button
-                      type="button"
-                      onClick={() => handleChooseDriverAndGoToEmail(truck)}
-                      disabled={Boolean(assigningTruckId)}
-                      className="w-full py-2 px-3 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
-                    >
-                      {isAssigningThis ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-950" />
-                      ) : (
-                        <UserCheck className="w-3.5 h-3.5" />
-                      )}
-                      <span>{isEs ? 'Elegir Conductor Disponible' : 'Choose Available Driver'}</span>
-                    </button>
-                  </div>
-                )}
               </div>
-            );
-          })}
+              <div className="space-y-1.5 text-xs text-muted-foreground">
+                <div className="flex justify-between">
+                  <span>{t.fleet.assignedDriver}:</span>
+                  <span className="text-foreground font-semibold">{truck.conductor_nombre || t.fleet.noAssigned}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>{t.fleet.chassis}:</span>
+                  <span className={truck.chasis_disponible ? 'text-green-400' : 'text-red-400'}>
+                    {truck.chasis_disponible ? t.fleet.availableText : t.fleet.unavailable}
+                    {truck.chasis_numero ? ` (${truck.chasis_numero})` : ''}
+                  </span>
+                </div>
+                {truck.notas && <div className="text-muted-foreground/70 italic truncate">{truck.notas}</div>}
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
