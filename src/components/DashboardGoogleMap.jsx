@@ -1,30 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Navigation, Layers, Compass } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { MapPin, Navigation, Compass } from 'lucide-react';
 
 /**
- * Componente de Mapa Interactivo en Modo Oscuro para el Dashboard de Trucky.
- * - Obtiene GOOGLE_MAPS_API_KEY desde .env local o desde los secretos de Base44 (vía marketChat / getGoogleMapsConfig).
- * - Si Maps JavaScript API está activa en Google Cloud, renderiza Google Maps en ColorScheme.DARK.
- * - Si en Google Cloud Console la clave solo tiene habilitadas APIs de backend o mientras carga,
- *   renderiza un mapa interactivo en Modo Oscuro usando teselas libres de API Key (OpenStreetMap con filtro oscuro Trucky).
+ * Componente de Mapa Interactivo en Modo Oscuro para el Dashboard de Trucky (Opción A).
+ * - Renderiza de forma inmediata y directa (0ms de espera, sin depender de API Keys externas ni de Carto).
+ * - Utiliza teselas oficiales de OpenStreetMap estilizadas en Modo Oscuro profundo acorde al morado #5B2BA0 de Trucky.
+ * - Muestra todas las rutas de las cargas activas del perfil y los principales puertos/hubs logísticos.
  */
 
-const ENV_GOOGLE_MAPS_API_KEY =
-  import.meta.env.VITE_GOOGLE_MAPS_API_KEY ||
-  import.meta.env.GOOGLE_MAPS_API_KEY ||
-  '';
-
-let cachedRuntimeApiKey = ENV_GOOGLE_MAPS_API_KEY || '';
-let googleMapsLoaderPromise = null;
-
-// Coordenadas de los principales puertos y hubs logísticos de Trucky
 const KNOWN_LOGISTICS_HUBS = {
   miami: { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
   'port of miami': { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
+  portmiami: { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
   'port everglades': { lat: 26.0853, lng: -80.1183, label: 'Port Everglades, FL' },
   'fort lauderdale': { lat: 26.1224, lng: -80.1373, label: 'Fort Lauderdale, FL' },
+  lauderdale: { lat: 26.1224, lng: -80.1373, label: 'Fort Lauderdale, FL' },
   tampa: { lat: 27.9506, lng: -82.4572, label: 'Port Tampa Bay, FL' },
   orlando: { lat: 28.5383, lng: -81.3792, label: 'Orlando, FL' },
   jacksonville: { lat: 30.3322, lng: -81.6557, label: 'JAXPORT, Jacksonville, FL' },
@@ -35,6 +26,14 @@ const KNOWN_LOGISTICS_HUBS = {
   venice: { lat: 27.0998, lng: -82.4543, label: 'Venice, FL' },
   medley: { lat: 25.8406, lng: -80.3264, label: 'Medley, FL' },
   bartow: { lat: 27.8964, lng: -81.8431, label: 'Bartow, FL' },
+  hialeah: { lat: 25.8576, lng: -80.2781, label: 'Hialeah, FL' },
+  doral: { lat: 25.8195, lng: -80.3553, label: 'Doral, FL' },
+  pompano: { lat: 26.2379, lng: -80.1248, label: 'Pompano Beach, FL' },
+  lakeland: { lat: 28.0395, lng: -81.9498, label: 'Lakeland, FL' },
+  oca: { lat: 29.1872, lng: -82.1401, label: 'Ocala, FL' },
+  charleston: { lat: 32.7765, lng: -79.9311, label: 'Charleston Port, SC' },
+  mobile: { lat: 30.6954, lng: -88.0399, label: 'Port of Mobile, AL' },
+  neworleans: { lat: 29.9511, lng: -90.0715, label: 'Port of New Orleans, LA' },
 };
 
 const DEFAULT_HUBS_DISPLAY = [
@@ -71,199 +70,33 @@ function ensureLeafletCss() {
     style.id = 'trucky-dark-tiles-style';
     style.textContent = `
       .trucky-dark-map-tiles {
-        filter: invert(100%) hue-rotate(195deg) brightness(88%) contrast(92%) saturate(130%);
+        filter: invert(100%) hue-rotate(195deg) brightness(88%) contrast(92%) saturate(135%);
       }
       .leaflet-container {
         background: #0d0818 !important;
+        font-family: 'Inter', sans-serif !important;
       }
     `;
     document.head.appendChild(style);
   }
 }
 
-function loadGoogleMapsBootstrap(apiKey, locale = 'es') {
-  if (typeof window === 'undefined') return Promise.reject(new Error('No window'));
-  if (window.google?.maps?.importLibrary) {
-    return Promise.resolve(window.google.maps);
-  }
-  if (googleMapsLoaderPromise) {
-    return googleMapsLoaderPromise;
-  }
-
-  googleMapsLoaderPromise = new Promise((resolve, reject) => {
-    ((g) => {
-      var h,
-        a,
-        k,
-        p = 'The Google Maps JavaScript API',
-        c = 'google',
-        l = 'importLibrary',
-        q = '__ib__',
-        m = document,
-        b = window;
-      b = b[c] || (b[c] = {});
-      var d = b.maps || (b.maps = {}),
-        r = new Set(),
-        e = new URLSearchParams(),
-        u = () =>
-          h ||
-          (h = new Promise(async (f, n) => {
-            await (a = m.createElement('script'));
-            e.set('libraries', [...r] + '');
-            for (k in g)
-              e.set(
-                k.replace(/[A-Z]/g, (t) => '_' + t[0].toLowerCase()),
-                g[k]
-              );
-            e.set('callback', c + '.maps.' + q);
-            a.src = `https://maps.${c}apis.com/maps/api/js?` + e;
-            d[q] = f;
-            a.onerror = () => (h = n(Error(p + ' could not load.')));
-            a.nonce = m.querySelector('script[nonce]')?.nonce || '';
-            m.head.append(a);
-          }));
-      d[l]
-        ? console.warn(p + ' only loads once. Ignoring:', g)
-        : (d[l] = (f, ...n) => r.add(f) && u().then(() => d[l](f, ...n)));
-    })({
-      key: apiKey,
-      v: 'weekly',
-      language: locale === 'en' ? 'en' : 'es',
-      region: 'US',
-    });
-
-    if (window.google?.maps?.importLibrary) {
-      resolve(window.google.maps);
-    } else {
-      reject(new Error('No se pudo inicializar Google Maps importLibrary'));
-    }
-  });
-
-  return googleMapsLoaderPromise;
-}
-
 export default function DashboardGoogleMap({ loads = [], trucks = [], locale = 'es' }) {
-  const mapContainerRef = useRef(null);
   const leafletContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
   const leafletInstanceRef = useRef(null);
-  const markersRef = useRef([]);
-  const polylinesRef = useRef([]);
-  const geocodeCacheRef = useRef(new Map());
-
-  const [useFallbackDarkMap, setUseFallbackDarkMap] = useState(false);
-  const [mapReady, setMapReady] = useState(false);
-  const [trafficEnabled, setTrafficEnabled] = useState(true);
-  const trafficLayerRef = useRef(null);
   const [selectedRouteInfo, setSelectedRouteInfo] = useState(null);
 
   const isEs = locale !== 'en';
   const activeLoads = loads.slice(0, 6);
   const inTransitCount = loads.filter((l) => l.estado === 'en_transito').length;
 
-  // 1. Obtener GOOGLE_MAPS_API_KEY desde marketChat (ya desplegada en Base44) o getGoogleMapsConfig o .env
   useEffect(() => {
-    let cancelled = false;
-
-    const prevAuthFailure = window.gm_authFailure;
-    window.gm_authFailure = () => {
-      if (!cancelled) {
-        setUseFallbackDarkMap(true);
-      }
-      if (typeof prevAuthFailure === 'function') prevAuthFailure();
-    };
-
-    async function init() {
-      let apiKey = cachedRuntimeApiKey;
-
-      if (!apiKey) {
-        try {
-          const chatRes = await base44.functions.invoke('marketChat', {
-            action: 'get_maps_config',
-          });
-          const chatData = chatRes?.data || chatRes || {};
-          if (chatData.apiKey) {
-            apiKey = String(chatData.apiKey).trim();
-            cachedRuntimeApiKey = apiKey;
-          }
-        } catch (_) {}
-      }
-
-      if (!apiKey) {
-        try {
-          const cfgRes = await base44.functions.invoke('getGoogleMapsConfig', {});
-          const cfgData = cfgRes?.data || cfgRes || {};
-          if (cfgData.apiKey) {
-            apiKey = String(cfgData.apiKey).trim();
-            cachedRuntimeApiKey = apiKey;
-          }
-        } catch (_) {}
-      }
-
-      if (cancelled) return;
-
-      if (!apiKey) {
-        setUseFallbackDarkMap(true);
-        return;
-      }
-
-      try {
-        await loadGoogleMapsBootstrap(apiKey, locale);
-        const { Map, ColorScheme, TrafficLayer } = await window.google.maps.importLibrary('maps');
-
-        if (cancelled || !mapContainerRef.current) return;
-
-        const map = new Map(mapContainerRef.current, {
-          center: { lat: 27.6648, lng: -81.5158 },
-          zoom: 6,
-          mapId: 'DEMO_MAP_ID',
-          colorScheme: ColorScheme?.DARK || 'DARK',
-          disableDefaultUI: false,
-          mapTypeControl: false,
-          streetViewControl: false,
-          fullscreenControl: true,
-          zoomControl: true,
-          gestureHandling: 'cooperative',
-          internalUsageAttributionIds: ['gmp_git_agentskills_v1'],
-        });
-
-        const trafficLayer = new TrafficLayer();
-        trafficLayer.setMap(map);
-        trafficLayerRef.current = trafficLayer;
-
-        mapInstanceRef.current = map;
-        setMapReady(true);
-
-        // Verificar si Google Maps arrojó error de API no habilitada o restricción de llave
-        setTimeout(() => {
-          if (cancelled || !mapContainerRef.current) return;
-          const hasGmError = mapContainerRef.current.querySelector('.gm-err-container');
-          if (hasGmError) {
-            setUseFallbackDarkMap(true);
-          }
-        }, 2000);
-      } catch (_) {
-        if (!cancelled) {
-          setUseFallbackDarkMap(true);
-        }
-      }
-    }
-
-    init();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [locale]);
-
-  // 2. Renderizar Mapa Interactivo en Modo Oscuro (OpenStreetMap con filtro oscuro libre de API Key)
-  useEffect(() => {
-    if (!useFallbackDarkMap || !leafletContainerRef.current) return;
+    if (!leafletContainerRef.current) return;
 
     let cancelled = false;
     ensureLeafletCss();
 
-    async function initLeafletDarkMap() {
+    async function initDarkMap() {
       try {
         const L = (await import('leaflet')).default;
         if (cancelled || !leafletContainerRef.current) return;
@@ -281,7 +114,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         });
 
         // Teselas oficiales de OpenStreetMap (100% libres de API Key, nunca muestran marca de agua)
-        // estilizadas en Modo Oscuro mediante la clase CSS .trucky-dark-map-tiles
+        // estilizadas en Modo Oscuro mediante .trucky-dark-map-tiles
         L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
           className: 'trucky-dark-map-tiles',
@@ -299,16 +132,15 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
 
         if (activeLoads.length > 0) {
           for (const load of activeLoads) {
-            const oKey = String(load.origen || '').trim().toLowerCase();
-            const dKey = String(load.destino || '').trim().toLowerCase();
-            const oPos = geocodeCacheRef.current.get(oKey) || resolveLocalHubCoords(load.origen);
-            const dPos = geocodeCacheRef.current.get(dKey) || resolveLocalHubCoords(load.destino);
+            const oPos = resolveLocalHubCoords(load.origen);
+            const dPos = resolveLocalHubCoords(load.destino);
 
             if (oPos) {
               boundsPoints.push([oPos.lat, oPos.lng]);
               const m = L.marker([oPos.lat, oPos.lng], {
                 icon: createPinIcon('#5B2BA0', 'O'),
               }).addTo(map);
+              m.bindTooltip(`${isEs ? 'Origen' : 'Origin'}: ${load.origen}`, { direction: 'top' });
               m.on('click', () => setSelectedRouteInfo(load));
             }
 
@@ -318,6 +150,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
               const m = L.marker([dPos.lat, dPos.lng], {
                 icon: createPinIcon(isTransit ? '#10b981' : '#8b5cf6', 'D'),
               }).addTo(map);
+              m.bindTooltip(`${isEs ? 'Destino' : 'Destination'}: ${load.destino}`, { direction: 'top' });
               m.on('click', () => setSelectedRouteInfo(load));
             }
 
@@ -338,6 +171,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           }
         }
 
+        // Si el perfil aún no tiene cargas con coordenadas mapeadas, mostrar los principales puertos/hubs operativos
         if (boundsPoints.length === 0) {
           for (const hub of DEFAULT_HUBS_DISPLAY) {
             boundsPoints.push([hub.lat, hub.lng]);
@@ -357,7 +191,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
             {
               color: '#8b5cf6',
               weight: 2.5,
-              opacity: 0.65,
+              opacity: 0.7,
               dashArray: '6, 6',
             }
           ).addTo(map);
@@ -369,7 +203,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
 
         setTimeout(() => {
           map.invalidateSize();
-        }, 200);
+        }, 180);
 
         leafletInstanceRef.current = map;
       } catch (err) {
@@ -377,7 +211,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
       }
     }
 
-    initLeafletDarkMap();
+    initDarkMap();
 
     return () => {
       cancelled = true;
@@ -386,144 +220,12 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         leafletInstanceRef.current = null;
       }
     };
-  }, [useFallbackDarkMap, activeLoads]);
-
-  // 3. Alternar capa de tráfico en Google Maps
-  useEffect(() => {
-    if (!trafficLayerRef.current || !mapInstanceRef.current) return;
-    trafficLayerRef.current.setMap(trafficEnabled ? mapInstanceRef.current : null);
-  }, [trafficEnabled]);
-
-  // 4. Renderizar marcadores en Google Maps cuando Maps JS API está activa
-  useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current || useFallbackDarkMap) return;
-
-    let cancelled = false;
-
-    async function renderGoogleMarkers() {
-      try {
-        const { AdvancedMarkerElement, PinElement } = await window.google.maps.importLibrary('marker');
-        const { LatLngBounds } = await window.google.maps.importLibrary('core');
-
-        if (cancelled) return;
-
-        markersRef.current.forEach((m) => {
-          m.map = null;
-        });
-        markersRef.current = [];
-
-        polylinesRef.current.forEach((p) => {
-          p.setMap(null);
-        });
-        polylinesRef.current = [];
-
-        const bounds = new LatLngBounds();
-        let hasValidPoints = false;
-
-        if (activeLoads.length > 0) {
-          for (const load of activeLoads) {
-            const oKey = String(load.origen || '').trim().toLowerCase();
-            const dKey = String(load.destino || '').trim().toLowerCase();
-            const originPos = geocodeCacheRef.current.get(oKey) || resolveLocalHubCoords(load.origen);
-            const destPos = geocodeCacheRef.current.get(dKey) || resolveLocalHubCoords(load.destino);
-
-            if (originPos) {
-              bounds.extend(originPos);
-              hasValidPoints = true;
-              const originPin = new PinElement({
-                background: '#5B2BA0',
-                borderColor: '#ffffff',
-                glyphColor: '#ffffff',
-                glyphText: 'O',
-                scale: 0.95,
-              });
-              const originMarker = new AdvancedMarkerElement({
-                map: mapInstanceRef.current,
-                position: originPos,
-                title: `${isEs ? 'Origen' : 'Origin'}: ${load.origen} → ${load.destino}`,
-              });
-              originMarker.append(originPin);
-              originMarker.addEventListener('click', () => setSelectedRouteInfo(load));
-              markersRef.current.push(originMarker);
-            }
-
-            if (destPos) {
-              bounds.extend(destPos);
-              hasValidPoints = true;
-              const isInTransit = load.estado === 'en_transito';
-              const destPin = new PinElement({
-                background: isInTransit ? '#10b981' : '#8b5cf6',
-                borderColor: '#ffffff',
-                glyphColor: '#ffffff',
-                glyphText: 'D',
-                scale: 0.95,
-              });
-              const destMarker = new AdvancedMarkerElement({
-                map: mapInstanceRef.current,
-                position: destPos,
-                title: `${isEs ? 'Destino' : 'Destination'}: ${load.destino}`,
-              });
-              destMarker.append(destPin);
-              destMarker.addEventListener('click', () => setSelectedRouteInfo(load));
-              markersRef.current.push(destMarker);
-            }
-
-            if (originPos && destPos) {
-              const line = new window.google.maps.Polyline({
-                path: [originPos, destPos],
-                geodesic: true,
-                strokeColor: load.estado === 'en_transito' ? '#10b981' : '#a855f7',
-                strokeOpacity: 0.85,
-                strokeWeight: 3,
-                map: mapInstanceRef.current,
-              });
-              polylinesRef.current.push(line);
-            }
-          }
-        } else {
-          for (const hub of DEFAULT_HUBS_DISPLAY) {
-            const pos = { lat: hub.lat, lng: hub.lng };
-            bounds.extend(pos);
-            hasValidPoints = true;
-            const pin = new PinElement({
-              background: '#5B2BA0',
-              borderColor: '#ffffff',
-              glyphColor: '#ffffff',
-              glyphText: 'T',
-              scale: 0.9,
-            });
-            const marker = new AdvancedMarkerElement({
-              map: mapInstanceRef.current,
-              position: pos,
-              title: `${hub.name} (${hub.role})`,
-            });
-            marker.append(pin);
-            markersRef.current.push(marker);
-          }
-        }
-
-        if (hasValidPoints && !cancelled) {
-          mapInstanceRef.current.fitBounds(bounds, 55);
-        }
-      } catch (_) {}
-    }
-
-    renderGoogleMarkers();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mapReady, useFallbackDarkMap, activeLoads, isEs]);
+  }, [activeLoads, isEs]);
 
   const handleRecenter = () => {
     setSelectedRouteInfo(null);
-    if (useFallbackDarkMap && leafletInstanceRef.current) {
+    if (leafletInstanceRef.current) {
       leafletInstanceRef.current.setView([27.8, -81.7], 6);
-      return;
-    }
-    if (mapInstanceRef.current) {
-      mapInstanceRef.current.panTo({ lat: 27.6648, lng: -81.5158 });
-      mapInstanceRef.current.setZoom(6);
     }
   };
 
@@ -544,7 +246,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-sm font-semibold text-white truncate">
-                {isEs ? 'Mapa Operativo de Rutas y Flota (Google Maps)' : 'Live Fleet & Routes Map (Google Maps)'}
+                {isEs ? 'Mapa Operativo de Rutas y Flota' : 'Live Fleet & Routes Map'}
               </h2>
               <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-400/25">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
@@ -559,23 +261,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           </div>
         </div>
 
-        {/* Controles rápidos del mapa */}
         <div className="flex items-center gap-2 self-start sm:self-auto flex-shrink-0">
-          {!useFallbackDarkMap && (
-            <button
-              type="button"
-              onClick={() => setTrafficEnabled((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 cursor-pointer ${
-                trafficEnabled
-                  ? 'bg-[#5B2BA0] text-white border-white/25 shadow-sm shadow-[#5B2BA0]/40'
-                  : 'bg-white/[0.04] text-white/70 border-white/10 hover:text-white hover:bg-white/[0.08]'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>{isEs ? 'Tráfico en vivo' : 'Live Traffic'}</span>
-            </button>
-          )}
-
           <button
             type="button"
             onClick={handleRecenter}
@@ -587,16 +273,9 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         </div>
       </div>
 
-      {/* Contenedor del Mapa con altura compacta (340px) */}
+      {/* Contenedor del Mapa en Modo Oscuro (340px) */}
       <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0d0818] shadow-inner">
-        <div
-          ref={mapContainerRef}
-          className={`w-full h-full ${useFallbackDarkMap ? 'hidden' : 'block'}`}
-        />
-
-        {useFallbackDarkMap && (
-          <div ref={leafletContainerRef} className="w-full h-full z-0" />
-        )}
+        <div ref={leafletContainerRef} className="w-full h-full z-0" />
 
         {selectedRouteInfo && (
           <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm glass-panel rounded-xl p-3 border border-white/20 text-xs text-white shadow-xl z-[400]">
