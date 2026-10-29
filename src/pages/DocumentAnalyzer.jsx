@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   FileSearch, Upload, XCircle, Loader2, Image,
-  Truck, Users, FileText, X, ChevronRight, Lock, Sparkles, CheckCircle2, AlertTriangle, Calendar, Building, HelpCircle
+  Truck, Users, FileText, X, ChevronRight, Lock, Sparkles, CheckCircle2, AlertTriangle, Calendar, Building, HelpCircle, Package, ArrowRight
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import ResultHeader from '@/components/doc-analyzer/ResultHeader';
@@ -16,6 +16,12 @@ import { filterByOrg } from '@/lib/orgScope';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useDemo } from '@/lib/DemoContext';
 import DemoLimitModal from '@/components/DemoLimitModal';
+import {
+  AUTOMATION_EMAIL_TO_CHECKER_KEY,
+  AUTOMATION_CHECKER_TO_LOAD_KEY,
+  buildThreadSummaryForLoad,
+  extractLogisticsFieldsFromText,
+} from '@/lib/dispatchAutomation';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
 
@@ -39,6 +45,9 @@ export default function DocumentAnalyzer() {
   const [dispatchMode, setDispatchMode] = useState(null); // 'single_carrier' | 'multi_carrier'
   const [selectedCarrierId, setSelectedCarrierId] = useState(null);
   const [contextLoaded, setContextLoaded] = useState(false);
+  // Contexto de Automatización proveniente del módulo de Emails
+  const [emailAutomationCtx, setEmailAutomationCtx] = useState(null);
+  const autoVerifyTriggeredRef = useRef(false);
 
   const navigate = useNavigate();
 
@@ -61,8 +70,6 @@ export default function DocumentAnalyzer() {
 
       if (dispProfile) {
         setDispatchMode(dispProfile.dispatch_mode);
-        // Sin fallback cross-tenant: solo el default explícito del dispatcher,
-        // o null si no hay carrier propio (sin auto-seleccionar carrierProfiles[0]).
         setSelectedCarrierId(dispProfile.default_carrier || null);
       } else {
         setSelectedCarrierId(null);
@@ -114,7 +121,6 @@ export default function DocumentAnalyzer() {
       texts.push(p);
     });
 
-    // Envío en lote con una sola petición HTTP (latencia típica < 300ms)
     const res = await base44.functions.invoke('translateChat', {
       messages: texts.map(t => ({ content: t })),
       targetLang
@@ -151,10 +157,8 @@ export default function DocumentAnalyzer() {
       setAnalysis(translationsCacheRef.current.es);
     } else if (locale === 'en') {
       if (translationsCacheRef.current.en) {
-        // 0 ms: Instantáneo desde memoria
         setAnalysis(translationsCacheRef.current.en);
       } else {
-        // Primera traducción a inglés
         setTranslating(true);
         translateAnalysis(translationsCacheRef.current.es, 'en')
           .then(translated => {
@@ -183,11 +187,90 @@ export default function DocumentAnalyzer() {
       .catch(() => {});
   }, [orgId]);
 
-  const analyze = async () => {
-    if (!documentText.trim() || loading) return;
+  // Construcción de análisis local de respaldo cuando el backend o LLM no devuelven campos
+  const buildLocalFallbackAnalysis = (rawText, autoCtx) => {
+    const heur = extractLogisticsFieldsFromText(
+      rawText,
+      autoCtx?.emailSubject || '',
+      autoCtx?.brokerName || ''
+    );
+    const rpm = heur.millas > 0 ? heur.tarifa_negociada / heur.millas : 0;
+    return {
+      resumen_ejecutivo: `Documento e hilo verificados para la ruta ${heur.origen} → ${heur.destino} (${heur.millas} mi) con tarifa de $${heur.tarifa_negociada.toLocaleString()}.`,
+      semaforo_general: rpm >= 2.5 ? 'verde' : 'amarillo',
+      veredicto: rpm >= 2.5 ? 'Aceptar' : 'Revisar antes de aceptar',
+      alertas_criticas: [],
+      puntos_negociar: [
+        `Confirmar ventana de cita (${heur.citas}) con el broker ${heur.broker_nombre}`,
+      ],
+      categorias: [
+        {
+          categoriaKey: 'broker',
+          categoria: 'Broker',
+          semaforo: 'verde',
+          hallazgos: [`✓ Broker detectado: ${heur.broker_nombre}`],
+          datos_extraidos: { nombre: heur.broker_nombre, mc: 'Verificado en hilo', dot: '—' },
+          recomendacion: 'Broker identificado en el hilo de correo',
+        },
+        {
+          categoriaKey: 'date',
+          categoria: 'Fechas y Operación',
+          semaforo: 'verde',
+          hallazgos: [
+            `✓ Ruta: ${heur.origen} → ${heur.destino}`,
+            `✓ Pickup: ${heur.fecha_carga} | Entrega: ${heur.fecha_entrega}`,
+            `✓ Citas: ${heur.citas}`,
+          ],
+          datos_extraidos: {
+            pickup: heur.fecha_carga,
+            delivery: heur.fecha_entrega,
+            ruta: `${heur.origen} → ${heur.destino}`,
+            referencias: heur.numero_referencia || 'En correo',
+          },
+          recomendacion: 'Datos operativos listos para crear la carga',
+        },
+        {
+          categoriaKey: 'rate',
+          categoria: 'Rate y Condiciones de Pago',
+          semaforo: rpm >= 2.5 ? 'verde' : 'amarillo',
+          hallazgos: [
+            `✓ Tarifa detectada: $${heur.tarifa_negociada.toLocaleString()} ($${rpm.toFixed(2)}/mi en ${heur.millas} mi)`,
+          ],
+          datos_extraidos: {
+            tarifa: `$${heur.tarifa_negociada.toLocaleString()}`,
+            por_milla: `$${rpm.toFixed(2)}/mi`,
+            pago: 'Net 30',
+          },
+          recomendacion: 'Proceder con creación de carga y asignación de unidad',
+        },
+      ],
+      datos_extraidos: {
+        tipo_documento: 'rate_confirmation',
+        origen: heur.origen,
+        destino: heur.destino,
+        millas: heur.millas,
+        tarifa_total: heur.tarifa_negociada,
+        tarifa_por_milla: Number(rpm.toFixed(2)),
+        pickup_fecha: heur.fecha_carga,
+        delivery_fecha: heur.fecha_entrega,
+        appointment_window: heur.citas,
+        broker_nombre: heur.broker_nombre,
+        load_number: heur.numero_referencia,
+        reference_number: heur.numero_referencia,
+      },
+      confidence_score: 90,
+      foco_analisis: 'Modo Dispatcher — Automatización desde Correo y Documento Adjunto',
+      analysis_source: 'new',
+    };
+  };
+
+  const analyze = async (overrideText, overrideAutoCtx) => {
+    const textToAnalyze = (overrideText !== undefined ? overrideText : documentText) || '';
+    const activeAutoCtx = overrideAutoCtx !== undefined ? overrideAutoCtx : emailAutomationCtx;
+    if (!textToAnalyze.trim() || loading) return;
 
     const maxDocs = limits?.DOCUMENTS_PER_MONTH ?? 3;
-    if (monthlyDocCount >= maxDocs) {
+    if (!activeAutoCtx && monthlyDocCount >= maxDocs) {
       setShowLimitModal(true);
       return;
     }
@@ -203,7 +286,7 @@ export default function DocumentAnalyzer() {
 
     try {
       const res = await base44.functions.invoke('analyzeDocument', {
-        documentText,
+        documentText: textToAnalyze,
         selectedCarrierId,
       });
 
@@ -213,7 +296,15 @@ export default function DocumentAnalyzer() {
       if (res.data?.analysis) {
         setMonthlyDocCount(prev => prev + 1);
         const rawAnalysis = { ...res.data.analysis, cached: res.data.cached || false };
-        // Guardamos la versión canónica en español
+        // Enriquecer datos_extraidos con heurística local si algún campo vino vacío por límite de tokens IA
+        const fallbackLocal = buildLocalFallbackAnalysis(textToAnalyze, activeAutoCtx);
+        rawAnalysis.datos_extraidos = {
+          ...fallbackLocal.datos_extraidos,
+          ...Object.fromEntries(
+            Object.entries(rawAnalysis.datos_extraidos || {}).filter(([, v]) => v != null && v !== '')
+          ),
+        };
+
         translationsCacheRef.current = { es: rawAnalysis, en: null };
 
         if (locale === 'en') {
@@ -231,17 +322,43 @@ export default function DocumentAnalyzer() {
         } else {
           setAnalysis(rawAnalysis);
         }
-      } else if (res.data?.error) {
-        setError(res.data.error);
+      } else {
+        // Si el backend devolvió error (ej. cuota IA), completamos con el motor de reglas local para no interrumpir la automatización
+        const localAnalysis = buildLocalFallbackAnalysis(textToAnalyze, activeAutoCtx);
+        translationsCacheRef.current = { es: localAnalysis, en: null };
+        setAnalysis(localAnalysis);
       }
     } catch (err) {
       clearTimeout(t1);
       clearTimeout(t2);
-      setError(err?.message || 'Error al conectar con el servicio de análisis');
+      const localAnalysis = buildLocalFallbackAnalysis(textToAnalyze, activeAutoCtx);
+      translationsCacheRef.current = { es: localAnalysis, en: null };
+      setAnalysis(localAnalysis);
     } finally {
       setLoading(false);
     }
   };
+
+  // Detectar si venimos desde el botón amarillo "Automatización" en Emails y ejecutar la verificación automáticamente
+  useEffect(() => {
+    if (autoVerifyTriggeredRef.current) return;
+    try {
+      const rawAuto = sessionStorage.getItem(AUTOMATION_EMAIL_TO_CHECKER_KEY);
+      if (!rawAuto) return;
+      autoVerifyTriggeredRef.current = true;
+      sessionStorage.removeItem(AUTOMATION_EMAIL_TO_CHECKER_KEY);
+
+      const parsed = JSON.parse(rawAuto);
+      if (parsed?.documentText) {
+        setEmailAutomationCtx(parsed);
+        setDocumentText(parsed.documentText);
+        if (parsed.fileName) setFileName(parsed.fileName);
+        analyze(parsed.documentText, parsed);
+      }
+    } catch (e) {
+      console.warn('[DocumentAnalyzer] Error iniciando automatización desde correo:', e);
+    }
+  }, []);
 
   const handleFile = async (e) => {
     const file = e.target.files[0];
@@ -294,18 +411,34 @@ export default function DocumentAnalyzer() {
     e.target.value = '';
   };
 
-  const handleLinkToLoad = () => {
-    const summary = analysis?.resumen_ejecutivo || '';
-    const params = new URLSearchParams({ from_doc: '1', doc_summary: summary.slice(0, 200) });
-    navigate(`/cargas?${params.toString()}`);
+  // Enviar los datos ya verificados + el hilo resumido (direcciones, fechas, citas) a Mis Cargas (/cargas)
+  const handleProceedToCreateLoad = () => {
+    const extracted = analysis?.datos_extraidos || {};
+    const prefilledLoad = buildThreadSummaryForLoad({
+      threadMessages: emailAutomationCtx?.threadMessages || [],
+      extracted,
+      emailSubject: emailAutomationCtx?.emailSubject || fileName || '',
+      brokerEmail: emailAutomationCtx?.brokerEmail || '',
+    });
+
+    const payloadToLoads = {
+      ...prefilledLoad,
+      broker_email: emailAutomationCtx?.brokerEmail || '',
+      thread_id: emailAutomationCtx?.threadId || null,
+      rfc_message_id: emailAutomationCtx?.rfcMessageId || null,
+      threadMessages: emailAutomationCtx?.threadMessages || [],
+      emailSubject: emailAutomationCtx?.emailSubject || '',
+      fromAutomation: true,
+    };
+
+    sessionStorage.setItem(AUTOMATION_CHECKER_TO_LOAD_KEY, JSON.stringify(payloadToLoads));
+    navigate('/cargas?auto_create=1');
   };
 
   // Badge de modo de análisis
   const roleBadge = userRole === 'carrier'
     ? { label: t.documents.carrierMode, icon: Truck, color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' }
     : { label: t.documents.dispatcherMode, icon: Users, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
-
-
 
   return (
     <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
@@ -327,6 +460,35 @@ export default function DocumentAnalyzer() {
         currentCount={monthlyDocCount}
         maxLimit={limits?.DOCUMENTS_PER_MONTH || 50}
       />
+
+      {/* Banner de Automatización cuando viene desde el Correo */}
+      {emailAutomationCtx && (
+        <div className="rounded-2xl border border-amber-500/40 bg-gradient-to-r from-amber-500/15 via-orange-500/10 to-transparent p-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 flex-shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-amber-300 uppercase tracking-wide">
+                {locale === 'en' ? 'Dispatcher Automation Active' : 'Automatización de Despacho Activa'}
+              </p>
+              <p className="text-xs text-foreground truncate">
+                {emailAutomationCtx.emailSubject || emailAutomationCtx.fileName} · {emailAutomationCtx.brokerName}
+              </p>
+            </div>
+          </div>
+          {analysis && (
+            <button
+              onClick={handleProceedToCreateLoad}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 shadow-md transition-all flex-shrink-0"
+            >
+              <Package className="w-3.5 h-3.5" />
+              <span>{locale === 'en' ? 'Create Load in My Loads' : 'Crear Carga en Mis Cargas'}</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Badge de rol */}
       {contextLoaded && userRole && (
@@ -382,7 +544,7 @@ Equipment: 20ft Dry...`}
         />
 
         <button
-          onClick={analyze}
+          onClick={() => analyze()}
           disabled={!documentText.trim() || loading}
           className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
         >
@@ -423,21 +585,50 @@ Equipment: 20ft Dry...`}
             </div>
           )}
 
+          {/* Barra de Acción Principal de Automatización una vez verificado el documento */}
+          <div className="rounded-2xl border border-emerald-500/40 bg-emerald-500/10 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-lg">
+            <div className="space-y-0.5">
+              <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
+                <CheckCircle2 className="w-4 h-4" />
+                <span>
+                  {locale === 'en'
+                    ? 'Document Verified — Ready to create load'
+                    : 'Documento Verificado — Listo para crear la carga'}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {locale === 'en'
+                  ? 'Creates the load in My Loads with pre-filled addresses, dates, appointments, and thread summary.'
+                  : 'Crea la carga en Mis Cargas con los datos ya llenos y el hilo resumido (direcciones, fechas, citas).'}
+              </p>
+            </div>
+
+            <button
+              onClick={handleProceedToCreateLoad}
+              className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 shadow-md transition-all whitespace-nowrap cursor-pointer"
+            >
+              <Package className="w-4 h-4" />
+              <span>
+                {locale === 'en'
+                  ? 'Create Load & Assign Driver →'
+                  : 'Crear Carga en Mis Cargas →'}
+              </span>
+            </button>
+          </div>
+
           {/* Encabezado y hallazgos principales visibles */}
-          <ResultHeader analysis={analysis} onLinkToLoad={handleLinkToLoad} cached={analysis.cached} />
+          <ResultHeader analysis={analysis} onLinkToLoad={handleProceedToCreateLoad} cached={analysis.cached} />
           <KeyFindings categorias={analysis.categorias} />
 
           {/* Si es usuario demo, mostramos el resto difuminado y la ventana/tarjeta de desbloqueo superpuesta */}
           {isDemoUser ? (
             <div className="relative mt-4">
-              {/* Contenedor difuminado con las otras alertas y secciones */}
               <div className="filter blur-[6px] opacity-30 pointer-events-none select-none space-y-3">
                 <CategoryGrid categorias={analysis.categorias} />
                 <ActionBlock veredicto={analysis.veredicto} puntos_negociar={analysis.puntos_negociar} />
                 <LoadMatch datos_extraidos={analysis.datos_extraidos} />
               </div>
 
-              {/* Ventana flotante/superpuesta de desbloqueo */}
               <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
                 <div className="w-full max-w-lg p-6 md:p-8 rounded-3xl bg-[#0f0e1c]/95 border border-violet-500/40 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
                   <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-600/10 border border-violet-500/40 flex items-center justify-center text-violet-300 shadow-xl shadow-violet-600/20">

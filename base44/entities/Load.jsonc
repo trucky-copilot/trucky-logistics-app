@@ -4,7 +4,7 @@
   "properties": {
     "organization_id": {
       "type": "string",
-      "description": "ID de la organizaci\u00f3n a la que pertenece este registro"
+      "description": "ID de la organización a la que pertenece este registro"
     },
     "profile_id": {
       "type": "string",
@@ -12,6 +12,10 @@
     },
     "broker_nombre": {
       "type": "string"
+    },
+    "broker_email": {
+      "type": "string",
+      "description": "Correo electrónico del broker asociado a esta carga"
     },
     "broker_id": {
       "type": "string"
@@ -60,11 +64,28 @@
       "type": "string",
       "format": "date"
     },
+    "citas": {
+      "type": "string",
+      "description": "Horarios o citas de recogida y entrega (appointment window)"
+    },
     "truck_placa": {
       "type": "string"
     },
     "conductor_nombre": {
       "type": "string"
+    },
+    "carrier_email": {
+      "type": "string",
+      "description": "Correo electrónico del carrier o conductor asignado"
+    },
+    "shared_with_carrier": {
+      "type": "boolean",
+      "default": false,
+      "description": "True cuando el dispatcher asignó un conductor y la carga debe ser visible en la vista de cargas del rol Carrier"
+    },
+    "thread_id": {
+      "type": "string",
+      "description": "ID del hilo de Gmail desde el cual se originó esta carga"
     },
     "estado": {
       "type": "string",

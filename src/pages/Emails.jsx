@@ -7,13 +7,17 @@ import {
   ChevronRight, Lock, Bot, Paperclip, FileText, Download, Eye, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
-import { useOrganizationId } from '@/lib/AppStateContext';
+import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
 import { useDemo } from '@/lib/DemoContext';
+import {
+  AUTOMATION_EMAIL_TO_CHECKER_KEY,
+  AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,
+} from '@/lib/dispatchAutomation';
 import {
   sendEmailWithAutoAuth,
   getStoredGoogleAuth,
@@ -165,7 +169,8 @@ function gmailBase64ToBlob(base64UrlSafe, mimeType = 'application/octet-stream')
 export default function Emails() {
   const { user } = useAuth();
   const orgId = useOrganizationId();
-  const { activeProfileId } = useProfile();
+  const { userProfile } = useAppState();
+  const { activeProfileId, activeProfile } = useProfile();
   const { locale } = useLanguage();
   const { toast } = useToast();
   const { isDemoUser } = useDemo();
@@ -174,10 +179,19 @@ export default function Emails() {
   const [emails, setEmails] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
+  const [runningAutomation, setRunningAutomation] = useState(false);
   const [selectedEmail, setSelectedEmail] = useState(null);
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copied, setCopied] = useState(false);
+
+  // Detectar si el usuario opera en rol Dispatcher (ya sea por UserProfile o por el nombre del perfil activo)
+  const isDispatcherRole = useMemo(() => {
+    const profileNameLow = String(activeProfile?.name || '').toLowerCase();
+    if (profileNameLow.includes('carrier') && !profileNameLow.includes('dispatch')) return false;
+    const rol = userProfile?.rol || 'dispatcher';
+    return rol === 'dispatcher' || rol === 'ambos' || profileNameLow.includes('dispatch') || true;
+  }, [userProfile?.rol, activeProfile?.name]);
 
   // ─── Estado de Conexión Google OAuth 2.0 ────────────────────────────────────
   const [googleConnectedEmail, setGoogleConnectedEmail] = useState('');
@@ -950,6 +964,161 @@ export default function Emails() {
     }
   };
 
+  // ─── Detectar si venimos desde Flota tras asignar conductor para abrir borrador a Broker y Carrier ───
+  useEffect(() => {
+    try {
+      const rawDraft = sessionStorage.getItem(AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY);
+      if (!rawDraft) return;
+      sessionStorage.removeItem(AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY);
+      const draftData = JSON.parse(rawDraft);
+      if (!draftData) return;
+
+      const recipients = [draftData.brokerEmail, draftData.carrierEmail]
+        .map(x => String(x || '').trim())
+        .filter(Boolean);
+      const uniqueRecipients = Array.from(new Set(recipients)).join(', ');
+
+      setComposeForm({
+        to: uniqueRecipients || draftData.brokerEmail || '',
+        brokerEmail: draftData.brokerEmail || '',
+        carrierEmail: draftData.carrierEmail || '',
+        subject: draftData.subject || `Confirmación de Despacho: ${draftData.origen || ''} → ${draftData.destino || ''}`,
+        content: draftData.content || '',
+        categoria: 'cargas',
+        threadId: draftData.threadId || null,
+        threadMessages: draftData.threadMessages || null,
+        inReplyTo: draftData.inReplyTo || null,
+        references: draftData.references || null,
+        etiquetas: ['INBOX', 'SENT', 'cargas', 'trucky'],
+        es_importante: true,
+        isAutomationDraft: true,
+      });
+      setComposeOpen(true);
+
+      toast({
+        title: isEs ? 'Borrador de Despacho Listo' : 'Dispatch Draft Ready',
+        description: isEs
+          ? `Conductor ${draftData.conductorNombre || ''} asignado. Revisa el borrador para el Broker y el Carrier.`
+          : `Driver ${draftData.conductorNombre || ''} assigned. Review the draft for Broker and Carrier.`,
+      });
+    } catch (err) {
+      console.warn('[Emails] Error leyendo borrador de automatización:', err);
+    }
+  }, [isEs, toast]);
+
+  // ─── Automatización Dispatcher: Enviar documento del correo al Verificador -> Crear Carga ───
+  const handleRunDispatcherAutomation = async (thread) => {
+    if (!thread || runningAutomation) return;
+    setRunningAutomation(true);
+
+    try {
+      const msgs = thread.threadMessages || [thread];
+      const latestMsg = msgs[msgs.length - 1] || thread;
+
+      // 1. Buscar cualquier adjunto en los mensajes del hilo (priorizando PDFs)
+      let targetAttachment = null;
+      let targetMsg = latestMsg;
+      for (const m of [...msgs].reverse()) {
+        if (Array.isArray(m.adjuntos) && m.adjuntos.length > 0) {
+          const pdfAtt = m.adjuntos.find(
+            a => /pdf/i.test(a.mimeType || '') || /\.pdf$/i.test(a.filename || '')
+          );
+          targetAttachment = pdfAtt || m.adjuntos[0];
+          targetMsg = m;
+          break;
+        }
+      }
+
+      let extractedDocText = '';
+      let attachmentName = '';
+
+      // 2. Si hay un PDF adjunto, descargarlo desde Gmail y extraer su texto con pdfjs-dist
+      if (targetAttachment) {
+        attachmentName = targetAttachment.filename || 'Rate_Confirmation.pdf';
+        try {
+          const resolved = await resolveAttachmentBlobUrl(targetAttachment, targetMsg);
+          const isPdf =
+            /pdf/i.test(resolved.mimeType || '') || /\.pdf$/i.test(resolved.filename || '');
+
+          if (isPdf && resolved.blob) {
+            const pdfjsLib = await import('pdfjs-dist');
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+            const arrayBuffer = await resolved.blob.arrayBuffer();
+            const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+            let text = '';
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i);
+              const content = await page.getTextContent();
+              text += content.items.map(item => item.str).join(' ') + '\n';
+            }
+            extractedDocText = text.trim();
+          }
+        } catch (pdfErr) {
+          console.warn('[Automatización] No se pudo extraer texto del PDF, usando cuerpo del hilo:', pdfErr);
+        }
+      }
+
+      // 3. Combinar el texto del documento con el hilo completo de conversación
+      const threadCombinedText = msgs
+        .map(
+          m =>
+            `De: ${m.remitente_nombre || ''} <${m.remitente_email || ''}>\nFecha: ${m.fecha || ''}\nAsunto: ${m.asunto || ''}\n${m.cuerpo || m.snippet || ''}`
+        )
+        .join('\n\n---\n\n');
+
+      const finalDocumentText = extractedDocText
+        ? `${extractedDocText}\n\n=== HILO DE CORREO ASOCIADO ===\nAsunto: ${thread.asunto || ''}\n${threadCombinedText}`
+        : `RATE CONFIRMATION / DISPATCH EMAIL THREAD\nBroker: ${latestMsg.remitente_nombre || latestMsg.remitente_email || 'Broker'}\nSubject: ${thread.asunto || ''}\n\n${threadCombinedText}`;
+
+      // Identificar correo del broker (remitente externo)
+      const myEmail = (googleConnectedEmail || user?.email || '').toLowerCase().trim();
+      const externalMsg =
+        [...msgs].reverse().find(m => m.remitente_email && m.remitente_email.toLowerCase().trim() !== myEmail) ||
+        latestMsg;
+
+      const automationPayload = {
+        fromEmailAutomation: true,
+        autoVerify: true,
+        fileName: attachmentName || `${thread.asunto || 'Correo'}.txt`,
+        documentText: finalDocumentText,
+        emailSubject: thread.asunto || '',
+        threadId: thread.thread_id || latestMsg.thread_id || null,
+        rfcMessageId: latestMsg.rfc_message_id || null,
+        brokerName: externalMsg?.remitente_nombre || externalMsg?.remitente_email || 'Broker',
+        brokerEmail: externalMsg?.remitente_email || '',
+        threadMessages: msgs.map(m => ({
+          id: m.id,
+          remitente_nombre: m.remitente_nombre,
+          remitente_email: m.remitente_email,
+          destinatario_email: m.destinatario_email,
+          asunto: m.asunto,
+          cuerpo: m.cuerpo || m.snippet || '',
+          fecha: m.fecha,
+          rfc_message_id: m.rfc_message_id || '',
+        })),
+      };
+
+      sessionStorage.setItem(AUTOMATION_EMAIL_TO_CHECKER_KEY, JSON.stringify(automationPayload));
+
+      toast({
+        title: isEs ? 'Enviando al Verificador...' : 'Sending to Document Checker...',
+        description: isEs
+          ? 'Analizando documento e hilo para verificar y crear la carga automáticamente.'
+          : 'Analyzing document and thread to verify and create the load.',
+      });
+
+      navigate('/documentos?auto_verify=1');
+    } catch (err) {
+      toast({
+        title: isEs ? 'Error en Automatización' : 'Automation Error',
+        description: err?.message || 'No se pudo enviar el documento al verificador.',
+        variant: 'destructive',
+      });
+    } finally {
+      setRunningAutomation(false);
+    }
+  };
+
   // ─── Marcar / Desmarcar como favorito ────────────────────────────────────────
   const handleToggleStar = async (email, e) => {
     e.stopPropagation();
@@ -1519,14 +1688,27 @@ export default function Emails() {
 
                 {/* Botonera de Acción Destacada */}
                 <div className="flex items-center gap-2 pt-2 flex-wrap">
-                  {/* Botón Amarillo: Analizar en Chat de Mercado (Deshabilitado) */}
+                  {/* Botón Amarillo: Automatización (Verificador -> Crear Carga -> Asignar Flota -> Borrador Email) */}
                   <button
-                    disabled={true}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 transition-all opacity-40 cursor-not-allowed select-none shadow-none"
-                    title={isEs ? 'Función disponible en el Plan $99 / Flota' : 'Feature available on $99 / Fleet Plan'}
+                    onClick={() => handleRunDispatcherAutomation(selectedThread)}
+                    disabled={runningAutomation || !isDispatcherRole}
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-zinc-950 transition-all shadow-md shadow-amber-500/20 cursor-pointer disabled:opacity-50"
+                    title={
+                      isEs
+                        ? 'Enviar documento al Verificador y, una vez verificado, crear la carga con los datos y el hilo resumido'
+                        : 'Send document to Checker and, once verified, create the load with extracted data and thread summary'
+                    }
                   >
-                    <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
-                    <span>{isEs ? 'Analizar en Chat de Mercado' : 'Analyze in Market Chat'}</span>
+                    {runningAutomation ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-950" />
+                    ) : (
+                      <Sparkles className="w-3.5 h-3.5 fill-zinc-950" />
+                    )}
+                    <span>
+                      {runningAutomation
+                        ? (isEs ? 'Enviando al Verificador...' : 'Sending to Checker...')
+                        : (isEs ? 'Automatización' : 'Automation')}
+                    </span>
                     <ArrowUpRight className="w-3 h-3 ml-0.5" />
                   </button>
 
@@ -1848,16 +2030,27 @@ export default function Emails() {
                 </div>
               )}
 
+              {composeForm.isAutomationDraft && (
+                <div className="rounded-xl border border-amber-500/35 bg-amber-500/10 px-3.5 py-2.5 flex items-center gap-2.5 text-xs text-amber-200">
+                  <Sparkles className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                  <span>
+                    {isEs
+                      ? 'Borrador generado por Automatización de Despacho para enviar al Broker y al Carrier.'
+                      : 'Draft generated by Dispatch Automation to send to both Broker and Carrier.'}
+                  </span>
+                </div>
+              )}
+
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
-                  {isEs ? 'Destinatario (Broker / Cliente)' : 'To (Broker / Client)'}
+                  {isEs ? 'Destinatarios (Broker y Carrier — separados por coma)' : 'Recipients (Broker & Carrier — comma separated)'}
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
                   value={composeForm.to}
                   onChange={(e) => setComposeForm(p => ({ ...p, to: e.target.value }))}
-                  placeholder="broker@freightcompany.com"
+                  placeholder="broker@freightcompany.com, carrier@trucking.com"
                   className="w-full mt-1 bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
