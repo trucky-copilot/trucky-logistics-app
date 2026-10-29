@@ -20,7 +20,7 @@ export default function DeleteConfirmModal({
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
       <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
         <div className="w-12 h-12 rounded-full bg-red-500/10 text-red-400 mx-auto flex items-center justify-center">
-          {loading ? <Loader2 className="w-6 h-6 animate-spin text-red-400" /> : <Trash2 className="w-6 h-6" />}
+          <Trash2 className="w-6 h-6" />
         </div>
         <div>
           <h3 className="text-base font-semibold text-foreground">{title}</h3>
