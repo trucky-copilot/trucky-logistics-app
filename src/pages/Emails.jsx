@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail, RotateCw, Plus, Search, Star, MessageSquare,
   Send, Sparkles, Inbox, Package, Building2,
   CheckCircle2, Clock, X, Loader2, ArrowUpRight, Copy, Check,
-  ChevronRight, Lock, Bot, Paperclip
+  ChevronRight, Lock, Bot, Paperclip, FileText, Download, Eye, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useOrganizationId } from '@/lib/AppStateContext';
@@ -88,6 +88,78 @@ function hasLogisticsSignal(email) {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(text);
   });
+}
+
+/**
+ * Extrae metadatos de todos los archivos adjuntos dentro del payload MIME de Gmail.
+ * Permite tanto indexar adjuntos nuevos como recuperar adjuntos bajo demanda para correos antiguos.
+ */
+export function extractAttachmentsFromGmailPayload(payload, gmailMessageId) {
+  const results = [];
+  const seenKeys = new Set();
+
+  function walk(part) {
+    if (!part) return;
+    const filename = typeof part.filename === 'string' ? part.filename.trim() : '';
+    const attachmentId = part.body?.attachmentId ? String(part.body.attachmentId) : '';
+    const inlineData = !attachmentId && part.body?.data ? String(part.body.data) : '';
+    const size = Number(part.body?.size) || 0;
+    const mimeType = part.mimeType || 'application/octet-stream';
+
+    if (filename && (attachmentId || inlineData)) {
+      const dedupeKey = `${filename}__${attachmentId || size}`;
+      if (!seenKeys.has(dedupeKey)) {
+        seenKeys.add(dedupeKey);
+        results.push({
+          filename,
+          mimeType,
+          size,
+          attachmentId,
+          gmail_message_id: gmailMessageId,
+          ...(inlineData && inlineData.length < 300000 ? { inlineData } : {}),
+        });
+      }
+    }
+
+    if (Array.isArray(part.parts)) {
+      for (const child of part.parts) {
+        walk(child);
+      }
+    }
+  }
+
+  walk(payload);
+  return results;
+}
+
+/**
+ * Formatea el tamaño en bytes a KB o MB legible.
+ */
+function formatAttachmentSize(bytes) {
+  const n = Number(bytes) || 0;
+  if (n <= 0) return 'PDF / Doc';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+/**
+ * Convierte una cadena Base64 URL-safe de la API de Gmail en un objeto Blob binario con su mimeType.
+ */
+function gmailBase64ToBlob(base64UrlSafe, mimeType = 'application/octet-stream') {
+  const cleanBase64 = String(base64UrlSafe || '')
+    .replace(/-/g, '+')
+    .replace(/_/g, '/')
+    .replace(/\s+/g, '');
+  const padLen = (4 - (cleanBase64.length % 4)) % 4;
+  const padded = cleanBase64 + '='.repeat(padLen);
+  const binaryStr = atob(padded);
+  const len = binaryStr.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryStr.charCodeAt(i);
+  }
+  return new Blob([bytes], { type: mimeType });
 }
 
 export default function Emails() {
@@ -601,6 +673,10 @@ export default function Emails() {
       const isImportant = msgs.some(m => hasImportantAndLogisticsTags(m));
       const hasSent = msgs.some(m => m.tipo_flujo === 'sent');
       const hasInbox = msgs.some(m => m.tipo_flujo !== 'sent');
+      const totalAttachmentsCount = msgs.reduce(
+        (acc, m) => acc + (Array.isArray(m.adjuntos) ? m.adjuntos.length : 0),
+        0
+      );
 
       // Participantes únicos del hilo (estilo Gmail: "Vince, yo 2")
       const participants = [];
@@ -625,6 +701,8 @@ export default function Emails() {
         hasImportantThread: isImportant,
         hasSentInThread: hasSent,
         hasInboxInThread: hasInbox,
+        hasAttachmentsInThread: totalAttachmentsCount > 0,
+        totalAttachmentsCount,
       });
     }
 
@@ -651,6 +729,226 @@ export default function Emails() {
       threadCount: 1,
     };
   }, [selectedEmail, emailThreads]);
+
+  // ─── Gestión de Documentos Adjuntos (Detección bajo demanda, Vista Previa y Descarga) ───
+  const checkedGmailMsgIdsRef = useRef(new Set());
+  const attachmentBlobCacheRef = useRef(new Map());
+  const [attachmentLoadingKey, setAttachmentLoadingKey] = useState(null);
+  const [previewAttachment, setPreviewAttachment] = useState(null);
+
+  // Obtiene un token válido de Google (renovándolo automáticamente si expiró)
+  const ensureValidGoogleToken = async () => {
+    let { token, email } = getStoredGoogleAuth(activeProfileId);
+    const effectiveToken = token || oauthToken;
+    const effectiveEmail = email || googleConnectedEmail;
+    if (effectiveToken) return { token: effectiveToken, email: effectiveEmail };
+
+    const fresh = await requestGoogleToken('');
+    if (fresh?.token) {
+      setOauthToken(fresh.token);
+      if (fresh.email) setGoogleConnectedEmail(fresh.email);
+      saveStoredGoogleAuth(fresh.token, fresh.email || effectiveEmail, activeProfileId);
+      return { token: fresh.token, email: fresh.email || effectiveEmail };
+    }
+    throw new Error('No se pudo obtener autorización de Google.');
+  };
+
+  // Detectar automáticamente adjuntos en correos que fueron sincronizados antes de esta actualización
+  useEffect(() => {
+    if (!selectedThread || isDemoUser) return;
+    const msgs = selectedThread.threadMessages || [selectedThread];
+    const msgsNeedingAttachmentCheck = msgs.filter(
+      m =>
+        m?.gmail_message_id &&
+        !Array.isArray(m.adjuntos) &&
+        !checkedGmailMsgIdsRef.current.has(m.gmail_message_id)
+    );
+
+    if (msgsNeedingAttachmentCheck.length === 0) return;
+
+    let cancelled = false;
+    (async () => {
+      let { token, email } = getStoredGoogleAuth(activeProfileId);
+      let activeToken = token || oauthToken;
+      if (!activeToken) return;
+
+      for (const msg of msgsNeedingAttachmentCheck) {
+        if (cancelled) break;
+        checkedGmailMsgIdsRef.current.add(msg.gmail_message_id);
+
+        try {
+          let detailRes = await fetch(
+            `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.gmail_message_id}?format=full`,
+            { headers: { Authorization: `Bearer ${activeToken}` } }
+          );
+
+          if (detailRes.status === 401) {
+            try {
+              const fresh = await requestGoogleToken('');
+              if (fresh?.token) {
+                activeToken = fresh.token;
+                setOauthToken(fresh.token);
+                saveStoredGoogleAuth(fresh.token, fresh.email || email || googleConnectedEmail, activeProfileId);
+                detailRes = await fetch(
+                  `https://gmail.googleapis.com/gmail/v1/users/me/messages/${msg.gmail_message_id}?format=full`,
+                  { headers: { Authorization: `Bearer ${activeToken}` } }
+                );
+              }
+            } catch (_) {
+              checkedGmailMsgIdsRef.current.delete(msg.gmail_message_id);
+              break;
+            }
+          }
+
+          if (!detailRes.ok) {
+            checkedGmailMsgIdsRef.current.delete(msg.gmail_message_id);
+            continue;
+          }
+
+          const detail = await detailRes.json();
+          const extracted = extractAttachmentsFromGmailPayload(detail?.payload, msg.gmail_message_id);
+
+          if (!cancelled) {
+            setEmails(prev =>
+              prev.map(item => (item.id === msg.id ? { ...item, adjuntos: extracted } : item))
+            );
+            setSelectedEmail(prev =>
+              prev && prev.id === msg.id ? { ...prev, adjuntos: extracted } : prev
+            );
+          }
+
+          if (msg.id && !String(msg.id).startsWith('demo-')) {
+            base44.entities.Email.update(msg.id, { adjuntos: extracted }).catch(() => {});
+          }
+        } catch (err) {
+          checkedGmailMsgIdsRef.current.delete(msg.gmail_message_id);
+          console.warn('[Emails] No se pudieron verificar adjuntos bajo demanda:', err);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedThread?.threadKey, isDemoUser, activeProfileId, oauthToken, googleConnectedEmail]);
+
+  // Descarga o recupera de caché el Blob URL de un documento adjunto desde Gmail API
+  const resolveAttachmentBlobUrl = async (att, msg) => {
+    const gmailMsgId = att.gmail_message_id || msg?.gmail_message_id || '';
+    const cacheKey = `${gmailMsgId}__${att.attachmentId || att.filename}`;
+
+    if (attachmentBlobCacheRef.current.has(cacheKey)) {
+      return attachmentBlobCacheRef.current.get(cacheKey);
+    }
+
+    // Si Gmail ya incluyó inlineData o es un correo Demo
+    if (att.inlineData) {
+      const blob = gmailBase64ToBlob(att.inlineData, att.mimeType || 'application/pdf');
+      const blobUrl = URL.createObjectURL(blob);
+      const entry = { blobUrl, blob, filename: att.filename, mimeType: att.mimeType || 'application/pdf' };
+      attachmentBlobCacheRef.current.set(cacheKey, entry);
+      return entry;
+    }
+
+    if (!gmailMsgId || !att.attachmentId) {
+      throw new Error(isEs ? 'Este adjunto no tiene identificador de Gmail disponible.' : 'Missing Gmail attachment ID.');
+    }
+
+    let { token } = await ensureValidGoogleToken();
+    let res = await fetch(
+      `https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailMsgId}/attachments/${att.attachmentId}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    if (res.status === 401) {
+      const fresh = await requestGoogleToken('');
+      token = fresh.token;
+      setOauthToken(token);
+      saveStoredGoogleAuth(token, fresh.email || googleConnectedEmail, activeProfileId);
+      res = await fetch(
+        `https://gmail.googleapis.com/gmail/v1/users/me/messages/${gmailMsgId}/attachments/${att.attachmentId}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    }
+
+    if (!res.ok) {
+      throw new Error(
+        isEs
+          ? `Error ${res.status} al obtener el documento desde Gmail.`
+          : `Failed (${res.status}) to fetch attachment from Gmail.`
+      );
+    }
+
+    const json = await res.json();
+    if (!json?.data) {
+      throw new Error(isEs ? 'El archivo adjunto está vacío.' : 'Attachment data is empty.');
+    }
+
+    const effectiveMime =
+      att.mimeType && att.mimeType !== 'application/octet-stream'
+        ? att.mimeType
+        : /\.pdf$/i.test(att.filename || '')
+        ? 'application/pdf'
+        : /\.(png|jpg|jpeg|webp|gif)$/i.test(att.filename || '')
+        ? `image/${att.filename.split('.').pop().toLowerCase().replace('jpg', 'jpeg')}`
+        : 'application/octet-stream';
+
+    const blob = gmailBase64ToBlob(json.data, effectiveMime);
+    const blobUrl = URL.createObjectURL(blob);
+    const entry = { blobUrl, blob, filename: att.filename || 'documento.pdf', mimeType: effectiveMime };
+    attachmentBlobCacheRef.current.set(cacheKey, entry);
+    return entry;
+  };
+
+  // Visualizar documento adjunto en el visor integrado de Trucky
+  const handlePreviewAttachment = async (att, msg) => {
+    const actionKey = `preview__${msg?.id}__${att.attachmentId || att.filename}`;
+    setAttachmentLoadingKey(actionKey);
+    try {
+      const resolved = await resolveAttachmentBlobUrl(att, msg);
+      setPreviewAttachment({
+        ...att,
+        blobUrl: resolved.blobUrl,
+        mimeType: resolved.mimeType,
+        filename: resolved.filename,
+      });
+    } catch (err) {
+      toast({
+        title: isEs ? 'No se pudo abrir el documento' : 'Could not open attachment',
+        description: err.message || (isEs ? 'Vuelve a sincronizar con Google.' : 'Please reconnect Google.'),
+        variant: 'destructive',
+      });
+    } finally {
+      setAttachmentLoadingKey(null);
+    }
+  };
+
+  // Descargar documento adjunto directamente al equipo del usuario
+  const handleDownloadAttachment = async (att, msg) => {
+    const actionKey = `download__${msg?.id}__${att.attachmentId || att.filename}`;
+    setAttachmentLoadingKey(actionKey);
+    try {
+      const resolved = await resolveAttachmentBlobUrl(att, msg);
+      const link = document.createElement('a');
+      link.href = resolved.blobUrl;
+      link.download = resolved.filename || att.filename || 'adjunto';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast({
+        title: isEs ? 'Descarga iniciada' : 'Download started',
+        description: resolved.filename,
+      });
+    } catch (err) {
+      toast({
+        title: isEs ? 'Error al descargar adjunto' : 'Attachment download failed',
+        description: err.message || (isEs ? 'Intenta reconectar tu cuenta de Gmail.' : 'Try reconnecting Gmail.'),
+        variant: 'destructive',
+      });
+    } finally {
+      setAttachmentLoadingKey(null);
+    }
+  };
 
   // ─── Marcar / Desmarcar como favorito ────────────────────────────────────────
   const handleToggleStar = async (email, e) => {
@@ -1139,6 +1437,12 @@ export default function Emails() {
                                 {isEs ? 'Respondido' : 'Replied'}
                               </span>
                             )}
+                            {item.hasAttachmentsInThread && (
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-violet-500/15 text-violet-300 border-violet-500/30 flex items-center gap-1">
+                                <Paperclip className="w-2.5 h-2.5 text-violet-400" />
+                                <span>{item.totalAttachmentsCount || 1}</span>
+                              </span>
+                            )}
                           </div>
 
                           <button
@@ -1307,6 +1611,124 @@ export default function Emails() {
                       <div className="prose prose-invert max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-zinc-200">
                         {msg.cuerpo || msg.snippet || '(Sin contenido)'}
                       </div>
+
+                      {/* Sección de Documentos Adjuntos (Estilo Gmail + Visor y Descarga en Trucky) */}
+                      {Array.isArray(msg.adjuntos) && msg.adjuntos.length > 0 && (
+                        <div className="mt-4 pt-3.5 border-t border-border/50 space-y-2.5">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-foreground flex items-center gap-1.5">
+                              <Paperclip className="w-3.5 h-3.5 text-primary" />
+                              {msg.adjuntos.length === 1
+                                ? (isEs ? '1 archivo adjunto' : '1 attachment')
+                                : (isEs ? `${msg.adjuntos.length} archivos adjuntos` : `${msg.adjuntos.length} attachments`)}
+                            </span>
+                            <span className="text-[11px] text-muted-foreground">
+                              {isEs ? 'Haz clic para visualizar o descargar' : 'Click to preview or download'}
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                            {msg.adjuntos.map((att, attIdx) => {
+                              const isPdf =
+                                /pdf/i.test(att.mimeType || '') || /\.pdf$/i.test(att.filename || '');
+                              const isImage =
+                                /^image\//i.test(att.mimeType || '') ||
+                                /\.(png|jpg|jpeg|webp|gif)$/i.test(att.filename || '');
+                              const previewKey = `preview__${msg?.id}__${att.attachmentId || att.filename}`;
+                              const downloadKey = `download__${msg?.id}__${att.attachmentId || att.filename}`;
+                              const isPreviewLoading = attachmentLoadingKey === previewKey;
+                              const isDownloadLoading = attachmentLoadingKey === downloadKey;
+
+                              return (
+                                <div
+                                  key={`${att.attachmentId || att.filename}__${attIdx}`}
+                                  onClick={() => handlePreviewAttachment(att, msg)}
+                                  className="group relative flex flex-col justify-between rounded-xl border border-primary/25 bg-[#150d26]/90 hover:bg-[#1d1236] hover:border-primary/50 transition-all p-3 cursor-pointer shadow-sm"
+                                >
+                                  <div className="flex items-start gap-3 min-w-0">
+                                    {/* Icono tipo Gmail (PDF en rojo, Imagen en violeta, Documento en azul) */}
+                                    <div
+                                      className={`w-10 h-10 rounded-xl border flex flex-col items-center justify-center flex-shrink-0 font-extrabold text-[9px] tracking-wider ${
+                                        isPdf
+                                          ? 'bg-red-500/15 border-red-500/35 text-red-400'
+                                          : isImage
+                                          ? 'bg-violet-500/15 border-violet-500/35 text-violet-300'
+                                          : 'bg-blue-500/15 border-blue-500/35 text-blue-400'
+                                      }`}
+                                    >
+                                      {isPdf ? (
+                                        <>
+                                          <FileText className="w-4 h-4 mb-0.5 text-red-400" />
+                                          <span>PDF</span>
+                                        </>
+                                      ) : isImage ? (
+                                        <>
+                                          <ImageIcon className="w-4 h-4 mb-0.5 text-violet-300" />
+                                          <span>IMG</span>
+                                        </>
+                                      ) : (
+                                        <>
+                                          <Paperclip className="w-4 h-4 mb-0.5 text-blue-400" />
+                                          <span>DOC</span>
+                                        </>
+                                      )}
+                                    </div>
+
+                                    <div className="min-w-0 flex-1">
+                                      <p
+                                        className="text-xs font-semibold text-foreground truncate group-hover:text-white transition-colors"
+                                        title={att.filename}
+                                      >
+                                        {att.filename || (isEs ? 'Documento adjunto' : 'Attachment')}
+                                      </p>
+                                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                                        {formatAttachmentSize(att.size)} ·{' '}
+                                        {isPdf ? 'Documento PDF' : isImage ? 'Imagen' : (att.mimeType || 'Archivo')}
+                                      </p>
+                                    </div>
+                                  </div>
+
+                                  {/* Botones de Acción: Visualizar y Descargar */}
+                                  <div
+                                    className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-white/10"
+                                    onClick={(e) => e.stopPropagation()}
+                                  >
+                                    <button
+                                      type="button"
+                                      onClick={() => handlePreviewAttachment(att, msg)}
+                                      disabled={isPreviewLoading || isDownloadLoading}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 transition-colors disabled:opacity-50"
+                                      title={isEs ? 'Visualizar documento en pantalla' : 'Preview document'}
+                                    >
+                                      {isPreviewLoading ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Eye className="w-3.5 h-3.5" />
+                                      )}
+                                      <span>{isEs ? 'Visualizar' : 'Preview'}</span>
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDownloadAttachment(att, msg)}
+                                      disabled={isPreviewLoading || isDownloadLoading}
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+                                      title={isEs ? 'Descargar archivo a tu dispositivo' : 'Download file'}
+                                    >
+                                      {isDownloadLoading ? (
+                                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                      ) : (
+                                        <Download className="w-3.5 h-3.5" />
+                                      )}
+                                      <span>{isEs ? 'Descargar' : 'Download'}</span>
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1511,6 +1933,109 @@ export default function Emails() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Modal Visor de Documentos Adjuntos (PDF / Imágenes / Archivos) ────── */}
+      {previewAttachment && (
+        <div
+          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6"
+          onClick={() => setPreviewAttachment(null)}
+        >
+          <div
+            className="bg-card border border-border rounded-2xl w-full max-w-5xl h-[88vh] overflow-hidden shadow-2xl flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Barra superior del visor */}
+            <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border bg-muted/40">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 flex-shrink-0">
+                  <FileText className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-xs md:text-sm font-bold text-foreground truncate">
+                    {previewAttachment.filename}
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground">
+                    {formatAttachmentSize(previewAttachment.size)} · {previewAttachment.mimeType}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <a
+                  href={previewAttachment.blobUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors"
+                  title={isEs ? 'Abrir en pestaña nueva' : 'Open in new tab'}
+                >
+                  <ExternalLink className="w-3.5 h-3.5 text-primary" />
+                  <span className="hidden sm:inline">{isEs ? 'Abrir en pestaña' : 'Open in tab'}</span>
+                </a>
+
+                <a
+                  href={previewAttachment.blobUrl}
+                  download={previewAttachment.filename || 'adjunto'}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>{isEs ? 'Descargar' : 'Download'}</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setPreviewAttachment(null)}
+                  className="p-1.5 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                  title={isEs ? 'Cerrar visor' : 'Close viewer'}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Área central de renderizado del documento */}
+            <div className="flex-1 bg-zinc-950/90 overflow-auto flex items-center justify-center relative">
+              {/pdf/i.test(previewAttachment.mimeType || '') || /\.pdf$/i.test(previewAttachment.filename || '') ? (
+                <iframe
+                  src={previewAttachment.blobUrl}
+                  title={previewAttachment.filename}
+                  className="w-full h-full border-0 bg-white"
+                />
+              ) : /^image\//i.test(previewAttachment.mimeType || '') ||
+                /\.(png|jpg|jpeg|webp|gif)$/i.test(previewAttachment.filename || '') ? (
+                <div className="p-4 flex items-center justify-center w-full h-full overflow-auto">
+                  <img
+                    src={previewAttachment.blobUrl}
+                    alt={previewAttachment.filename}
+                    className="max-w-full max-h-full object-contain rounded-lg shadow-xl"
+                  />
+                </div>
+              ) : (
+                <div className="text-center p-8 space-y-4 max-w-md">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary">
+                    <FileText className="w-7 h-7" />
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-bold text-foreground">{previewAttachment.filename}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {isEs
+                        ? 'Este formato de archivo está listo para descargarse a tu equipo.'
+                        : 'This file format is ready to be downloaded to your computer.'}
+                    </p>
+                  </div>
+                  <a
+                    href={previewAttachment.blobUrl}
+                    download={previewAttachment.filename || 'adjunto'}
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+                  >
+                    <Download className="w-4 h-4" />
+                    <span>{isEs ? 'Descargar archivo ahora' : 'Download file now'}</span>
+                  </a>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

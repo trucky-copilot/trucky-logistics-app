@@ -78,7 +78,7 @@
     },
     "google_account": {
       "type": "string",
-      "description": "Cuenta de Google (ej. correo@gmail.com) desde la cual se sincroniz\u00f3 este mensaje"
+      "description": "Cuenta de Google (ej. correo@gmail.com) desde la cual se sincronizó este mensaje"
     },
     "etiquetas": {
       "type": "array",
@@ -103,6 +103,39 @@
     "rfc_message_id": {
       "type": "string",
       "description": "Encabezado RFC 822 Message-ID para encadenar respuestas (In-Reply-To / References)"
+    },
+    "adjuntos": {
+      "type": "array",
+      "description": "Lista de documentos y archivos adjuntos del correo (ej. PDF Rate Confirmation, BOL, imagenes)",
+      "items": {
+        "type": "object",
+        "properties": {
+          "filename": {
+            "type": "string",
+            "description": "Nombre del archivo adjunto"
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "Tipo MIME del archivo (ej. application/pdf, image/png)"
+          },
+          "size": {
+            "type": "number",
+            "description": "Tamano del archivo en bytes"
+          },
+          "attachmentId": {
+            "type": "string",
+            "description": "ID del adjunto en la API de Gmail para descarga o vista previa"
+          },
+          "gmail_message_id": {
+            "type": "string",
+            "description": "ID del mensaje en Gmail al que pertenece este adjunto"
+          },
+          "inlineData": {
+            "type": "string",
+            "description": "Contenido en Base64 URL-safe si Gmail lo incluyo directamente en el payload"
+          }
+        }
+      }
     }
   },
   "required": [

@@ -226,6 +226,61 @@ function getHtmlText(payload: any): string {
     .join('\n');
 }
 
+export interface EmailAttachmentMeta {
+  filename: string;
+  mimeType: string;
+  size: number;
+  attachmentId: string;
+  gmail_message_id: string;
+  inlineData?: string;
+}
+
+/**
+ * Recorre recursivamente el payload MIME de Gmail para extraer todos los archivos adjuntos
+ * (PDFs de Rate Confirmation, BOL, imágenes, documentos, etc.).
+ */
+export function extractAttachmentsMetadata(
+  payload: any,
+  gmailMessageId: string
+): EmailAttachmentMeta[] {
+  const results: EmailAttachmentMeta[] = [];
+  const seenKeys = new Set<string>();
+
+  function walk(part: any) {
+    if (!part) return;
+
+    const filename = typeof part.filename === 'string' ? part.filename.trim() : '';
+    const attachmentId = part.body?.attachmentId ? String(part.body.attachmentId) : '';
+    const inlineData = !attachmentId && part.body?.data ? String(part.body.data) : '';
+    const size = Number(part.body?.size) || 0;
+    const mimeType = part.mimeType || 'application/octet-stream';
+
+    if (filename && (attachmentId || inlineData)) {
+      const dedupeKey = `${filename}__${attachmentId || size}`;
+      if (!seenKeys.has(dedupeKey)) {
+        seenKeys.add(dedupeKey);
+        results.push({
+          filename,
+          mimeType,
+          size,
+          attachmentId,
+          gmail_message_id: gmailMessageId,
+          ...(inlineData && inlineData.length < 300000 ? { inlineData } : {}),
+        });
+      }
+    }
+
+    if (Array.isArray(part.parts)) {
+      for (const child of part.parts) {
+        walk(child);
+      }
+    }
+  }
+
+  walk(payload);
+  return results;
+}
+
 export function getFetchLimit(limit: unknown) {
   return Math.max(Math.min(Number(limit) || 80, 100), 40);
 }
@@ -442,8 +497,10 @@ export default async function syncGmail(req: Request, ctx: any) {
         }
 
         const bodyText = getPlainText(detail.payload);
+        const adjuntos = extractAttachmentsMetadata(detail.payload, detail.id);
+        const attachmentNamesText = adjuntos.map(a => a.filename).join(' ');
         const snippet = (detail.snippet || bodyText || subject).replace(/\s+/g, ' ').trim().slice(0, 500);
-        if (containsTerm(`${subject}\n${bodyText}\n${detail.snippet || ''}`, 'trucky')) {
+        if (containsTerm(`${subject}\n${bodyText}\n${detail.snippet || ''}\n${attachmentNamesText}`, 'trucky')) {
           coincidenciasTrucky++;
         }
 
@@ -458,7 +515,7 @@ export default async function syncGmail(req: Request, ctx: any) {
         const connectedGoogleAccount = (reqGmailUser || '').toLowerCase().trim();
         const { es_logistico, categoria, isImportante } = classifyEmail(
           subject,
-          `${bodyText}\n${detail.snippet || ''}`,
+          `${bodyText}\n${detail.snippet || ''}\n${attachmentNamesText}`,
           fromAddress,
           resolvedLabels
         );
@@ -501,6 +558,7 @@ export default async function syncGmail(req: Request, ctx: any) {
               thread_id: detail.threadId || existingEmail.thread_id || detail.id,
               gmail_message_id: detail.id,
               rfc_message_id: rfcMessageId || existingEmail.rfc_message_id || '',
+              adjuntos,
             });
             syncedEmails.push(updatedEmail);
             reparados++;
@@ -542,6 +600,7 @@ export default async function syncGmail(req: Request, ctx: any) {
             thread_id: detail.threadId || detail.id,
             gmail_message_id: detail.id,
             rfc_message_id: rfcMessageId || '',
+            adjuntos,
           });
 
           syncedEmails.push(nuevoRegistro);
