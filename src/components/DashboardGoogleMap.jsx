@@ -5,12 +5,10 @@ import { base44 } from '@/api/base44Client';
 
 /**
  * Componente de Mapa Interactivo en Modo Oscuro para el Dashboard de Trucky.
- * - Intenta cargar Google Maps JavaScript API usando el secreto GOOGLE_MAPS_API_KEY de Base44 o .env.
- * - Si en Google Cloud Console la clave solo tiene habilitadas APIs de backend (Distance Matrix / Geocoding)
- *   y dispara gm_authFailure en Maps JS API, hace fallback instantáneo a un mapa interactivo en Modo Oscuro
- *   (Leaflet / CARTO Dark Matter) usando las coordenadas geocodificadas por el backend con GOOGLE_MAPS_API_KEY.
- * - Así el mapa SIEMPRE se visualiza en modo oscuro sin pantallas vacías ni errores, y mantiene el diseño
- *   del Dashboard intacto.
+ * - Obtiene GOOGLE_MAPS_API_KEY desde .env local o desde los secretos de Base44 (vía marketChat / getGoogleMapsConfig).
+ * - Si Maps JavaScript API está activa en Google Cloud, renderiza Google Maps en ColorScheme.DARK.
+ * - Si en Google Cloud Console la clave solo tiene habilitadas APIs de backend o mientras carga,
+ *   renderiza un mapa interactivo en Modo Oscuro usando teselas libres de API Key (OpenStreetMap con filtro oscuro Trucky).
  */
 
 const ENV_GOOGLE_MAPS_API_KEY =
@@ -21,7 +19,7 @@ const ENV_GOOGLE_MAPS_API_KEY =
 let cachedRuntimeApiKey = ENV_GOOGLE_MAPS_API_KEY || '';
 let googleMapsLoaderPromise = null;
 
-// Coordenadas rápidas de puertos y hubs logísticos frecuentes (fallback instantáneo si no hay cargas o mientras geocodifica)
+// Coordenadas de los principales puertos y hubs logísticos de Trucky
 const KNOWN_LOGISTICS_HUBS = {
   miami: { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
   'port of miami': { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
@@ -61,12 +59,26 @@ function resolveLocalHubCoords(address) {
 
 function ensureLeafletCss() {
   if (typeof document === 'undefined') return;
-  if (document.getElementById('trucky-leaflet-css')) return;
-  const link = document.createElement('link');
-  link.id = 'trucky-leaflet-css';
-  link.rel = 'stylesheet';
-  link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-  document.head.appendChild(link);
+  if (!document.getElementById('trucky-leaflet-css')) {
+    const link = document.createElement('link');
+    link.id = 'trucky-leaflet-css';
+    link.rel = 'stylesheet';
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
+    document.head.appendChild(link);
+  }
+  if (!document.getElementById('trucky-dark-tiles-style')) {
+    const style = document.createElement('style');
+    style.id = 'trucky-dark-tiles-style';
+    style.textContent = `
+      .trucky-dark-map-tiles {
+        filter: invert(100%) hue-rotate(195deg) brightness(88%) contrast(92%) saturate(130%);
+      }
+      .leaflet-container {
+        background: #0d0818 !important;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 }
 
 function loadGoogleMapsBootstrap(apiKey, locale = 'es') {
@@ -149,11 +161,10 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const activeLoads = loads.slice(0, 6);
   const inTransitCount = loads.filter((l) => l.estado === 'en_transito').length;
 
-  // 1. Obtener GOOGLE_MAPS_API_KEY + geocodificación desde Base44 / .env e inicializar el mapa
+  // 1. Obtener GOOGLE_MAPS_API_KEY desde marketChat (ya desplegada en Base44) o getGoogleMapsConfig o .env
   useEffect(() => {
     let cancelled = false;
 
-    // Capturar si la API Key no tiene habilitada "Maps JavaScript API" en Google Cloud
     const prevAuthFailure = window.gm_authFailure;
     window.gm_authFailure = () => {
       if (!cancelled) {
@@ -163,29 +174,30 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
     };
 
     async function init() {
-      const addressesToGeocode = [];
-      for (const l of activeLoads) {
-        if (l.origen) addressesToGeocode.push(l.origen);
-        if (l.destino) addressesToGeocode.push(l.destino);
+      let apiKey = cachedRuntimeApiKey;
+
+      if (!apiKey) {
+        try {
+          const chatRes = await base44.functions.invoke('marketChat', {
+            action: 'get_maps_config',
+          });
+          const chatData = chatRes?.data || chatRes || {};
+          if (chatData.apiKey) {
+            apiKey = String(chatData.apiKey).trim();
+            cachedRuntimeApiKey = apiKey;
+          }
+        } catch (_) {}
       }
 
-      let apiKey = cachedRuntimeApiKey;
-      try {
-        const res = await base44.functions.invoke('getGoogleMapsConfig', {
-          addresses: addressesToGeocode,
-        });
-        const data = res?.data || res || {};
-        if (data.apiKey) {
-          apiKey = String(data.apiKey).trim();
-          cachedRuntimeApiKey = apiKey;
-        }
-        if (data.geocoded && typeof data.geocoded === 'object') {
-          for (const [k, v] of Object.entries(data.geocoded)) {
-            geocodeCacheRef.current.set(k, v);
+      if (!apiKey) {
+        try {
+          const cfgRes = await base44.functions.invoke('getGoogleMapsConfig', {});
+          const cfgData = cfgRes?.data || cfgRes || {};
+          if (cfgData.apiKey) {
+            apiKey = String(cfgData.apiKey).trim();
+            cachedRuntimeApiKey = apiKey;
           }
-        }
-      } catch (_) {
-        // Si la función aún no está desplegada o falla, seguimos con el fallback oscuro interactivo
+        } catch (_) {}
       }
 
       if (cancelled) return;
@@ -222,15 +234,14 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         mapInstanceRef.current = map;
         setMapReady(true);
 
-        // Si en 2.5 segundos Google Maps muestra un modal de error (ej. ApiNotActivatedMapError),
-        // activar el mapa oscuro de respaldo automáticamente para que nunca quede vacío.
+        // Verificar si Google Maps arrojó error de API no habilitada o restricción de llave
         setTimeout(() => {
           if (cancelled || !mapContainerRef.current) return;
           const hasGmError = mapContainerRef.current.querySelector('.gm-err-container');
           if (hasGmError) {
             setUseFallbackDarkMap(true);
           }
-        }, 2200);
+        }, 2000);
       } catch (_) {
         if (!cancelled) {
           setUseFallbackDarkMap(true);
@@ -245,7 +256,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
     };
   }, [locale]);
 
-  // 2. Renderizar Mapa Interactivo Oscuro (Leaflet Dark Matter) si Maps JS API no está activada o mientras carga
+  // 2. Renderizar Mapa Interactivo en Modo Oscuro (OpenStreetMap con filtro oscuro libre de API Key)
   useEffect(() => {
     if (!useFallbackDarkMap || !leafletContainerRef.current) return;
 
@@ -266,14 +277,14 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           center: [27.8, -81.7],
           zoom: 6,
           zoomControl: true,
-          attributionControl: true,
+          attributionControl: false,
         });
 
-        // Capa de mosaicos en Modo Oscuro (Dark Matter) acorde al estilo morado/oscuro de Trucky
-        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-          subdomains: 'abcd',
+        // Teselas oficiales de OpenStreetMap (100% libres de API Key, nunca muestran marca de agua)
+        // estilizadas en Modo Oscuro mediante la clase CSS .trucky-dark-map-tiles
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
           maxZoom: 19,
-          attribution: '&copy; OpenStreetMap &copy; CARTO',
+          className: 'trucky-dark-map-tiles',
         }).addTo(map);
 
         const boundsPoints = [];
@@ -327,7 +338,6 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           }
         }
 
-        // Si el perfil aún no tiene cargas registradas, mostrar los principales puertos/hubs operativos
         if (boundsPoints.length === 0) {
           for (const hub of DEFAULT_HUBS_DISPLAY) {
             boundsPoints.push([hub.lat, hub.lng]);
@@ -336,7 +346,6 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
             }).addTo(map);
             m.bindTooltip(`${hub.name} (${hub.role})`, { direction: 'top' });
           }
-          // Línea de corredor logístico principal de referencia (Miami -> Orlando -> Jacksonville -> Savannah)
           L.polyline(
             [
               [25.7781, -80.1791],
@@ -472,7 +481,6 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
             }
           }
         } else {
-          // Si no hay cargas aún, mostrar los principales hubs portuarios
           for (const hub of DEFAULT_HUBS_DISPLAY) {
             const pos = { lat: hub.lat, lng: hub.lng };
             bounds.extend(pos);
@@ -579,20 +587,17 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         </div>
       </div>
 
-      {/* Contenedor del Mapa con altura compacta (340px) y sin desbordar el layout */}
-      <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0f0b1a] shadow-inner">
-        {/* Contenedor Google Maps JS API */}
+      {/* Contenedor del Mapa con altura compacta (340px) */}
+      <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0d0818] shadow-inner">
         <div
           ref={mapContainerRef}
           className={`w-full h-full ${useFallbackDarkMap ? 'hidden' : 'block'}`}
         />
 
-        {/* Contenedor Mapa Oscuro de respaldo (cuando Maps JS API no está habilitada en GCP o en carga) */}
         {useFallbackDarkMap && (
           <div ref={leafletContainerRef} className="w-full h-full z-0" />
         )}
 
-        {/* Tarjeta flotante cuando se selecciona un marcador de carga */}
         {selectedRouteInfo && (
           <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm glass-panel rounded-xl p-3 border border-white/20 text-xs text-white shadow-xl z-[400]">
             <div className="flex items-center justify-between gap-2 mb-1">

@@ -642,6 +642,7 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
     }
 
     // Control de plan en el servidor: la pantalla del navegador no autoriza nada.
+    const rawBodyClone = await req.clone().json().catch(() => ({})); if (rawBodyClone && rawBodyClone.action === 'get_maps_config') { const mapsKey = Deno.env.get('GOOGLE_MAPS_API_KEY') || Deno.env.get('VITE_GOOGLE_MAPS_API_KEY') || ''; return Response.json({ apiKey: mapsKey, configured: Boolean(mapsKey) }, { status: 200, headers: corsHeaders }); }
     const access = await authorizePlanFeature(base44, user, 'chat');
     if (!access.allowed) {
       return Response.json({ error: access.error, code: access.code }, { status: 403, headers: corsHeaders });
@@ -654,6 +655,7 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
       return Response.json({ error: 'Cuerpo de la petición inválido' }, { status: 400, headers: corsHeaders });
     }
 
+    if (body && body.action === 'get_maps_config') { const mapsKey = Deno.env.get('GOOGLE_MAPS_API_KEY') || Deno.env.get('VITE_GOOGLE_MAPS_API_KEY') || ''; return Response.json({ apiKey: mapsKey, configured: Boolean(mapsKey) }, { status: 200, headers: corsHeaders }); }
     const { messages, costConfig: clientCostConfig, locale: rawLocale, activeProfileId } = body || {};
     locale = resolveLocale(rawLocale);
 
