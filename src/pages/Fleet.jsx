@@ -425,8 +425,8 @@ export default function Fleet() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Solo mostrar el botón de elegir conductor en la esquina al lado de "+ Agregar camión" si existen conductores en este perfil */}
-          {availableDriverOptions.length > 0 && (
+          {/* Botón siempre visible; el menú solo lista conductores si existen en este perfil */}
+          {(
             <div className="relative">
               <button
                 type="button"
@@ -443,7 +443,7 @@ export default function Fleet() {
                 <ChevronDown className="w-3.5 h-3.5" />
               </button>
 
-              {driverMenuOpen && (
+              {driverMenuOpen && availableDriverOptions.length > 0 && (
                 <div className="absolute right-0 mt-1.5 w-56 rounded-xl bg-card border border-border shadow-xl z-40 py-1">
                   {availableDriverOptions.map(opt => (
                     <button
