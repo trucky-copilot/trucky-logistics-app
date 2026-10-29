@@ -4,23 +4,24 @@ import { MapPin, Navigation, Compass } from 'lucide-react';
 
 /**
  * Componente de Mapa Interactivo en Modo Oscuro para el Dashboard de Trucky.
- * - Contenido estrictamente dentro de su caja (w-full max-w-full overflow-hidden) para no empujar nunca el layout.
- * - Usa teselas oficiales de OpenStreetMap estilizadas en Modo Oscuro sin requerir API Key ni mostrar marcas de agua.
+ * - Si no hay cargas registradas (loads.length === 0), el mapa permanece limpio sin marcadores ni líneas.
+ * - Cuando existen cargas, resuelve las coordenadas de origen y destino (catálogo local rápido + fallback Nominatim)
+ *   y renderiza íconos de camiones para el Origen y el Destino unidos por la ruta.
  */
 
 const KNOWN_LOGISTICS_HUBS = {
-  miami: { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
+  miami: { lat: 25.7781, lng: -80.1791, label: 'Miami, FL' },
   'port of miami': { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
   portmiami: { lat: 25.7781, lng: -80.1791, label: 'PortMiami, FL' },
   'port everglades': { lat: 26.0853, lng: -80.1183, label: 'Port Everglades, FL' },
   'fort lauderdale': { lat: 26.1224, lng: -80.1373, label: 'Fort Lauderdale, FL' },
   lauderdale: { lat: 26.1224, lng: -80.1373, label: 'Fort Lauderdale, FL' },
-  tampa: { lat: 27.9506, lng: -82.4572, label: 'Port Tampa Bay, FL' },
+  tampa: { lat: 27.9506, lng: -82.4572, label: 'Tampa, FL' },
   orlando: { lat: 28.5383, lng: -81.3792, label: 'Orlando, FL' },
-  jacksonville: { lat: 30.3322, lng: -81.6557, label: 'JAXPORT, Jacksonville, FL' },
-  savannah: { lat: 32.128, lng: -81.1514, label: 'Garden City Terminal, Savannah, GA' },
+  jacksonville: { lat: 30.3322, lng: -81.6557, label: 'Jacksonville, FL' },
+  savannah: { lat: 32.128, lng: -81.1514, label: 'Savannah, GA' },
   atlanta: { lat: 33.749, lng: -84.388, label: 'Atlanta, GA' },
-  houston: { lat: 29.7604, lng: -95.3698, label: 'Port Houston, TX' },
+  houston: { lat: 29.7604, lng: -95.3698, label: 'Houston, TX' },
   dallas: { lat: 32.7767, lng: -96.797, label: 'Dallas, TX' },
   venice: { lat: 27.0998, lng: -82.4543, label: 'Venice, FL' },
   medley: { lat: 25.8406, lng: -80.3264, label: 'Medley, FL' },
@@ -29,28 +30,77 @@ const KNOWN_LOGISTICS_HUBS = {
   doral: { lat: 25.8195, lng: -80.3553, label: 'Doral, FL' },
   pompano: { lat: 26.2379, lng: -80.1248, label: 'Pompano Beach, FL' },
   lakeland: { lat: 28.0395, lng: -81.9498, label: 'Lakeland, FL' },
-  charleston: { lat: 32.7765, lng: -79.9311, label: 'Charleston Port, SC' },
-  mobile: { lat: 30.6954, lng: -88.0399, label: 'Port of Mobile, AL' },
-  neworleans: { lat: 29.9511, lng: -90.0715, label: 'Port of New Orleans, LA' },
+  naples: { lat: 26.142, lng: -81.7948, label: 'Naples, FL' },
+  'west palm beach': { lat: 26.7153, lng: -80.0534, label: 'West Palm Beach, FL' },
+  wpb: { lat: 26.7153, lng: -80.0534, label: 'West Palm Beach, FL' },
+  'palm beach': { lat: 26.7153, lng: -80.0534, label: 'West Palm Beach, FL' },
+  'fort myers': { lat: 26.6406, lng: -81.8723, label: 'Fort Myers, FL' },
+  sarasota: { lat: 27.3364, lng: -82.5307, label: 'Sarasota, FL' },
+  ocala: { lat: 29.1872, lng: -82.1401, label: 'Ocala, FL' },
+  tallahassee: { lat: 30.4383, lng: -84.2807, label: 'Tallahassee, FL' },
+  pensacola: { lat: 30.4213, lng: -87.2169, label: 'Pensacola, FL' },
+  daytona: { lat: 29.2108, lng: -81.0228, label: 'Daytona Beach, FL' },
+  melbourne: { lat: 28.0836, lng: -80.6081, label: 'Melbourne, FL' },
+  charleston: { lat: 32.7765, lng: -79.9311, label: 'Charleston, SC' },
+  charlotte: { lat: 35.2271, lng: -80.8431, label: 'Charlotte, NC' },
+  mobile: { lat: 30.6954, lng: -88.0399, label: 'Mobile, AL' },
+  'new orleans': { lat: 29.9511, lng: -90.0715, label: 'New Orleans, LA' },
+  neworleans: { lat: 29.9511, lng: -90.0715, label: 'New Orleans, LA' },
+  memphis: { lat: 35.1495, lng: -90.049, label: 'Memphis, TN' },
+  nashville: { lat: 36.1627, lng: -86.7816, label: 'Nashville, TN' },
+  chicago: { lat: 41.8781, lng: -87.6298, label: 'Chicago, IL' },
+  laredo: { lat: 27.5036, lng: -99.5076, label: 'Laredo, TX' },
+  'san antonio': { lat: 29.4241, lng: -98.4936, label: 'San Antonio, TX' },
+  austin: { lat: 30.2672, lng: -97.7431, label: 'Austin, TX' },
+  'los angeles': { lat: 34.0522, lng: -118.2437, label: 'Los Angeles, CA' },
+  'long beach': { lat: 33.7701, lng: -118.1937, label: 'Long Beach, CA' },
+  newark: { lat: 40.7357, lng: -74.1724, label: 'Newark, NJ' },
+  'new york': { lat: 40.7128, lng: -74.006, label: 'New York, NY' },
 };
 
-const DEFAULT_HUBS_DISPLAY = [
-  { name: 'PortMiami, FL', lat: 25.7781, lng: -80.1791, role: 'Port Hub' },
-  { name: 'Port Everglades, FL', lat: 26.0853, lng: -80.1183, role: 'Port Hub' },
-  { name: 'Port Tampa Bay, FL', lat: 27.9506, lng: -82.4572, role: 'Port Hub' },
-  { name: 'Orlando Logistics Center, FL', lat: 28.5383, lng: -81.3792, role: 'Distribution Hub' },
-  { name: 'JAXPORT, Jacksonville, FL', lat: 30.3322, lng: -81.6557, role: 'Port Hub' },
-  { name: 'Savannah Port, GA', lat: 32.128, lng: -81.1514, role: 'Port Hub' },
-];
+const geocodeRuntimeCache = new Map();
 
-function resolveLocalHubCoords(address) {
+/**
+ * Resuelve las coordenadas de una ciudad/dirección primero por catálogo instantáneo
+ * y si no está en el catálogo, consulta el geocodificador público de OpenStreetMap (Nominatim).
+ */
+async function resolveAddressCoords(address) {
   if (!address) return null;
   const lower = String(address).toLowerCase().trim();
+  if (!lower) return null;
+
+  if (geocodeRuntimeCache.has(lower)) {
+    return geocodeRuntimeCache.get(lower);
+  }
+
   for (const [key, coords] of Object.entries(KNOWN_LOGISTICS_HUBS)) {
     if (lower.includes(key)) {
+      geocodeRuntimeCache.set(lower, coords);
       return coords;
     }
   }
+
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(address)}`;
+    const res = await fetch(url, {
+      headers: { 'Accept-Language': 'en-US,es' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0 && data[0].lat && data[0].lon) {
+        const resolved = {
+          lat: parseFloat(data[0].lat),
+          lng: parseFloat(data[0].lon),
+          label: address,
+        };
+        geocodeRuntimeCache.set(lower, resolved);
+        return resolved;
+      }
+    }
+  } catch (_) {
+    // Fallback silencioso si la red bloquea Nominatim
+  }
+
   return null;
 }
 
@@ -74,9 +124,58 @@ function ensureLeafletCss() {
         background: #0d0818 !important;
         font-family: 'Inter', sans-serif !important;
       }
+      .trucky-truck-marker {
+        background: transparent !important;
+        border: none !important;
+      }
     `;
     document.head.appendChild(style);
   }
+}
+
+/**
+ * Genera el HTML del marcador con ícono de camión (SVG Lucide Truck) y etiqueta opcional.
+ * @param {string} bgColor Color de fondo del pin (#5B2BA0 para Origen, #10b981/#8b5cf6 para Destino)
+ * @param {string} badgeText Etiqueta corta ('ORIG' o 'DEST')
+ */
+function buildTruckMarkerHtml(bgColor, badgeText) {
+  return `
+    <div style="position:relative;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">
+      <div style="
+        width:34px;
+        height:34px;
+        border-radius:12px;
+        background:${bgColor};
+        border:2px solid #ffffff;
+        color:#ffffff;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        box-shadow:0 6px 16px rgba(0,0,0,0.65), 0 0 12px ${bgColor}99;
+      ">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"/>
+          <path d="M15 18H9"/>
+          <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14"/>
+          <circle cx="17" cy="18" r="2"/>
+          <circle cx="7" cy="18" r="2"/>
+        </svg>
+      </div>
+      <span style="
+        position:absolute;
+        bottom:-6px;
+        padding:1px 4px;
+        border-radius:4px;
+        background:#0d0818;
+        border:1px solid rgba(255,255,255,0.35);
+        color:#ffffff;
+        font-size:8px;
+        font-weight:800;
+        letter-spacing:0.04em;
+        line-height:1;
+      ">${badgeText}</span>
+    </div>
+  `;
 }
 
 export default function DashboardGoogleMap({ loads = [], trucks = [], locale = 'es' }) {
@@ -85,7 +184,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const [selectedRouteInfo, setSelectedRouteInfo] = useState(null);
 
   const isEs = locale !== 'en';
-  const activeLoads = loads.slice(0, 6);
+  const activeLoads = loads.slice(0, 8);
   const inTransitCount = loads.filter((l) => l.estado === 'en_transito').length;
 
   useEffect(() => {
@@ -117,91 +216,88 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           className: 'trucky-dark-map-tiles',
         }).addTo(map);
 
-        const boundsPoints = [];
-
-        const createPinIcon = (bgColor, label) =>
-          L.divIcon({
-            className: 'trucky-custom-pin',
-            html: `<div style="width:28px;height:28px;border-radius:9999px;background:${bgColor};border:2px solid #ffffff;color:#ffffff;font-weight:700;font-size:11px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(91,43,160,0.65);">${label}</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-          });
-
-        if (activeLoads.length > 0) {
-          for (const load of activeLoads) {
-            const oPos = resolveLocalHubCoords(load.origen);
-            const dPos = resolveLocalHubCoords(load.destino);
-
-            if (oPos) {
-              boundsPoints.push([oPos.lat, oPos.lng]);
-              const m = L.marker([oPos.lat, oPos.lng], {
-                icon: createPinIcon('#5B2BA0', 'O'),
-              }).addTo(map);
-              m.bindTooltip(`${isEs ? 'Origen' : 'Origin'}: ${load.origen}`, { direction: 'top' });
-              m.on('click', () => setSelectedRouteInfo(load));
-            }
-
-            if (dPos) {
-              boundsPoints.push([dPos.lat, dPos.lng]);
-              const isTransit = load.estado === 'en_transito';
-              const m = L.marker([dPos.lat, dPos.lng], {
-                icon: createPinIcon(isTransit ? '#10b981' : '#8b5cf6', 'D'),
-              }).addTo(map);
-              m.bindTooltip(`${isEs ? 'Destino' : 'Destination'}: ${load.destino}`, { direction: 'top' });
-              m.on('click', () => setSelectedRouteInfo(load));
-            }
-
-            if (oPos && dPos) {
-              L.polyline(
-                [
-                  [oPos.lat, oPos.lng],
-                  [dPos.lat, dPos.lng],
-                ],
-                {
-                  color: load.estado === 'en_transito' ? '#10b981' : '#a855f7',
-                  weight: 3,
-                  opacity: 0.85,
-                  dashArray: load.estado === 'en_transito' ? undefined : '6, 6',
-                }
-              ).addTo(map);
-            }
-          }
-        }
-
-        if (boundsPoints.length === 0) {
-          for (const hub of DEFAULT_HUBS_DISPLAY) {
-            boundsPoints.push([hub.lat, hub.lng]);
-            const m = L.marker([hub.lat, hub.lng], {
-              icon: createPinIcon('#5B2BA0', 'T'),
-            }).addTo(map);
-            m.bindTooltip(`${hub.name} (${hub.role})`, { direction: 'top' });
-          }
-          L.polyline(
-            [
-              [25.7781, -80.1791],
-              [26.0853, -80.1183],
-              [28.5383, -81.3792],
-              [30.3322, -81.6557],
-              [32.128, -81.1514],
-            ],
-            {
-              color: '#8b5cf6',
-              weight: 2.5,
-              opacity: 0.7,
-              dashArray: '6, 6',
-            }
-          ).addTo(map);
-        }
-
-        if (boundsPoints.length > 1) {
-          map.fitBounds(boundsPoints, { padding: [35, 35] });
-        }
+        leafletInstanceRef.current = map;
 
         setTimeout(() => {
-          map.invalidateSize({ pan: false });
+          if (!cancelled && leafletInstanceRef.current) {
+            leafletInstanceRef.current.invalidateSize({ pan: false });
+          }
         }, 180);
 
-        leafletInstanceRef.current = map;
+        // Si NO hay cargas registradas, dejamos el mapa completamente limpio (sin puntos T ni líneas)
+        if (activeLoads.length === 0) {
+          return;
+        }
+
+        const createTruckIcon = (bgColor, badgeText) =>
+          L.divIcon({
+            className: 'trucky-truck-marker',
+            html: buildTruckMarkerHtml(bgColor, badgeText),
+            iconSize: [36, 40],
+            iconAnchor: [18, 20],
+          });
+
+        const boundsPoints = [];
+
+        for (const load of activeLoads) {
+          if (cancelled) return;
+
+          const [oPos, dPos] = await Promise.all([
+            resolveAddressCoords(load.origen),
+            resolveAddressCoords(load.destino),
+          ]);
+
+          if (cancelled || !leafletInstanceRef.current) return;
+
+          if (oPos) {
+            boundsPoints.push([oPos.lat, oPos.lng]);
+            const originMarker = L.marker([oPos.lat, oPos.lng], {
+              icon: createTruckIcon('#5B2BA0', isEs ? 'ORIG' : 'ORIG'),
+            }).addTo(map);
+            originMarker.bindTooltip(
+              `🚚 ${isEs ? 'Origen' : 'Origin'}: ${load.origen}`,
+              { direction: 'top', offset: [0, -14] }
+            );
+            originMarker.on('click', () => setSelectedRouteInfo(load));
+          }
+
+          if (dPos) {
+            boundsPoints.push([dPos.lat, dPos.lng]);
+            const isTransit = load.estado === 'en_transito';
+            const destMarker = L.marker([dPos.lat, dPos.lng], {
+              icon: createTruckIcon(isTransit ? '#10b981' : '#7c3aed', 'DEST'),
+            }).addTo(map);
+            destMarker.bindTooltip(
+              `🚚 ${isEs ? 'Destino' : 'Destination'}: ${load.destino}`,
+              { direction: 'top', offset: [0, -14] }
+            );
+            destMarker.on('click', () => setSelectedRouteInfo(load));
+          }
+
+          if (oPos && dPos) {
+            const routeLine = L.polyline(
+              [
+                [oPos.lat, oPos.lng],
+                [dPos.lat, dPos.lng],
+              ],
+              {
+                color: load.estado === 'en_transito' ? '#10b981' : '#a855f7',
+                weight: 3,
+                opacity: 0.9,
+                dashArray: load.estado === 'en_transito' ? undefined : '6, 6',
+              }
+            ).addTo(map);
+            routeLine.on('click', () => setSelectedRouteInfo(load));
+          }
+        }
+
+        if (!cancelled && leafletInstanceRef.current) {
+          if (boundsPoints.length > 1) {
+            map.fitBounds(boundsPoints, { padding: [45, 45], maxZoom: 10 });
+          } else if (boundsPoints.length === 1) {
+            map.setView(boundsPoints[0], 8);
+          }
+        }
       } catch (err) {
         console.warn('[DashboardGoogleMap] Error inicializando mapa oscuro:', err);
       }
@@ -216,7 +312,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         leafletInstanceRef.current = null;
       }
     };
-  }, [activeLoads, isEs]);
+  }, [loads, isEs]);
 
   const handleRecenter = () => {
     setSelectedRouteInfo(null);
