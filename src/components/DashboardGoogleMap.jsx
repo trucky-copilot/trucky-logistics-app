@@ -111,6 +111,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           zoom: 6,
           zoomControl: true,
           attributionControl: false,
+          keyboard: false,
         });
 
         // Teselas oficiales de OpenStreetMap (100% libres de API Key, nunca muestran marca de agua)
@@ -202,7 +203,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         }
 
         setTimeout(() => {
-          map.invalidateSize();
+          map.invalidateSize({ pan: false });
         }, 180);
 
         leafletInstanceRef.current = map;
@@ -274,8 +275,8 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
       </div>
 
       {/* Contenedor del Mapa en Modo Oscuro (340px) */}
-      <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0d0818] shadow-inner">
-        <div ref={leafletContainerRef} className="w-full h-full z-0" />
+      <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0d0818] shadow-inner contain-layout">
+        <div ref={leafletContainerRef} className="w-full h-full z-0 overflow-hidden" />
 
         {selectedRouteInfo && (
           <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm glass-panel rounded-xl p-3 border border-white/20 text-xs text-white shadow-xl z-[400]">

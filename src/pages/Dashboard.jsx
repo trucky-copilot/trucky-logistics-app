@@ -115,6 +115,9 @@ export default function Dashboard() {
       setError(t.dashboard.error);
     }).finally(() => {
       setLoading(false);
+      if (typeof window !== 'undefined') {
+        window.scrollTo(0, 0);
+      }
     });
   }, [orgId, activeProfileId]);
 

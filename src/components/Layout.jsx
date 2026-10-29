@@ -100,7 +100,7 @@ export default function Layout() {
   const isChat = location.pathname.startsWith('/chat');
 
   return (
-    <div className="flex h-screen bg-background overflow-hidden font-inter">
+    <div className="flex h-screen w-full max-w-full bg-background overflow-hidden font-inter relative">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
@@ -260,7 +260,7 @@ export default function Layout() {
         <OperationalReadinessBanner />
 
         {/* Page content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden min-w-0">
           <Outlet />
         </main>
       </div>
