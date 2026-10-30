@@ -146,7 +146,7 @@ export async function sendEmailWithAutoAuth({
     saveStoredGoogleAuth(token, email, profile_id);
   }
 
-  const callSend = async (authToken, senderEmail) => {
+  const callSend = async (authToken, senderEmail, overrideThreadId = threadId) => {
     return await base44.functions.invoke('sendGmail', {
       accessToken: authToken,
       gmailUser: senderEmail || undefined,
@@ -158,9 +158,9 @@ export async function sendEmailWithAutoAuth({
       profile_id,
       remitente_nombre,
       load_id,
-      threadId,
-      inReplyTo,
-      references,
+      threadId: overrideThreadId,
+      inReplyTo: overrideThreadId ? inReplyTo : null,
+      references: overrideThreadId ? references : null,
       etiquetas,
       es_importante,
     });
@@ -170,6 +170,10 @@ export async function sendEmailWithAutoAuth({
     const res = await callSend(token, email);
     if (res?.data?.error) {
       const errorText = String(res.data.error).toLowerCase();
+      if (errorText.includes('404') && threadId) {
+        console.warn('[googleAuthHelper] threadId no existe (404), reintentando sin threadId...');
+        return await callSend(token, email, null);
+      }
       if (
         errorText.includes('401') ||
         errorText.includes('403') ||
@@ -188,6 +192,10 @@ export async function sendEmailWithAutoAuth({
   } catch (err) {
     const status = err?.status || err?.response?.status;
     const msg = String(err?.response?.data?.error || err?.message || '').toLowerCase();
+    if ((status === 404 || msg.includes('404')) && threadId) {
+      console.warn('[googleAuthHelper] Error 404 con threadId, reintentando como nuevo mensaje sin threadId...');
+      return await callSend(token, email, null);
+    }
     if (
       status === 401 ||
       status === 403 ||

@@ -432,15 +432,15 @@ export default function Fleet() {
                 type="button"
                 onClick={() => setDriverMenuOpen(prev => !prev)}
                 disabled={assigningDriver}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-xs font-bold text-zinc-950 shadow-sm transition-all cursor-pointer disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground shadow-sm transition-all cursor-pointer disabled:opacity-50"
               >
                 {assigningDriver ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-950" />
+                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-foreground" />
                 ) : (
-                  <UserCheck className="w-3.5 h-3.5" />
+                  <UserCheck className="w-3.5 h-3.5 text-primary-foreground" />
                 )}
                 <span>{isEs ? 'Elegir conductor' : 'Choose driver'}</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <ChevronDown className="w-3.5 h-3.5 text-primary-foreground" />
               </button>
 
               {driverMenuOpen && availableDriverOptions.length > 0 && (

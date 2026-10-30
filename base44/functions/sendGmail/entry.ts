@@ -175,7 +175,7 @@ export default async function sendGmail(req: Request, ctx: any) {
         sendPayload.threadId = threadId;
       }
 
-      const googleRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      let googleRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
         method: "POST",
         headers: {
           "Authorization": `Bearer ${accessToken}`,
@@ -184,13 +184,28 @@ export default async function sendGmail(req: Request, ctx: any) {
         body: JSON.stringify(sendPayload),
       });
 
+      // Si Google responde 404 porque el threadId no existe en este buzón de Gmail (hilo externo o cuenta distinta),
+      // reintentamos inmediatamente como un mensaje nuevo independiente sin threadId
+      if (!googleRes.ok && googleRes.status === 404 && sendPayload.threadId) {
+        console.warn("[sendGmail] threadId no existe en este buzón (404), reenviando sin threadId...");
+        delete sendPayload.threadId;
+        googleRes = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${accessToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(sendPayload),
+        });
+      }
+
       if (!googleRes.ok) {
         const errJson = await googleRes.json().catch(() => ({}));
         const errMsg = errJson?.error?.message || `Error ${googleRes.status} de Google Gmail API`;
         console.error("[sendGmail] Error devuelto por Google:", errJson);
         return new Response(
           JSON.stringify({ error: `Fallo al enviar con Google: ${errMsg}` }),
-          { status: googleRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
 
