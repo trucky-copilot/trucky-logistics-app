@@ -117,7 +117,9 @@ export default function Loads() {
     loadData();
   }, [orgId, activeProfileId, currentUser?.email]);
 
-  const filtered = filter === 'all' ? loads : loads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
+  // Mis cargas + las que me asignaron por correo, en la MISMA tabla.
+  const allLoads = [...loads, ...myAssignedLoads.map(l => ({ ...l, _assigned: true }))];
+  const filtered = filter === 'all' ? allLoads : allLoads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
 
   const handleSave = async (data) => {
     try {
@@ -192,7 +194,7 @@ export default function Loads() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-xl font-bold text-foreground">{t.loadsPage.title}</h1>
-          <p className="text-sm text-muted-foreground">{loads.length} {t.loadsPage.registered}</p>
+          <p className="text-sm text-muted-foreground">{allLoads.length} {t.loadsPage.registered}</p>
         </div>
         <button
           onClick={() => {
@@ -217,28 +219,6 @@ export default function Loads() {
         currentCount={loads.length}
         maxLimit={limits?.LOADS || 5}
       />
-
-      {/* Vista del conductor: cargas que me asignaron por correo (solo lectura) */}
-      {myAssignedLoads.length > 0 && (
-        <div className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4 space-y-2">
-          <h2 className="text-sm font-semibold text-violet-200 flex items-center gap-1.5">
-            <UserCheck className="w-4 h-4" />
-            {isEs ? `Cargas asignadas a ti (${myAssignedLoads.length})` : `Loads assigned to you (${myAssignedLoads.length})`}
-          </h2>
-          {myAssignedLoads.map(l => (
-            <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl bg-card/60 border border-border px-3 py-2">
-              <div className="min-w-0">
-                <div className="text-xs font-medium text-foreground truncate">{l.origen} → {l.destino}</div>
-                <div className="text-[11px] text-muted-foreground">
-                  {[l.numero_referencia && `Ref: ${l.numero_referencia}`, l.fecha_carga && `${isEs ? 'Recogida' : 'Pickup'}: ${String(l.fecha_carga).slice(0, 10)}`, l.truck_placa]
-                    .filter(Boolean).join(' · ') || (isEs ? 'Sin detalles' : 'No details')}
-                </div>
-              </div>
-              <StatusBadge status={l.estado || 'pendiente'} />
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Summary strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -308,7 +288,7 @@ export default function Loads() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {filtered.map(load => (
-                  <tr key={load.id} className="hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => handleEdit(load)}>
+                  <tr key={load.id} className={`hover:bg-muted/20 transition-colors ${load._assigned ? '' : 'cursor-pointer'}`} onClick={() => { if (!load._assigned) handleEdit(load); }}>
                     <td className="px-4 py-3">
                       <div className="text-xs font-medium text-foreground">{load.origen}</div>
                       <div className="text-xs text-muted-foreground">→ {load.destino}</div>
@@ -329,6 +309,13 @@ export default function Loads() {
                     <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${(load.tarifa_negociada || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 hidden sm:table-cell"><StatusBadge status={load.estado || 'pendiente'} /></td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                      {load._assigned ? (
+                        <div className="flex justify-end">
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/30 whitespace-nowrap">
+                            {isEs ? 'Asignada a ti' : 'Assigned to you'}
+                          </span>
+                        </div>
+                      ) : (
                       <div className="flex items-center gap-1 justify-end">
                         <button
                           onClick={() => handleEdit(load)}
@@ -345,6 +332,7 @@ export default function Loads() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
+                      )}
                     </td>
                   </tr>
                 ))}
