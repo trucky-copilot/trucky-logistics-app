@@ -47,7 +47,7 @@ function estimateMilesBetween(originStr = '', destStr = '') {
     if (!oCoord && oLow.includes(city)) oCoord = coords;
     if (!dCoord && dLow.includes(city)) dCoord = coords;
   }
-  if (!oCoord || !dCoord) return 250;
+  if (!oCoord || !dCoord) return 0; // sin coordenadas no se inventan millas (antes: 250)
   const R = 3958.8;
   const dLat = ((dCoord[0] - oCoord[0]) * Math.PI) / 180;
   const dLon = ((dCoord[1] - oCoord[1]) * Math.PI) / 180;
@@ -169,20 +169,31 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
     }
   }
 
-  // Si no tenía formato Shipper 1 / Consignee 1, buscar Origin / Destination explícitos
+  // Si no tenía formato Shipper 1 / Consignee 1, buscar Origin / Destination explícitos.
+  // Incluye el formato típico de correo de broker: "PICKUP- FIT", "P/U : POMTOC",
+  // "Delivery - 33166", "POD: Miami".
+  const cleanPlace = (v) => String(v || '')
+    .replace(/\*/g, '')
+    .replace(/\s+(?:-\s*)?(?:delivery|deliver|drop|pod|weight|commodity|rate|chassis|tri-?axle|live load)\b.*$/i, '')
+    .trim()
+    .slice(0, 80);
   if (!origen) {
-    const oMatch = primaryText.match(/(?:origin|origen|pickup\s*location|pickup\s*address|ship\s*from)\s*[:\-]\s*([^\n\r|]+)/i);
-    if (oMatch) origen = oMatch[1].trim().slice(0, 80);
+    const oMatch = primaryText.match(/(?:origin|origen|pickup\s*location|pickup\s*address|ship\s*from|pick\s*-?\s*up|p\/u|\bpu\b)\s*[:\-–]+\s*([^\n\r|]+)/i);
+    if (oMatch) origen = cleanPlace(oMatch[1]);
   }
   if (!destino) {
-    const dMatch = primaryText.match(/(?:destination|destino|delivery\s*location|delivery\s*address|deliver\s*to)\s*[:\-]\s*([^\n\r|]+)/i);
-    if (dMatch) destino = dMatch[1].trim().slice(0, 80);
+    const dMatch = primaryText.match(/(?:destination|destino|delivery\s*location|delivery\s*address|deliver\s*to|delivery|\bpod\b|drop\s*off|entrega)\s*[:\-–]+\s*([^\n\r|]+)/i);
+    if (dMatch) destino = cleanPlace(dMatch[1]);
   }
 
   // Solo si el PDF no tenía direcciones o no había PDF, usar el texto/asunto del correo
   if (!origen || !destino) {
-    const combinedForRoute = `${primaryText}\n${threadOnlyText}\n${fallbackSubject}`;
-    const arrowMatch = combinedForRoute.match(/([A-Za-zÁÉÍÓÚÑáéíóúñ .]+(?:,\s*[A-Z]{2})?)\s*(?:->|→|\ba\b|\bto\b)\s*([A-Za-zÁÉÍÓÚÑáéíóúñ .]+(?:,\s*[A-Z]{2})?)/i);
+    // Solo flechas explícitas (->, →) o " TO " en el ASUNTO. Antes se buscaba
+    // " to " / " a " en todo el texto y "Average Days to Pay" salía como ruta.
+    const routeSource = String(fallbackSubject || '');
+    const arrowMatch =
+      routeSource.match(/([A-Za-zÁÉÍÓÚÑáéíóúñ .]+(?:,\s*[A-Z]{2})?)\s*(?:->|→)\s*([A-Za-zÁÉÍÓÚÑáéíóúñ .]+(?:,\s*[A-Z]{2})?)/) ||
+      routeSource.match(/([A-Za-z .]+(?:,\s*[A-Z]{2})?)\s+TO\s+([A-Za-z .]+(?:,\s*[A-Z]{2})?(?:\s*\d{5})?)/);
     if (arrowMatch) {
       if (!origen) {
         origen = arrowMatch[1]
@@ -220,7 +231,7 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
 
   if (!pickupDate) {
     const pdfDates = primaryText.match(/\b(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{4}-\d{2}-\d{2})\b/g) || [];
-    pickupDate = normalizeToIsoDate(pdfDates[0]) || new Date().toISOString().slice(0, 10);
+    pickupDate = normalizeToIsoDate(pdfDates[0]) || '';
     deliveryDate = normalizeToIsoDate(pdfDates[1] || pdfDates[0]) || pickupDate;
   }
 
@@ -254,17 +265,19 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
   if (shippingNoteMatch) noteParts.push(shippingNoteMatch[1].trim());
   notas = noteParts.join(' · ').slice(0, 220);
 
+  // Lo que no está en el documento queda VACÍO para que el dispatcher lo complete.
+  // Antes se inventaban valores (Fort Lauderdale → Miami, 250 mi, $450).
   return {
-    origen: origen || 'Fort Lauderdale, FL',
-    destino: destino || 'Miami, FL',
-    millas: millas || 250,
-    tarifa_negociada: tarifa || 450,
-    tarifa_ofrecida: tarifa || 450,
+    origen: origen || '',
+    destino: destino || '',
+    millas: millas || 0,
+    tarifa_negociada: tarifa || 0,
+    tarifa_ofrecida: tarifa || 0,
     fecha_carga: pickupDate,
     fecha_entrega: deliveryDate || pickupDate,
     citas: citasResumen,
     numero_referencia,
-    broker_nombre: broker_nombre || 'Broker',
+    broker_nombre: broker_nombre || '',
     notas,
   };
 }
@@ -282,20 +295,17 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
     threadMessages[0]?.remitente_nombre || brokerEmail
   );
 
-  // Priorizar los datos que vinieron del PDF (heur) si el LLM devolvió valores genéricos o vacíos
-  const origen = (extracted?.origen && !/miami/i.test(extracted.origen)) ? extracted.origen : (heur.origen || extracted?.origen);
-  const destino = (extracted?.destino && !/tampa/i.test(extracted.destino)) ? extracted.destino : (heur.destino || extracted?.destino);
+  // Primero lo que extrajo el Verificador; si falta, lo que se lee del texto.
+  // Antes se descartaban "Miami", "Tampa", $850 y 250 mi por considerarlos
+  // valores de relleno, y se terminaban usando otros inventados.
+  const pick = (a, b) => (a !== undefined && a !== null && String(a).trim() !== '' ? a : b);
+  const origen = pick(extracted?.origen, heur.origen);
+  const destino = pick(extracted?.destino, heur.destino);
   const pickupFecha = normalizeToIsoDate(extracted?.pickup_fecha) || heur.fecha_carga;
   const deliveryFecha = normalizeToIsoDate(extracted?.delivery_fecha) || heur.fecha_entrega || pickupFecha;
-  const tarifaTotal = Number(extracted?.tarifa_total) > 0 && Number(extracted?.tarifa_total) !== 850
-    ? Number(extracted.tarifa_total)
-    : (heur.tarifa_negociada || Number(extracted?.tarifa_total) || 450);
-  const millas = Number(extracted?.millas) > 0 && Number(extracted?.millas) !== 250
-    ? Number(extracted.millas)
-    : (heur.millas || Number(extracted?.millas) || 250);
-  const brokerNombre = (extracted?.broker_nombre && !/trucky\s*app|broker/i.test(extracted.broker_nombre))
-    ? extracted.broker_nombre
-    : (heur.broker_nombre || extracted?.broker_nombre || 'Broker');
+  const tarifaTotal = Number(extracted?.tarifa_total) > 0 ? Number(extracted.tarifa_total) : heur.tarifa_negociada;
+  const millas = Number(extracted?.millas) > 0 ? Number(extracted.millas) : heur.millas;
+  const brokerNombre = pick(extracted?.broker_nombre, heur.broker_nombre);
   const refNum =
     extracted?.load_number ||
     extracted?.reference_number ||
@@ -315,4 +325,23 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
     broker_nombre: brokerNombre,
     notas: heur.notas || '',
   };
+}
+
+
+/**
+ * ¿El documento es una confirmación (se puede crear carga) o una solicitud de
+ * tarifa (todavía no hay carga)? Se usa el tipo que dio el Verificador y, como
+ * respaldo, frases típicas del texto.
+ * Devuelve: 'confirmation' | 'rate_request' | 'unknown'
+ */
+export function classifyLoadDocument(text = '', verifierType = '') {
+  const t = String(text || '').toLowerCase();
+  const v = String(verifierType || '').toLowerCase();
+  if (/rate.?request|quote|cotiza|solicitud/.test(v)) return 'rate_request';
+  const confirmation = /rate\s*confirmation|rate\s*con\b|load\s*confirmation|carrier\s*confirmation|load\s*tender|confirmaci[oó]n\s*de\s*(tarifa|carga)|agreed\s*amount|carrier\s*pay|delivery\s*order/.test(t);
+  const request = /rate\s*request|\brfq\b|need\s*(trucking\s*)?rates?|best\s*rates?|please\s*(advise|quote|share)|can\s*you\s*(handle|do|quote)|how\s*much|cotizaci[oó]n|solicitud\s*de\s*tarifa|please\s*confirm\s*this\s*rate/.test(t);
+  if (confirmation && !request) return 'confirmation';
+  if (/confirmation|delivery_order|rate_con/.test(v) && !request) return 'confirmation';
+  if (request) return 'rate_request';
+  return 'unknown';
 }

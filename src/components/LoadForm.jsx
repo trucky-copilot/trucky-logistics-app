@@ -82,7 +82,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">
-            {load ? t.loadForm.editTitle : t.loadForm.newTitle}
+            {load?.id ? t.loadForm.editTitle : t.loadForm.newTitle}
           </h2>
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground">
             <X className="w-4 h-4" />

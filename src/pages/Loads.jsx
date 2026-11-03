@@ -14,6 +14,7 @@ import DemoLimitModal from '@/components/DemoLimitModal';
 import { useToast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { onlyActiveProfile, buildDriverOptions, storeDispatchDraft } from '@/lib/driverAssignment';
+import { AUTOMATION_CHECKER_TO_LOAD_KEY } from '@/lib/dispatchAutomation';
 
 export default function Loads() {
   const orgId = useOrganizationId();
@@ -30,6 +31,37 @@ export default function Loads() {
   const [filter, setFilter] = useState('all');
   const [drivers, setDrivers] = useState([]);
   const [myAssignedLoads, setMyAssignedLoads] = useState([]);
+  const [prefillLoad, setPrefillLoad] = useState(null);
+
+  // Viene del Verificador: abrir el formulario PRE-LLENADO para que el dispatcher
+  // revise y confirme. La carga no se crea hasta que pulse Guardar.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem(AUTOMATION_CHECKER_TO_LOAD_KEY);
+      if (!raw) return;
+      sessionStorage.removeItem(AUTOMATION_CHECKER_TO_LOAD_KEY);
+      const d = JSON.parse(raw) || {};
+      const num = (v) => (Number(v) > 0 ? Number(v) : '');
+      setPrefillLoad({
+        origen: d.origen || '',
+        destino: d.destino || '',
+        millas: num(d.millas),
+        broker_nombre: d.broker_nombre || '',
+        broker_email: d.broker_email || '',
+        tarifa_ofrecida: num(d.tarifa_ofrecida),
+        tarifa_negociada: num(d.tarifa_negociada),
+        fecha_carga: d.fecha_carga || '',
+        fecha_entrega: d.fecha_entrega || '',
+        citas: d.citas || '',
+        numero_referencia: d.numero_referencia || '',
+        notas: d.notas || '',
+        thread_id: d.thread_id || '',
+        estado: 'pendiente',
+      });
+      setEditLoad(null);
+      setShowForm(true);
+    } catch (_) {}
+  }, []);
   const [trucks, setTrucks] = useState([]);
   const { currentUser } = useAppState();
   const { toast } = useToast();
@@ -170,6 +202,7 @@ export default function Loads() {
       window.dispatchEvent(new CustomEvent('notifications-updated'));
       setShowForm(false);
       setEditLoad(null);
+      setPrefillLoad(null);
       loadData();
     } catch (err) {
       console.error('Error guardando carga:', err);
@@ -255,9 +288,9 @@ export default function Loads() {
       {/* Form modal */}
       {showForm && (
         <LoadForm
-          load={editLoad}
+          load={editLoad || prefillLoad}
           onSave={handleSave}
-          onClose={() => { setShowForm(false); setEditLoad(null); }}
+          onClose={() => { setShowForm(false); setEditLoad(null); setPrefillLoad(null); }}
           driverOptions={driverOptionsFor(editLoad?.id)}
         />
       )}

@@ -1217,22 +1217,19 @@ export default function Emails() {
         [...msgs].reverse().find(m => m.remitente_email && m.remitente_email.toLowerCase().trim() !== myEmail) ||
         latestMsg;
 
-      // 4. Enviar internamente al Verificador de Documentos (analyzeDocument) y construir datos verificados
-      let extractedFromVerifier = {};
-      try {
-        const res = await base44.functions.invoke('analyzeDocument', {
-          documentText: finalDocumentText,
-          selectedCarrierId: null,
-        });
-        if (res?.data?.analysis?.datos_extraidos) {
-          extractedFromVerifier = res.data.analysis.datos_extraidos;
-        }
-      } catch (verifyErr) {
-        console.warn('[Automatización] Usando extracción directa de respaldo tras verificador:', verifyErr);
-      }
-
-      // 5. Construir los datos de la carga extrayendo fielmente los datos del PDF verificado
-      const prefilledLoad = buildThreadSummaryForLoad({
+      // 4. Pasar PRIMERO por el Verificador. Antes la carga se creaba aquí mismo,
+      //    sin confirmación y con valores inventados. Ahora el Verificador analiza
+      //    el documento, dice si es rate confirmation o solicitud de tarifa, y
+      //    desde ahí el dispatcher decide crear la carga (y revisa los datos).
+      sessionStorage.setItem(AUTOMATION_EMAIL_TO_CHECKER_KEY, JSON.stringify({
+        documentText: finalDocumentText,
+        fileName: attachmentName || thread.asunto || '',
+        hasPdf: Boolean(extractedDocText),
+        emailSubject: thread.asunto || '',
+        brokerEmail: externalMsg?.remitente_email || '',
+        brokerName: externalMsg?.remitente_nombre || '',
+        threadId: thread.thread_id || latestMsg.thread_id || null,
+        rfcMessageId: latestMsg.rfc_message_id || null,
         threadMessages: msgs.map(m => ({
           id: m.id,
           remitente_nombre: m.remitente_nombre,
@@ -1241,82 +1238,9 @@ export default function Emails() {
           asunto: m.asunto,
           cuerpo: m.cuerpo || m.snippet || '',
           fecha: m.fecha,
-          rfc_message_id: m.rfc_message_id || '',
         })),
-        extracted: extractedFromVerifier,
-        rawDocumentText: extractedDocText || finalDocumentText,
-        emailSubject: thread.asunto || '',
-        brokerEmail: externalMsg?.remitente_email || '',
-      });
-
-      const millas = Number(prefilledLoad.millas) || 250;
-      const tarifa = Number(prefilledLoad.tarifa_negociada) || 850;
-      const dieselPrecio = 5.40;
-      const rpm = millas > 0 && tarifa > 0 ? tarifa / millas : 0;
-      const dieselCost = millas > 0 ? (millas / 6.5) * dieselPrecio : 0;
-      const profit = tarifa - dieselCost - tarifa * 0.25;
-      const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
-
-      // 6. Crear automáticamente la carga en la base de datos Base44 (Mis Cargas) para el perfil activo
-      const createPayload = {
-        origen: prefilledLoad.origen || 'Miami, FL',
-        destino: prefilledLoad.destino || 'Tampa, FL',
-        millas,
-        broker_nombre: prefilledLoad.broker_nombre || externalMsg?.remitente_nombre || 'Broker',
-        broker_email: externalMsg?.remitente_email || '',
-        tipo_cliente: 'broker_directo',
-        tarifa_ofrecida: Number(prefilledLoad.tarifa_ofrecida) || tarifa,
-        tarifa_negociada: tarifa,
-        diesel_precio_dia: dieselPrecio,
-        fecha_carga: prefilledLoad.fecha_carga || new Date().toISOString().slice(0, 10),
-        fecha_entrega: prefilledLoad.fecha_entrega || new Date().toISOString().slice(0, 10),
-        citas: prefilledLoad.citas || '',
-        numero_referencia: prefilledLoad.numero_referencia || '',
-        notas: prefilledLoad.notas || '',
-        thread_id: thread.thread_id || latestMsg.thread_id || '',
-        estado: 'pendiente',
-        profile_id: String(activeProfileId || '1'),
-        shared_with_carrier: false,
-        revenue_por_milla: rpm,
-        costo_estimado: dieselCost,
-        ganancia_estimada: profit,
-        resultado,
-      };
-
-      const createdLoad = await base44.entities.Load.create(withOrg(orgId, createPayload));
-
-      // Respaldo secundario en localStorage del perfil actual
-      try {
-        const key = `profile_loads_${orgId}_${activeProfileId || '1'}`;
-        const existing = JSON.parse(localStorage.getItem(key) || '[]');
-        if (Array.isArray(existing) && !existing.includes(createdLoad.id)) {
-          localStorage.setItem(key, JSON.stringify([...existing, createdLoad.id]));
-        }
-      } catch (_) {}
-
-      // Guardar referencia en Base44 Notification y disparar evento para campana
-      try {
-        await base44.entities.Notification.create(
-          withOrg(orgId, {
-            titulo: isEs ? 'Automatización completada' : 'Automation completed',
-            mensaje: isEs
-              ? 'Ya se terminó el proceso, revisa las cargas.'
-              : 'The process has finished, check your loads.',
-            tipo: 'mensaje_despacho',
-            prioridad: 'media',
-            leido: false,
-            profile_id: String(activeProfileId || '1'),
-          })
-        );
-        window.dispatchEvent(new CustomEvent('notifications-updated'));
-      } catch (_) {}
-
-      toast({
-        title: isEs ? 'Automatización completada' : 'Automation completed',
-        description: isEs
-          ? 'Ya se terminó el proceso, revisa las cargas'
-          : 'The process has finished, check your loads',
-      });
+      }));
+      navigate('/documentos');
     } catch (err) {
       toast({
         title: isEs ? 'Error en Automatización' : 'Automation Error',

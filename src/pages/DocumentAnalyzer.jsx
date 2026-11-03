@@ -21,6 +21,7 @@ import {
   AUTOMATION_CHECKER_TO_LOAD_KEY,
   buildThreadSummaryForLoad,
   extractLogisticsFieldsFromText,
+  classifyLoadDocument,
 } from '@/lib/dispatchAutomation';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
@@ -417,6 +418,8 @@ export default function DocumentAnalyzer() {
     const prefilledLoad = buildThreadSummaryForLoad({
       threadMessages: emailAutomationCtx?.threadMessages || [],
       extracted,
+      // Los datos salen del DOCUMENTO analizado (antes no se pasaba el texto)
+      rawDocumentText: documentText || '',
       emailSubject: emailAutomationCtx?.emailSubject || fileName || '',
       brokerEmail: emailAutomationCtx?.brokerEmail || '',
     });
@@ -550,6 +553,47 @@ Equipment: 20ft Dry...`}
 
           {/* Encabezado y hallazgos principales visibles */}
           <ResultHeader analysis={analysis} onLinkToLoad={handleProceedToCreateLoad} cached={analysis.cached} />
+
+          {/* Crear carga SOLO desde una confirmación; una solicitud de tarifa no crea carga */}
+          {(() => {
+            const isEsLocal = locale !== 'en';
+            const textForType = emailAutomationCtx?.hasPdf
+              ? String(documentText || '').split('=== HILO DE CORREO ASOCIADO ===')[0]
+              : String(documentText || '');
+            const kind = classifyLoadDocument(textForType, analysis?.datos_extraidos?.tipo_documento);
+            if (kind === 'rate_request') {
+              return (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 flex gap-2.5">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold">{isEsLocal ? 'Es una solicitud de tarifa, no una rate confirmation' : 'This is a rate request, not a rate confirmation'}</p>
+                    <p className="text-xs text-amber-200/80 mt-1">
+                      {isEsLocal
+                        ? 'Todavía no hay carga que crear. Responde al broker con tu cotización; cuando llegue la rate confirmation, pásala por el verificador.'
+                        : 'There is no load to create yet. Reply to the broker with your quote; when the rate confirmation arrives, run it through the checker.'}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <p className="text-xs text-muted-foreground">
+                  {kind === 'confirmation'
+                    ? (isEsLocal ? 'Rate confirmation detectada. Revisa los datos antes de guardar la carga.' : 'Rate confirmation detected. Review the data before saving the load.')
+                    : (isEsLocal ? 'No se pudo confirmar el tipo de documento. Revisa bien los datos antes de guardar.' : 'Could not confirm the document type. Review the data carefully before saving.')}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleProceedToCreateLoad}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground whitespace-nowrap"
+                >
+                  <Package className="w-3.5 h-3.5" />
+                  {isEsLocal ? 'Crear carga con estos datos' : 'Create load from this data'}
+                </button>
+              </div>
+            );
+          })()}
           <KeyFindings categorias={analysis.categorias} />
 
           {/* Si es usuario demo, mostramos el resto difuminado y la ventana/tarjeta de desbloqueo superpuesta */}
