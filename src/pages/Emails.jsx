@@ -1447,9 +1447,23 @@ export default function Emails() {
           es_importante: false,
         });
 
-        if (createdEmail) {
+        // Solo se agrega a la bandeja si se envió desde la cuenta sincronizada en
+        // este perfil. Si salió desde otra cuenta de Gmail, no se muestra aquí:
+        // el usuario lo ve en el perfil que tiene esa cuenta.
+        const syncedAccount = String(googleConnectedEmail || '').toLowerCase().trim();
+        const sameAccount = !syncedAccount || !createdEmail || belongsToGoogleAccount(createdEmail, syncedAccount);
+        if (createdEmail && sameAccount) {
           setEmails(prev => [createdEmail, ...prev]);
           setSelectedEmail(createdEmail);
+        }
+        if (!sameAccount) {
+          const sender = createdEmail?.google_account || createdEmail?.remitente_email || '';
+          toast({
+            title: isEs ? 'Enviado desde otra cuenta' : 'Sent from another account',
+            description: isEs
+              ? `El correo salió desde ${sender}. Esta bandeja muestra solo ${syncedAccount}; búscalo en el perfil conectado a ${sender}.`
+              : `The email was sent from ${sender}. This inbox only shows ${syncedAccount}; find it in the profile connected to ${sender}.`,
+          });
         }
         await fetchEmails();
       }
