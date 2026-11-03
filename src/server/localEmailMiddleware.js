@@ -238,6 +238,7 @@ export function createLocalEmailMiddleware(rootPath) {
             profile_id: profile_id || null,
             remitente_nombre: senderName,
             remitente_email: effectiveEmail,
+            google_account: effectiveEmail && effectiveEmail !== 'me' ? String(effectiveEmail).toLowerCase().trim() : null,
             destinatario_email: Array.isArray(to) ? to.join(', ') : to,
             asunto: subject,
             cuerpo: content,
@@ -349,6 +350,7 @@ export function createLocalEmailMiddleware(rootPath) {
                   remitente_nombre: fromName,
                   remitente_email: fromAddress,
                   destinatario_email: user,
+                  google_account: String(user).toLowerCase().trim(), // cuenta de Gmail de origen
                   asunto: subject,
                   cuerpo: plainText || snippet,
                   snippet: snippet || subject,

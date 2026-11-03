@@ -27,8 +27,11 @@ import {
   requestGoogleToken,
 } from '@/lib/googleAuthHelper';
 
+// "trucky" NO es señal logística: aparece en los nombres de las propias cuentas
+// (trucky.road.copilot@gmail.com, trucky.ai, trucky-copilot) y hacía pasar
+// correos de Instagram, GitHub, etc.
 const LOGISTICS_EMAIL_TERMS = [
-  'trucky', 'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
+  'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
   'flete', 'fletes', 'carga', 'cargas', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
   'detention', 'layover', 'tonu', 'lumper', 'carrier', 'broker', 'dispatcher', 'dispatch',
   'pickup', 'delivery', 'container', 'factoring', 'quickpay', 'camion', 'flota', 'tarifa de flete',
@@ -81,10 +84,47 @@ export function hasImportantAndLogisticsTags(email) {
   return Boolean(isImportante && hasLogisticsTag);
 }
 
-function hasLogisticsSignal(email) {
-  if (email?.es_logistico === true || hasImportantAndLogisticsTags(email)) {
-    return true;
+// Remitentes que nunca envían correos de operación logística.
+const NON_LOGISTICS_SENDERS = [
+  'google.com', 'accounts.google', 'openai.com', 'linkedin.com', 'github.com',
+  'amazon.com', 'uber.com', 'microsoft.com', 'temu.com', 'x.ai',
+  'instagram.com', 'facebookmail.com', 'facebook.com', 'meta.com', 'tiktok.com',
+  'twitter.com', 'hubspot', 'readme.io', 'readme.com', 'notion.so', 'slack.com',
+  'chatgpt.com', 'base44',
+];
+
+// Asuntos de cuenta/seguridad: códigos, contraseñas, inicios de sesión.
+const SYSTEM_SUBJECT_PATTERNS = [
+  /\bcode\b/i, /c[oó]digo/i, /\b\d{4,8}\b.*\b(code|c[oó]digo)\b/i,
+  /verif(y|ication|icar|icaci[oó]n)/i, /password|contrase[nñ]a/i,
+  /sign[- ]?in|log[- ]?in|inicio de sesi[oó]n|iniciar sesi[oó]n/i,
+  /security alert|alerta de seguridad|seguridad en tu cuenta/i,
+  /privacy policy|pol[ií]tica de privacidad|recuperado correctamente/i,
+  /get back on|welcome to|bienvenid[oa] a/i,
+];
+
+function isSystemOrSocialEmail(email) {
+  const sender = String(email?.remitente_email || '').toLowerCase();
+  const subject = String(email?.asunto || '');
+  return NON_LOGISTICS_SENDERS.some(d => sender.includes(d)) ||
+    SYSTEM_SUBJECT_PATTERNS.some(re => re.test(subject));
+}
+
+// ¿El correo pertenece a la cuenta de Gmail conectada?
+// google_account lo guarda la sincronización en producción; en local se deduce
+// del destinatario (recibidos) o del remitente (enviados).
+function belongsToGoogleAccount(email, account) {
+  const acc = account.toLowerCase().trim();
+  if (email?.google_account) {
+    return String(email.google_account).toLowerCase().trim() === acc;
   }
+  const field = email?.tipo_flujo === 'sent' ? email?.remitente_email : email?.destinatario_email;
+  return String(field || '').toLowerCase().includes(acc);
+}
+
+function hasLogisticsSignal(email) {
+  // Ya no se confía en es_logistico ni en la etiqueta "Importante" de Gmail:
+  // la sincronización marcaba como logístico cualquier correo que dijera "trucky".
   const text = `${email.asunto || ''} ${email.snippet || ''} ${email.cuerpo || ''}`
     .toLowerCase()
     .normalize('NFD')
@@ -243,42 +283,29 @@ export default function Emails() {
 
       const activeGoogleAcc = (overrideAccount !== undefined ? overrideAccount : (googleConnectedEmail || '')).toLowerCase().trim();
 
-      // Filtrar correos no deseados de Google/sistema y correos no logísticos
+      // Filtrar la bandeja. El ORDEN importa: primero la cuenta, luego lo que
+      // nunca es logístico y al final la señal logística. Antes había un
+      // "return true" al inicio que saltaba todas las reglas.
       const cleanList = profileScoped.filter(e => {
-        if (hasImportantAndLogisticsTags(e)) {
+        // 1) Cuenta de Gmail: solo correos de la cuenta conectada en este perfil.
+        //    Fail-closed: si no se puede saber de qué cuenta es, no se muestra.
+        if (activeGoogleAcc && !belongsToGoogleAccount(e, activeGoogleAcc)) {
+          return false;
+        }
+
+        // 2) Correos de sistema / redes sociales: nunca son logísticos,
+        //    aunque Gmail los marque como "Importante".
+        if (isSystemOrSocialEmail(e)) {
+          return false;
+        }
+
+        // 3) Lo que enviamos desde Trucky es logístico.
+        if (e.tipo_flujo === 'sent') {
           return true;
         }
 
-        const sender = (e.remitente_email || '').toLowerCase();
-        const subject = (e.asunto || '').toLowerCase();
-        const senderIsNonLogistics = [
-          'google.com', 'accounts.google', 'openai.com', 'linkedin.com', 'github.com',
-          'amazon.com', 'uber.com', 'microsoft.com', 'temu.com', 'x.ai',
-        ].some(domain => sender.includes(domain));
-
-        if (e.es_logistico === false || senderIsNonLogistics || !hasLogisticsSignal(e)) {
-          return false;
-        }
-
-        if (activeGoogleAcc && e.google_account) {
-          if (e.google_account.toLowerCase().trim() !== activeGoogleAcc) {
-            return false;
-          }
-        }
-
-        if (
-          subject.includes('alerta de seguridad') ||
-          subject.includes('security alert') ||
-          subject.includes('recuperado correctamente') ||
-          subject.includes('código de verificación') ||
-          subject.includes('verification code') ||
-          subject.includes('política de privacidad') ||
-          subject.includes('privacy policy')
-        ) {
-          return false;
-        }
-
-        return true;
+        // 4) Señal logística real en el contenido (sin contar la palabra "trucky").
+        return hasLogisticsSignal(e);
       });
 
       // Ordenar siempre del más reciente al más antiguo
@@ -523,14 +550,15 @@ export default function Emails() {
             ? ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} recibidos, ${diagnostics.reparados || 0} existentes actualizados.`
             : ` Gmail: ${diagnostics.mensajesDevueltosPorGmail} received, ${diagnostics.reparados || 0} existing emails refreshed.`
           : '';
+        // Primero recargamos la bandeja y DESPUÉS avisamos: antes el aviso salía
+        // mientras la lista todavía se estaba actualizando.
+        await fetchEmails(emailToSync);
         toast({
           title: isEs ? 'Sincronización completada' : 'Sync Completed',
           description: isEs
             ? `${nuevos} correos logísticos importados (${omitidos} personales/spam filtrados).${diagnosticText}`
             : `${nuevos} freight emails imported (${omitidos} non-logistics filtered).${diagnosticText}`,
         });
-        
-        await fetchEmails(emailToSync);
       }
     } catch (err) {
       const serverMsg = err?.response?.data?.error || err?.response?.data?.message || err?.message || 'Error de conexión';
