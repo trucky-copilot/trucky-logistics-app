@@ -21,6 +21,7 @@ import {
 } from '@/lib/dispatchAutomation';
 import {
   sendEmailWithAutoAuth,
+  isGoogleAuthError,
   getStoredGoogleAuth,
   saveStoredGoogleAuth,
   clearStoredGoogleAuth,
@@ -697,35 +698,46 @@ export default function Emails() {
         }
 
         if (token) {
-          let syncRes = await base44.functions.invoke('syncGmail', {
-            accessToken: token,
+          const runSync = (authToken) => base44.functions.invoke('syncGmail', {
+            accessToken: authToken,
             gmailUser: effectiveEmail,
             organization_id: orgId,
             profile_id: activeProfileId,
             user_id: user?.id || null,
             limit: 80,
-          }).catch(err => ({ data: { error: err?.message || '401' } }));
+          }).catch(err => ({
+            // Antes se guardaba err.message ("Request failed with status code 400"),
+            // que no dice nada del token, así que nunca se renovaba: "Actualizar"
+            // fallaba en silencio y solo "Sincronizar" (que abre Google) funcionaba.
+            data: { error: err?.response?.data?.error || err?.message || 'error' },
+            status: err?.response?.status,
+          }));
 
-          // Si el token expiró (después de 1 hora), renovarlo automáticamente y reintentar
-          if (syncRes?.data?.error && /401|autenticaci|credentials|expired|token/i.test(String(syncRes.data.error))) {
+          let syncRes = await runSync(token);
+
+          // Token vencido (dura ~1 hora): renovarlo para la MISMA cuenta y reintentar.
+          if (syncRes?.data?.error && (syncRes.status === 401 || isGoogleAuthError(syncRes.data.error))) {
             try {
-              const fresh = await requestGoogleToken('');
+              const fresh = await requestGoogleToken('', effectiveEmail);
               token = fresh.token;
               setOauthToken(token);
               saveStoredGoogleAuth(token, fresh.email || effectiveEmail, activeProfileId);
-              syncRes = await base44.functions.invoke('syncGmail', {
-                accessToken: token,
-                gmailUser: fresh.email || effectiveEmail,
-                organization_id: orgId,
-                profile_id: activeProfileId,
-                user_id: user?.id || null,
-                limit: 80,
-              });
+              syncRes = await runSync(token);
             } catch (_) {
               clearExpiredToken();
               handleConnectGoogle('select_account');
               return;
             }
+          }
+
+          if (syncRes?.data?.error) {
+            toast({
+              title: isEs ? 'No se pudo actualizar' : 'Could not refresh',
+              description: String(syncRes.data.error),
+              variant: 'destructive',
+            });
+            await fetchEmails(effectiveEmail);
+            return;
           }
         }
       }

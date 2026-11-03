@@ -58,7 +58,8 @@ export function clearStoredGoogleAuth(profileId = '1') {
  * Solicita o renueva un token de Google OAuth 2.0.
  * Si ya se otorgaron permisos previos, Google renueva sin interrupciones.
  */
-export function requestGoogleToken(promptMode = '') {
+// loginHint: sugiere a Google la cuenta del perfil para no cambiarla por error.
+export function requestGoogleToken(promptMode = '', loginHint = '') {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
       return reject(new Error('El servicio de autenticación de Google se está inicializando. Por favor intenta en unos segundos.'));
@@ -89,7 +90,8 @@ export function requestGoogleToken(promptMode = '') {
         },
       });
 
-      client.requestAccessToken({ prompt: promptMode });
+      const hint = loginHint && String(loginHint).includes('@') ? String(loginHint) : '';
+      client.requestAccessToken(hint ? { prompt: promptMode, login_hint: hint, hint } : { prompt: promptMode });
     } catch (err) {
       reject(err);
     }
@@ -101,12 +103,12 @@ export function requestGoogleToken(promptMode = '') {
  * primero intenta en silencio (permisos ya otorgados) y, si Google exige que el
  * usuario confirme la cuenta, abre la ventana de selección desde el mismo envío.
  */
-async function obtainGoogleToken() {
+async function obtainGoogleToken(loginHint = '') {
   try {
-    return await requestGoogleToken('');
+    return await requestGoogleToken('', loginHint);
   } catch (_) {
     try {
-      return await requestGoogleToken('select_account');
+      return await requestGoogleToken('select_account', loginHint);
     } catch (err) {
       throw new Error(
         err?.message ||
@@ -135,6 +137,18 @@ export function isGoogleAuthError(text = '') {
   ].some(k => t.includes(k));
 }
 
+/**
+ * Guarda el token nuevo SOLO si es de la misma cuenta que ya tiene el perfil.
+ * Antes, al enviar con otra cuenta, se sobrescribía la cuenta del perfil y la
+ * bandeja (sincronizada con otra) empezaba a mezclar correos.
+ */
+function keepProfileAccount(fresh, profileEmail, profileId) {
+  const same = !profileEmail || !fresh.email ||
+    String(fresh.email).toLowerCase() === String(profileEmail).toLowerCase();
+  if (same) saveStoredGoogleAuth(fresh.token, fresh.email || profileEmail, profileId);
+  return fresh.email || profileEmail;
+}
+
 export async function sendEmailWithAutoAuth({
   to,
   subject,
@@ -154,10 +168,9 @@ export async function sendEmailWithAutoAuth({
 
   // Si no hay token guardado en el navegador, solicitarlo antes del envío
   if (!token) {
-    const authResult = await obtainGoogleToken();
+    const authResult = await obtainGoogleToken(email);
     token = authResult.token;
-    email = authResult.email || email;
-    saveStoredGoogleAuth(token, email, profile_id);
+    email = keepProfileAccount(authResult, email, profile_id);
   }
 
   const callSend = async (authToken, senderEmail, overrideThreadId = threadId) => {
@@ -190,9 +203,9 @@ export async function sendEmailWithAutoAuth({
       }
       if (isGoogleAuthError(errorText)) {
         // Renovar automáticamente y reintentar de inmediato
-        const fresh = await obtainGoogleToken();
-        saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
-        return await callSend(fresh.token, fresh.email || email);
+        const fresh = await obtainGoogleToken(email);
+        const sender = keepProfileAccount(fresh, email, profile_id);
+        return await callSend(fresh.token, sender);
       }
     }
     return res;
@@ -205,9 +218,9 @@ export async function sendEmailWithAutoAuth({
     }
     if (status === 401 || status === 403 || isGoogleAuthError(msg)) {
       // Renovar automáticamente y reintentar
-      const fresh = await obtainGoogleToken();
-      saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
-      return await callSend(fresh.token, fresh.email || email);
+      const fresh = await obtainGoogleToken(email);
+      const sender = keepProfileAccount(fresh, email, profile_id);
+      return await callSend(fresh.token, sender);
     }
     throw err;
   }
