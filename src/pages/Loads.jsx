@@ -1,15 +1,19 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Plus, Package, Trash2, Pencil } from 'lucide-react';
+import { Plus, Package, Trash2, Pencil, UserCheck } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import LoadForm from '@/components/LoadForm';
 import DeleteConfirmModal from '@/components/DeleteConfirmModal';
-import { useOrganizationId } from '@/lib/AppStateContext';
+import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
 import { useDemo } from '@/lib/DemoContext';
 import DemoLimitModal from '@/components/DemoLimitModal';
+import { useToast } from '@/components/ui/use-toast';
+import { ToastAction } from '@/components/ui/toast';
+import { onlyActiveProfile, buildDriverOptions, storeDispatchDraft } from '@/lib/driverAssignment';
 
 export default function Loads() {
   const orgId = useOrganizationId();
@@ -24,6 +28,17 @@ export default function Loads() {
   const [deleteLoad, setDeleteLoad] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [drivers, setDrivers] = useState([]);
+  const [trucks, setTrucks] = useState([]);
+  const { currentUser } = useAppState();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const isEs = locale !== 'en';
+
+  const legacyIds = (entity) => {
+    try { return JSON.parse(localStorage.getItem(`profile_${entity}_${orgId}_${activeProfileId}`) || 'null'); }
+    catch (_) { return null; }
+  };
 
   const getProfileLoadIds = () => {
     const key = `profile_loads_${orgId}_${activeProfileId}`;
@@ -60,13 +75,19 @@ export default function Loads() {
 
   const loadData = async () => {
     setLoading(true);
-    const data = await listByOrg(base44.entities.Load, orgId, '-created_date', 100);
+    const [data, rawDrivers, rawTrucks] = await Promise.all([
+      listByOrg(base44.entities.Load, orgId, '-created_date', 100),
+      listByOrg(base44.entities.Driver, orgId),
+      listByOrg(base44.entities.Truck, orgId),
+    ]);
+    // Solo conductores y camiones del carrier activo (perfil activo).
+    setDrivers(onlyActiveProfile(rawDrivers, activeProfileId, legacyIds('drivers')));
+    setTrucks(onlyActiveProfile(rawTrucks, activeProfileId, legacyIds('trucks')));
     const profileIds = getProfileLoadIds();
 
+    // Antes: "shared_with_carrier === true" mostraba la carga en TODOS los
+    // perfiles, mezclando carriers. Ahora cada carga vive solo en su perfil.
     let filtered = data.filter(l => {
-      if (l.shared_with_carrier === true) {
-        return true;
-      }
       if (l.profile_id) {
         return String(l.profile_id) === String(activeProfileId);
       }
@@ -99,11 +120,35 @@ export default function Loads() {
         resultado,
       };
 
+      let saved;
       if (editLoad) {
-        await base44.entities.Load.update(editLoad.id, payload);
+        saved = await base44.entities.Load.update(editLoad.id, payload);
       } else {
-        const created = await base44.entities.Load.create(withOrg(orgId, payload));
-        addLoadToProfile(created.id);
+        saved = await base44.entities.Load.create(withOrg(orgId, payload));
+        addLoadToProfile(saved.id);
+      }
+
+      // Si se asignó un conductor NUEVO, dejar listo el borrador (no se envía solo).
+      const newlyAssigned = data.conductor_id && String(data.conductor_id) !== String(editLoad?.conductor_id || '');
+      if (newlyAssigned) {
+        const option = driverOptionsFor(editLoad?.id).find(o => String(o.id) === String(data.conductor_id));
+        if (option) {
+          storeDispatchDraft({
+            load: { ...(editLoad || {}), ...payload, id: saved?.id || editLoad?.id },
+            option,
+            carrierEmail: currentUser?.email || '',
+            isEs,
+          });
+          toast({
+            title: isEs ? `Carga asignada a ${option.name}` : `Load assigned to ${option.name}`,
+            description: isEs ? 'El borrador para el Broker y el Carrier está listo.' : 'The draft for the Broker and Carrier is ready.',
+            action: (
+              <ToastAction altText={isEs ? 'Abrir borrador' : 'Open draft'} onClick={() => navigate('/emails?dispatch_draft=1')}>
+                {isEs ? 'Abrir borrador' : 'Open draft'}
+              </ToastAction>
+            ),
+          });
+        }
       }
       window.dispatchEvent(new CustomEvent('notifications-updated'));
       setShowForm(false);
@@ -114,6 +159,9 @@ export default function Loads() {
       alert('Error al guardar la carga: ' + (err?.message || 'intente de nuevo'));
     }
   };
+
+  const driverOptionsFor = (currentLoadId) =>
+    buildDriverOptions({ drivers, trucks, loads, currentLoadId, isEs });
 
   const handleEdit = (load) => {
     setEditLoad(load);
@@ -193,6 +241,7 @@ export default function Loads() {
           load={editLoad}
           onSave={handleSave}
           onClose={() => { setShowForm(false); setEditLoad(null); }}
+          driverOptions={driverOptionsFor(editLoad?.id)}
         />
       )}
 
@@ -226,6 +275,12 @@ export default function Loads() {
                     <td className="px-4 py-3">
                       <div className="text-xs font-medium text-foreground">{load.origen}</div>
                       <div className="text-xs text-muted-foreground">→ {load.destino}</div>
+                      {load.conductor_nombre && (
+                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-violet-300">
+                          <UserCheck className="w-3 h-3" />
+                          {load.conductor_nombre}{load.truck_placa ? ` · ${load.truck_placa}` : ''}
+                        </div>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground hidden sm:table-cell">{load.broker_nombre || '--'}</td>
                     <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={load.tipo_cliente || 'broker_directo'} /></td>

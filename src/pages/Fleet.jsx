@@ -11,6 +11,8 @@ import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useDemo } from '@/lib/DemoContext';
 import DemoLimitModal from '@/components/DemoLimitModal';
 import { useToast } from '@/components/ui/use-toast';
+import AssignLoadModal from '@/components/AssignLoadModal';
+import { assignmentFields, storeDispatchDraft } from '@/lib/driverAssignment';
 import {
   AUTOMATION_PENDING_DISPATCH_LOAD_KEY,
   AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,
@@ -234,159 +236,29 @@ export default function Fleet() {
     loadData();
   }, [orgId, activeProfileId]);
 
-  // Construir lista de conductores disponibles únicamente de ESTE perfil (activeProfileId)
-  const availableDriverOptions = (() => {
-    const options = [];
-    const seen = new Set();
-
-    drivers
-      .filter(d => !d.estado || d.estado === 'activo')
-      .forEach(d => {
-        const name = `${d.nombre || ''} ${d.apellido || ''}`.trim();
-        if (!name) return;
-        const matchedTruck =
-          trucks.find(
-            tr =>
-              (d.truck_asignado && String(d.truck_asignado).toLowerCase() === String(tr.placa || '').toLowerCase()) ||
-              (tr.conductor_nombre && String(tr.conductor_nombre).toLowerCase() === name.toLowerCase())
-          ) || trucks.find(tr => tr.estado === 'disponible');
-
-        const key = name.toLowerCase();
-        if (!seen.has(key)) {
-          seen.add(key);
-          options.push({
-            id: d.id,
-            driverName: name,
-            driverPhone: d.telefono || '',
-            truck: matchedTruck || null,
-            placa: matchedTruck?.placa || d.truck_asignado || '',
-          });
-        }
-      });
-
-    trucks
-      .filter(tr => tr.estado === 'disponible' && tr.conductor_nombre)
-      .forEach(tr => {
-        const name = String(tr.conductor_nombre).trim();
-        const key = name.toLowerCase();
-        if (name && !seen.has(key)) {
-          seen.add(key);
-          options.push({
-            id: `truck-${tr.id}`,
-            driverName: name,
-            driverPhone: '',
-            truck: tr,
-            placa: tr.placa || '',
-          });
-        }
-      });
-
-    return options;
-  })();
-
-  const handleSelectAvailableDriver = async (option) => {
-    setDriverMenuOpen(false);
-    const loadToAssign =
-      profileLoads.find(l => l.estado === 'pendiente' && !l.conductor_nombre) ||
-      profileLoads.find(l => l.estado === 'pendiente') ||
-      profileLoads[0] ||
-      null;
-
-    if (!loadToAssign) {
-      toast({
-        title: isEs ? 'No hay cargas pendientes en este perfil' : 'No pending loads in this profile',
-        description: isEs ? 'Primero crea una carga para asignarle el conductor.' : 'First create a load to assign the driver.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
+  // Asignar: la carga y el conductor los elige el dispatcher en AssignLoadModal.
+  // Relación por ID; solo conductores del perfil activo; el correo queda en borrador.
+  const handleAssign = async (load, option) => {
     setAssigningDriver(true);
     try {
-      const driverName = option.driverName;
-      const placa = option.placa || '';
-
-      // 1. Actualizar la carga en Base44 y marcar shared_with_carrier: true para que sea visible en el rol Carrier
-      const updatedLoad = await base44.entities.Load.update(loadToAssign.id, {
-        conductor_nombre: driverName,
-        truck_placa: placa,
-        estado: 'en_transito',
-        shared_with_carrier: true,
+      await base44.entities.Load.update(load.id, assignmentFields(option));
+      // Antes la carga se copiaba a los 5 perfiles y se marcaba shared_with_carrier,
+      // lo que la mostraba en otros carriers. Ahora se queda en su perfil.
+      storeDispatchDraft({
+        load: { ...load, ...assignmentFields(option) },
+        option,
+        carrierEmail: load.carrier_email || currentUser?.email || '',
+        isEs,
       });
-
-      const allProfileIds = Array.from(
-        new Set(['1', '2', '3', '4', '5', ...(profiles || []).map(p => String(p.id))])
-      );
-      for (const pid of allProfileIds) {
-        const key = `profile_loads_${orgId}_${pid}`;
-        try {
-          const existing = JSON.parse(localStorage.getItem(key) || '[]');
-          if (Array.isArray(existing) && !existing.includes(loadToAssign.id)) {
-            localStorage.setItem(key, JSON.stringify([...existing, loadToAssign.id]));
-          }
-        } catch (_) {}
-      }
-
-      // 2. Si tiene camión asociado en el perfil, actualizarlo en Base44
-      if (option.truck?.id) {
-        await base44.entities.Truck.update(option.truck.id, {
-          conductor_nombre: driverName,
-          estado: 'en_ruta',
-        });
-      }
-
-      // 3. Construir borrador en Emails para el Broker y el Carrier
-      const brokerEmail = loadToAssign.broker_email || '';
-      const carrierEmail = loadToAssign.carrier_email || currentUser?.email || '';
-      const refLabel = loadToAssign.numero_referencia ? ` (Ref: ${loadToAssign.numero_referencia})` : '';
-
-      const draftSubject = `Confirmación de Despacho: ${loadToAssign.origen} → ${loadToAssign.destino}${refLabel}`;
-      const draftBody = isEs
-        ? `Hola equipo (${loadToAssign.broker_nombre || 'Broker'} & Carrier),\n\nConfirmamos la asignación de conductor y unidad para la carga:\n\n` +
-          `• Ruta: ${loadToAssign.origen} → ${loadToAssign.destino} (${loadToAssign.millas || '--'} millas)\n` +
-          `• Fecha de Recogida (Pickup): ${loadToAssign.fecha_carga || 'Confirmada'}\n` +
-          `• Fecha de Entrega (Delivery): ${loadToAssign.fecha_entrega || 'Confirmada'}\n` +
-          (loadToAssign.numero_referencia ? `• Load # / Referencia: ${loadToAssign.numero_referencia}\n` : '') +
-          `• Tarifa Acordada: $${(loadToAssign.tarifa_negociada || 0).toLocaleString()}\n\n` +
-          `DATOS DEL CONDUCTOR ASIGNADO:\n` +
-          `• Conductor: ${driverName}${option.driverPhone ? ' (Tel: ' + option.driverPhone + ')' : ''}\n` +
-          (placa ? `• Camión / Placa: ${placa}\n` : '') +
-          `\nSaludos cordiales,\nDepartamento de Despacho — Trucky`
-        : `Hello team (${loadToAssign.broker_nombre || 'Broker'} & Carrier),\n\nWe confirm the driver and unit assignment for the load:\n\n` +
-          `• Route: ${loadToAssign.origen} → ${loadToAssign.destino} (${loadToAssign.millas || '--'} miles)\n` +
-          `• Pickup Date: ${loadToAssign.fecha_carga || 'Confirmed'}\n` +
-          `• Delivery Date: ${loadToAssign.fecha_entrega || 'Confirmed'}\n` +
-          (loadToAssign.numero_referencia ? `• Load # / Reference: ${loadToAssign.numero_referencia}\n` : '') +
-          `• Agreed Rate: $${(loadToAssign.tarifa_negociada || 0).toLocaleString()}\n\n` +
-          `ASSIGNED DRIVER DETAILS:\n` +
-          `• Driver: ${driverName}${option.driverPhone ? ' (Phone: ' + option.driverPhone + ')' : ''}\n` +
-          (placa ? `• Truck / Plate: ${placa}\n` : '') +
-          `\nBest regards,\nDispatch Department — Trucky`;
-
-      sessionStorage.setItem(
-        AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,
-        JSON.stringify({
-          loadId: updatedLoad?.id || loadToAssign.id,
-          origen: loadToAssign.origen,
-          destino: loadToAssign.destino,
-          brokerEmail,
-          carrierEmail,
-          conductorNombre: driverName,
-          truckPlaca: placa,
-          subject: draftSubject,
-          content: draftBody,
-          threadId: loadToAssign.thread_id || null,
-        })
-      );
       sessionStorage.removeItem(AUTOMATION_PENDING_DISPATCH_LOAD_KEY);
       window.dispatchEvent(new CustomEvent('notifications-updated'));
-
+      setDriverMenuOpen(false);
       navigate('/emails?dispatch_draft=1');
     } catch (err) {
-      console.error('Error al elegir conductor:', err);
+      console.error('Error al asignar conductor:', err);
       toast({
-        title: isEs ? 'Error al elegir conductor' : 'Failed to choose driver',
-        description: err?.message || 'Intenta nuevamente.',
+        title: isEs ? 'Error al asignar conductor' : 'Failed to assign driver',
+        description: err?.message || (isEs ? 'Intenta nuevamente.' : 'Try again.'),
         variant: 'destructive',
       });
     } finally {
@@ -425,44 +297,30 @@ export default function Fleet() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Botón siempre visible; el menú solo lista conductores si existen en este perfil */}
-          {(
-            <div className="relative">
-              <button
-                type="button"
-                onClick={() => setDriverMenuOpen(prev => !prev)}
-                disabled={assigningDriver}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground shadow-sm transition-all cursor-pointer disabled:opacity-50"
-              >
-                {assigningDriver ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-foreground" />
-                ) : (
-                  <UserCheck className="w-3.5 h-3.5 text-primary-foreground" />
-                )}
-                <span>{isEs ? 'Elegir conductor' : 'Choose driver'}</span>
-                <ChevronDown className="w-3.5 h-3.5 text-primary-foreground" />
-              </button>
-
-              {driverMenuOpen && availableDriverOptions.length > 0 && (
-                <div className="absolute right-0 mt-1.5 w-56 rounded-xl bg-card border border-border shadow-xl z-40 py-1">
-                  {availableDriverOptions.map(opt => (
-                    <button
-                      key={opt.id}
-                      type="button"
-                      onClick={() => handleSelectAvailableDriver(opt)}
-                      className="w-full text-left px-3 py-2 text-xs hover:bg-muted transition-colors flex items-center justify-between gap-2"
-                    >
-                      <span className="font-semibold text-foreground truncate">{opt.driverName}</span>
-                      {opt.placa && (
-                        <span className="text-[10px] font-mono text-muted-foreground flex-shrink-0">
-                          {opt.placa}
-                        </span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+          {/* Abre la ventana: 1) elegir carga, 2) elegir conductor */}
+          <button
+            type="button"
+            onClick={() => setDriverMenuOpen(true)}
+            disabled={assigningDriver}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground shadow-sm transition-all cursor-pointer disabled:opacity-50"
+          >
+            {assigningDriver ? (
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-foreground" />
+            ) : (
+              <UserCheck className="w-3.5 h-3.5 text-primary-foreground" />
+            )}
+            <span>{isEs ? 'Elegir conductor' : 'Choose driver'}</span>
+          </button>
+          {driverMenuOpen && (
+            <AssignLoadModal
+              loads={profileLoads}
+              drivers={drivers}
+              trucks={trucks}
+              isEs={isEs}
+              busy={assigningDriver}
+              onAssign={handleAssign}
+              onClose={() => setDriverMenuOpen(false)}
+            />
           )}
 
           <button

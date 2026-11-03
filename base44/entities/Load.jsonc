@@ -74,6 +74,14 @@
     "conductor_nombre": {
       "type": "string"
     },
+    "conductor_id": {
+      "type": "string",
+      "description": "ID del Driver asignado (relación por ID; conductor_nombre es solo para mostrar)"
+    },
+    "truck_id": {
+      "type": "string",
+      "description": "ID del Truck del conductor asignado"
+    },
     "carrier_email": {
       "type": "string",
       "description": "Correo electrónico del carrier o conductor asignado"

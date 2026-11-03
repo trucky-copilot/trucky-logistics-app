@@ -2,10 +2,13 @@ import { useState, useEffect } from 'react';
 import { X, TrendingUp, TrendingDown } from 'lucide-react';
 import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
+import DriverSelect, { canAssign } from '@/components/DriverSelect';
+import { assignmentFields } from '@/lib/driverAssignment';
 
-export default function LoadForm({ load, onSave, onClose }) {
+export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) {
   const { setUnsavedChanges } = useProfile();
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
+  const isEs = locale !== 'en';
 
   const TIPO_OPTIONS = [
     { value: 'broker_directo', label: t.loadForm.directBroker },
@@ -23,12 +26,15 @@ export default function LoadForm({ load, onSave, onClose }) {
     origen: '', destino: '', millas: '', broker_nombre: '', tipo_cliente: 'broker_directo',
     tarifa_ofrecida: '', tarifa_negociada: '', diesel_precio_dia: 5.40,
     fecha_carga: '', fecha_entrega: '', truck_placa: '', conductor_nombre: '',
+    conductor_id: null, truck_id: null,
     estado: 'pendiente', notas: '', numero_referencia: '',
     ...load
   };
   
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
+  const [docAck, setDocAck] = useState(false);
+  const selectedDriver = driverOptions.find(o => String(o.id) === String(form.conductor_id)) || null;
 
   useEffect(() => {
     const isUnsaved = JSON.stringify(form) !== JSON.stringify(initialState);
@@ -59,6 +65,8 @@ export default function LoadForm({ load, onSave, onClose }) {
     if (!form.millas || Number(String(form.millas).replace(',', '.')) <= 0) {
       newErrors.millas = true;
     }
+    // Documento vencido (ej. TWIC): no se asigna sin confirmación explícita.
+    if (!canAssign(selectedDriver, docAck)) newErrors.conductor_id = true;
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
@@ -208,14 +216,33 @@ export default function LoadForm({ load, onSave, onClose }) {
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.truckPlate}</label>
-              <input value={form.truck_placa} onChange={e => set('truck_placa', e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder="ABC-1234" />
+              <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.driver}</label>
+              {/* Relación por ID: se elige de la lista de conductores del carrier activo */}
+              <DriverSelect
+                options={driverOptions}
+                value={form.conductor_id}
+                legacyName={!form.conductor_id ? form.conductor_nombre : ''}
+                onChange={opt => {
+                  setDocAck(false);
+                  setForm(prev => ({ ...prev, ...assignmentFields(opt) }));
+                  if (errors.conductor_id) setErrors(prev => ({ ...prev, conductor_id: false }));
+                }}
+                acknowledged={docAck}
+                onAcknowledge={setDocAck}
+                isEs={isEs}
+              />
+              {errors.conductor_id && (
+                <p className="text-[11px] text-red-400 mt-1">
+                  {isEs ? 'Confirma la advertencia del documento vencido para asignar.' : 'Confirm the expired-document warning to assign.'}
+                </p>
+              )}
             </div>
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.driver}</label>
-              <input value={form.conductor_nombre} onChange={e => set('conductor_nombre', e.target.value)}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder={t.loadForm.driverPlaceholder} />
+              <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.truckPlate}</label>
+              {/* La placa sale del camión del conductor elegido */}
+              <input value={form.truck_placa || ''} readOnly
+                className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
+                placeholder={isEs ? 'Se completa al elegir conductor' : 'Filled when a driver is chosen'} />
             </div>
           </div>
 
