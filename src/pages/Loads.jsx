@@ -29,6 +29,7 @@ export default function Loads() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [filter, setFilter] = useState('all');
   const [drivers, setDrivers] = useState([]);
+  const [myAssignedLoads, setMyAssignedLoads] = useState([]);
   const [trucks, setTrucks] = useState([]);
   const { currentUser } = useAppState();
   const { toast } = useToast();
@@ -95,12 +96,26 @@ export default function Loads() {
     });
 
     setLoads(filtered);
+
+    // Cargas que un dispatcher me asignó por correo (vista del conductor).
+    const myEmail = String(currentUser?.email || '').toLowerCase().trim();
+    if (myEmail) {
+      try {
+        const mine = await base44.entities.Load.filter({ conductor_email: myEmail }, '-created_date', 50);
+        const ownIds = new Set(filtered.map(l => l.id));
+        setMyAssignedLoads((mine || []).filter(l => !ownIds.has(l.id)));
+      } catch (_) {
+        setMyAssignedLoads([]);
+      }
+    } else {
+      setMyAssignedLoads([]);
+    }
     setLoading(false);
   };
 
   useEffect(() => {
     loadData();
-  }, [orgId, activeProfileId]);
+  }, [orgId, activeProfileId, currentUser?.email]);
 
   const filtered = filter === 'all' ? loads : loads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
 
@@ -202,6 +217,28 @@ export default function Loads() {
         currentCount={loads.length}
         maxLimit={limits?.LOADS || 5}
       />
+
+      {/* Vista del conductor: cargas que me asignaron por correo (solo lectura) */}
+      {myAssignedLoads.length > 0 && (
+        <div className="rounded-2xl border border-violet-500/30 bg-violet-500/5 p-4 space-y-2">
+          <h2 className="text-sm font-semibold text-violet-200 flex items-center gap-1.5">
+            <UserCheck className="w-4 h-4" />
+            {isEs ? `Cargas asignadas a ti (${myAssignedLoads.length})` : `Loads assigned to you (${myAssignedLoads.length})`}
+          </h2>
+          {myAssignedLoads.map(l => (
+            <div key={l.id} className="flex items-center justify-between gap-3 rounded-xl bg-card/60 border border-border px-3 py-2">
+              <div className="min-w-0">
+                <div className="text-xs font-medium text-foreground truncate">{l.origen} → {l.destino}</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {[l.numero_referencia && `Ref: ${l.numero_referencia}`, l.fecha_carga && `${isEs ? 'Recogida' : 'Pickup'}: ${String(l.fecha_carga).slice(0, 10)}`, l.truck_placa]
+                    .filter(Boolean).join(' · ') || (isEs ? 'Sin detalles' : 'No details')}
+                </div>
+              </div>
+              <StatusBadge status={l.estado || 'pendiente'} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Summary strip */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

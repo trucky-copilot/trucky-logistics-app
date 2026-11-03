@@ -74,6 +74,10 @@
     "conductor_nombre": {
       "type": "string"
     },
+    "conductor_email": {
+      "type": "string",
+      "description": "Correo del conductor al que se envió el despacho; ese usuario puede ver la carga"
+    },
     "conductor_id": {
       "type": "string",
       "description": "ID del Driver asignado (relación por ID; conductor_nombre es solo para mostrar)"
@@ -142,6 +146,9 @@
       "$or": [
         {
           "created_by_id": "{{user.id}}"
+        },
+        {
+          "data.conductor_email": "{{user.email}}"
         },
         {
           "user_condition": {

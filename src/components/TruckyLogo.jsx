@@ -37,4 +37,16 @@ export function TruckyLogoBanner({ className = 'h-9 w-28', rounded = 'rounded-xl
   );
 }
 
+/**
+ * Logotipo completo (el mismo de la barra lateral): recuadro morado #4F1984
+ * con el logotipo blanco. `imgClass` controla el alto.
+ */
+export function TruckyWordmark({ imgClass = 'h-6', className = '' }) {
+  return (
+    <div className={`rounded-xl bg-[#4F1984] border border-white/15 shadow-lg shadow-[#4F1984]/40 px-3 py-2 inline-flex flex-shrink-0 ${className}`}>
+      <img src="/trucky-wordmark.png" alt="Trucky" className={`${imgClass} w-auto select-none pointer-events-none`} draggable={false} />
+    </div>
+  );
+}
+
 export default TruckyLogoIcon;

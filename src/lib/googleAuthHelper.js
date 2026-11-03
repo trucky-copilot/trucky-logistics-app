@@ -35,10 +35,19 @@ if (typeof window !== 'undefined') {
   purgeLegacyGoogleStorage();
 }
 
+// La CUENTA de Gmail del perfil se recuerda en localStorage (sobrevive a cerrar
+// la pestaña). El token sigue en sessionStorage porque caduca en ~1 hora.
+// Antes la cuenta también se perdía al cerrar la pestaña: desaparecía el correo
+// junto a "filter active" y la bandeja dejaba de filtrar por cuenta.
+const ACCOUNT_PREFIX = 'trucky_gmail_account_';
+
 export function getStoredGoogleAuth(profileId = '1') {
   if (typeof window === 'undefined') return { token: null, email: null };
   const token = sessionStorage.getItem(`${TOKEN_PREFIX}${profileId}`) || null;
-  const email = sessionStorage.getItem(`${EMAIL_PREFIX}${profileId}`) || null;
+  let email = sessionStorage.getItem(`${EMAIL_PREFIX}${profileId}`) || null;
+  if (!email) {
+    try { email = localStorage.getItem(`${ACCOUNT_PREFIX}${profileId}`) || null; } catch (_) {}
+  }
   return { token, email };
 }
 
@@ -46,6 +55,9 @@ export function saveStoredGoogleAuth(token, email, profileId = '1') {
   if (!token) return;
   sessionStorage.setItem(`${TOKEN_PREFIX}${profileId}`, token);
   if (email) sessionStorage.setItem(`${EMAIL_PREFIX}${profileId}`, email);
+  if (email && String(email).includes('@')) {
+    try { localStorage.setItem(`${ACCOUNT_PREFIX}${profileId}`, String(email).toLowerCase().trim()); } catch (_) {}
+  }
 }
 
 export function clearStoredGoogleAuth(profileId = '1') {

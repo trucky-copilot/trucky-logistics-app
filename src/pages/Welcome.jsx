@@ -1,6 +1,6 @@
 import { useReducer } from 'react';
 import { Truck, Shield, BarChart3, FileSearch, Loader2, ArrowLeft, MailCheck } from 'lucide-react';
-import { TruckyLogoIcon } from '@/components/TruckyLogo';
+import { TruckyWordmark } from '@/components/TruckyLogo';
 import { base44 } from '@/api/base44Client';
 import {
   AUTH_STEP,
@@ -176,14 +176,8 @@ export default function Welcome() {
     <div className="fixed inset-0 bg-background overflow-y-auto">
       <div className="min-h-full flex flex-col items-center justify-center p-6">
         {/* Logo */}
-        <div className="flex items-center gap-3 mb-8">
-          <div className="w-14 h-14 rounded-2xl overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] shadow-xl shadow-[#5B2BA0]/40">
-            <TruckyLogoIcon className="w-14 h-14" rounded="rounded-2xl" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-3xl font-black text-foreground tracking-tight lowercase">trucky</div>
-            <div className="text-sm text-violet-300/80 font-medium">Your road co-pilot</div>
-          </div>
+        <div className="flex items-center justify-center mb-8">
+          <TruckyWordmark imgClass="h-10" className="px-5 py-3 rounded-2xl" />
         </div>
 
         {/* Headline */}

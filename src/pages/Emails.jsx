@@ -1107,6 +1107,7 @@ export default function Emails() {
         etiquetas: ['INBOX', 'SENT', 'cargas', 'trucky'],
         es_importante: true,
         isAutomationDraft: true,
+        loadId: draftData.loadId || null,
       });
       setComposeOpen(true);
 
@@ -1439,6 +1440,28 @@ export default function Emails() {
         });
       } else {
         const createdEmail = res?.data?.email;
+
+        // Correo de despacho: registrar la carga al correo del conductor para que,
+        // al iniciar sesión en Trucky con ese correo, vea su carga.
+        // Conductor = destinatario que no es el broker ni la cuenta que envía.
+        if (composeForm.loadId) {
+          const senderAcc = String(googleConnectedEmail || '').toLowerCase().trim();
+          const exclude = new Set([
+            String(composeForm.brokerEmail || '').toLowerCase().trim(),
+            senderAcc,
+          ].filter(Boolean));
+          const driverEmail = String(composeForm.to || '')
+            .split(/[,;]/)
+            .map(x => x.trim().toLowerCase())
+            .find(x => x.includes('@') && !exclude.has(x));
+          if (driverEmail) {
+            try {
+              await base44.entities.Load.update(composeForm.loadId, { conductor_email: driverEmail });
+            } catch (err) {
+              console.warn('[Emails] No se pudo registrar la carga al conductor:', err);
+            }
+          }
+        }
         toast({
           title: isEs ? 'Correo enviado con éxito' : 'Email sent successfully',
           description: isEs
@@ -1635,9 +1658,13 @@ export default function Emails() {
                 ? 'Conectado a Gmail · Filtro inteligente anti-ruido activado'
                 : 'Connected to Gmail · Smart logistics filter active'}
             </span>
-            {googleConnectedEmail && (
+            {googleConnectedEmail && googleConnectedEmail.includes('@') ? (
               <span className="px-2 py-0.5 rounded-md bg-muted text-[11px] font-medium text-foreground border border-border">
                 {googleConnectedEmail}
+              </span>
+            ) : (
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-[11px] font-medium text-amber-300 border border-amber-500/30">
+                {isEs ? 'Sin cuenta conectada · usa Sincronizar' : 'No account connected · use Sync'}
               </span>
             )}
           </p>

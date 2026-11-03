@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TruckyLogoIcon } from '@/components/TruckyLogo';
+import { TruckyWordmark } from '@/components/TruckyLogo';
 import { base44 } from '@/api/base44Client';
 import { deriveCosts, FIXED_COST_DEFAULTS } from '@/lib/freight/costMath';
 import { Truck, Users, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
@@ -162,13 +162,7 @@ export default function Onboarding({ onComplete }) {
 
         {/* Logo */}
         <div className="flex items-center justify-center gap-2.5 mb-8">
-          <div className="w-11 h-11 rounded-xl overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] shadow-lg shadow-[#5B2BA0]/35">
-            <TruckyLogoIcon className="w-11 h-11" rounded="rounded-xl" />
-          </div>
-          <div className="leading-tight">
-            <div className="text-xl font-bold text-foreground tracking-tight lowercase">trucky</div>
-            <div className="text-xs text-violet-300/80 font-medium">Your road co-pilot</div>
-          </div>
+          <TruckyWordmark imgClass="h-8" />
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 space-y-6">
