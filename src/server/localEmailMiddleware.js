@@ -10,7 +10,7 @@ const LOGISTICS_KEYWORDS = [
   'lumper', 'carrier', 'carriers', 'broker', 'brokers', 'dispatcher', 'dispatch', 'pickup',
   'origin', 'destination', 'mc#', 'mc number', 'dot#', 'factoring', 'quickpay',
   'settlement', 'deadhead', 'all-in', 'rpm', 'flete', 'fletes', 'carga', 'cargas', 'camion', 'camiones',
-  'remolque', 'orden de entrega', 'carta porte', 'cotización', 'cotizacion', 'tarifa', 'tarifas', 'trucky',
+  'remolque', 'orden de entrega', 'carta porte', 'cotización', 'cotizacion', 'tarifa', 'tarifas',
   'rate quote', 'load offer', 'quote'
 ];
 
@@ -36,7 +36,9 @@ function classifyEmail(subject, text, fromAddress = '') {
   const tieneContenidoExcluido = EXCLUSION_KEYWORDS.some(k => content.includes(k));
 
   // No excluir si es enviado expresamente por Trucky o cotización de tarifa
-  const esCotizacionTrucky = content.includes('trucky') || content.includes('cotización de tarifa') || content.includes('cotizacion de tarifa');
+  // Antes también contaba content.includes('trucky'): como la cuenta se llama trucky.*,
+  // cualquier correo (Temu, Instagram…) se saltaba la lista de exclusión.
+  const esCotizacionTrucky = content.includes('cotización de tarifa') || content.includes('cotizacion de tarifa');
 
   if ((esRemitenteExcluido || tieneContenidoExcluido) && !esCotizacionTrucky) {
     return { es_logistico: false, categoria: 'general' };
@@ -315,14 +317,25 @@ export function createLocalEmailMiddleware(rootPath) {
             if (totalMessages > 0) {
               const fetchCount = Math.min(limit, totalMessages);
               const startSeq = Math.max(1, totalMessages - fetchCount + 1);
-              const range = `${startSeq}:${totalMessages}`;
+              let range = `${startSeq}:${totalMessages}`;
+
+              // Igual que en producción: Gmail ya separa Promociones y Social, así
+              // que pedimos solo lo que NO está ahí (búsqueda nativa X-GM-RAW).
+              // Si la búsqueda falla, se usa el rango de siempre.
+              try {
+                const seqs = await client.search({ gmailRaw: '-category:promotions -category:social -in:spam' });
+                if (Array.isArray(seqs)) {
+                  const latest = seqs.sort((a, b) => a - b).slice(-fetchCount);
+                  range = latest.length ? latest.join(',') : null;
+                }
+              } catch (_) {}
 
               const localEmails = readLocalEmails();
               const existingSet = new Set(
                 localEmails.map(e => `${e.remitente_email}__${e.asunto}__${e.fecha?.slice(0, 16)}`)
               );
 
-              for await (const msg of client.fetch(range, { source: true, envelope: true })) {
+              for await (const msg of (range ? client.fetch(range, { source: true, envelope: true }) : [])) {
                 if (!msg.source) continue;
 
                 const parsed = await simpleParser(msg.source);

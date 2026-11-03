@@ -114,3 +114,15 @@ Deno.test('shows email when it has both importante and broker/carrier/trucky lab
   );
   if (!resultTrucky.es_logistico) throw new Error('Email with both importante and trucky label was not shown');
 });
+
+Deno.test('Gmail Promotions/Social are never logistics, even with logistics words', () => {
+  const promo = classifyEmail('Free delivery on your shipment', 'Track your load', 'deals@shop.com', ['CATEGORY_PROMOTIONS']);
+  const social = classifyEmail('trucky.ai, get back on Instagram', 'carrier', 'x@instagram.com', ['CATEGORY_SOCIAL']);
+  if (promo.es_logistico) throw new Error('Promotions email was classified as logistics');
+  if (social.es_logistico) throw new Error('Social email was classified as logistics');
+});
+
+Deno.test('the word "trucky" alone does not make an email logistics', () => {
+  const result = classifyEmail('Congratulations! You are in!', 'Hi trucky, welcome to the club', 'news@somestore.com');
+  if (result.es_logistico) throw new Error('Email passed only because it mentions trucky');
+});

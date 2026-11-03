@@ -99,6 +99,11 @@ export function classifyEmail(subject: string, text: string, fromAddress = '', l
   const content = `${subj} ${text || ''}`.toLowerCase();
 
   const labelsLower = labels.map(l => (l || '').toLowerCase().trim());
+
+  // Gmail lo clasificó como Promociones o Social: nunca es operación logística.
+  if (labelsLower.some(l => l === 'category_promotions' || l === 'category_social')) {
+    return { es_logistico: false, categoria: 'general', isImportante: false };
+  }
   const isImportante = labelsLower.some(l => 
     l === 'important' || l === 'importante' || l.includes('important') || l.includes('importante') || l === 'starred'
   ) || /\b(importante|important|urgente)\b/i.test(subj);
@@ -126,12 +131,10 @@ export function classifyEmail(subject: string, text: string, fromAddress = '', l
   const hasSubjectMatch = LOGISTICS_KEYWORDS.some(term => containsTerm(subj, term));
   const hasTrucky = containsTerm(content, 'trucky');
 
-  if (!hasMandatory && !hasSubjectMatch && !hasTrucky && !hasLogisticsLabel) {
+  // "trucky" solo no basta: aparece en el nombre de las propias cuentas
+  // (trucky.road.copilot@…, trucky.ai), así que cualquier correo lo trae.
+  if (!hasMandatory && !hasSubjectMatch && !hasLogisticsLabel) {
     return { es_logistico: false, categoria: 'general', isImportante };
-  }
-
-  if (hasTrucky) {
-    return { es_logistico: true, categoria: 'cargas', isImportante };
   }
 
   // 2. Si tiene palabras de exclusión (ocio, seguridad, e-commerce, promociones)
@@ -362,14 +365,17 @@ export default async function syncGmail(req: Request, ctx: any) {
       console.log("[syncGmail] Sincronizando vía Google OAuth 2.0...");
       const fetchLimit = getFetchLimit(limit);
 
-      // Consultar tanto Recibidos/Enviados recientes como explícitamente correos IMPORTANTES para no perder ninguno por spam/promociones
+      // Gmail ya clasifica Promociones, Social y Spam: esos correos (tiendas,
+      // redes sociales, newsletters) no se piden. Así no dependemos de listas
+      // de remitentes en el código.
+      const GMAIL_EXCLUDE = '-category:promotions -category:social -in:spam';
       const [inboxListRes, importantListRes] = await Promise.all([
         fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}&q=${encodeURIComponent('in:inbox OR in:sent OR label:important')}`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=${fetchLimit}&q=${encodeURIComponent(`(in:inbox OR in:sent) ${GMAIL_EXCLUDE}`)}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         ),
         fetch(
-          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=35&labelIds=IMPORTANT`,
+          `https://gmail.googleapis.com/gmail/v1/users/me/messages?maxResults=35&q=${encodeURIComponent(`label:important ${GMAIL_EXCLUDE}`)}`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         ).catch(() => null),
       ]);

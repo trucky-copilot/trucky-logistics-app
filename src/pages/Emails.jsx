@@ -4,7 +4,7 @@ import {
   Mail, RotateCw, Plus, Search, Star, MessageSquare,
   Send, Sparkles, Inbox, Package, Building2,
   CheckCircle2, Clock, X, Loader2, ArrowUpRight, Copy, Check,
-  ChevronRight, Lock, Bot, Paperclip, FileText, Download, Eye, Image as ImageIcon, ExternalLink
+  ChevronRight, Lock, Bot, HelpCircle, ThumbsUp, ThumbsDown, Paperclip, FileText, Download, Eye, Image as ImageIcon, ExternalLink
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
@@ -30,14 +30,20 @@ import {
 // "trucky" NO es señal logística: aparece en los nombres de las propias cuentas
 // (trucky.road.copilot@gmail.com, trucky.ai, trucky-copilot) y hacía pasar
 // correos de Instagram, GitHub, etc.
-const LOGISTICS_EMAIL_TERMS = [
-  'load', 'loads', 'freight', 'freights', 'rate confirmation', 'bill of lading', 'bol',
-  'flete', 'fletes', 'carga', 'cargas', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
+// Términos FUERTES: por sí solos indican operación de transporte.
+const STRONG_LOGISTICS_TERMS = [
+  'load', 'loads', 'freight', 'freights', 'rate confirmation', 'rate con', 'bill of lading', 'bol',
+  'flete', 'fletes', 'reefer', 'dry van', 'flatbed', 'drayage', 'chassis',
   'detention', 'layover', 'tonu', 'lumper', 'carrier', 'broker', 'dispatcher', 'dispatch',
-  'pickup', 'delivery', 'container', 'factoring', 'quickpay', 'camion', 'flota', 'tarifa de flete',
-  'rfq', 'quote', 'quotes', 'rate request', 'rate inquiry', 'overweight', 'tri-axle', 'tri axle',
-  'port', 'puerto', 'terminal', 'containers', '20ft', '40ft', '40hc', '45hc', '20dc', '40dc', 'soc',
-  'shipment', 'shipments', 'rate', 'rates', 'tarifa', 'cotizacion'
+  'factoring', 'quickpay', 'camion', 'tarifa de flete', 'rfq', 'rate request', 'rate inquiry',
+  'overweight', 'tri-axle', 'tri axle', '20ft', '40ft', '40hc', '45hc', '20dc', '40dc',
+  'pick up', 'pickup', 'p/u', 'deadhead', 'mc#', 'dot#', 'trucking', 'truckload', 'ltl', 'ftl',
+];
+// Términos DÉBILES: también salen en tiendas y newsletters ("free delivery",
+// "rate us", "port"). Hacen falta al menos 2 distintos para contar.
+const WEAK_LOGISTICS_TERMS = [
+  'delivery', 'container', 'containers', 'quote', 'quotes', 'port', 'puerto', 'terminal',
+  'shipment', 'shipments', 'rate', 'rates', 'tarifa', 'cotizacion', 'carga', 'cargas', 'flota', 'soc',
 ];
 
 export function normalizeSubjectForThread(subject = '') {
@@ -85,12 +91,23 @@ export function hasImportantAndLogisticsTags(email) {
 }
 
 // Remitentes que nunca envían correos de operación logística.
+// Remitentes que nunca envían operación logística. Se busca la palabra en
+// todo el remitente (temu.com, temuemail.com, eu.temu.com…).
 const NON_LOGISTICS_SENDERS = [
-  'google.com', 'accounts.google', 'openai.com', 'linkedin.com', 'github.com',
-  'amazon.com', 'uber.com', 'microsoft.com', 'temu.com', 'x.ai',
-  'instagram.com', 'facebookmail.com', 'facebook.com', 'meta.com', 'tiktok.com',
-  'twitter.com', 'hubspot', 'readme.io', 'readme.com', 'notion.so', 'slack.com',
-  'chatgpt.com', 'base44',
+  'google', 'openai', 'chatgpt', 'linkedin', 'github', 'amazon', 'uber', 'microsoft', 'x.ai',
+  'temu', 'shein', 'aliexpress', 'mercadolibre', 'ebay', 'walmart',
+  'instagram', 'facebook', 'meta.com', 'tiktok', 'twitter', 'whatsapp',
+  'hubspot', 'readme', 'notion', 'slack', 'base44', 'netflix', 'spotify', 'rappi',
+  'derechodeautor',
+];
+
+// Señales de correo masivo / newsletter (pie de "darse de baja", invitaciones…).
+const BULK_PATTERNS = [
+  /unsubscribe|darse de baja|dar de baja|cancelar (la )?suscripci[oó]n|anular suscripci[oó]n/i,
+  /est[aá]s? suscrit[oa]|you('| a)re receiving this|you are subscribed|ha recibido este correo/i,
+  /view (it )?in (your )?browser|ver en (el|tu) navegador/i,
+  /\b(podcast|webinar|newsletter|bolet[ií]n)\b/i,
+  /congratulations!? you('| a)re in|felicidades/i,
 ];
 
 // Asuntos de cuenta/seguridad: códigos, contraseñas, inicios de sesión.
@@ -104,10 +121,15 @@ const SYSTEM_SUBJECT_PATTERNS = [
 ];
 
 function isSystemOrSocialEmail(email) {
-  const sender = String(email?.remitente_email || '').toLowerCase();
+  const sender = `${email?.remitente_email || ''} ${email?.remitente_nombre || ''}`.toLowerCase();
   const subject = String(email?.asunto || '');
-  return NON_LOGISTICS_SENDERS.some(d => sender.includes(d)) ||
-    SYSTEM_SUBJECT_PATTERNS.some(re => re.test(subject));
+  if (NON_LOGISTICS_SENDERS.some(d => sender.includes(d))) return true;
+  if (SYSTEM_SUBJECT_PATTERNS.some(re => re.test(subject))) return true;
+  // Correo masivo: se oculta salvo que tenga un término logístico fuerte
+  // (así no se pierden, por ejemplo, alertas de load boards).
+  const body = `${subject} ${email?.snippet || ''} ${email?.cuerpo || ''}`;
+  if (BULK_PATTERNS.some(re => re.test(body)) && countTerms(email, STRONG_LOGISTICS_TERMS) === 0) return true;
+  return false;
 }
 
 // ¿El correo pertenece a la cuenta de Gmail conectada?
@@ -122,17 +144,40 @@ function belongsToGoogleAccount(email, account) {
   return String(field || '').toLowerCase().includes(acc);
 }
 
-function hasLogisticsSignal(email) {
-  // Ya no se confía en es_logistico ni en la etiqueta "Importante" de Gmail:
-  // la sincronización marcaba como logístico cualquier correo que dijera "trucky".
-  const text = `${email.asunto || ''} ${email.snippet || ''} ${email.cuerpo || ''}`
+function countTerms(email, terms) {
+  const text = `${email?.asunto || ''} ${email?.snippet || ''} ${email?.cuerpo || ''}`
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
-  return LOGISTICS_EMAIL_TERMS.some(term => {
+  return terms.filter(term => {
     const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`(^|[^a-z0-9])${escaped}(?=$|[^a-z0-9])`).test(text);
-  });
+  }).length;
+}
+
+// Reglas que el usuario enseña desde "Por revisar": { allow: [...], block: [...] }
+// Se guardan por organización y perfil.
+function senderRulesKey(orgId, profileId) {
+  return `email_sender_rules_${orgId || 'none'}_${profileId || '1'}`;
+}
+function loadSenderRules(orgId, profileId) {
+  try {
+    const raw = JSON.parse(localStorage.getItem(senderRulesKey(orgId, profileId)) || '{}');
+    return { allow: Array.isArray(raw.allow) ? raw.allow : [], block: Array.isArray(raw.block) ? raw.block : [] };
+  } catch (_) {
+    return { allow: [], block: [] };
+  }
+}
+function saveSenderRules(orgId, profileId, rules) {
+  try { localStorage.setItem(senderRulesKey(orgId, profileId), JSON.stringify(rules)); } catch (_) {}
+}
+
+function hasLogisticsSignal(email) {
+  // No se confía en es_logistico ni en la etiqueta "Importante" de Gmail: la
+  // sincronización marcaba como logístico cualquier correo que dijera "trucky".
+  // Regla: 1 término fuerte, o 2 débiles distintos.
+  return countTerms(email, STRONG_LOGISTICS_TERMS) >= 1 ||
+    countTerms(email, WEAK_LOGISTICS_TERMS) >= 2;
 }
 
 /**
@@ -283,30 +328,54 @@ export default function Emails() {
 
       const activeGoogleAcc = (overrideAccount !== undefined ? overrideAccount : (googleConnectedEmail || '')).toLowerCase().trim();
 
-      // Filtrar la bandeja. El ORDEN importa: primero la cuenta, luego lo que
-      // nunca es logístico y al final la señal logística. Antes había un
-      // "return true" al inicio que saltaba todas las reglas.
-      const cleanList = profileScoped.filter(e => {
-        // 1) Cuenta de Gmail: solo correos de la cuenta conectada en este perfil.
-        //    Fail-closed: si no se puede saber de qué cuenta es, no se muestra.
-        if (activeGoogleAcc && !belongsToGoogleAccount(e, activeGoogleAcc)) {
-          return false;
-        }
+      // Clasificar cada correo en: mostrar, "por revisar" u ocultar.
+      // El ORDEN importa: primero la cuenta, luego lo que el usuario ya decidió,
+      // luego remitentes conocidos, luego lo que nunca es logístico y al final
+      // las palabras clave. Lo dudoso NO se borra: va a "Por revisar".
+      const accountScoped = profileScoped.filter(
+        e => !activeGoogleAcc || belongsToGoogleAccount(e, activeGoogleAcc)
+      );
 
-        // 2) Correos de sistema / redes sociales: nunca son logísticos,
-        //    aunque Gmail los marque como "Importante".
-        if (isSystemOrSocialEmail(e)) {
-          return false;
-        }
+      // Remitentes conocidos: brokers registrados en la organización.
+      let brokerEmails = new Set();
+      try {
+        const brokers = await filterByOrg(base44.entities.Broker, orgId);
+        brokerEmails = new Set(
+          (brokers || []).map(b => String(b.email || '').toLowerCase().trim()).filter(Boolean)
+        );
+      } catch (_) {}
 
-        // 3) Lo que enviamos desde Trucky es logístico.
-        if (e.tipo_flujo === 'sent') {
-          return true;
-        }
-
-        // 4) Señal logística real en el contenido (sin contar la palabra "trucky").
-        return hasLogisticsSignal(e);
+      // Hilos en los que se escribió desde Trucky (por thread_id o asunto).
+      const sentThreadIds = new Set();
+      const sentSubjects = new Set();
+      accountScoped.filter(e => e.tipo_flujo === 'sent').forEach(e => {
+        if (e.thread_id) sentThreadIds.add(String(e.thread_id));
+        const ns = normalizeSubjectForThread(e.asunto);
+        if (ns) sentSubjects.add(ns);
       });
+
+      const rules = loadSenderRules(orgId, activeProfileId);
+      const allow = new Set(rules.allow);
+      const block = new Set(rules.block);
+
+      const classifyForInbox = (e) => {
+        const sender = String(e.remitente_email || '').toLowerCase().trim();
+        if (block.has(sender)) return 'hide';
+        if (e.tipo_flujo === 'sent') return 'show';
+        if (allow.has(sender) || brokerEmails.has(sender)) return 'show';
+        if ((e.thread_id && sentThreadIds.has(String(e.thread_id))) ||
+            sentSubjects.has(normalizeSubjectForThread(e.asunto))) return 'show';
+        if (isSystemOrSocialEmail(e)) return 'hide';
+        if (hasLogisticsSignal(e)) return 'show';
+        return 'review';
+      };
+
+      const cleanList = [];
+      for (const e of accountScoped) {
+        const verdict = classifyForInbox(e);
+        if (verdict === 'show') cleanList.push(e);
+        else if (verdict === 'review') cleanList.push({ ...e, _review: true });
+      }
 
       // Ordenar siempre del más reciente al más antiguo
       cleanList.sort((a, b) => new Date(b.fecha || 0).getTime() - new Date(a.fecha || 0).getTime());
@@ -412,7 +481,7 @@ export default function Emails() {
             const matchById = cleanList.find(p => p.id === prev.id);
             if (matchById) return matchById;
           }
-          return cleanList[0];
+          return cleanList.find(e => !e._review) || cleanList[0];
         });
       } else {
         setSelectedEmail(null);
@@ -750,6 +819,7 @@ export default function Emails() {
         hasInboxInThread: hasInbox,
         hasAttachmentsInThread: totalAttachmentsCount > 0,
         totalAttachmentsCount,
+        isReviewThread: msgs.every(m => m._review),
       });
     }
 
@@ -1410,6 +1480,12 @@ export default function Emails() {
 
   const filteredThreads = useMemo(() => {
     return emailThreads.filter(thread => {
+      // "Por revisar" solo muestra lo dudoso; las demás pestañas lo excluyen.
+      if (activeTab === 'review') {
+        if (!thread.isReviewThread) return false;
+      } else if (thread.isReviewThread) {
+        return false;
+      }
       const hasImportant = thread.hasImportantThread || hasImportantAndLogisticsTags(thread);
 
       if (activeTab === 'important_logistics') {
@@ -1436,18 +1512,40 @@ export default function Emails() {
     });
   }, [emailThreads, activeTab, searchQuery]);
 
+  const mainThreads = useMemo(() => emailThreads.filter(t => !t.isReviewThread), [emailThreads]);
+  const reviewCount = emailThreads.length - mainThreads.length;
   const importantLogisticsCount = useMemo(
-    () => emailThreads.filter(t => t.hasImportantThread || hasImportantAndLogisticsTags(t)).length,
-    [emailThreads]
+    () => mainThreads.filter(t => t.hasImportantThread || hasImportantAndLogisticsTags(t)).length,
+    [mainThreads]
   );
-  const unreadCount = useMemo(() => emailThreads.filter(t => !t.leido).length, [emailThreads]);
-  const allCount = emailThreads.length;
-  const starredCount = useMemo(() => emailThreads.filter(t => t.destacado || t.es_importante).length, [emailThreads]);
+  const unreadCount = useMemo(() => mainThreads.filter(t => !t.leido).length, [mainThreads]);
+  const allCount = mainThreads.length;
+  const starredCount = useMemo(() => mainThreads.filter(t => t.destacado || t.es_importante).length, [mainThreads]);
   const repliesCount = useMemo(
-    () => emailThreads.filter(t => isConversationReplyThread(t)).length,
-    [emailThreads]
+    () => mainThreads.filter(t => isConversationReplyThread(t)).length,
+    [mainThreads]
   );
-  const sentCount = useMemo(() => emailThreads.filter(t => t.hasSentInThread).length, [emailThreads]);
+  const sentCount = useMemo(() => mainThreads.filter(t => t.hasSentInThread).length, [mainThreads]);
+
+  // El usuario decide sobre un remitente de "Por revisar"; la app lo recuerda.
+  const handleSenderDecision = (thread, isLogistics) => {
+    const sender = String(thread?.remitente_email || '').toLowerCase().trim();
+    if (!sender) return;
+    const rules = loadSenderRules(orgId, activeProfileId);
+    const allow = new Set(rules.allow);
+    const block = new Set(rules.block);
+    if (isLogistics) { allow.add(sender); block.delete(sender); }
+    else { block.add(sender); allow.delete(sender); }
+    saveSenderRules(orgId, activeProfileId, { allow: [...allow], block: [...block] });
+    toast({
+      title: isLogistics
+        ? (isEs ? 'Remitente marcado como logístico' : 'Sender marked as logistics')
+        : (isEs ? 'Remitente ocultado' : 'Sender hidden'),
+      description: sender,
+    });
+    setSelectedEmail(null);
+    fetchEmails();
+  };
 
   const TABS = [
     { id: 'all', label: isEs ? 'Todos' : 'All', icon: Inbox, badge: allCount },
@@ -1456,6 +1554,7 @@ export default function Emails() {
     { id: 'starred', label: isEs ? 'Destacados' : 'Starred', icon: Star, badge: starredCount },
     { id: 'replies', label: isEs ? 'Respuestas' : 'Replies', icon: MessageSquare, badge: repliesCount },
     { id: 'sent', label: isEs ? 'Enviados' : 'Sent', icon: Send, badge: sentCount },
+    { id: 'review', label: isEs ? 'Por revisar' : 'To review', icon: HelpCircle, badge: reviewCount },
   ];
 
   const getCategoryBadge = (cat) => {
@@ -1815,6 +1914,31 @@ export default function Emails() {
                     </button>
                   </div>
                 </div>
+
+                {/* Correo dudoso: el usuario decide y la app recuerda al remitente */}
+                {selectedThread.isReviewThread && (
+                  <div className="mt-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
+                    <p className="text-xs text-amber-200">
+                      {isEs
+                        ? '¿Este correo es de tu operación logística? Tu respuesta se aplicará a todos los correos de este remitente.'
+                        : 'Is this email part of your logistics operation? Your answer applies to every email from this sender.'}
+                    </p>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleSenderDecision(selectedThread, true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
+                      >
+                        <ThumbsUp className="w-3.5 h-3.5" /> {isEs ? 'Sí, es logístico' : 'Yes, logistics'}
+                      </button>
+                      <button
+                        onClick={() => handleSenderDecision(selectedThread, false)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25"
+                      >
+                        <ThumbsDown className="w-3.5 h-3.5" /> {isEs ? 'No, ocultar' : 'No, hide'}
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Botonera de Acción Destacada */}
                 <div className="flex items-center gap-2 pt-2 flex-wrap">
