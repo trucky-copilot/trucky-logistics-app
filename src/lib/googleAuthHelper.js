@@ -121,6 +121,20 @@ async function obtainGoogleToken() {
  * Si el token no existe o expiró (401/403/scope), renueva internamente sin necesidad de
  * ir manualmente a la sección de correos ni hacer clic en sincronizar.
  */
+/**
+ * ¿El error es de token vencido o inválido? Google responde en inglés
+ * ("Request had invalid authentication credentials", "UNAUTHENTICATED"…) y
+ * antes solo se buscaba "401" o "autenticación", así que no se renovaba el token.
+ */
+export function isGoogleAuthError(text = '') {
+  const t = String(text).toLowerCase();
+  return [
+    '401', '403', 'autenticación', 'autenticacion', 'authentication', 'credentials',
+    'unauthenticated', 'unauthorized', 'invalid_grant', 'invalid_token',
+    'expected oauth', 'insufficient permission', 'scope', 'token expired',
+  ].some(k => t.includes(k));
+}
+
 export async function sendEmailWithAutoAuth({
   to,
   subject,
@@ -174,14 +188,7 @@ export async function sendEmailWithAutoAuth({
         console.warn('[googleAuthHelper] threadId no existe (404), reintentando sin threadId...');
         return await callSend(token, email, null);
       }
-      if (
-        errorText.includes('401') ||
-        errorText.includes('403') ||
-        errorText.includes('autenticación') ||
-        errorText.includes('insufficient permission') ||
-        errorText.includes('invalid_grant') ||
-        errorText.includes('scope')
-      ) {
+      if (isGoogleAuthError(errorText)) {
         // Renovar automáticamente y reintentar de inmediato
         const fresh = await obtainGoogleToken();
         saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
@@ -196,16 +203,7 @@ export async function sendEmailWithAutoAuth({
       console.warn('[googleAuthHelper] Error 404 con threadId, reintentando como nuevo mensaje sin threadId...');
       return await callSend(token, email, null);
     }
-    if (
-      status === 401 ||
-      status === 403 ||
-      msg.includes('401') ||
-      msg.includes('403') ||
-      msg.includes('autenticación') ||
-      msg.includes('insufficient permission') ||
-      msg.includes('scope') ||
-      msg.includes('invalid_grant')
-    ) {
+    if (status === 401 || status === 403 || isGoogleAuthError(msg)) {
       // Renovar automáticamente y reintentar
       const fresh = await obtainGoogleToken();
       saveStoredGoogleAuth(fresh.token, fresh.email || email, profile_id);
