@@ -23,15 +23,19 @@ export function AppStateProvider({ children }) {
   const [userProfile, setUserProfile]                   = useState(null);
   const [currentUser, setCurrentUser]                   = useState(null);
   const [organization, setOrganization]                 = useState(null);
+  // true mientras la organización todavía no se ha resuelto (evita mostrar
+  // datos vacíos como si fueran reales en las pantallas que dependen de ella)
+  const [organizationLoading, setOrganizationLoading]   = useState(true);
   const [operationalReadiness, setOperationalReadiness] = useState(null);
 
   const resolveState = useCallback(async () => {
     setAppState('loading');
+    setOrganizationLoading(true);
     try {
       // 1. Obtener usuario
       const user = await base44.auth.me();
       // 2. Sin usuario → unauthenticated
-      if (!user) { setAppState('unauthenticated'); return; }
+      if (!user) { setAppState('unauthenticated'); setOrganizationLoading(false); return; }
       setCurrentUser(user);
 
       // 3. Buscar UserProfile
@@ -42,6 +46,7 @@ export function AppStateProvider({ children }) {
       // 4. Sin perfil o sin onboarding → setup
       if (!profile || profile.onboarding_completado !== true) {
         setAppState('setup');
+        setOrganizationLoading(false);
         return;
       }
 
@@ -57,7 +62,8 @@ export function AppStateProvider({ children }) {
           const subscribedOrg = allOrgs.find(o => o.subscription_status === 'active' || o.subscription_status === 'trialing');
           setOrganization(subscribedOrg || allOrgs[0] || null);
         })
-        .catch(() => {});
+        .catch(() => {})
+        .finally(() => setOrganizationLoading(false));
 
       // Operational readiness: no bloqueante
       loadOperationalReadiness(user.email, profile).then(setOperationalReadiness).catch(() => {});
@@ -65,6 +71,7 @@ export function AppStateProvider({ children }) {
       setAppState('production');
     } catch {
       setAppState('unauthenticated');
+      setOrganizationLoading(false);
     }
   }, []);
 
@@ -77,6 +84,7 @@ export function AppStateProvider({ children }) {
       currentUser,
       organization,
       organizationId: organization?.id || null,
+      organizationLoading,
       setupDetails:   null,   // ya no se usa — se eliminó GoLiveChecklistPanel del onboarding
       operationalReadiness,
       resolveState,

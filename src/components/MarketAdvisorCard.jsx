@@ -345,8 +345,15 @@ function MarketAdvisorCardContent({ data, costConfig }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           {/* CAJA 1: VEREDICTO DE LA OFERTA */}
           {(() => {
-            const tTarget = applyBreakEvenAsGreen ? greenTotal : Number(marketTargetTotal);
-            const effectiveFloor = applyBreakEvenAsGreen ? (totalCpmFloor + totalAccesoriales) : (marketFloorTotal ? Number(marketFloorTotal) : (tTarget * 0.90));
+            const baseTarget = applyBreakEvenAsGreen ? greenTotal : Number(marketTargetTotal);
+            const baseFloor = applyBreakEvenAsGreen ? (totalCpmFloor + totalAccesoriales) : (marketFloorTotal ? Number(marketFloorTotal) : (baseTarget * 0.90));
+            // El piso del veredicto nunca puede quedar por debajo del break-even del
+            // perfil: antes se comparaba solo contra el CPM/mercado, así que una oferta
+            // que no cubre el punto de equilibrio salía AMARILLO ("negociar").
+            const effectiveFloor = applyBreakEvenAsGreen
+              ? baseFloor
+              : Math.max(baseFloor, userBreakEvenNum > 0 ? totalYellowFloor : 0);
+            const tTarget = Math.max(baseTarget, effectiveFloor);
             
             const showRed = tOfrecida === null || tOfrecida < effectiveFloor;
             const showYellow = tOfrecida === null || (tOfrecida >= effectiveFloor && tOfrecida < tTarget);
@@ -370,7 +377,7 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                         {isEs ? "Tarifa de la ruta" : "Route rate"}
                       </span>
                       <span className="text-white font-semibold text-xl">
-                        ${formatMoney(calculo.tarifaOfrecida)} &lt; ${formatMoney(marketFloorTotal || marketTargetTotal)} {isEs ? (marketFloorTotal ? '' : 'Mínimo') : (marketFloorTotal ? '' : 'Minimum')}
+                        ${formatMoney(calculo.tarifaOfrecida)} &lt; ${formatMoney(effectiveFloor)}
                       </span>
                     </div>
                   </div>

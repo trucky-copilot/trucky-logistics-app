@@ -1,35 +1,40 @@
 import { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
+import { useLanguage } from '@/lib/LanguageContext';
 
-function buildItems(res) {
+function buildItems(res, isEn) {
   const items = [];
-  if (res.diesel) items.push({ label: 'DIÉSEL', value: `$${parseFloat(res.diesel).toFixed(2)}/gal` });
+  if (res.diesel) items.push({ label: isEn ? 'DIESEL' : 'DIÉSEL', value: `$${parseFloat(res.diesel).toFixed(2)}/gal` });
   if (res.dry_van) items.push({ label: 'DRY VAN', value: `$${parseFloat(res.dry_van).toFixed(2)}/mi` });
   if (res.reefer) items.push({ label: 'REEFER', value: `$${parseFloat(res.reefer).toFixed(2)}/mi` });
   if (res.flatbed) items.push({ label: 'FLATBED', value: `$${parseFloat(res.flatbed).toFixed(2)}/mi` });
   if (res.step_deck) items.push({ label: 'STEP DECK', value: `$${parseFloat(res.step_deck).toFixed(2)}/mi` });
   if (res.power_only) items.push({ label: 'POWER ONLY', value: `$${parseFloat(res.power_only).toFixed(2)}/mi` });
-  if (res.container) items.push({ label: 'CONTENEDOR', value: `$${parseFloat(res.container).toFixed(2)}/mi` });
+  if (res.container) items.push({ label: isEn ? 'CONTAINER' : 'CONTENEDOR', value: `$${parseFloat(res.container).toFixed(2)}/mi` });
   return items;
 }
 
 function useMarketTickerData() {
-  const [items, setItems] = useState([]);
+  const { locale } = useLanguage();
+  const isEn = locale === 'en';
+  // Guardamos los datos crudos y armamos las etiquetas al vuelo: así,
+  // al cambiar ES/EN, el ticker se traduce sin volver a pedir los datos.
+  const [raw, setRaw] = useState(null);
 
   useEffect(() => {
     base44.entities.GlobalMarketTicker.filter().then(records => {
       const res = records.find(r => r.id === 'global') || records[0];
-      if (res) setItems(buildItems(res));
+      if (res) setRaw(res);
     }).catch(err => console.error('[MarketTicker] fetch error:', err));
 
     const onUpdated = (e) => {
-      if (e.detail) setItems(buildItems(e.detail));
+      if (e.detail) setRaw(e.detail);
     };
     window.addEventListener('tickerUpdated', onUpdated);
     return () => window.removeEventListener('tickerUpdated', onUpdated);
   }, []);
 
-  return items;
+  return raw ? buildItems(raw, isEn) : [];
 }
 
 function TickerItem({ item }) {
@@ -60,7 +65,7 @@ export default function MarketTicker() {
 
   return (
     <div
-      className="hidden lg:flex items-center flex-1 min-w-0 w-0 mx-4 h-8 rounded-lg bg-background/40 border border-border/60 overflow-hidden relative"
+      className="flex items-center order-last basis-full lg:order-none lg:basis-auto lg:flex-1 lg:w-0 lg:mx-4 min-w-0 h-8 rounded-lg bg-background/40 border border-border/60 overflow-hidden relative"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}

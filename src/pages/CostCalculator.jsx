@@ -545,10 +545,12 @@ export default function CostCalculator() {
             </div>
             <div>
               <h3 className="text-base font-semibold text-foreground">
-                Se guardó exitosamente
+                {locale === 'en' ? 'Saved successfully' : 'Se guardó exitosamente'}
               </h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Tus datos de la calculadora han sido guardados correctamente en tu perfil.
+                {locale === 'en'
+                  ? 'Your calculator data has been saved to your profile.'
+                  : 'Tus datos de la calculadora han sido guardados correctamente en tu perfil.'}
               </p>
             </div>
             <div className="pt-2">
@@ -557,7 +559,7 @@ export default function CostCalculator() {
                 onClick={() => setShowSavedModal(false)}
                 className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold transition-all shadow-lg shadow-primary/20"
               >
-                Aceptar
+                {locale === 'en' ? 'OK' : 'Aceptar'}
               </button>
             </div>
           </div>

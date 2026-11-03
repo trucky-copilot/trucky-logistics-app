@@ -19,7 +19,6 @@ import NotificationBell from './NotificationBell';
 import OperationalReadinessBanner from './OperationalReadinessBanner';
 import MarketTicker from './MarketTicker';
 import ProfileSelector from './ProfileSelector';
-import { TruckyLogoIcon } from './TruckyLogo';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { base44 } from '@/api/base44Client';
 import { useDemo } from '@/lib/DemoContext';
@@ -120,18 +119,20 @@ export default function Layout() {
         {/* Logo */}
         <div className="flex items-center justify-between p-5 border-b border-white/10">
           <div className="flex items-center gap-2.5">
-            <TruckyLogoIcon className="w-9 h-9" rounded="rounded-xl" />
-            <div className="leading-tight">
-              <div className="flex items-center gap-2">
-                <div className="text-base font-bold text-foreground tracking-tight lowercase">trucky</div>
-                {isDemoUser && (
-                  <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 text-[9px] font-black uppercase tracking-wider">
-                    Demo
-                  </span>
-                )}
-              </div>
-              <div className="text-[10px] text-violet-300/70 font-medium">Your road co-pilot</div>
+            {/* Logotipo completo: recuadro morado (#4F1984, el del logo original) */}
+            <div className="rounded-xl bg-[#4F1984] border border-white/15 shadow-lg shadow-[#4F1984]/40 px-3 py-2 flex-shrink-0">
+              <img
+                src="/trucky-wordmark.png"
+                alt="Trucky"
+                className="h-6 w-auto select-none pointer-events-none"
+                draggable={false}
+              />
             </div>
+            {isDemoUser && (
+              <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 text-[9px] font-black uppercase tracking-wider">
+                Demo
+              </span>
+            )}
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
@@ -239,7 +240,7 @@ export default function Layout() {
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="flex items-center gap-3 px-4 py-3 border-b border-white/10 bg-card/55 backdrop-blur-xl flex-shrink-0 min-w-0 max-w-full overflow-hidden">
+        <header className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-white/10 bg-card/55 backdrop-blur-xl flex-shrink-0 min-w-0 max-w-full overflow-hidden">
           <button
             onClick={() => setSidebarOpen(true)}
             className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"

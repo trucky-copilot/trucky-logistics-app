@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import {
-  DollarSign, Truck, Package, TrendingUp, AlertTriangle,
+  DollarSign, Truck, Package, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, Bell, Info, Zap, FileWarning, Building2, Users,
   Sparkles, ArrowUpRight, Layers, Activity
 } from 'lucide-react';
@@ -16,6 +16,10 @@ import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// "-$2,379" en vez de "$-2,379": Intl pone el signo antes del símbolo.
+const fmtUSD = (n) => n.toLocaleString('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
 
 const TIPO_ICONS = {
   cambio_asignacion: Truck,
@@ -35,7 +39,7 @@ const SECTION_TRANSITION = {
 
 export default function Dashboard() {
   const orgId = useOrganizationId();
-  const { organization, currentUser } = useAppState();
+  const { organization, currentUser, organizationLoading } = useAppState();
   const { t, locale } = useLanguage();
   const { activeProfileId } = useProfile();
   const [trucks, setTrucks] = useState([]);
@@ -47,6 +51,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeSection, setActiveSection] = useState('overview');
+  const reduceMotion = useReducedMotion(); // true si el usuario pidio reducir movimiento
 
   const isEs = locale !== 'en';
 
@@ -82,6 +87,10 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
+    // No pedir datos hasta que la organización y el perfil estén resueltos.
+    // Antes, con orgId = null, listByOrg devolvía [] al instante, loading pasaba
+    // a false y se pintaban $0 / "My organization" como si fueran datos reales.
+    if (organizationLoading || !activeProfileId) return;
     setLoading(true);
     setError(null);
     Promise.all([
@@ -116,7 +125,7 @@ export default function Dashboard() {
     }).finally(() => {
       setLoading(false);
     });
-  }, [orgId, activeProfileId]);
+  }, [orgId, activeProfileId, organizationLoading, currentUser?.email]);
 
   // ── Cálculos intactos de KPIs ────────────────────────────────────────────────
   const thisWeek = loads.filter(l => {
@@ -130,6 +139,19 @@ export default function Dashboard() {
   const totalProfit = thisWeek.reduce((s, l) => s + (l.ganancia_estimada || 0), 0);
   const totalMilesThisWeek = thisWeek.reduce((s, l) => s + (l.millas || 0), 0);
   const avgRatePerMile = totalMilesThisWeek > 0 ? totalRevenue / totalMilesThisWeek : 0;
+
+  // Semana anterior (hace 7–14 días) para calcular la variación de la ganancia.
+  // Ojo: se calcula sobre las últimas 50 cargas que trae la consulta.
+  const prevWeek = loads.filter(l => {
+    const d = new Date(l.created_date);
+    const now = Date.now();
+    return d >= new Date(now - 14 * 864e5) && d < new Date(now - 7 * 864e5);
+  });
+  const prevProfit = prevWeek.reduce((s, l) => s + (l.ganancia_estimada || 0), 0);
+  const profitDelta = totalProfit - prevProfit;
+  const profitTrendLabel = prevWeek.length > 0
+    ? `${profitDelta > 0 ? '+' : profitDelta < 0 ? '−' : ''}${fmtUSD(Math.abs(profitDelta))} ${isEs ? 'vs semana anterior' : 'vs last week'}`
+    : null;
 
   const operationalAlerts = getOperationalAlerts({
     trucks,
@@ -151,9 +173,30 @@ export default function Dashboard() {
     { id: 'loads', label: isEs ? 'Actividad de Cargas' : 'Recent Loads', icon: Package },
   ];
 
+  // Skeleton con la misma forma que el dashboard real: el usuario ve que algo
+  // está cargando, sin números falsos y sin "salto" de layout al llegar los datos.
   if (loading) return (
-    <div className="flex items-center justify-center h-full">
-      <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <div className="p-4 md:p-6 space-y-6" aria-busy="true" aria-live="polite">
+      <div className="glass-panel rounded-2xl p-4 md:p-5 flex items-center gap-3.5">
+        <Skeleton className="w-11 h-11 rounded-2xl bg-white/10" />
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-56 bg-white/10" />
+          <Skeleton className="h-3.5 w-32 bg-white/10" />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {[0, 1, 2, 3].map(i => (
+          <div key={i} className="glass-card p-5 rounded-2xl space-y-3">
+            <div className="flex items-start justify-between">
+              <Skeleton className="h-3 w-24 bg-white/10" />
+              <Skeleton className="w-9 h-9 rounded-xl bg-white/10" />
+            </div>
+            <Skeleton className="h-7 w-20 bg-white/10" />
+            <Skeleton className="h-3 w-28 bg-white/10" />
+          </div>
+        ))}
+      </div>
+      <span className="sr-only">{isEs ? 'Cargando datos…' : 'Loading data…'}</span>
     </div>
   );
 
@@ -168,7 +211,7 @@ export default function Dashboard() {
     <div className="grid lg:grid-cols-3 gap-4">
       {/* Fleet Status */}
       <motion.div
-        whileHover={{ y: -4 }}
+        whileHover={reduceMotion ? undefined : { y: -4 }}
         transition={{ type: 'spring', stiffness: 300, damping: 24 }}
         className="glass-panel rounded-2xl p-5 relative overflow-hidden"
       >
@@ -207,7 +250,7 @@ export default function Dashboard() {
 
       {/* Document Alerts and Notifications */}
       <motion.div
-        whileHover={{ y: -4 }}
+        whileHover={reduceMotion ? undefined : { y: -4 }}
         transition={{ type: 'spring', stiffness: 300, damping: 24 }}
         className={`glass-panel rounded-2xl p-5 relative overflow-hidden ${
           hasCriticalAlerts
@@ -288,7 +331,7 @@ export default function Dashboard() {
 
       {/* Broker Scoreboard */}
       <motion.div
-        whileHover={{ y: -4 }}
+        whileHover={reduceMotion ? undefined : { y: -4 }}
         transition={{ type: 'spring', stiffness: 300, damping: 24 }}
         className="glass-panel rounded-2xl p-5 relative overflow-hidden"
       >
@@ -337,7 +380,7 @@ export default function Dashboard() {
 
   const renderRecentLoadsPanel = () => (
     <motion.div
-      whileHover={{ y: -3 }}
+      whileHover={reduceMotion ? undefined : { y: -3 }}
       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
       className="glass-panel rounded-2xl p-5 relative overflow-hidden"
     >
@@ -444,16 +487,18 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
         <KpiCard
           titulo={t.dashboard.weeklyRevenue}
-          valor={`$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
-          subtitulo={`${thisWeek.length} ${t.dashboard.loads}`}
+          valor={fmtUSD(totalRevenue)}
+          subtitulo={`${thisWeek.length} ${thisWeek.length === 1 ? t.dashboard.load : t.dashboard.loads}`}
           icon={DollarSign}
           color="cyan"
         />
         <KpiCard
           titulo={t.dashboard.netProfit}
-          valor={`$${totalProfit.toLocaleString('en-US', { maximumFractionDigits: 0 })}`}
+          valor={fmtUSD(totalProfit)}
           subtitulo={t.dashboard.estimatedThisWeek}
-          icon={TrendingUp}
+          icon={totalProfit < 0 ? TrendingDown : TrendingUp}
+          trend={profitDelta}
+          trendLabel={profitTrendLabel}
           color={totalProfit >= 0 ? 'green' : 'red'}
         />
         <KpiCard

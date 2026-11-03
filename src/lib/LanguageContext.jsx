@@ -27,7 +27,7 @@ const translations = {
     dashboard: {
       title: 'Dashboard Operacional', organization: 'Mi organización', weeklyRevenue: 'Facturación Semana',
       netProfit: 'Ganancia Neta', averageRate: 'Tarifa Promedio/Milla', weeklyTrips: 'Viajes Esta Semana',
-      loads: 'cargas', estimatedThisWeek: 'estimado esta semana', target: 'meta: $3.00/milla',
+      load: 'carga', loads: 'cargas', estimatedThisWeek: 'estimado esta semana', target: 'meta: $3.00/milla',
       inTransitNow: 'en tránsito ahora', fleetStatus: 'Estado de la Flota', viewAll: 'Ver todo',
       noTrucks: 'No hay camiones registrados', noDriver: 'Sin conductor', documentAlerts: 'Alertas de Documentos',
       next30Days: 'próx. 30 días', allDocumentsOk: 'Todos los documentos en orden', expired: 'VENCIDO',
@@ -163,7 +163,7 @@ const translations = {
     dashboard: {
       title: 'Operational Dashboard', organization: 'My organization', weeklyRevenue: 'Weekly Revenue',
       netProfit: 'Net Profit', averageRate: 'Average Rate/Mile', weeklyTrips: 'Trips This Week',
-      loads: 'loads', estimatedThisWeek: 'estimated this week', target: 'target: $3.00/mile',
+      load: 'load', loads: 'loads', estimatedThisWeek: 'estimated this week', target: 'target: $3.00/mile',
       inTransitNow: 'in transit now', fleetStatus: 'Fleet Status', viewAll: 'View all',
       noTrucks: 'No trucks registered', noDriver: 'No driver', documentAlerts: 'Document Alerts',
       next30Days: 'next 30 days', allDocumentsOk: 'All documents are in order', expired: 'EXPIRED',

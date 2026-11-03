@@ -52,7 +52,7 @@ export const PLAN_LIMITS = {
     BROKERS: Infinity,
     LOADS: Infinity,
     DRIVERS: Infinity,
-    PROFILES: Infinity,
+    PROFILES: 5, // cuentas exentas (prueba/admin): tope de 5 perfiles; el resto sigue ilimitado
     DOCUMENTS_PER_MONTH: Infinity,
     ANALYZE_IN_CHAT: true,
     EMAIL_MODULE: true,

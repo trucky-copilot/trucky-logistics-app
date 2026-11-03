@@ -7,6 +7,25 @@
  * en rojo o amarillo en brokers, en flotas, en conductores, en cargas; las verdes no".
  */
 
+/**
+ * Textos de notificaciones que genera la propia app (no el usuario).
+ * Se guardan en la base de datos en el idioma activo en ese momento, así que
+ * se traducen al mostrarlos. Para agregar uno nuevo: añade { es, en }.
+ */
+const SYSTEM_NOTIFICATION_TEXTS = [
+  { es: 'Automatización completada', en: 'Automation completed' },
+  { es: 'Ya se terminó el proceso, revisa las cargas.', en: 'The process has finished, check your loads.' },
+];
+
+function localizeSystemText(text, isEn) {
+  if (!text) return text;
+  const clean = text.trim().replace(/\.$/, '');
+  const match = SYSTEM_NOTIFICATION_TEXTS.find(
+    (t) => t.es.replace(/\.$/, '') === clean || t.en.replace(/\.$/, '') === clean
+  );
+  return match ? (isEn ? match.en : match.es) : text;
+}
+
 export function getOperationalAlerts({
   trucks = [],
   drivers = [],
@@ -436,8 +455,8 @@ export function getOperationalAlerts({
         modulo: 'sistema',
         moduloLabel: isEn ? 'Notification' : 'Notificación',
         nivel: 'rojo',
-        titulo: notif.titulo,
-        mensaje: notif.mensaje,
+        titulo: localizeSystemText(notif.titulo, isEn),
+        mensaje: localizeSystemText(notif.mensaje, isEn),
         icon: notif.tipo || 'Bell',
         link: '/notificaciones',
         urgent: true,
@@ -449,8 +468,8 @@ export function getOperationalAlerts({
         modulo: 'sistema',
         moduloLabel: isEn ? 'Notification' : 'Notificación',
         nivel: 'amarillo',
-        titulo: notif.titulo,
-        mensaje: notif.mensaje,
+        titulo: localizeSystemText(notif.titulo, isEn),
+        mensaje: localizeSystemText(notif.mensaje, isEn),
         icon: notif.tipo || 'Bell',
         link: '/notificaciones',
         urgent: false,

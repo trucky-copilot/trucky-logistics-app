@@ -19,6 +19,12 @@ export default function ProfileSelector() {
   const { profiles, activeProfile, activeProfileId, switchProfile, addProfile, renameProfile, deleteProfile, maxProfilesAllowed = 3 } = useProfile();
   const { t, locale } = useLanguage();
   const isEn = locale === 'en';
+  // El perfil por defecto se guarda como "Perfil N". Solo se traduce al mostrarlo,
+  // así no tocamos datos ya guardados y los nombres que el usuario escriba se respetan.
+  const displayName = (name = '') => {
+    const m = name.match(/^(Perfil|Profile) (\d+)$/);
+    return m ? `${isEn ? 'Profile' : 'Perfil'} ${m[2]}` : name;
+  };
   
   // States for dialogs
   const [promptOpen, setPromptOpen] = useState(false);
@@ -121,7 +127,7 @@ export default function ProfileSelector() {
       <DropdownMenu>
         <DropdownMenuTrigger className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted/50 transition-colors focus:outline-none">
           <span className="text-xs font-semibold text-foreground truncate max-w-[120px]">
-            {activeProfile.name}
+            {displayName(activeProfile.name)}
           </span>
           <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
         </DropdownMenuTrigger>
@@ -145,7 +151,7 @@ export default function ProfileSelector() {
             >
               <span className={`flex-1 text-sm truncate ${p.id === activeProfileId ? 'font-bold text-primary' : 'text-foreground'}`}>
                 {p.id === activeProfileId && <span className="mr-1">✓</span>}
-                {p.name}
+                {displayName(p.name)}
               </span>
               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button 

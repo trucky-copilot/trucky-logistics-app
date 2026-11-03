@@ -223,6 +223,8 @@ export default function Emails() {
   });
 
   const isEs = locale === 'es';
+  // Idioma para fechas: el de la app, no el del navegador ([] = navegador)
+  const dateLocale = isEs ? 'es-CO' : 'en-US';
 
   // ─── Carga inicial de correos desde la base de datos por perfil y cuenta ───
   const fetchEmails = async (overrideAccount) => {
@@ -234,7 +236,9 @@ export default function Emails() {
       const scoped = emailList.filter(e => !orgId || !e.organization_id || e.organization_id === orgId);
       // Filtrar estrictamente por el perfil activo para que cada perfil tenga sus propios correos
       const profileScoped = activeProfileId
-        ? scoped.filter(e => !e.profile_id || String(e.profile_id) === String(activeProfileId))
+        // Un correo sin profile_id pertenece al perfil 1 (mismo criterio que CostConfig).
+        // Antes "!e.profile_id ||" lo dejaba pasar en TODOS los perfiles.
+        ? scoped.filter(e => String(e.profile_id || '1') === String(activeProfileId))
         : scoped;
 
       const activeGoogleAcc = (overrideAccount !== undefined ? overrideAccount : (googleConnectedEmail || '')).toLowerCase().trim();
@@ -1449,9 +1453,9 @@ export default function Emails() {
       d.getDate() === now.getDate();
 
     if (isToday) {
-      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return d.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' });
     }
-    return `${d.toLocaleDateString([], { day: '2-digit', month: 'short' })} · ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    return `${d.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short' })} · ${d.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}`;
   };
 
   return (
@@ -1757,7 +1761,7 @@ export default function Emails() {
 
                       <span className="text-xs text-muted-foreground flex items-center gap-1">
                         <Clock className="w-3 h-3" />
-                        {new Date(selectedThread.fecha).toLocaleString()}
+                        {new Date(selectedThread.fecha).toLocaleString(dateLocale)}
                       </span>
                     </div>
 
@@ -1868,7 +1872,7 @@ export default function Emails() {
 
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-[11px] text-muted-foreground">
-                            {new Date(msg.fecha).toLocaleString()}
+                            {new Date(msg.fecha).toLocaleString(dateLocale)}
                           </span>
                           {isLast && (
                             <button
@@ -2113,7 +2117,7 @@ export default function Emails() {
                           <span className="font-semibold text-foreground truncate">
                             {m.remitente_nombre || m.remitente_email}
                           </span>
-                          <span>{new Date(m.fecha).toLocaleString()}</span>
+                          <span>{new Date(m.fecha).toLocaleString(dateLocale)}</span>
                         </div>
                         <p className="text-zinc-300 whitespace-pre-wrap line-clamp-3">
                           {m.cuerpo || m.snippet}

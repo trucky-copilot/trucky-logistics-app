@@ -1,5 +1,5 @@
-import { motion } from 'framer-motion';
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { motion, useReducedMotion } from 'framer-motion';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 export default function KpiCard({
   titulo,
@@ -26,12 +26,16 @@ export default function KpiCard({
     yellow: 'text-amber-300',
   };
 
+  // MotionConfig solo vuelve instantaneo el whileHover (la tarjeta salta).
+  // Para que no se mueva nada, no le pasamos whileHover si se pide reducir movimiento.
+  const reduceMotion = useReducedMotion();
+
   const badgeStyle = colorMap[color] || colorMap.violet;
   const iconStyle = iconColor[color] || iconColor.violet;
 
   return (
     <motion.div
-      whileHover={{ y: -5, scale: 1.01 }}
+      whileHover={reduceMotion ? undefined : { y: -5, scale: 1.01 }}
       transition={{ type: 'spring', stiffness: 320, damping: 22 }}
       className="glass-card p-5 rounded-2xl relative overflow-hidden group cursor-default"
     >
@@ -52,8 +56,8 @@ export default function KpiCard({
         <div className="text-2xl font-bold text-white tracking-tight">{valor}</div>
         {subtitulo && <div className="text-xs text-white/60">{subtitulo}</div>}
         {trendLabel && (
-          <div className={`flex items-center gap-1 text-xs font-medium pt-0.5 ${trend >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {trend >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+          <div className={`flex items-center gap-1 text-xs font-medium pt-0.5 ${trend > 0 ? 'text-emerald-400' : trend < 0 ? 'text-red-400' : 'text-white/60'}`}>
+            {trend > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : trend < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
             {trendLabel}
           </div>
         )}

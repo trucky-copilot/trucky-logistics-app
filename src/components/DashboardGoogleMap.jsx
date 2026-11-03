@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { motion } from 'framer-motion';
+import { motion, useReducedMotion } from 'framer-motion';
 import { MapPin, Navigation, Compass } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
@@ -116,6 +116,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const mapRef = useRef(null);
   const overlaysRef = useRef([]);
   const [selectedRouteInfo, setSelectedRouteInfo] = useState(null);
+  const reduceMotion = useReducedMotion(); // true si el usuario pidio reducir movimiento
   const [mapError, setMapError] = useState(null);
 
   const isEs = locale !== 'en';
@@ -245,7 +246,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
 
   return (
     <motion.div
-      whileHover={{ y: -2 }}
+      whileHover={reduceMotion ? undefined : { y: -2 }}
       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
       className="glass-panel rounded-2xl p-5 relative overflow-hidden w-full min-w-0"
     >
