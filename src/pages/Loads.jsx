@@ -288,7 +288,7 @@ export default function Loads() {
               </thead>
               <tbody className="divide-y divide-border/50">
                 {filtered.map(load => (
-                  <tr key={load.id} className={`hover:bg-muted/20 transition-colors ${load._assigned ? '' : 'cursor-pointer'}`} onClick={() => { if (!load._assigned) handleEdit(load); }}>
+                  <tr key={load.id} className="hover:bg-muted/20 transition-colors cursor-pointer" onClick={() => handleEdit(load)}>
                     <td className="px-4 py-3">
                       <div className="text-xs font-medium text-foreground">{load.origen}</div>
                       <div className="text-xs text-muted-foreground">→ {load.destino}</div>
@@ -309,13 +309,6 @@ export default function Loads() {
                     <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${(load.tarifa_negociada || 0).toLocaleString()}</td>
                     <td className="px-4 py-3 hidden sm:table-cell"><StatusBadge status={load.estado || 'pendiente'} /></td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                      {load._assigned ? (
-                        <div className="flex justify-end">
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-violet-500/15 text-violet-300 border border-violet-500/30 whitespace-nowrap">
-                            {isEs ? 'Asignada a ti' : 'Assigned to you'}
-                          </span>
-                        </div>
-                      ) : (
                       <div className="flex items-center gap-1 justify-end">
                         <button
                           onClick={() => handleEdit(load)}
@@ -332,7 +325,6 @@ export default function Loads() {
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      )}
                     </td>
                   </tr>
                 ))}
