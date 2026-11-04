@@ -368,7 +368,10 @@ function MarketAdvisorCardContent({ data, costConfig }) {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
           {/* CAJA 1: VEREDICTO DE LA OFERTA */}
           {(() => {
-            const baseTarget = applyBreakEvenAsGreen ? greenTotal : Number(marketTargetTotal);
+            // La comparación usa la MISMA meta que se muestra en "Detalles de la ruta"
+            // (targetRpm × millas, con deadhead). Antes usaba el objetivo de mercado
+            // del servidor ($1,000) aunque la tarjeta dijera "tu meta $5.00/mi".
+            const baseTarget = applyBreakEvenAsGreen ? greenTotal : Number(totalTarget || marketTargetTotal);
             const baseFloor = applyBreakEvenAsGreen ? (totalCpmFloor + totalAccesoriales) : (marketFloorTotal ? Number(marketFloorTotal) : (baseTarget * 0.90));
             // El piso del veredicto nunca puede quedar por debajo del break-even del
             // perfil: antes se comparaba solo contra el CPM/mercado, así que una oferta
