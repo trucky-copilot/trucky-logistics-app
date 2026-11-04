@@ -10,6 +10,7 @@
  *  conductor con estado activo (o sin estado) que NO tiene otra carga en tránsito.
  */
 import { AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY } from '@/lib/dispatchAutomation';
+import { effectiveRate } from '@/lib/loadRate';
 
 const DOCS = [
   { field: 'twic_vencimiento', es: 'TWIC', en: 'TWIC' },
@@ -96,7 +97,10 @@ export function buildDispatchDraft(load, option, isEs = true) {
   const ref = load.numero_referencia ? ` (Ref: ${load.numero_referencia})` : '';
   const na = isEs ? 'No registrado' : 'Not on file';
   const subject = `${isEs ? 'Confirmación de Despacho' : 'Dispatch Confirmation'}: ${load.origen} → ${load.destino}${ref}`;
-  const rate = `$${Number(load.tarifa_negociada || 0).toLocaleString('en-US')}`;
+  // Negociada o, si falta, la ofrecida (QA: decía "Tarifa acordada: $0")
+  const rate = effectiveRate(load) > 0
+    ? `$${effectiveRate(load).toLocaleString('en-US')}`
+    : (isEs ? 'Por confirmar' : 'To be confirmed');
   const body = isEs
     ? `Hola equipo (${load.broker_nombre || 'Broker'} & Carrier),\n\n` +
       `Confirmamos la asignación de conductor y unidad para la carga:\n\n` +

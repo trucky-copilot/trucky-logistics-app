@@ -16,6 +16,7 @@ import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
+import { effectiveRate, effectiveRpm, effectiveProfit } from '@/lib/loadRate';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // "-$2,379" en vez de "$-2,379": Intl pone el signo antes del símbolo.
@@ -135,8 +136,9 @@ export default function Dashboard() {
     return d >= weekAgo;
   });
 
-  const totalRevenue = thisWeek.reduce((s, l) => s + (l.tarifa_negociada || 0), 0);
-  const totalProfit = thisWeek.reduce((s, l) => s + (l.ganancia_estimada || 0), 0);
+  // Tarifa efectiva: negociada o, si falta, la ofrecida (QA)
+  const totalRevenue = thisWeek.reduce((s, l) => s + effectiveRate(l), 0);
+  const totalProfit = thisWeek.reduce((s, l) => s + effectiveProfit(l), 0);
   const totalMilesThisWeek = thisWeek.reduce((s, l) => s + (l.millas || 0), 0);
   const avgRatePerMile = totalMilesThisWeek > 0 ? totalRevenue / totalMilesThisWeek : 0;
 
@@ -147,11 +149,27 @@ export default function Dashboard() {
     const now = Date.now();
     return d >= new Date(now - 14 * 864e5) && d < new Date(now - 7 * 864e5);
   });
-  const prevProfit = prevWeek.reduce((s, l) => s + (l.ganancia_estimada || 0), 0);
+  const prevProfit = prevWeek.reduce((s, l) => s + effectiveProfit(l), 0);
+  const prevRevenue = prevWeek.reduce((s, l) => s + effectiveRate(l), 0);
+  const prevMiles = prevWeek.reduce((s, l) => s + (l.millas || 0), 0);
+  const prevAvgRate = prevMiles > 0 ? prevRevenue / prevMiles : 0;
+
+  // Variación vs semana anterior para TODAS las tarjetas (QA: flecha según la variación).
+  // trend > 0 → flecha arriba (verde), < 0 → abajo (rojo), 0 → sin cambio.
+  const vsLabel = isEs ? 'vs semana anterior' : 'vs last week';
+  const sign = (d) => (d > 0 ? '+' : d < 0 ? '−' : '');
+  const trendOf = (delta, format) => ({
+    trend: delta,
+    trendLabel: `${sign(delta)}${format(Math.abs(delta))} ${vsLabel}`,
+  });
   const profitDelta = totalProfit - prevProfit;
-  const profitTrendLabel = prevWeek.length > 0
-    ? `${profitDelta > 0 ? '+' : profitDelta < 0 ? '−' : ''}${fmtUSD(Math.abs(profitDelta))} ${isEs ? 'vs semana anterior' : 'vs last week'}`
-    : null;
+  const profitTrend = trendOf(profitDelta, fmtUSD);
+  const revenueTrend = trendOf(totalRevenue - prevRevenue, fmtUSD);
+  const tripsTrend = trendOf(thisWeek.length - prevWeek.length, (n) => String(n));
+  // La tarifa por milla solo se compara si ambas semanas tienen millas
+  const rateTrend = avgRatePerMile > 0 && prevAvgRate > 0
+    ? trendOf(Number((avgRatePerMile - prevAvgRate).toFixed(2)), (n) => `$${n.toFixed(2)}/mi`)
+    : { trend: 0, trendLabel: isEs ? 'Sin datos para comparar' : 'No data to compare' };
 
   const operationalAlerts = getOperationalAlerts({
     trucks,
@@ -421,10 +439,10 @@ export default function Dashboard() {
                   <td className="py-2.5 px-3 text-white/70 hidden sm:table-cell text-xs max-w-[10rem] truncate" title={load.broker_nombre || ''}>{load.broker_nombre || '--'}</td>
                   <td className="py-2.5 px-3 text-right text-white/70 hidden md:table-cell text-xs font-mono">{load.millas || '--'}</td>
                   <td className={`py-2.5 px-3 text-right font-mono text-xs font-medium ${
-                    (load.revenue_por_milla || 0) >= 3 ? 'text-emerald-400' :
-                    (load.revenue_por_milla || 0) >= 2.6 ? 'text-amber-400' : 'text-red-400'
-                  }`}>${load.revenue_por_milla?.toFixed(2) || '--'}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-xs font-semibold text-white">${(load.tarifa_negociada || 0).toLocaleString('en-US')}</td>
+                    effectiveRpm(load) >= 3 ? 'text-emerald-400' :
+                    effectiveRpm(load) >= 2.6 ? 'text-amber-400' : 'text-red-400'
+                  }`}>{effectiveRpm(load) > 0 ? `$${effectiveRpm(load).toFixed(2)}` : '--'}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-xs font-semibold text-white">${effectiveRate(load).toLocaleString('en-US')}</td>
                 </tr>
               ))}
             </tbody>
@@ -490,6 +508,8 @@ export default function Dashboard() {
           valor={fmtUSD(totalRevenue)}
           subtitulo={`${thisWeek.length} ${thisWeek.length === 1 ? t.dashboard.load : t.dashboard.loads}`}
           icon={DollarSign}
+          trend={revenueTrend.trend}
+          trendLabel={revenueTrend.trendLabel}
           color="cyan"
         />
         <KpiCard
@@ -497,8 +517,8 @@ export default function Dashboard() {
           valor={fmtUSD(totalProfit)}
           subtitulo={t.dashboard.estimatedThisWeek}
           icon={totalProfit < 0 ? TrendingDown : TrendingUp}
-          trend={profitDelta}
-          trendLabel={profitTrendLabel}
+          trend={profitTrend.trend}
+          trendLabel={profitTrend.trendLabel}
           color={totalProfit >= 0 ? 'green' : 'red'}
         />
         <KpiCard
@@ -506,6 +526,8 @@ export default function Dashboard() {
           valor={avgRatePerMile > 0 ? `$${avgRatePerMile.toFixed(2)}` : '--'}
           subtitulo={costConfig?.tarifa_objetivo ? (locale === 'en' ? `target: $${costConfig.tarifa_objetivo.toFixed(2)}/mile` : `meta: $${costConfig.tarifa_objetivo.toFixed(2)}/milla`) : t.dashboard.target}
           icon={Package}
+          trend={rateTrend.trend}
+          trendLabel={rateTrend.trendLabel}
           color={
             costConfig?.tarifa_objetivo
               ? (avgRatePerMile >= costConfig.tarifa_objetivo ? 'green' : avgRatePerMile >= costConfig.tarifa_objetivo * 0.9 ? 'yellow' : 'red')
@@ -517,6 +539,8 @@ export default function Dashboard() {
           valor={thisWeek.length}
           subtitulo={`${loads.filter(l => l.estado === 'en_transito').length} ${t.dashboard.inTransitNow}`}
           icon={Truck}
+          trend={tripsTrend.trend}
+          trendLabel={tripsTrend.trendLabel}
           color="violet"
         />
       </div>

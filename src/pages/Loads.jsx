@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { onlyActiveProfile, buildDriverOptions, storeDispatchDraft } from '@/lib/driverAssignment';
 import { AUTOMATION_CHECKER_TO_LOAD_KEY } from '@/lib/dispatchAutomation';
+import { effectiveRate, effectiveRpm, estimateProfit } from '@/lib/loadRate';
 
 export default function Loads() {
   const orgId = useOrganizationId();
@@ -155,9 +156,10 @@ export default function Loads() {
 
   const handleSave = async (data) => {
     try {
-      const rpm = data.millas > 0 && data.tarifa_negociada > 0 ? data.tarifa_negociada / data.millas : 0;
+      // Si no hay tarifa negociada, se calcula con la ofrecida (QA)
+      const rpm = effectiveRpm(data);
       const dieselCost = data.millas > 0 && data.diesel_precio_dia > 0 ? (data.millas / 6.5) * data.diesel_precio_dia : 0;
-      const profit = data.tarifa_negociada - dieselCost - (data.tarifa_negociada * 0.25);
+      const profit = estimateProfit(data);
       const resultado = profit > 50 ? 'ganancia' : profit < -50 ? 'perdida' : 'break_even';
 
       const payload = {
@@ -218,7 +220,7 @@ export default function Loads() {
     setShowForm(true);
   };
 
-  const totalRevenue = filtered.reduce((s, l) => s + (l.tarifa_negociada || 0), 0);
+  const totalRevenue = filtered.reduce((s, l) => s + effectiveRate(l), 0);
   const totalMiles = filtered.reduce((s, l) => s + (l.millas || 0), 0);
   const avgRate = totalMiles > 0 ? totalRevenue / totalMiles : 0;
 
@@ -336,10 +338,10 @@ export default function Loads() {
                     <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={load.tipo_cliente || 'broker_directo'} /></td>
                     <td className="px-4 py-3 text-right text-xs font-mono text-muted-foreground hidden md:table-cell">{load.millas || '--'}</td>
                     <td className={`px-4 py-3 text-right text-xs font-mono font-semibold ${
-                      (load.revenue_por_milla || 0) >= 3 ? 'text-green-400' :
-                      (load.revenue_por_milla || 0) >= 2.6 ? 'text-yellow-400' : 'text-red-400'
-                    }`}>${load.revenue_por_milla?.toFixed(2) || '--'}</td>
-                    <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${(load.tarifa_negociada || 0).toLocaleString('en-US')}</td>
+                      effectiveRpm(load) >= 3 ? 'text-green-400' :
+                      effectiveRpm(load) >= 2.6 ? 'text-yellow-400' : 'text-red-400'
+                    }`}>{effectiveRpm(load) > 0 ? `$${effectiveRpm(load).toFixed(2)}` : '--'}</td>
+                    <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${effectiveRate(load).toLocaleString('en-US')}</td>
                     <td className="px-4 py-3 hidden sm:table-cell"><StatusBadge status={load.estado || 'pendiente'} /></td>
                     <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                       <div className="flex items-center gap-1 justify-end">

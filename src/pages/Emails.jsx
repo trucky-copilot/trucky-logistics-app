@@ -173,6 +173,36 @@ function saveSenderRules(orgId, profileId, rules) {
   try { localStorage.setItem(senderRulesKey(orgId, profileId), JSON.stringify(rules)); } catch (_) {}
 }
 
+// QA: TODA solicitud de tarifa / carga es "Carga". "Broker" queda solo para
+// trámites con el broker (setup packet, onboarding, crédito, seguro, contrato).
+// Antes la sincronización ponía "Broker" a cualquier correo que dijera "rate" o "quote".
+function displayCategory(email) {
+  const text = `${email?.asunto || ''} ${email?.snippet || ''} ${email?.cuerpo || ''}`.toLowerCase();
+  const brokerAdmin = /(setup\s*packet|carrier\s*packet|carrier\s*setup|onboarding|credit\s*(application|check)|certificate\s*of\s*insurance|\bcoi\b|broker[- ]carrier\s*agreement|carrier\s*agreement|w-?9\b|alta\s*de\s*carrier|contrato\s*con\s*el\s*broker)/;
+  return brokerAdmin.test(text) ? 'brokers' : 'cargas';
+}
+
+// QA: equipo detectado en el correo (40' reefer, 20' overweight, 1x40 HC, chasis tri-axle…)
+function detectEquipment(email) {
+  const t = `${email?.asunto || ''}\n${email?.cuerpo || email?.snippet || ''}`;
+  const out = [];
+  // Tamaño con tipo ("1x40 HC", "40HC", "20 GP") o con comillas/ft ("20'", '40"', "53 ft")
+  const typed = [...t.matchAll(/\b(?:\d+\s*x\s*)?(20|40|45|53)\s*(?:'|’|"|ft\b|-?\s*foot|-?\s*feet)?\s*(hc|high\s*cube|gp|dc|std|rf)\b/gi)];
+  const plain = [...t.matchAll(/\b(?:\d+\s*x\s*)?(20|40|45|53)\s*(?:'|’|"|ft\b|-?\s*foot|-?\s*feet|pies)/gi)];
+  const sizes = new Map();
+  for (const m of typed) sizes.set(m[1], `${m[1]}' ${m[2].toUpperCase().replace(/HIGH\s*CUBE/, 'HC')}`);
+  for (const m of plain) if (!sizes.has(m[1])) sizes.set(m[1], `${m[1]}'`);
+  out.push(...sizes.values());
+  if (/\breefer\b|refrigerat|\brf\b/i.test(t)) out.push('Reefer');
+  if (/flat\s*-?bed|step\s*-?deck/i.test(t)) out.push('Flatbed');
+  if (/dry\s*-?van/i.test(t)) out.push('Dry van');
+  if (/tri-?\s*ax[le]+/i.test(t)) out.push('Tri-axle');
+  else if (/\bchassis\b|\bchasis\b/i.test(t)) out.push('Chassis');
+  if (/overweight|\bheavy\b|\b[6-9]\d,?\d{3}\s*lbs/i.test(t)) out.push('Overweight');
+  if (!out.length && /drayage|container|contenedor/i.test(t)) out.push('Container');
+  return [...new Set(out)].slice(0, 4);
+}
+
 function hasLogisticsSignal(email) {
   // No se confía en es_logistico ni en la etiqueta "Importante" de Gmail: la
   // sincronización marcaba como logístico cualquier correo que dijera "trucky".
@@ -1530,7 +1560,8 @@ export default function Emails() {
     { id: 'review', label: isEs ? 'Por revisar' : 'To review', icon: HelpCircle, badge: reviewCount },
   ];
 
-  const getCategoryBadge = (cat) => {
+  const getCategoryBadge = (emailOrCat) => {
+    const cat = typeof emailOrCat === 'string' ? emailOrCat : displayCategory(emailOrCat);
     switch (cat) {
       case 'brokers':
         return { label: isEs ? 'Broker' : 'Broker', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
@@ -1559,7 +1590,7 @@ export default function Emails() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
+    <div className="flex flex-col lg:h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
       {/* ─── Encabezado Principal ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
         <div>
@@ -1578,9 +1609,9 @@ export default function Emails() {
           </div>
           <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5 flex-wrap">
             <span>
-              {isEs
-                ? 'Conectado a Gmail · Filtro inteligente anti-ruido activado'
-                : 'Connected to Gmail · Smart logistics filter active'}
+              {googleConnectedEmail && googleConnectedEmail.includes('@')
+                ? (isEs ? 'Conectado a Gmail · Filtro inteligente anti-ruido activado' : 'Connected to Gmail · Smart logistics filter active')
+                : (isEs ? 'Gmail sin conectar · Filtro inteligente anti-ruido activado' : 'Gmail not connected · Smart logistics filter active')}
             </span>
             {googleConnectedEmail && googleConnectedEmail.includes('@') ? (
               <span className="px-2 py-0.5 rounded-md bg-muted text-[11px] font-medium text-foreground border border-border">
@@ -1698,9 +1729,11 @@ export default function Emails() {
       </div>
 
       {/* ─── Panel Master-Detail (Feed de Hilos + Lector de Conversación) ─────── */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 min-h-0 overflow-hidden">
+      {/* En pantallas angostas cada panel tiene su propio alto; antes se repartían
+          la altura sobrante y la lista quedaba en una franja de una línea. */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-4 lg:min-h-0 lg:overflow-hidden">
         {/* Columna Izquierda: Lista de Hilos de Correo (5 columnas) */}
-        <div className="lg:col-span-5 flex flex-col bg-card/60 border border-border rounded-2xl overflow-hidden">
+        <div className="lg:col-span-5 flex flex-col bg-card/60 border border-border rounded-2xl overflow-hidden h-[60vh] min-h-[18rem] lg:h-auto lg:min-h-0">
           <div className="px-4 py-3 border-b border-border/60 bg-card flex items-center justify-between text-xs text-muted-foreground">
             <span>{filteredThreads.length} {isEs ? 'conversaciones' : 'threads'}</span>
             <span className="text-[11px] opacity-70">
@@ -1739,7 +1772,8 @@ export default function Emails() {
             ) : (
               filteredThreads.map(item => {
                 const isSelected = selectedThread?.threadKey === item.threadKey;
-                const badge = getCategoryBadge(item.categoria);
+                const badge = getCategoryBadge(item);
+                const equipment = detectEquipment(item);
                 const initials = (item.remitente_nombre || 'TL')
                   .split(' ')
                   .map(w => w[0])
@@ -1801,6 +1835,11 @@ export default function Emails() {
                             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${badge.color}`}>
                               {badge.label}
                             </span>
+                            {equipment.map(eq => (
+                              <span key={eq} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-sky-500/10 text-sky-300 border-sky-500/30">
+                                {eq}
+                              </span>
+                            ))}
                             {(item.hasImportantThread || hasImportantAndLogisticsTags(item)) && (
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
                                 <Sparkles className="w-2.5 h-2.5 text-red-400" />
@@ -1837,7 +1876,7 @@ export default function Emails() {
         </div>
 
         {/* Columna Derecha: Lector de Hilo de Correo (7 columnas) */}
-        <div className="lg:col-span-7 flex flex-col bg-card/60 border border-border rounded-2xl overflow-hidden">
+        <div className="lg:col-span-7 flex flex-col bg-card/60 border border-border rounded-2xl overflow-hidden h-[75vh] min-h-[24rem] lg:h-auto lg:min-h-0">
           {selectedThread ? (
             <div className="flex flex-col h-full">
               {/* Header del Hilo */}
@@ -1845,9 +1884,17 @@ export default function Emails() {
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${getCategoryBadge(selectedThread.categoria).color}`}>
-                        {getCategoryBadge(selectedThread.categoria).label}
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${getCategoryBadge(selectedThread).color}`}>
+                        {getCategoryBadge(selectedThread).label}
                       </span>
+                      {detectEquipment({
+                        asunto: selectedThread.asunto,
+                        cuerpo: (selectedThread.threadMessages || [selectedThread]).map(m => m.cuerpo || m.snippet || '').join('\n'),
+                      }).map(eq => (
+                        <span key={eq} className="text-[10px] font-semibold px-2 py-0.5 rounded-md border bg-sky-500/10 text-sky-300 border-sky-500/30">
+                          {eq}
+                        </span>
+                      ))}
 
                       {(selectedThread.hasImportantThread || hasImportantAndLogisticsTags(selectedThread)) && (
                         <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1 shadow-sm">

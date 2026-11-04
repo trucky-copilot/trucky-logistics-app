@@ -61,7 +61,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
 
   // Live calculations
   const millas = Number(String(form.millas).replace(',', '.')) || 0;
-  const tarifa = Number(form.tarifa_negociada) || 0;
+  const tarifa = Number(form.tarifa_negociada) > 0 ? Number(form.tarifa_negociada) : (Number(form.tarifa_ofrecida) || 0);
   const diesel = Number(form.diesel_precio_dia) || 0;
   const rpm = millas > 0 && tarifa > 0 ? tarifa / millas : 0;
   const dieselCost = millas > 0 ? (millas / 6.5) * diesel : 0;

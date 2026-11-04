@@ -532,6 +532,36 @@ export default function MarketChat() {
     processQueue();
   };
 
+  // Los borradores de correo vienen en un bloque ``` que se dibuja como tarjeta
+  // (botones "Enviar por Gmail" / "Copiar"). Decisión de producto: los correos a
+  // brokers van SIEMPRE en inglés, así que el bloque NO se traduce ni se toca;
+  // solo se traduce el texto que lo rodea. Antes Google Translate borraba los ```
+  // y el borrador quedaba como texto plano y traducido.
+  const FENCE_RE = /```[\s\S]*?```/g;
+  const hasFence = (t) => typeof t === 'string' && /```[\s\S]*?```/.test(t);
+  const splitFenced = (text) => {
+    const parts = [];
+    let last = 0;
+    for (const m of String(text || '').matchAll(FENCE_RE)) {
+      if (m.index > last) parts.push({ code: false, value: text.slice(last, m.index) });
+      parts.push({ code: true, value: m[0] });
+      last = m.index + m[0].length;
+    }
+    if (last < String(text || '').length) parts.push({ code: false, value: text.slice(last) });
+    return parts;
+  };
+  // Fuente para traducir: la versión que conserva el bloque del correo (si alguna lo tiene).
+  const sourceFor = (m) => {
+    const versions = [m.content, ...Object.values(m.translations || {})];
+    return versions.find(hasFence) || m.content;
+  };
+  // Una traducción en caché sirve solo si no perdió el bloque del correo.
+  const cachedOk = (m, lang) => {
+    const cached = m.translations && m.translations[lang];
+    if (!cached) return false;
+    return !hasFence(sourceFor(m)) || hasFence(cached);
+  };
+
   const translateHistory = async (targetLang) => {
     if (translatingHistory || messages.length === 0) return;
     const currentSeq = ++translationSeqRef.current;
@@ -541,31 +571,49 @@ export default function MarketChat() {
     const startIndex = Math.max(0, messages.length - WINDOW_SIZE);
     const windowMessages = messages.slice(startIndex);
 
-    const needsTranslationIndices = [];
-    const textsToSend = [];
+    // Por mensaje: sus partes (texto / bloque de correo) y qué partes se traducen
+    const jobs = [];          // { realIdx, source, parts }
+    const textsToSend = [];   // segmentos de texto a traducir
+    const segmentMap = [];    // { jobIdx, partIdx }
 
     windowMessages.forEach((m, idx) => {
       const realIdx = startIndex + idx;
-      if (m.translations && m.translations[targetLang]) {
-        // Ya traducido en caché para este idioma
-      } else if (m.content && m.content.trim()) {
-        needsTranslationIndices.push(realIdx);
-        textsToSend.push({ role: m.role, content: m.content });
-      }
+      if (cachedOk(m, targetLang)) return;
+      const source = sourceFor(m);
+      if (!source || !source.trim()) return;
+      const parts = splitFenced(source);
+      const jobIdx = jobs.length;
+      jobs.push({ realIdx, source, parts });
+      parts.forEach((part, partIdx) => {
+        if (!part.code && part.value.trim()) {
+          segmentMap.push({ jobIdx, partIdx });
+          textsToSend.push({ role: m.role, content: part.value });
+        }
+      });
     });
 
-    // Caso A: Todos los mensajes ya tienen traducción en caché en memoria (0 ms, sin petición de red)
-    if (needsTranslationIndices.length === 0) {
-      setMessages(prev => prev.map(m => {
-        if (m.translations && m.translations[targetLang]) {
-          return { ...m, content: m.translations[targetLang] };
-        }
-        return m;
-      }));
+    const applyCached = (list) => list.map(m => (
+      cachedOk(m, targetLang) ? { ...m, content: m.translations[targetLang] } : m
+    ));
+
+    // Caso A: todo en caché (o solo hay bloques de correo, que no se traducen)
+    if (jobs.length === 0 || textsToSend.length === 0) {
+      setMessages(prev => {
+        const updated = [...prev];
+        jobs.forEach(job => {
+          const msg = updated[job.realIdx];
+          if (!msg) return;
+          const tr = { ...(msg.translations || {}) };
+          if (!tr[prevLocaleRef.current || 'es']) tr[prevLocaleRef.current || 'es'] = job.source;
+          tr[targetLang] = job.source; // solo correo: queda igual (en inglés)
+          updated[job.realIdx] = { ...msg, content: job.source, translations: tr };
+        });
+        return applyCached(updated);
+      });
       return;
     }
 
-    // Caso B: Solo enviamos a Google Translate los mensajes que no están en caché
+    // Caso B: solo se envían a traducir los segmentos de texto (nunca el correo)
     setTranslatingHistory(true);
 
     try {
@@ -583,31 +631,35 @@ export default function MarketChat() {
 
       if (res.data?.messages) {
         const returnedTranslated = res.data.messages;
+        // Rearmar cada mensaje: texto traducido + bloque de correo intacto
+        const rebuilt = jobs.map(job => job.parts.map(p => p.value));
+        segmentMap.forEach(({ jobIdx, partIdx }, i) => {
+          const tr = returnedTranslated[i]?.content;
+          if (typeof tr === 'string') {
+            // conservar los saltos de línea de los extremos para no pegar el texto al bloque
+            const original = jobs[jobIdx].parts[partIdx].value;
+            const lead = original.match(/^\s*/)[0];
+            const trail = original.match(/\s*$/)[0];
+            rebuilt[jobIdx][partIdx] = lead + tr.trim() + trail;
+          }
+        });
+
         setMessages(prev => {
           const updated = [...prev];
-          needsTranslationIndices.forEach((targetIndex, i) => {
-            if (updated[targetIndex] && returnedTranslated[i]) {
-              const transText = returnedTranslated[i].content;
-              const prevTranslations = updated[targetIndex].translations || {};
-              if (!prevTranslations[prevLocaleRef.current || 'es']) {
-                prevTranslations[prevLocaleRef.current || 'es'] = updated[targetIndex].content;
-              }
-              prevTranslations[targetLang] = transText;
-              updated[targetIndex] = {
-                ...updated[targetIndex],
-                content: transText,
-                translations: prevTranslations,
-              };
+          jobs.forEach((job, jobIdx) => {
+            const msg = updated[job.realIdx];
+            if (!msg) return;
+            const transText = rebuilt[jobIdx].join('');
+            const prevTranslations = { ...(msg.translations || {}) };
+            if (!prevTranslations[prevLocaleRef.current || 'es']) {
+              prevTranslations[prevLocaleRef.current || 'es'] = job.source;
             }
+            prevTranslations[targetLang] = transText;
+            updated[job.realIdx] = { ...msg, content: transText, translations: prevTranslations };
           });
 
           // Aplicar la versión traducida también en los que ya estaban en caché
-          const fullyUpdated = updated.map(m => {
-            if (m.translations && m.translations[targetLang]) {
-              return { ...m, content: m.translations[targetLang] };
-            }
-            return m;
-          });
+          const fullyUpdated = applyCached(updated);
 
           // Persistir en caché local
           try {

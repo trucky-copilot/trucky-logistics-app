@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
+import { effectiveRate } from '@/lib/loadRate';
 import { MapPin, Navigation, Compass } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
@@ -303,7 +304,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
             <div className="flex items-center justify-between text-white/75 text-[11px]">
               <span>{selectedRouteInfo.broker_nombre || 'Broker'}</span>
               <span className="font-mono font-semibold text-emerald-400">
-                ${(selectedRouteInfo.tarifa_negociada || 0).toLocaleString('en-US')} ({selectedRouteInfo.millas || '--'} mi)
+                ${effectiveRate(selectedRouteInfo).toLocaleString('en-US')} ({selectedRouteInfo.millas || '--'} mi)
               </span>
             </div>
           </div>

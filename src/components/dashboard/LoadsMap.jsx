@@ -4,6 +4,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useLanguage } from '@/lib/LanguageContext';
 import { geocode } from '@/lib/floridaLocations';
+import { effectiveRate } from '@/lib/loadRate';
 
 // Colored pin via divIcon (no external image assets needed)
 function pinIcon(color) {
@@ -90,10 +91,10 @@ export default function LoadsMap({ loads = [] }) {
                   <div style={{ minWidth: 140 }}>
                     <div style={{ fontWeight: 700, marginBottom: 2 }}>{t.map.destination}</div>
                     <div style={{ opacity: 0.8 }}>{load.destino}</div>
-                    {load.tarifa_negociada != null && (
+                    {effectiveRate(load) > 0 && (
                       <div style={{ fontSize: 11, marginTop: 4 }}>
-                        {t.map.rate}: ${Number(load.tarifa_negociada).toLocaleString()}
-                        {load.millas ? ` · $${(load.tarifa_negociada / load.millas).toFixed(2)}/mi` : ''}
+                        {t.map.rate}: ${effectiveRate(load).toLocaleString('en-US')}
+                        {load.millas ? ` · $${(effectiveRate(load) / load.millas).toFixed(2)}/mi` : ''}
                       </div>
                     )}
                   </div>
