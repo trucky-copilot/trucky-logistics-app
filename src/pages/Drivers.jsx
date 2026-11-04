@@ -26,8 +26,10 @@ function DocAlert({ label, date }) {
   );
 }
 
-function DriverForm({ driver, onSave, onClose }) {
-  const { t } = useLanguage();
+function DriverForm({ driver, onSave, onClose, existingDrivers = [] }) {
+  const { t, locale } = useLanguage();
+  const isEs = locale !== 'en';
+  const [formError, setFormError] = useState('');
   const { setUnsavedChanges } = useProfile();
   const initialState = {
     nombre: '', apellido: '', telefono: '', licencia_numero: '',
@@ -48,6 +50,31 @@ function DriverForm({ driver, onSave, onClose }) {
   const handleSubmit = async (e) => { 
     e.preventDefault(); 
     if (isSaving) return;
+
+    // M3 (QA): teléfono válido (7 a 15 dígitos; se permiten + ( ) - . y espacios)
+    const phone = String(form.telefono || '').trim();
+    if (phone) {
+      const digits = phone.replace(/\D/g, '');
+      if (!/^[0-9+()\-.\s]+$/.test(phone) || digits.length < 7 || digits.length > 15) {
+        setFormError(isEs ? 'Teléfono inválido: usa solo números (7 a 15 dígitos).' : 'Invalid phone: use numbers only (7 to 15 digits).');
+        return;
+      }
+    }
+    // M3 (QA): evitar duplicados (misma licencia, o mismo nombre + teléfono)
+    const norm = (v) => String(v || '').toLowerCase().replace(/\s+/g, ' ').trim();
+    const onlyDigits = (v) => String(v || '').replace(/\D/g, '');
+    const fullName = norm(`${form.nombre} ${form.apellido}`);
+    const dup = existingDrivers.find(d => d.id !== driver?.id && (
+      (norm(form.licencia_numero) && norm(d.licencia_numero) === norm(form.licencia_numero)) ||
+      (fullName && norm(`${d.nombre} ${d.apellido}`) === fullName && onlyDigits(d.telefono) === onlyDigits(form.telefono))
+    ));
+    if (dup) {
+      setFormError(isEs
+        ? `Ya existe un conductor con esos datos: ${`${dup.nombre || ''} ${dup.apellido || ''}`.trim()}.`
+        : `A driver with that data already exists: ${`${dup.nombre || ''} ${dup.apellido || ''}`.trim()}.`);
+      return;
+    }
+    setFormError('');
     setIsSaving(true);
     try {
       await onSave(form);
@@ -63,6 +90,9 @@ function DriverForm({ driver, onSave, onClose }) {
           <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground"><X className="w-4 h-4" /></button>
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
+          {formError && (
+            <div className="p-2.5 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-red-300">{formError}</div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.name} *</label>
@@ -78,7 +108,7 @@ function DriverForm({ driver, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.drivers.phone}</label>
-              <input value={form.telefono} onChange={e => set('telefono', e.target.value)}
+              <input type="tel" inputMode="tel" value={form.telefono} onChange={e => { set('telefono', e.target.value); setFormError(''); }}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
@@ -296,7 +326,7 @@ export default function Drivers() {
         maxLimit={limits?.DRIVERS || 5}
       />
 
-      {showForm && <DriverForm driver={editDriver} onSave={handleSave} onClose={() => { setShowForm(false); setEditDriver(null); }} />}
+      {showForm && <DriverForm driver={editDriver} existingDrivers={drivers} onSave={handleSave} onClose={() => { setShowForm(false); setEditDriver(null); }} />}
 
       {loading ? (
         <div className="flex justify-center py-12"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>

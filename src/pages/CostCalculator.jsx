@@ -489,6 +489,22 @@ export default function CostCalculator() {
       {/* Results */}
       <div className="bg-card border border-border rounded-xl p-4 space-y-4">
         <h2 className="text-sm font-semibold text-foreground">{t.calculator.results}</h2>
+
+        {/* L4 (QA): explicar por qué no se puede calcular en vez de solo mostrar "—" */}
+        {!costos.valido && (
+          <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-200">
+            {(() => {
+              const campo = {
+                diesel_precio: locale === 'en' ? 'Diesel price' : 'Precio del diésel',
+                mpg: 'MPG',
+                millas_semana_promedio: locale === 'en' ? 'Miles per week' : 'Millas por semana',
+              }[costos.faltante] || costos.faltante;
+              return locale === 'en'
+                ? `Cannot calculate cost per mile or break-even: "${campo}" must be greater than 0.`
+                : `No se puede calcular el costo por milla ni el break-even: "${campo}" debe ser mayor que 0.`;
+            })()}
+          </div>
+        )}
         
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div className="bg-muted rounded-xl p-3 text-center">

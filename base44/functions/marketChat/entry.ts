@@ -808,6 +808,17 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
       raw.millas_ida = null; // Descarta las millas inventadas por la IA para que entre Google Maps
     }
 
+    // U5 (QA): millas de deadhead (vacías hasta el pickup). Se suman al cálculo
+    // para que el RPM sea el real: "40 miles deadhead", "deadhead de 40", "40 millas vacías".
+    const dhMatch =
+      String(msgSinComas || '').match(/(?:deadhead|dead\s*head|millas\s*vac[ií]as|empty\s*miles)\s*(?:of|de|:|=)?\s*(\d{1,4})/i) ||
+      String(msgSinComas || '').match(/(?<![$\d.])(\d{1,4})\s*(?:mi|mi\.|miles|millas)?\s*(?:of\s*|de\s*)?(?:deadhead|dead\s*head|dh\b|vac[ií]as|en\s*vac[ií]o|empty\s*miles)/i);
+    const millasDeadhead = dhMatch ? Number(dhMatch[1]) : 0;
+    // Si la IA tomó el número del deadhead como millas cargadas, se descarta.
+    if (millasDeadhead > 0 && Number(raw.millas_ida) === millasDeadhead) {
+      raw.millas_ida = null;
+    }
+
     // Si el usuario solo pide millas, omitimos las validaciones de equipo y respondemos de inmediato.
     if (intent === 'ask_miles') {
       if (!raw.millas_ida && raw.origen && raw.destino) {
@@ -1195,7 +1206,15 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
       await perf.time('db.persistPagoCamion', () => persistPagoCamion(base44, user.email, costConfigRecord, truckPayment.rpm, activeProfileId));
     }
 
-    const tarifaOfrecida = typeof raw.tarifa_ofrecida === 'number' && isFinite(raw.tarifa_ofrecida) && raw.tarifa_ofrecida > 0
+    // H3 (QA): "$2.20 per mile" / "$2.20/mi" / "2.20 por milla" es una tarifa POR MILLA.
+    // Antes se tomaba 2.2 como total del flete ($2.2, $0.00 RPM → ROJO).
+    const rpmOfertaMatch = String(msgSinComas || '').match(
+      /\$?\s*(\d{1,2}(?:\.\d{1,2})?)\s*(?:usd\s*)?(?:per\s*mile|a\s*mile|\/\s*mi(?:le)?\b|por\s*milla|la\s*milla|\brpm\b)/i
+    );
+    const tarifaOfrecidaRpm = rpmOfertaMatch && Number(rpmOfertaMatch[1]) > 0.5 && Number(rpmOfertaMatch[1]) <= 20
+      ? Number(rpmOfertaMatch[1])
+      : null;
+    const tarifaOfrecida = tarifaOfrecidaRpm == null && typeof raw.tarifa_ofrecida === 'number' && isFinite(raw.tarifa_ofrecida) && raw.tarifa_ofrecida > 0
       ? raw.tarifa_ofrecida
       : null;
 
@@ -1223,6 +1242,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           millasIdaDeclaradas: raw.millas_ida,
           pagoCamionRpm: truckPayment.rpm,
           tarifaOfrecida,
+          tarifaOfrecidaRpm,
           accessorialTriggers: raw.accessorial_triggers,
           costoPorMillaPropio,
           tarifaObjetivaPropia: costConfig?.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
@@ -1257,6 +1277,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           millasIdaDeclaradas: raw.millas_ida,
           pagoCamionRpm: truckPayment.rpm,
           tarifaOfrecida,
+          tarifaOfrecidaRpm,
           costoPorMillaPropio,
           tarifaObjetivaPropia: costConfig?.tarifa_objetivo != null ? Number(costConfig.tarifa_objetivo) : null,
           tarifaBreakEvenPropia: costConfig?.tarifa_break_even != null ? Number(costConfig.tarifa_break_even) : null,
@@ -1294,6 +1315,9 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
     // frontend lo estaba renderizando visiblemente en algunos casos.
 
     const responsePayload: any = { content: conFronteraVerificada(content, permitidasRateCheck) };
+    if (calculo && millasDeadhead > 0) {
+      (calculo as any).millasDeadhead = millasDeadhead;
+    }
     if (calculo) {
       responsePayload.structuredData = {
         intent: 'rate_check',

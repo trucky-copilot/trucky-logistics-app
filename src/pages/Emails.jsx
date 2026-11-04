@@ -1209,7 +1209,7 @@ export default function Emails() {
 
       const finalDocumentText = extractedDocText
         ? `${extractedDocText}\n\n=== HILO DE CORREO ASOCIADO ===\nAsunto: ${thread.asunto || ''}\n${threadCombinedText}`
-        : `RATE CONFIRMATION / DISPATCH EMAIL THREAD\nBroker: ${latestMsg.remitente_nombre || latestMsg.remitente_email || 'Broker'}\nSubject: ${thread.asunto || ''}\n\n${threadCombinedText}`;
+        : `EMAIL THREAD\nBroker: ${latestMsg.remitente_nombre || latestMsg.remitente_email || 'Broker'}\nSubject: ${thread.asunto || ''}\n\n${threadCombinedText}`;
 
       // Identificar correo del broker (remitente externo)
       const myEmail = (googleConnectedEmail || user?.email || '').toLowerCase().trim();

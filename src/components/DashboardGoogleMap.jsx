@@ -303,7 +303,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
             <div className="flex items-center justify-between text-white/75 text-[11px]">
               <span>{selectedRouteInfo.broker_nombre || 'Broker'}</span>
               <span className="font-mono font-semibold text-emerald-400">
-                ${(selectedRouteInfo.tarifa_negociada || 0).toLocaleString()} ({selectedRouteInfo.millas || '--'} mi)
+                ${(selectedRouteInfo.tarifa_negociada || 0).toLocaleString('en-US')} ({selectedRouteInfo.millas || '--'} mi)
               </span>
             </div>
           </div>

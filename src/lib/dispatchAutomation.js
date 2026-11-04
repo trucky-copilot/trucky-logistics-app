@@ -152,6 +152,8 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
       origen = addrMatch[1].trim();
     } else if (nameMatch) {
       origen = nameMatch[1].trim();
+    } else if (cityStateMatch) {
+      origen = cityStateMatch[1].trim();
     }
   }
 
@@ -166,13 +168,17 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
       destino = addrMatch[1].trim();
     } else if (nameMatch) {
       destino = nameMatch[1].trim();
+    } else if (cityStateMatch) {
+      destino = cityStateMatch[1].trim();
     }
   }
 
   // Si no tenía formato Shipper 1 / Consignee 1, buscar Origin / Destination explícitos.
   // Incluye el formato típico de correo de broker: "PICKUP- FIT", "P/U : POMTOC",
   // "Delivery - 33166", "POD: Miami".
-  const cleanPlace = (v) => String(v || '')
+  const cleanPlace = (v) => /^\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(String(v || ''))
+    ? '' // es una fecha ("Pickup: 11/06/2026"), no un lugar
+    : String(v || '')
     .replace(/\*/g, '')
     .replace(/\s+(?:-\s*)?(?:delivery|deliver|drop|pod|weight|commodity|rate|chassis|tri-?axle|live load)\b.*$/i, '')
     .trim()
@@ -246,7 +252,10 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
 
   // 7. MILLAS
   let millas = 0;
-  const milesMatch = primaryText.match(/([0-9]{2,4}(?:[.,][0-9]+)?)\s*(?:miles|millas|loaded\s*miles|\bmi\b)/i);
+  // "280 miles" o "Miles: 280" (antes solo se leía el primer formato)
+  const milesMatch =
+    primaryText.match(/([0-9]{2,4}(?:[.,][0-9]+)?)\s*(?:miles|millas|loaded\s*miles|\bmi\b)/i) ||
+    primaryText.match(/(?:loaded\s*miles|miles|millas|distance|distancia)\s*[:\-]\s*([0-9]{2,4}(?:[.,][0-9]+)?)/i);
   if (milesMatch) {
     millas = Number(String(milesMatch[1]).replace(',', '.')) || 0;
   }
@@ -344,4 +353,107 @@ export function classifyLoadDocument(text = '', verifierType = '') {
   if (/confirmation|delivery_order|rate_con/.test(v) && !request) return 'confirmation';
   if (request) return 'rate_request';
   return 'unknown';
+}
+
+/**
+ * H1 (QA): tipo de documento ANTES de analizarlo. El Verificador solo analiza
+ * Rate Confirmations; lo demás se detiene con un motivo claro.
+ * Mira primero el encabezado (primeros ~800 caracteres): gana el título que
+ * aparece antes. Si no hay título, revisa todo el texto.
+ * Devuelve: 'rate_confirmation' | 'bill_of_lading' | 'delivery_order' |
+ *           'rate_request' | 'market_report' | 'unknown'
+ */
+export function detectDocumentType(text = '') {
+  const full = String(text || '').toLowerCase();
+  const head = full.slice(0, 800);
+  const TITLES = [
+    ['rate_confirmation', /rate\s*confirmation|load\s*confirmation|dispatch\s*confirmation|carrier\s*confirmation|load\s*tender|confirmaci[oó]n\s*de\s*(tarifa|carga|despacho)/],
+    ['bill_of_lading', /bill\s*of\s*lading|straight\s*bill|\bb\/l\b|conocimiento\s*de\s*embarque/],
+    ['delivery_order', /delivery\s*order|orden\s*de\s*entrega/],
+    ['market_report', /trendlines|\bdat\b.*(spot|rates?)|spot\s*(market|rates?)\s*(report|trends?)|market\s*report/],
+  ];
+  let best = null;
+  for (const [type, re] of TITLES) {
+    const m = head.match(re);
+    if (m && (best === null || m.index < best.index)) best = { type, index: m.index };
+  }
+  if (best) return best.type;
+
+  if (classifyLoadDocument(full) === 'rate_request') return 'rate_request';
+  if (/agreed\s*amount|carrier\s*pay|rate\s*con\b|line\s*haul/.test(full)) return 'rate_confirmation';
+  for (const [type, re] of TITLES) if (re.test(full)) return type;
+  return 'unknown';
+}
+
+/** M6 (QA): reemplaza "null"/"undefined" literales en todo el resultado del análisis. */
+export function cleanNullStrings(value, label = 'No especificado') {
+  if (typeof value === 'string') {
+    return value
+      .replace(/\b(null|undefined)\s*@\s*(null|undefined)\b/gi, label)
+      .replace(/\b(null|undefined)\b/gi, label);
+  }
+  if (Array.isArray(value)) return value.map(v => cleanNullStrings(v, label));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, cleanNullStrings(v, label)]));
+  }
+  return value;
+}
+
+/**
+ * U3 (QA): reglas de riesgo que NO dependen de la IA ni del plan.
+ * Penalidad, TONU no pagado y MC inválido se marcan como alerta crítica (❌)
+ * y el veredicto nunca puede quedar en "Aceptar".
+ */
+const PENALTY_RE = /(penalt(y|ies)|penalidad(es)?|\bmulta(s)?\b|late\s*fee|liquidated\s*damages|charge\s*-?\s*back|\$?\s*\d[\d,.]*\s*(usd)?\s*(per|\/|por)\s*(hour|hr|hora)\s*(of\s*)?(delay|late|lateness|retraso|tardanza))/i;
+const TONU_NOT_PAID_RE = /(tonu[^.\n]{0,40}(not\s*(be\s*)?(paid|payable|applicable)|no\s*(se\s*)?(paga|pagar|pagado|aplica)|n\/a|none|will\s*not)|\bno\s*tonu\b|sin\s*tonu|without\s*tonu)/i;
+
+export function findRiskClauses(text = '') {
+  const t = String(text || '');
+  const risks = [];
+  const pen = t.match(PENALTY_RE);
+  if (pen) {
+    // la línea completa donde aparece ("Late delivery penalty: $250 per hour of delay.")
+    const line = (t.split(/\n|(?<=\.)\s+/).find(l => PENALTY_RE.test(l)) || pen[0]).trim().slice(0, 160);
+    risks.push({ key: 'clause', text: `❌ Penalidad: "${line}"` });
+  }
+  const tonu = t.match(TONU_NOT_PAID_RE);
+  if (tonu) risks.push({ key: 'clause', text: `❌ TONU no pagado: "${tonu[0].trim()}" — sin protección si cancelan la carga` });
+  for (const m of t.matchAll(/\bMC\s*(?:#|number|no\.?|num)?\s*[:\-]?\s*(\d{1,8})\b/gi)) {
+    const d = m[1];
+    if (d.length < 5 || /^0+$/.test(d) || /^(\d)\1+$/.test(d)) {
+      risks.push({ key: 'broker', text: `❌ MC inválido (${d}) — no es un número real de FMCSA` });
+      break;
+    }
+  }
+  return risks;
+}
+
+export function applyRiskGuards(analysis, text = '') {
+  if (!analysis) return analysis;
+  const risks = findRiskClauses(text);
+  if (risks.length === 0) return analysis;
+  const a = { ...analysis, categorias: [...(analysis.categorias || [])] };
+  for (const r of risks) {
+    const i = a.categorias.findIndex(c => c.categoriaKey === r.key);
+    if (i >= 0) {
+      const c = a.categorias[i];
+      const hallazgos = (c.hallazgos || []).filter(h => !/^✓\s*(TONU|MC|Sin cláusulas)/i.test(h));
+      if (!hallazgos.some(h => h === r.text)) hallazgos.unshift(r.text);
+      a.categorias[i] = { ...c, semaforo: 'rojo', hallazgos };
+    } else {
+      a.categorias.push({
+        categoriaKey: r.key,
+        categoria: r.key === 'broker' ? 'Broker' : 'Cláusulas y Penalidades',
+        semaforo: 'rojo',
+        hallazgos: [r.text],
+        recomendacion: 'No aceptar hasta corregir',
+      });
+    }
+  }
+  const alertas = new Set([...(a.alertas_criticas || []), ...risks.map(r => r.text)]);
+  a.alertas_criticas = [...alertas];
+  a.veredicto = 'No aceptar hasta corregir';
+  a.semaforo_general = 'rojo';
+  a.resumen_ejecutivo = `Alerta crítica: ${risks.map(r => r.text.replace(/^❌\s*/, '')).join(' · ')}. ${a.resumen_ejecutivo || ''}`.trim();
+  return a;
 }

@@ -5,6 +5,16 @@ import { useLanguage } from '@/lib/LanguageContext';
 import DriverSelect, { canAssign } from '@/components/DriverSelect';
 import { assignmentFields } from '@/lib/driverAssignment';
 
+// M2 (QA): texto plano. Se quita cualquier etiqueta HTML (<img onerror=…>, <script>…)
+// antes de guardar. React ya escapa al mostrar, pero no se debe almacenar marcado.
+function plainText(v, max = 200) {
+  return String(v ?? '')
+    .replace(/<[^>]*>?/g, '')
+    .replace(/[<>]/g, '')
+    .trim()
+    .slice(0, max);
+}
+
 export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) {
   const { setUnsavedChanges } = useProfile();
   const { t, locale } = useLanguage();
@@ -62,9 +72,17 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
     const newErrors = {};
     if (!form.origen || !form.origen.trim()) newErrors.origen = true;
     if (!form.destino || !form.destino.trim()) newErrors.destino = true;
-    if (!form.millas || Number(String(form.millas).replace(',', '.')) <= 0) {
-      newErrors.millas = true;
+    // M1 (QA): millas > 0 y tarifas ≥ 0 (antes se guardaba −500 y contaminaba el Dashboard)
+    const millasNum = Number(String(form.millas).replace(',', '.'));
+    if (!Number.isFinite(millasNum) || millasNum <= 0) newErrors.millas = true;
+    for (const k of ['tarifa_ofrecida', 'tarifa_negociada', 'diesel_precio_dia']) {
+      const raw = form[k];
+      if (raw === '' || raw === null || raw === undefined) continue;
+      const n = Number(raw);
+      if (!Number.isFinite(n) || n < 0) newErrors[k] = true;
     }
+    if (plainText(form.origen) === '') newErrors.origen = true;
+    if (plainText(form.destino) === '') newErrors.destino = true;
     // Documento vencido (ej. TWIC): no se asigna sin confirmación explícita.
     if (!canAssign(selectedDriver, docAck)) newErrors.conductor_id = true;
     if (Object.keys(newErrors).length > 0) {
@@ -73,7 +91,15 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
     }
     onSave({
       ...form,
-      millas: Number(String(form.millas).replace(',', '.')) || 0,
+      origen: plainText(form.origen, 120),
+      destino: plainText(form.destino, 120),
+      broker_nombre: plainText(form.broker_nombre, 80),
+      numero_referencia: plainText(form.numero_referencia, 60),
+      notas: plainText(form.notas, 1000),
+      millas: millasNum,
+      tarifa_ofrecida: Number(form.tarifa_ofrecida) || 0,
+      tarifa_negociada: Number(form.tarifa_negociada) || 0,
+      diesel_precio_dia: Number(form.diesel_precio_dia) || 0,
     });
   };
 
@@ -154,23 +180,27 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
                   if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('millas', val);
                 }}
                 className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none transition-colors ${
-                  errors.millas && (!form.millas || String(form.millas).trim() === '') ? 'border-red-500 focus:ring-1 focus:ring-red-500/50' : 'border-border focus:ring-1 focus:ring-primary/50'
+                  errors.millas ? 'border-red-500 focus:ring-1 focus:ring-red-500/50' : 'border-border focus:ring-1 focus:ring-primary/50'
                 }`}
                 placeholder="275"
               />
-              {errors.millas && (!form.millas || String(form.millas).trim() === '') && (
-                <span className="text-[10px] text-red-400 block mt-0.5 font-medium">{t.loadForm.required}</span>
+              {errors.millas && (
+                <span className="text-[10px] text-red-400 block mt-0.5 font-medium">
+                  {!form.millas || String(form.millas).trim() === '' ? t.loadForm.required : (isEs ? 'Debe ser mayor que 0' : 'Must be greater than 0')}
+                </span>
               )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.offeredRate}</label>
-              <input type="number" step="0.01" value={form.tarifa_ofrecida} onChange={e => set('tarifa_ofrecida', Number(e.target.value))}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder="600" />
+              <input type="number" step="0.01" min="0" value={form.tarifa_ofrecida} onChange={e => set('tarifa_ofrecida', e.target.value === '' ? '' : Number(e.target.value))}
+                className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 ${errors.tarifa_ofrecida ? 'border-red-500 focus:ring-red-500/50' : 'border-border focus:ring-primary/50'}`} placeholder="600" />
+              {errors.tarifa_ofrecida && <span className="text-[10px] text-red-400 block mt-0.5">{isEs ? 'No puede ser negativa' : 'Cannot be negative'}</span>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.negotiatedRate}</label>
-              <input type="number" step="0.01" value={form.tarifa_negociada} onChange={e => set('tarifa_negociada', Number(e.target.value))}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" placeholder="750" />
+              <input type="number" step="0.01" min="0" value={form.tarifa_negociada} onChange={e => set('tarifa_negociada', e.target.value === '' ? '' : Number(e.target.value))}
+                className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 ${errors.tarifa_negociada ? 'border-red-500 focus:ring-red-500/50' : 'border-border focus:ring-primary/50'}`} placeholder="750" />
+              {errors.tarifa_negociada && <span className="text-[10px] text-red-400 block mt-0.5">{isEs ? 'No puede ser negativa' : 'Cannot be negative'}</span>}
             </div>
           </div>
 

@@ -62,7 +62,7 @@ function BrokerForm({ broker, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.brokers.name} *</label>
-              <input required value={form.nombre} onChange={e => set('nombre', e.target.value)}
+              <input required maxLength={80} value={form.nombre} onChange={e => set('nombre', e.target.value)}
                 className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
             <div>
@@ -308,7 +308,7 @@ export default function Brokers() {
                 {brokers.sort((a, b) => (b.cargas_realizadas || 0) - (a.cargas_realizadas || 0)).map(broker => (
                   <tr key={broker.id} className="hover:bg-muted/20 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-medium text-foreground">{broker.nombre}</div>
+                      <div className="font-medium text-foreground truncate max-w-[16rem] sm:max-w-xs" title={broker.nombre}>{broker.nombre}</div>
                       <div className="text-xs text-muted-foreground">{broker.mc_number || t.brokers.noMc} · {broker.contacto || t.brokers.noContact}</div>
                       {broker.clausulas_frecuentes && (
                         <div className="text-xs text-yellow-400 mt-0.5 truncate max-w-48">⚠ {broker.clausulas_frecuentes}</div>

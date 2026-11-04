@@ -22,6 +22,9 @@ import {
   buildThreadSummaryForLoad,
   extractLogisticsFieldsFromText,
   classifyLoadDocument,
+  detectDocumentType,
+  cleanNullStrings,
+  applyRiskGuards,
 } from '@/lib/dispatchAutomation';
 
 const ACCEPTED_TYPES = '.txt,.pdf,.jpg,.jpeg,.png,.csv';
@@ -197,7 +200,7 @@ export default function DocumentAnalyzer() {
     );
     const rpm = heur.millas > 0 ? heur.tarifa_negociada / heur.millas : 0;
     return {
-      resumen_ejecutivo: `Documento e hilo verificados para la ruta ${heur.origen} → ${heur.destino} (${heur.millas} mi) con tarifa de $${heur.tarifa_negociada.toLocaleString()}.`,
+      resumen_ejecutivo: `Documento e hilo verificados para la ruta ${heur.origen} → ${heur.destino} (${heur.millas} mi) con tarifa de $${heur.tarifa_negociada.toLocaleString('en-US')}.`,
       semaforo_general: rpm >= 2.5 ? 'verde' : 'amarillo',
       veredicto: rpm >= 2.5 ? 'Aceptar' : 'Revisar antes de aceptar',
       alertas_criticas: [],
@@ -235,10 +238,10 @@ export default function DocumentAnalyzer() {
           categoria: 'Rate y Condiciones de Pago',
           semaforo: rpm >= 2.5 ? 'verde' : 'amarillo',
           hallazgos: [
-            `✓ Tarifa detectada: $${heur.tarifa_negociada.toLocaleString()} ($${rpm.toFixed(2)}/mi en ${heur.millas} mi)`,
+            `✓ Tarifa detectada: $${heur.tarifa_negociada.toLocaleString('en-US')} ($${rpm.toFixed(2)}/mi en ${heur.millas} mi)`,
           ],
           datos_extraidos: {
-            tarifa: `$${heur.tarifa_negociada.toLocaleString()}`,
+            tarifa: `$${heur.tarifa_negociada.toLocaleString('en-US')}`,
             por_milla: `$${rpm.toFixed(2)}/mi`,
             pago: 'Net 30',
           },
@@ -276,6 +279,27 @@ export default function DocumentAnalyzer() {
       return;
     }
 
+    const isEsLocal = locale !== 'en';
+
+    // H1: clasificar ANTES de analizar. Solo se analizan Rate Confirmations.
+    const textForType = activeAutoCtx?.hasPdf
+      ? textToAnalyze.split('=== HILO DE CORREO ASOCIADO ===')[0]
+      : textToAnalyze;
+    const docType = detectDocumentType(textForType);
+    const NOT_RC = {
+      bill_of_lading: isEsLocal ? 'un Bill of Lading' : 'a Bill of Lading',
+      delivery_order: isEsLocal ? 'una Delivery Order' : 'a Delivery Order',
+      rate_request: isEsLocal ? 'una solicitud de tarifa' : 'a rate request',
+      market_report: isEsLocal ? 'un reporte de mercado' : 'a market report',
+    };
+    if (NOT_RC[docType]) {
+      setAnalysis(null);
+      setError(isEsLocal
+        ? `Este documento no es un Rate Confirmation (parece ${NOT_RC[docType]}). El verificador solo analiza Rate Confirmations.`
+        : `This document is not a Rate Confirmation (it looks like ${NOT_RC[docType]}). The checker only analyzes Rate Confirmations.`);
+      return;
+    }
+
     setLoading(true);
     setLoadingMsg(t.documents.extract);
     setError(null);
@@ -296,7 +320,11 @@ export default function DocumentAnalyzer() {
 
       if (res.data?.analysis) {
         setMonthlyDocCount(prev => prev + 1);
-        const rawAnalysis = { ...res.data.analysis, cached: res.data.cached || false };
+        // M6: nada de "null" literal en pantalla
+        let rawAnalysis = cleanNullStrings(
+          { ...res.data.analysis, cached: res.data.cached || false },
+          locale === 'en' ? 'Not specified' : 'No especificado'
+        );
         // Enriquecer datos_extraidos con heurística local si algún campo vino vacío por límite de tokens IA
         const fallbackLocal = buildLocalFallbackAnalysis(textToAnalyze, activeAutoCtx);
         rawAnalysis.datos_extraidos = {
@@ -305,6 +333,9 @@ export default function DocumentAnalyzer() {
             Object.entries(rawAnalysis.datos_extraidos || {}).filter(([, v]) => v != null && v !== '')
           ),
         };
+
+        // U3: penalidad / TONU no pagado / MC inválido = alerta crítica, en todos los planes
+        rawAnalysis = applyRiskGuards(rawAnalysis, textForType);
 
         translationsCacheRef.current = { es: rawAnalysis, en: null };
 
@@ -324,17 +355,26 @@ export default function DocumentAnalyzer() {
           setAnalysis(rawAnalysis);
         }
       } else {
-        // Si el backend devolvió error (ej. cuota IA), completamos con el motor de reglas local para no interrumpir la automatización
-        const localAnalysis = buildLocalFallbackAnalysis(textToAnalyze, activeAutoCtx);
-        translationsCacheRef.current = { es: localAnalysis, en: null };
-        setAnalysis(localAnalysis);
+        // H4: antes se inventaba un análisis "local" (con veredicto y Net 30) cuando
+        // el servidor fallaba. Ahora se muestra un mensaje claro y se puede reintentar.
+        console.error('[DocumentAnalyzer] analyzeDocument sin análisis:', res?.data);
+        setError(isEsLocal
+          ? 'No pudimos analizar el documento. Revisa que sea un Rate Confirmation legible e intenta de nuevo.'
+          : 'We could not analyze the document. Make sure it is a readable Rate Confirmation and try again.');
       }
     } catch (err) {
       clearTimeout(t1);
       clearTimeout(t2);
-      const localAnalysis = buildLocalFallbackAnalysis(textToAnalyze, activeAutoCtx);
-      translationsCacheRef.current = { es: localAnalysis, en: null };
-      setAnalysis(localAnalysis);
+      // H4: nunca mostrar "Request failed with status code 400" al usuario.
+      console.error('[DocumentAnalyzer] Error analyzeDocument:', err?.response?.status, err?.response?.data || err);
+      const status = err?.response?.status;
+      setError(status === 400
+        ? (isEsLocal
+            ? 'No pudimos leer el documento o no es un Rate Confirmation. Prueba con otro archivo o pega el texto.'
+            : 'We could not read the document or it is not a Rate Confirmation. Try another file or paste the text.')
+        : (isEsLocal
+            ? 'Hubo un problema al verificar el documento. Intenta de nuevo en unos segundos.'
+            : 'There was a problem verifying the document. Try again in a few seconds.'));
     } finally {
       setLoading(false);
     }
@@ -368,6 +408,7 @@ export default function DocumentAnalyzer() {
     setFileName(file.name);
     setError(null);
     setAnalysis(null);
+    setDocumentText('');
     translationsCacheRef.current = { es: null, en: null };
 
     if (ext === 'pdf') {
@@ -493,7 +534,12 @@ export default function DocumentAnalyzer() {
 
         <textarea
           value={documentText}
-          onChange={e => setDocumentText(e.target.value)}
+          onChange={e => {
+            setDocumentText(e.target.value);
+            // H4: si el usuario escribe/pega, ya no se trabaja con el archivo anterior
+            if (fileName) setFileName('');
+            if (error) setError(null);
+          }}
           placeholder={`${t.documents.placeholder}
 
 RATE CONFIRMATION

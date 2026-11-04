@@ -28,8 +28,13 @@ const EQUIPMENT_TYPES = [
   { value: 'drayage', label: 'Drayage' },
 ];
 
+// M4 (QA): año del camión entre 1990 y el año actual + 1
+const MIN_TRUCK_YEAR = 1990;
+const MAX_TRUCK_YEAR = new Date().getFullYear() + 1;
+
 function TruckForm({ truck, onSave, onClose }) {
-  const { t } = useLanguage();
+  const { t, locale } = useLanguage();
+  const [yearError, setYearError] = useState(false);
   const { setUnsavedChanges } = useProfile();
   const initialState = {
     placa: '', modelo: '', año: '', estado: 'disponible',
@@ -50,6 +55,11 @@ function TruckForm({ truck, onSave, onClose }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isSaving) return;
+    const year = form.año === '' || form.año === null || form.año === undefined ? null : Number(form.año);
+    if (year !== null && (!Number.isInteger(year) || year < MIN_TRUCK_YEAR || year > MAX_TRUCK_YEAR)) {
+      setYearError(true);
+      return;
+    }
     setIsSaving(true);
     try {
       await onSave(form);
@@ -81,8 +91,14 @@ function TruckForm({ truck, onSave, onClose }) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.fleet.year}</label>
-              <input type="number" value={form.año} onChange={e => set('año', Number(e.target.value))}
-                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" />
+              <input type="number" min={MIN_TRUCK_YEAR} max={MAX_TRUCK_YEAR} step="1" value={form.año}
+                onChange={e => { set('año', e.target.value === '' ? '' : Number(e.target.value)); setYearError(false); }}
+                className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 ${yearError ? 'border-red-500 focus:ring-red-500/50' : 'border-border focus:ring-primary/50'}`} />
+              {yearError && (
+                <span className="text-[10px] text-red-400 block mt-0.5">
+                  {locale === 'en' ? `Enter a year between ${MIN_TRUCK_YEAR} and ${MAX_TRUCK_YEAR}` : `Ingresa un año entre ${MIN_TRUCK_YEAR} y ${MAX_TRUCK_YEAR}`}
+                </span>
+              )}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.fleet.status}</label>

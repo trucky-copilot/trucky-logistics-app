@@ -361,7 +361,7 @@ export default function Dashboard() {
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate">{b.nombre}</div>
+                  <div className="text-sm font-medium text-white truncate" title={b.nombre}>{b.nombre}</div>
                   <div className="text-xs text-white/60">{b.cargas_realizadas || 0} {t.dashboard.loads}</div>
                 </div>
                 <div className="text-right">
@@ -418,13 +418,13 @@ export default function Dashboard() {
                     <div className="font-medium text-xs">{load.origen}</div>
                     <div className="text-white/60 text-xs">→ {load.destino}</div>
                   </td>
-                  <td className="py-2.5 px-3 text-white/70 hidden sm:table-cell text-xs">{load.broker_nombre || '--'}</td>
+                  <td className="py-2.5 px-3 text-white/70 hidden sm:table-cell text-xs max-w-[10rem] truncate" title={load.broker_nombre || ''}>{load.broker_nombre || '--'}</td>
                   <td className="py-2.5 px-3 text-right text-white/70 hidden md:table-cell text-xs font-mono">{load.millas || '--'}</td>
                   <td className={`py-2.5 px-3 text-right font-mono text-xs font-medium ${
                     (load.revenue_por_milla || 0) >= 3 ? 'text-emerald-400' :
                     (load.revenue_por_milla || 0) >= 2.6 ? 'text-amber-400' : 'text-red-400'
                   }`}>${load.revenue_por_milla?.toFixed(2) || '--'}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-xs font-semibold text-white">${(load.tarifa_negociada || 0).toLocaleString()}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-xs font-semibold text-white">${(load.tarifa_negociada || 0).toLocaleString('en-US')}</td>
                 </tr>
               ))}
             </tbody>

@@ -1168,6 +1168,15 @@ export function filterAccessorialsByTriggers(
   return finalItems;
 }
 
+/**
+ * H3 (QA): la oferta puede venir por milla ("$2.20 per mile"). En ese caso se
+ * multiplica por las millas de la ruta para tener el total del flete.
+ */
+function ofertaTotal(tarifaOfrecida: number | null, tarifaOfrecidaRpm: number | null | undefined, millas: number): number | null {
+  if (tarifaOfrecidaRpm != null && tarifaOfrecidaRpm > 0 && millas > 0) return Math.round(tarifaOfrecidaRpm * millas);
+  return tarifaOfrecida;
+}
+
 export function resolveDrayageQuote(params: {
   origenRaw?: unknown;
   destinoRaw: unknown;
@@ -1175,6 +1184,7 @@ export function resolveDrayageQuote(params: {
   millasIdaDeclaradas: unknown;
   pagoCamionRpm: number | null;
   tarifaOfrecida: number | null;
+  tarifaOfrecidaRpm?: number | null;
   accessorialTriggers?: unknown;
   costoPorMillaPropio?: number | null;
   tarifaObjetivaPropia?: number | null;
@@ -1184,7 +1194,7 @@ export function resolveDrayageQuote(params: {
   dynamicContainerRoutes?: any[];
   stateMarketData?: any[];
 }): DrayageOutcome {
-  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, rawPrompt, customAccessorialsText, dynamicContainerRoutes, stateMarketData } = params;
+  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, tarifaOfrecidaRpm, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, rawPrompt, customAccessorialsText, dynamicContainerRoutes, stateMarketData } = params;
   const equipmentLabel = tamano === '20' ? "Drayage/Container 20'"
     : tamano === '40' ? "Drayage/Container 40'"
       : tamano === '45' ? "Drayage/Container 45'"
@@ -1332,11 +1342,11 @@ export function resolveDrayageQuote(params: {
           tarifaPromedioEstado: rpmObjetivo,
           referencias: [],
           referenciasEstadoNombre: null,
-          tarifaOfrecida,
+          tarifaOfrecida: ofertaTotal(tarifaOfrecida, tarifaOfrecidaRpm, match.millasIda),
           segundaLectura: null,
           precioIncluyeRegreso: match.precioIncluyeRegreso,
           accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
-          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida: ofertaTotal(tarifaOfrecida, tarifaOfrecidaRpm, match.millasIda), millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
           costoPorMillaPropio: costoPorMillaPropio ?? null,
           tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
           tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
@@ -1449,11 +1459,11 @@ export function resolveDrayageQuote(params: {
       tarifaPromedioEstado: (millasIda > 200 && tarifaObjetivaPropia != null && tarifaObjetivaPropia > 0) ? tarifaObjetivaPropia : null,
       referencias,
       referenciasEstadoNombre: refState.cercano ? nombreEstado(refState.estado) : null,
-      tarifaOfrecida,
+      tarifaOfrecida: ofertaTotal(tarifaOfrecida, tarifaOfrecidaRpm, millasIda),
       segundaLectura: null,
       precioIncluyeRegreso: tramoCortoAplicado ? closestPrecioIncluyeRegreso : false,
       accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
-      perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+      perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida: ofertaTotal(tarifaOfrecida, tarifaOfrecidaRpm, millasIda), millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
       costoPorMillaPropio: costoPorMillaPropio ?? null,
       tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
       tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
@@ -1483,6 +1493,7 @@ export function resolveGenericQuote(params: {
   millasIdaDeclaradas: unknown;
   pagoCamionRpm: number | null;
   tarifaOfrecida: number | null;
+  tarifaOfrecidaRpm?: number | null;
   // Fase 6 — costo propio por milla (CostConfig.costo_por_milla).
   costoPorMillaPropio?: number | null;
   // Semáforo — tarifa objetivo del usuario (CostConfig.tarifa_objetivo).
@@ -1492,7 +1503,7 @@ export function resolveGenericQuote(params: {
   stateMarketData?: any[];
   customAccessorialsText?: string | null;
 }): GenericQuoteOutcome {
-  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, stateMarketData = [], customAccessorialsText } = params;
+  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, tarifaOfrecidaRpm, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, stateMarketData = [], customAccessorialsText } = params;
 
   const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
     ? millasIdaDeclaradas
@@ -1688,11 +1699,11 @@ export function resolveGenericQuote(params: {
       tarifaPromedioEstado: rpmBase,
       referencias: [],
       referenciasEstadoNombre: null,
-      tarifaOfrecida,
+      tarifaOfrecida: ofertaTotal(tarifaOfrecida, tarifaOfrecidaRpm, tableMatchFlat ? tableMatchFlat.millasIda : millasIda),
       segundaLectura,
       precioIncluyeRegreso: tableMatchFlat ? tableMatchFlat.precioIncluyeRegreso : false,
       accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
-      perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+      perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida: ofertaTotal(tarifaOfrecida, tarifaOfrecidaRpm, tableMatchFlat ? tableMatchFlat.millasIda : millasIda), millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
       costoPorMillaPropio: costoPorMillaPropio ?? null,
       tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
       tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
@@ -1753,40 +1764,42 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
 
     // Encabezado
     lineas.push(`📍 **${rutaLabel}** · ${millasTag} · ${equipLabel}`);
-    lineas.push(`Te muestro tres escenarios para que decidas si tomar, negociar o declinar este flete según tu CPM.`);
+    // M5 (QA): estas líneas estaban fijas en español y se mezclaban con la app en inglés
+    const L = (es: string, en: string) => (locale === 'en' ? en : es);
+    lineas.push(L('Te muestro tres escenarios para que decidas si tomar, negociar o declinar este flete según tu CPM.', 'Here are three scenarios to help you decide whether to take, negotiate or decline this load based on your CPM.'));
     lineas.push('');
 
     // 🔴 ROJO
-    lineas.push(`🔴 **ROJO — Declinar o negociar**  < ${cpmFmt} (< tu CPM)`);
-    lineas.push(`● La tarifa está por debajo de tu costo operativo por milla.`);
-    lineas.push(`● Perderías dinero en este flete.`);
-    lineas.push(`● Considera declinar o pedir una tarifa significativamente más alta.`);
+    lineas.push(L(`🔴 **ROJO — Declinar o negociar**  < ${cpmFmt} (< tu CPM)`, `🔴 **RED — Decline or negotiate**  < ${cpmFmt} (< your CPM)`));
+    lineas.push(L('● La tarifa está por debajo de tu costo operativo por milla.', '● The rate is below your operating cost per mile.'));
+    lineas.push(L('● Perderías dinero en este flete.', '● You would lose money on this load.'));
+    lineas.push(L('● Considera declinar o pedir una tarifa significativamente más alta.', '● Consider declining or asking for a significantly higher rate.'));
     lineas.push('');
 
     // 🟡 AMARILLO
-    lineas.push(`🟡 **AMARILLO — Negociar**  ${cpmFmt} – ${tObjFmt}  ≈ tu CPM`);
-    lineas.push(`● Esta tarifa está alrededor de tu break-even.`);
-    lineas.push(`● Cubre los costos pero deja poco margen de ganancia.`);
-    lineas.push(`● Intenta negociar más alto, especialmente si el regreso está incierto.`);
+    lineas.push(L(`🟡 **AMARILLO — Negociar**  ${cpmFmt} – ${tObjFmt}  ≈ tu CPM`, `🟡 **YELLOW — Negotiate**  ${cpmFmt} – ${tObjFmt}  ≈ your CPM`));
+    lineas.push(L('● Esta tarifa está alrededor de tu break-even.', '● This rate is around your break-even.'));
+    lineas.push(L('● Cubre los costos pero deja poco margen de ganancia.', '● It covers costs but leaves little profit margin.'));
+    lineas.push(L('● Intenta negociar más alto, especialmente si el regreso está incierto.', '● Try to negotiate higher, especially if the backhaul is uncertain.'));
     lineas.push('');
 
     // 🟢 VERDE
-    lineas.push(`🟢 **VERDE — Aceptar**  ${tObjFmt}+ (≥ ${targetDescriptor})`);
-    lineas.push(`● Tarifa rentable.`);
-    lineas.push(`● Cubre tus costos y te deja margen de ganancia.`);
-    lineas.push(`● Buena opción, especialmente si conseguís buen regreso.`);
+    lineas.push(L(`🟢 **VERDE — Aceptar**  ${tObjFmt}+ (≥ ${targetDescriptor})`, `🟢 **GREEN — Accept**  ${tObjFmt}+ (≥ ${targetDescriptor})`));
+    lineas.push(L('● Tarifa rentable.', '● Profitable rate.'));
+    lineas.push(L('● Cubre tus costos y te deja margen de ganancia.', '● It covers your costs and leaves a profit margin.'));
+    lineas.push(L('● Buena opción, especialmente si consigues buen regreso.', '● Good option, especially if you find a good backhaul.'));
     lineas.push('');
 
     // Detalles de la ruta
     lineas.push(`---`);
-    lineas.push(`📌 **Detalles de la ruta**`);
-    lineas.push(`- De: ${rutaLabel} · Distancia: ${millasTag}`);
+    lineas.push(L('📌 **Detalles de la ruta**', '📌 **Route details**'));
+    lineas.push(L(`- De: ${rutaLabel} · Distancia: ${millasTag}`, `- From: ${rutaLabel} · Distance: ${millasTag}`));
     const rpmMercado = q.precioIncluyeRegreso
       ? (q.objetivo / (q.millasIda * 2))
       : (q.objetivo / q.millasIda);
     const rpmMercadoFmt = `$${rpmMercado.toFixed(2)}/mi`;
     const rateDetalleFmt = (q.targetSource === 'tabla' || q.fuenteMillas === 'tabla') ? rpmMercadoFmt : tObjFmt;
-    lineas.push(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${rateDetalleFmt})`);
+    lineas.push(L(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${rateDetalleFmt})`, `- Market target: ${formatUSD(q.objetivo)} total (${rateDetalleFmt})`));
 
     // Accesoriales
     let totalAccesoriales = 0;
@@ -1794,7 +1807,7 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
       const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
       lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
       for (const a of q.accesoriales.items) {
-        const customFlag = a.isCustom ? " *(Personalizado)*" : "";
+        const customFlag = a.isCustom ? (locale === 'en' ? ' *(Custom)*' : ' *(Personalizado)*') : '';
         lineas.push(render(m.accesorialItemLine, a.concepto + customFlag, a.monto));
         const match = a.monto.match(/\$(\d+(\.\d+)?)/);
         if (match) {
@@ -1807,7 +1820,7 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
       }
       
       if (totalAccesoriales > 0) {
-        lineas.push(`\n**Total sugerido (Objetivo + Accesoriales): ${formatUSD(q.objetivo + totalAccesoriales)}**`);
+        lineas.push(L(`\n**Total sugerido (Objetivo + Accesoriales): ${formatUSD(q.objetivo + totalAccesoriales)}**`, `\n**Suggested total (Target + Accessorials): ${formatUSD(q.objetivo + totalAccesoriales)}**`));
       }
     }
 
@@ -1826,9 +1839,9 @@ export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'
     // Recomendación final
     lineas.push('');
     lineas.push(`---`);
-    lineas.push(`✅ **Recomendación TruckyAI**`);
-    lineas.push(`Apunta a mínimo **${tObjFmt} (${formatUSD(totalObj)} total)** o más para que este flete sea rentable.`);
-    lineas.push(`Si te ofrecen entre ${cpmFmt} y ${tObjFmt}, **negocia** y confirma si incluye el regreso.`);
+    lineas.push(L('✅ **Recomendación TruckyAI**', '✅ **TruckyAI Recommendation**'));
+    lineas.push(L(`Apunta a mínimo **${tObjFmt} (${formatUSD(totalObj)} total)** o más para que este flete sea rentable.`, `Aim for at least **${tObjFmt} (${formatUSD(totalObj)} total)** or more for this load to be profitable.`));
+    lineas.push(L(`Si te ofrecen entre ${cpmFmt} y ${tObjFmt}, **negocia** y confirma si incluye el regreso.`, `If you are offered between ${cpmFmt} and ${tObjFmt}, **negotiate** and confirm whether the backhaul is included.`));
 
     lineas.push(...buildMarginVerdictMarkdown(q.perfilMargen, locale));
     return lineas.join('\n');

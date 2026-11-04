@@ -57,7 +57,11 @@ function MarketAdvisorCardContent({ data, costConfig }) {
   if (!data || !data.calculo) return null;
 
   const { origen, destino, calculo, stateMarketData } = data;
-  const { millasIda, piso, objetivo, costoPorMillaPropio, tarifaObjetivaPropia, equipmentLabel, targetSource } = calculo;
+  const { millasIda: millasCargadas, piso, objetivo, costoPorMillaPropio, tarifaObjetivaPropia, equipmentLabel, targetSource } = calculo;
+  // U5 (QA): el deadhead (millas vacías hasta el pickup) también se maneja y cuesta.
+  // Todos los cálculos por milla usan cargadas + deadhead → RPM real.
+  const millasDeadhead = Number(calculo.millasDeadhead) > 0 ? Number(calculo.millasDeadhead) : 0;
+  const millasIda = millasCargadas + millasDeadhead;
   
   const originStr = origen ? origen : 'Unknown';
   const destStr = destino ? destino : (calculo?.ciudad || 'Unknown');
@@ -73,6 +77,8 @@ function MarketAdvisorCardContent({ data, costConfig }) {
   }
 
   let stateRate = null;
+  let stateRateSource = null; // 'market' (datos cargados por el admin) | 'reference' (tabla interna)
+  let stateRateDate = null;
 
   // Extraer estado de origen y destino
   let originStateCode = null;
@@ -118,12 +124,15 @@ function MarketAdvisorCardContent({ data, costConfig }) {
     });
     if (stateData && stateData[equipKey] && Number(stateData[equipKey]) > 0) {
       stateRate = Number(stateData[equipKey]).toFixed(2);
+      stateRateSource = 'market';
+      stateRateDate = stateData.updated_date || stateData.created_date || null;
     }
   }
 
   // 2. Si no vino en la base de datos, usar tarifas por defecto del sistema
   if (!stateRate && lookupStateCode && equipKey && DEFAULT_STATE_RATES[lookupStateCode]?.[equipKey]) {
     stateRate = DEFAULT_STATE_RATES[lookupStateCode][equipKey];
+    stateRateSource = 'reference';
   }
 
   // 3. Si no hay para el estado específico, buscar promedio nacional 'US' en stateMarketData
@@ -131,12 +140,15 @@ function MarketAdvisorCardContent({ data, costConfig }) {
     const nationalData = stateMarketData.find(s => s.state_code && s.state_code.trim().toUpperCase() === 'US');
     if (nationalData && nationalData[equipKey]) {
       stateRate = Number(nationalData[equipKey]).toFixed(2);
+      stateRateSource = 'market';
+      stateRateDate = nationalData.updated_date || nationalData.created_date || null;
     }
   }
 
   // 4. Fallback final nacional en DEFAULT_STATE_RATES
   if (!stateRate && equipKey && DEFAULT_STATE_RATES.US?.[equipKey]) {
     stateRate = DEFAULT_STATE_RATES.US[equipKey];
+    stateRateSource = 'reference';
   }
 
   const isNeighborFL = /(?:^|[^a-z])(georgia|ga|alabama|al)(?:[^a-z]|$)/i.test(origen || '') || /(?:^|[^a-z])(georgia|ga|alabama|al)(?:[^a-z]|$)/i.test(destino || '');
@@ -262,6 +274,17 @@ function MarketAdvisorCardContent({ data, costConfig }) {
     }
     totalTarget = Math.round(parseFloat(targetRpm) * millasIda) + totalAccesoriales;
   }
+
+  // U5 (QA): antes se rotulaba "Tarifa promedio por estado" aunque el valor fuera
+  // la meta del perfil ($3.00). Ahora se dice de dónde sale cada número.
+  const targetFromProfile = userTargetNum > 0 && String(targetRpm) === userTargetNum.toFixed(2) &&
+    !(tarifaEstadoVal > 0 && userTargetNum.toFixed(2) === Number(tarifaEstadoVal).toFixed(2));
+  const stateRateSourceLabel = stateRate
+    ? (es => stateRateSource === 'market'
+        ? (es ? `Fuente: datos de mercado cargados${stateRateDate ? ` (${String(stateRateDate).slice(0, 10)})` : ''}`
+              : `Source: uploaded market data${stateRateDate ? ` (${String(stateRateDate).slice(0, 10)})` : ''}`)
+        : (es ? 'Fuente: referencia interna de Trucky (sin fecha)' : 'Source: Trucky internal reference (undated)'))
+    : null;
 
   // Regla especial: Cuando el CPM es mayor a la tarifa del estado,
   // O cuando la tarifa objetivo sea 0 y el CPM sea menor/bajo al promedio de tarifas por estado
@@ -411,7 +434,7 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                         {isEs ? "Tarifa de la ruta" : "Route rate"}
                       </span>
                       <span className="text-white font-semibold text-xl">
-                        ${formatMoney(calculo.tarifaOfrecida)} ~ ${formatMoney(marketTargetTotal)}
+                        ${formatMoney(calculo.tarifaOfrecida)} &lt; ${formatMoney(tTarget)}
                       </span>
                     </div>
                   </div>
@@ -444,7 +467,7 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                       {isEs ? "Tarifa de la ruta" : "Route rate"}
                     </span>
                     <span className="text-white font-semibold text-xl">
-                      ${formatMoney(calculo.tarifaOfrecida)} &ge; ${formatMoney(marketTargetTotal)}
+                      ${formatMoney(calculo.tarifaOfrecida)} &ge; ${formatMoney(tTarget)}
                     </span>
                   </div>
                 </div>
@@ -474,7 +497,13 @@ function MarketAdvisorCardContent({ data, costConfig }) {
               <div className="space-y-2.5 text-sm text-gray-300 ml-11">
                 <p>{isEs ? "Desde" : "From"}: {originStr}</p>
                 <p>{isEs ? "Hacia" : "To"}: {destStr}</p>
-                <p>{isEs ? "Distancia (cargado)" : "Distance (loaded)"}: {millasIda} {isEs ? "millas (aprox.)" : "miles (approx.)"}</p>
+                <p>
+                  {millasDeadhead > 0
+                    ? (isEs
+                        ? `Distancia: ${millasCargadas} cargadas + ${millasDeadhead} deadhead = ${millasIda} millas`
+                        : `Distance: ${millasCargadas} loaded + ${millasDeadhead} deadhead = ${millasIda} miles`)
+                    : `${isEs ? "Distancia (cargado)" : "Distance (loaded)"}: ${millasIda} ${isEs ? "millas (aprox.)" : "miles (approx.)"}`}
+                </p>
                 <p className="text-white font-medium">
                   {isEs ? "Tarifa propuesta" : "Offered rate"}: ${formatMoney(calculo.tarifaOfrecida)} {ofrecidaRpm ? `($${ofrecidaRpm} RPM)` : ''}
                 </p>
@@ -487,10 +516,14 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                     isEs 
                       ? (isCpmHigherThanState
                           ? `Tarifa objetivo (break-even): $${userBreakEven}/mi`
-                          : `${isInterstate ? "Tarifa promedio nacional (US)" : "Tarifa promedio por estado"}: $${targetRpm}/mi`)
+                          : (targetFromProfile
+                              ? `Tu tarifa objetivo (perfil): $${targetRpm}/mi`
+                              : `${isInterstate ? "Tarifa promedio nacional (US)" : "Tarifa promedio por estado"}: $${targetRpm}/mi · ${stateRateSourceLabel ? stateRateSourceLabel(true) : ""}`))
                       : (isCpmHigherThanState
                           ? `Target rate (break-even): $${userBreakEven}/mi`
-                          : `${isInterstate ? "National average rate (US)" : "State average rate"}: $${targetRpm}/mi`)
+                          : (targetFromProfile
+                              ? `Your target rate (profile): $${targetRpm}/mi`
+                              : `${isInterstate ? "National average rate (US)" : "State average rate"}: $${targetRpm}/mi · ${stateRateSourceLabel ? stateRateSourceLabel(false) : ""}`))
                   )}
                 </p>
               </div>
@@ -644,7 +677,13 @@ function MarketAdvisorCardContent({ data, costConfig }) {
               <div className="space-y-2 text-sm text-gray-300 ml-11">
                 <p>{isEs ? "Desde" : "From"}: {originStr}</p>
                 <p>{isEs ? "Hacia" : "To"}: {destStr}</p>
-                <p>{isEs ? "Distancia (cargado)" : "Distance (loaded)"}: {millasIda} {isEs ? "millas (aprox.)" : "miles (approx.)"}</p>
+                <p>
+                  {millasDeadhead > 0
+                    ? (isEs
+                        ? `Distancia: ${millasCargadas} cargadas + ${millasDeadhead} deadhead = ${millasIda} millas`
+                        : `Distance: ${millasCargadas} loaded + ${millasDeadhead} deadhead = ${millasIda} miles`)
+                    : `${isEs ? "Distancia (cargado)" : "Distance (loaded)"}: ${millasIda} ${isEs ? "millas (aprox.)" : "miles (approx.)"}`}
+                </p>
                 
                 {!isOver200 ? (
                   <p>{isEs ? "Tarifas planas" : "Flat rates"}: ${formatMoney(marketTargetTotal)} total</p>
@@ -658,10 +697,14 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                       isEs 
                         ? (isCpmHigherThanState
                             ? `Tarifa objetivo (break-even): $${userBreakEven}/mi`
-                            : `${isInterstate ? "Tarifa promedio nacional (US)" : "Tarifa promedio por estado"}: $${targetRpm}/mi`)
+                            : (targetFromProfile
+                                ? `Tu tarifa objetivo (perfil): $${targetRpm}/mi`
+                                : `${isInterstate ? "Tarifa promedio nacional (US)" : "Tarifa promedio por estado"}: $${targetRpm}/mi · ${stateRateSourceLabel ? stateRateSourceLabel(true) : ""}`))
                         : (isCpmHigherThanState
                             ? `Target rate (break-even): $${userBreakEven}/mi`
-                            : `${isInterstate ? "National average rate (US)" : "State average rate"}: $${targetRpm}/mi`)
+                            : (targetFromProfile
+                                ? `Your target rate (profile): $${targetRpm}/mi`
+                                : `${isInterstate ? "National average rate (US)" : "State average rate"}: $${targetRpm}/mi · ${stateRateSourceLabel ? stateRateSourceLabel(false) : ""}`))
                     )}
                   </p>
                 )}

@@ -26,7 +26,12 @@ function detectarTipoDocumento(text) {
   const lower = text.toLowerCase();
 
   // Bloquear documentos sensibles (sin IA)
-  const esSensible = SENSITIVE_KEYWORDS.some(k => lower.includes(k));
+  // 'ssn' y 'ein' se buscaban como pedazo de palabra y bloqueaban documentos válidos (error 400)
+  const esSensible = SENSITIVE_KEYWORDS.some(k => {
+    const key = k.trim();
+    if (key === 'ssn' || key === 'ein' || key === 'ein:') return new RegExp(`\\b${key.replace(':', '')}\\b`, 'i').test(lower);
+    return lower.includes(k);
+  });
   if (esSensible) return 'blocked';
 
   // Confirmar documento de transporte
@@ -407,6 +412,10 @@ function validarBroker(datos, brokers, brokerProfiles) {
   if (!datos.broker_mc) {
     hallazgos.push('⚠ MC Number del broker no encontrado — verificar en FMCSA.dot.gov');
     if (semaforo === 'verde') semaforo = 'amarillo';
+  } else if (mcInvalido(datos.broker_mc)) {
+    // U3 (QA): "MC 000000" se aceptaba
+    hallazgos.push(`❌ MC del broker inválido (${datos.broker_mc}) — no es un número real de FMCSA`);
+    semaforo = 'rojo';
   }
 
   // Prioridad 1: BrokerProfile del onboarding (comparación de strings, sin IA)
@@ -680,7 +689,30 @@ const CLAUSULAS_ABUSIVAS = [
   'unlimited liability', 'unconditional guarantee',
 ];
 
-function validarClausulas(datos) {
+// U3 (QA): penalidades y TONU no pagado son ALERTA CRÍTICA en todos los planes.
+// Se buscan en lo que extrajo la IA y también en el texto crudo del documento,
+// porque la IA a veces no llena "penalidades".
+const PENALTY_RE = /(penalt(y|ies)|penalidad(es)?|\bmulta(s)?\b|late\s*fee|liquidated\s*damages|charge\s*-?\s*back|\$?\s*\d[\d,.]*\s*(usd)?\s*(per|\/|por)\s*(hour|hr|hora)\s*(of\s*)?(delay|late|lateness|retraso|tardanza))/i;
+const TONU_NOT_PAID_RE = /(tonu[^.\n]{0,40}(not\s*(be\s*)?(paid|payable|applicable)|no\s*(se\s*)?(paga|pagar|pagado|aplica)|n\/a|none|will\s*not)|\bno\s*tonu\b|sin\s*tonu|without\s*tonu)/i;
+
+export function detectarRiesgosTexto(text = '') {
+  const t = String(text || '');
+  const pen = t.match(PENALTY_RE);
+  const tonu = t.match(TONU_NOT_PAID_RE);
+  return {
+    penalidad: pen ? pen[0].trim() : null,
+    tonuNoPagado: tonu ? tonu[0].trim() : null,
+  };
+}
+
+// MC inválido: todo ceros, un mismo dígito repetido o menos de 5 dígitos (ej. "000000")
+export function mcInvalido(mc: unknown) {
+  const d = String(mc || '').replace(/\D/g, '');
+  if (!d) return false;
+  return d.length < 5 || /^0+$/.test(d) || /^(\d)\1+$/.test(d);
+}
+
+function validarClausulas(datos, rawText = '') {
   const hallazgos = [];
   let semaforo = 'verde';
 
@@ -759,7 +791,12 @@ function validarClausulas(datos) {
     if (semaforo === 'verde') semaforo = 'amarillo';
   }
 
-  if (!datos.tonu_rate) {
+  const riesgos = detectarRiesgosTexto(`${rawText}\n${datos.penalidades || ''}\n${datos.tonu_rate || ''}`);
+  const tonuNoPagado = riesgos.tonuNoPagado || TONU_NOT_PAID_RE.test(`tonu ${datos.tonu_rate || ''}`) || /^\$?\s*0+(\.0+)?$/.test(String(datos.tonu_rate || '').trim());
+  if (tonuNoPagado) {
+    hallazgos.push(`❌ TONU no pagado${riesgos.tonuNoPagado ? ` ("${riesgos.tonuNoPagado}")` : ''} — sin protección si cancelan la carga`);
+    semaforo = 'rojo';
+  } else if (!datos.tonu_rate) {
     hallazgos.push('⚠ TONU no mencionado — sin protección por cancelación');
     if (semaforo === 'verde') semaforo = 'amarillo';
   } else {
@@ -783,9 +820,9 @@ function validarClausulas(datos) {
     }
   }
 
-  if (isMeaningful(datos.penalidades)) {
-    hallazgos.push(`⚠ Penalidades: ${datos.penalidades}`);
-    if (semaforo === 'verde') semaforo = 'amarillo';
+  if (isMeaningful(datos.penalidades) || riesgos.penalidad) {
+    hallazgos.push(`❌ Penalidad: ${isMeaningful(datos.penalidades) ? datos.penalidades : riesgos.penalidad}`);
+    semaforo = 'rojo';
   }
 
   if (hallazgos.length === 0) hallazgos.push('✓ Sin cláusulas de riesgo detectadas');
@@ -1035,7 +1072,7 @@ Deno.serve(async (req) => {
             validarCarrier(reconstructedDatos, carrierProfile, user, carrierProfiles, orgName),
             validarEquipo(reconstructedDatos, trucks, carrierProfile),
             validarCommodity(reconstructedDatos, carrierProfile),
-            validarClausulas(reconstructedDatos),
+            validarClausulas(reconstructedDatos, documentText),
             validarFechasOperacion(reconstructedDatos),
             validarBroker(reconstructedDatos, brokers, brokerProfiles),
           ];
@@ -1046,7 +1083,7 @@ Deno.serve(async (req) => {
             validarFechasOperacion(reconstructedDatos),
             validarEquipo(reconstructedDatos, trucks, carrierProfile),
             validarCommodity(reconstructedDatos, carrierProfile),
-            validarClausulas(reconstructedDatos),
+            validarClausulas(reconstructedDatos, documentText),
             validarRate(reconstructedDatos, costConfig),
           ];
         }
@@ -1114,7 +1151,7 @@ Deno.serve(async (req) => {
         validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName),        // ← ¿está correcto mi nombre/MC?
         validarEquipo(datos, trucks, carrierProfile),                                 // ← ¿tengo el equipo?
         validarCommodity(datos, carrierProfile),                                      // ← ¿puedo mover esta carga?
-        validarClausulas(datos),                                                      // ← ¿qué riesgos contractuales hay?
+        validarClausulas(datos, documentText),                                                      // ← ¿qué riesgos contractuales hay?
         validarFechasOperacion(datos),                                                // ← ¿son viables los tiempos?
         validarBroker(datos, brokers, brokerProfiles),                                // ← info del broker
       ];
@@ -1126,7 +1163,7 @@ Deno.serve(async (req) => {
         validarFechasOperacion(datos),                                                // ← ¿está completo para operar?
         validarEquipo(datos, trucks, carrierProfile),                                 // ← ¿compatible con el carrier?
         validarCommodity(datos, carrierProfile),                                      // ← ¿commodity OK para el carrier?
-        validarClausulas(datos),                                                      // ← ¿cláusulas aceptables?
+        validarClausulas(datos, documentText),                                                      // ← ¿cláusulas aceptables?
         validarRate(datos, costConfig),                                               // ← info de tarifa (menos crítico)
       ];
     }

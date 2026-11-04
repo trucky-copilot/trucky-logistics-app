@@ -1,0 +1,2024 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// MOTOR DE TARIFAS — dominio puro, sin I/O y sin IA.
+//
+// Este módulo se extrajo de entry.ts SIN cambiar lógica: las firmas, los valores
+// de retorno y el comportamiento son idénticos. Lo único que se agregó son los
+// tipos explícitos, que se borran al compilar y no afectan la ejecución.
+//
+// La extracción existe para poder cubrir estas funciones con `deno test`:
+// entry.ts llama a Deno.serve() en el nivel superior y no se puede importar
+// desde una prueba sin levantar el servidor.
+//
+// REGLA: acá no entra nada que haga red, lea entidades ni invoque al LLM. Si una
+// función necesita I/O, va en entry.ts.
+//
+// NOTA sobre los tipos: todo lo que viene del LLM se recibe como `unknown` a
+// propósito. El schema de extracción no es una garantía —el modelo puede
+// desviarse— así que estas funciones validan en vez de confiar. Eso ya era el
+// comportamiento original; los tipos solo lo hacen explícito.
+//
+// ─────────────────────────────────────────────────────────────────────────────
+// reglas-v3-multiestado, Fase 3 (inversión del motor) — LO QUE CAMBIÓ ACÁ:
+//
+// SE ELIMINÓ POR COMPLETO (no solo se dejó de llamar — grep-verificado sin
+// referencias en ningún archivo):
+//   - `LANES` / `findLane` (catálogo viejo de 7 lanes hardcodeadas de Miami).
+//     Competía como fuente de verdad paralela justo para esas rutas — con la
+//     tabla real de 259 rutas cargada (Fase 1), un catálogo aparte de 7 lanes
+//     inventadas es directamente incorrecto, no solo redundante.
+//   - `detectarFueraDeMercado` / `buildOutOfMarketMarkdown` (el guardarraíl
+//     geográfico). El principio de "nunca se rechaza por falta de tabla" lo
+//     reemplaza: ahora TODO se calcula, y la tabla refina cuando hay match.
+//   - El camino `source: 'llm'` de `resolveMiles` (la estimación de millas del
+//     LLM). Las millas ahora salen SOLO de la tabla, del usuario, o se
+//     preguntan — nunca se estiman.
+//   - El sistema de piso/objetivo por tramo flat (`FLAT_MINIMUMS`,
+//     `getFlatBucket`, el `computeFloor`/`computeTarget`/`resolveFloorBasis`
+//     viejos): quedaba como código muerto compitiendo con el nuevo modelo
+//     consciente de tabla (`computeFloorTarget`) — Fase 4 introduce el
+//     reemplazo correcto (mínimos v3 §7 por equipo, no genéricos por tramo).
+//
+// SE MANTUVO SIN TOCAR (no es parte de este cambio, otra función distinta):
+//   - `FLORIDA_TOKENS` / `contieneToken`: aunque el guardarraíl geográfico los
+//     usaba, TAMBIÉN alimentan `DOMAIN_TOKENS` para el guardarraíl de TEMA
+//     (`esConsultaDeNegocio`/`esFueraDeTema`/`resolveIntent`) — una feature
+//     completamente distinta (decide si el mensaje es de negocio de freight,
+//     no si la ruta está en el mercado geográfico cubierto). Borrarlos habría
+//     roto esa feature sin necesidad; se documenta acá para que quede claro
+//     que no es un olvido.
+//
+// reglas-v3-multiestado (reconciliación con chat-idioma-toggle, PR #7): el
+// toggle de idioma se re-aplicó sobre el motor reescrito de esta fase —
+// `locale: Locale = 'es'` se agregó a cada builder que genera texto visible
+// al dispatcher (mismo patrón que ya usaba `computeVerdict`/
+// `safeFallbackContent` antes de esta reconciliación: default 'es' preserva
+// el comportamiento de todo call site preexistente que no pasa `locale`
+// explícito, y entry.ts pasa siempre el locale resuelto de la request). El
+// texto en sí sale de `MESSAGES[locale]` (messageCatalog.ts) en vez de vivir
+// hardcodeado acá — mismo principio que ya regía antes de este SDD.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import {
+  lookupRoute,
+  findClosestRouteByMiles,
+  recordUnmatchedRoute,
+  loadAccessorials,
+  type Estado,
+  type Tamano,
+  type RouteRecord,
+  type AccessorialRecord,
+} from './rateTable.ts';
+import { resolveLocation } from './nameResolution.ts';
+import { TX_SIZE_FACTORS, deriveTxPrice } from './sizeDerivation.ts';
+import {
+  selectReferenceRoutes,
+  resolveReferenceState,
+  detectNeighborState,
+  type ReferenceRoute,
+} from './referenceRoutes.ts';
+import { MESSAGES, render, type Locale } from './messageCatalog.ts';
+export type { Locale } from './messageCatalog.ts';
+
+export const FREIGHT_KB_VERSION = '2.0.0';
+
+export interface Equipment {
+  id: string;
+  label: string;
+  rpm_min: number;
+  rpm_target: number;
+}
+
+export type VerdictBand = 'reference' | 'reject' | 'negotiate' | 'accept';
+
+export interface Verdict {
+  emoji: string;
+  label: string;
+  band: VerdictBand;
+}
+
+export interface ChatMessage {
+  role: string;
+  content: string;
+}
+
+// 7 equipos — el id se usa también como valor del enum "equipo" en EXTRACTION_SCHEMA.
+//
+// reglas-v3-multiestado (kickoff §6): dry_van, reefer y flatbed cambian su
+// referencia por milla. La tabla vieja usaba un par (mín/objetivo) por equipo;
+// para estos tres, el kickoff da UNA sola cifra ("RPM base"), así que ambos
+// campos quedan iguales a esa cifra — el par min/target para ellos ya no
+// representa dos umbrales distintos, sino el mismo RPM base usado dos veces
+// para no romper la forma `Equipment` que consume el resto del motor.
+// step_deck/drayage_20/drayage_40/power_only NO cambian — el kickoff no los
+// menciona.
+export const EQUIPMENT_BENCHMARKS: Equipment[] = [
+  { id: 'dry_van', label: "53' Dry Van", rpm_min: 3.07, rpm_target: 3.07 },
+  { id: 'reefer', label: 'Reefer', rpm_min: 3.66, rpm_target: 3.66 },
+  { id: 'flatbed', label: 'Flatbed', rpm_min: 3.65, rpm_target: 3.65 },
+  { id: 'step_deck', label: 'Step Deck', rpm_min: 2.75, rpm_target: 3.25 },
+  { id: 'drayage_20', label: "Drayage/Container 20'", rpm_min: 2.75, rpm_target: 3.50 },
+  { id: 'drayage_40', label: "Drayage/Container 40'", rpm_min: 2.50, rpm_target: 3.25 },
+  { id: 'power_only', label: 'Power Only', rpm_min: 1.50, rpm_target: 1.75 },
+];
+
+// DETENTION unificado — único valor válido en todo el prompt
+export const DETENTION = { standard: 75, min: 50, max: 100, free_hours: 2 };
+
+// `unit` es un tag semántico (locale-neutral), NUNCA el literal de texto en
+// ningún idioma — chat-idioma-toggle Fase 2 (T2.2). El texto que corresponde a
+// cada locale se resuelve al renderizar, vía buildAccessorialsLine() +
+// MESSAGES[locale].units.perDay, no acá en la data.
+export const ACCESSORIALS: Array<{ label: string; min: number; max: number; unit?: 'perDay' }> = [
+  { label: 'Pre-Pull', min: 100, max: 100 },
+  { label: 'Storage', min: 75, max: 150, unit: 'perDay' },
+];
+
+// Arma la línea de accesoriales resolviendo el tag semántico de ACCESSORIALS a
+// texto de unidad por locale. Vive acá (no en entry.ts, que le da el archivo
+// el Design) por el mismo motivo que el resto de los builders de este módulo:
+// entry.ts no se puede importar desde `deno test` (Deno.serve() de nivel
+// superior), así que la lógica que necesita cobertura real se extrae acá —
+// entry.ts solo la invoca con el `locale` ya resuelto de la request.
+export function buildAccessorialsLine(locale: Locale = 'es'): string {
+  const unitText = MESSAGES[locale].units.perDay;
+  return ACCESSORIALS
+    .map(a => {
+      const unit = a.unit === 'perDay' ? unitText : '';
+      return a.min === a.max
+        ? `${a.label} $${a.min}${unit}`
+        : `${a.label} $${a.min}-${a.max}${unit}`;
+    })
+    .join(' | ');
+}
+
+// reglas-v3-multiestado Fase 7 (frontera LLM/datos, criterio 4): estas cifras
+// vivían como literales sueltos dentro del texto de BASE_CONTEXT en entry.ts.
+// Se extraen acá como constantes únicas para que entry.ts las interpole (en
+// vez de repetirlas a mano) y para que llmDataBoundary.ts pueda armar el
+// conjunto de "cifras de KB permitidas" en una respuesta general sin
+// duplicar los números por otro lado — una sola fuente de verdad.
+export const HOS_LIMITS = {
+  driving_hours: 11,
+  on_duty_hours: 14,
+  break_minutes: 30,
+  break_after_hours: 8,
+  hours_8_days: 70,
+  hours_7_days: 60,
+};
+
+export const DEADHEAD_THRESHOLDS = {
+  ok_pct: 20,
+  concerning_pct: 40,
+  long_deadhead_miles: 100,
+  extra_rpm_min: 1.00,
+  extra_rpm_max: 1.50,
+};
+
+export const HISTORY_CAP = 8;
+
+export const MAX_REQUEST_CHARS = 20000;
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NORMALIZACIÓN DE TEXTO
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function normalizeText(value: unknown): string {
+  return (value || '')
+    .toString()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .trim();
+}
+
+export function matchesAny(text: string, tokens: string[]): boolean {
+  return tokens.some(t => t && text.includes(t));
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARDARRAÍL DE TEMA — Decisión 1: backstop determinista de alcance de tema.
+// (Feature preexistente, NO tocada por reglas-v3-multiestado — ver nota de
+// cabecera. FLORIDA_TOKENS sigue viva acá porque DOMAIN_TOKENS la usa.)
+//
+// El LLM ya recibe instrucciones de solo responder freight en el prompt, pero
+// eso no es determinista. esConsultaDeNegocio re-tokeniza el último mensaje
+// del dispatcher contra el vocabulario de la KB.
+//
+// Precedencia en resolveIntent: rate_check > allowlist de negocio > blocklist
+// (blocklist llega en la Fase 2 original de esta feature, no de este SDD).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const FLORIDA_TOKENS = [
+  'florida', 'miami', 'tampa', 'orlando', 'jacksonville', 'naples', 'fort myers',
+  'ft myers', 'west palm', 'wpb', 'pompano', 'fort pierce', 'ft pierce',
+  'everglades', 'lauderdale', 'hialeah', 'medley', 'doral', 'homestead',
+  'boca raton', 'wellington', 'palm beach', 'sarasota', 'petersburg',
+  'clearwater', 'ocala', 'gainesville', 'lakeland', 'kissimmee', 'canaveral',
+  'melbourne', 'daytona', 'tallahassee', 'pensacola', 'key west', 'stuart',
+  'vero beach', 'okeechobee', 'immokalee', 'plant city', 'winter haven',
+  'port st lucie', 'jupiter', 'deerfield', 'coral springs', 'hollywood fl',
+  'pomtoc', 'sfct', 'fit', 'pev', 'portmiami',
+];
+
+function contieneToken(texto: string, tokens: string[]): string | null {
+  for (const t of tokens) {
+    // Límite de palabra a ambos lados para que "fit" no coincida dentro de
+    // "outfit" ni "fl" dentro de "flagler".
+    const re = new RegExp(`(^|[^a-z0-9])${t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`);
+    if (re.test(texto)) return t;
+  }
+  return null;
+}
+
+// Vocabulario de negocio: equipos, cargos, documentos, geografía cubierta.
+const DOMAIN_TOKENS = [
+  'drayage', 'contenedor', 'container', 'chasis', 'chassis', 'per diem',
+  'demurrage', 'detention', 'tonu', 'twic', 'bol', 'rate confirmation',
+  'red confirmation', 'backhaul', 'void check', 'broker', 'carrier',
+  'dispatcher', 'diesel', 'mpg', 'milla', 'millas', 'tarifa', 'carga', 'load',
+  'puerto', 'terminal', 'hos', 'deadhead', 'reefer', 'flatbed', 'dry van',
+  'power only', 'step deck', 'pre-pull', 'prepull', 'storage', 'rpm',
+  ...FLORIDA_TOKENS,
+];
+
+/** true si el texto contiene vocabulario de negocio de la KB — la allowlist. */
+export function esConsultaDeNegocio(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  return contieneToken(normalizado, DOMAIN_TOKENS) !== null;
+}
+
+/** Contenido del último mensaje del dispatcher (role 'user'), o '' si no hay. */
+export function ultimoMensajeDelDispatcher(messages: ChatMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') return messages[i].content;
+  }
+  return '';
+}
+
+// TEMPORARY: blocklist de demo, remover después del 2026-08-18 (#7784 item 1).
+const OFF_TOPIC_TOKENS = [
+  // 1. programación
+  'python', 'javascript', 'codigo', 'programa', 'programar', 'algoritmo', 'script',
+  // 2. clima
+  'clima', 'pronostico del tiempo', 'va a llover',
+  // 3. deportes
+  'futbol', 'partido de futbol', 'campeonato',
+  // 4. recetas
+  'receta', 'cocinar', 'ingredientes de cocina',
+  // 5. política
+  'eleccion', 'elecciones', 'candidato presidencial',
+  // 6. traducción
+  'traduce', 'traducir', 'how do you say',
+  // 7. chistes
+  'chiste', 'cuentame una broma',
+];
+
+// 8va categoría: aritmética pura sin referente de freight.
+const PURE_ARITHMETIC_RE = /\d+\s*%\s*(de|of)\s*\$?\s*[\d,.]+/;
+
+/** true si el texto cae en una de las 8 categorías de demo Y no hay término de la KB. */
+export function esFueraDeTema(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  if (esConsultaDeNegocio(normalizado)) return false; // la allowlist siempre gana
+  if (contieneToken(normalizado, OFF_TOPIC_TOKENS) !== null) return true;
+  return PURE_ARITHMETIC_RE.test(normalizado);
+}
+
+/**
+ * Decide el intent final con precedencia determinista:
+ *   1. raw === 'rate_check'                                  → 'rate_check'  (nunca se declina)
+ *   2. esConsultaDeNegocio(último mensaje)                    → 'general'     (la allowlist rescata)
+ *   3. raw === 'off_topic' || esFueraDeTema(último mensaje)   → 'off_topic'   (LLM o blocklist temporal)
+ *   4. cualquier otro caso                                    → 'general'     (comportamiento por defecto)
+ */
+export function resolveIntent(raw: unknown, messages: ChatMessage[]): 'rate_check' | 'general' | 'off_topic' | 'ask_miles' | 'draft_email' {
+  if (raw === 'draft_email') return 'draft_email';
+  if (raw === 'ask_miles') return 'ask_miles';
+  if (raw === 'rate_check') return 'rate_check';
+  const ultimo = ultimoMensajeDelDispatcher(messages);
+  if (esConsultaDeNegocio(ultimo)) return 'general';
+  if (raw === 'off_topic' || esFueraDeTema(ultimo)) return 'off_topic';
+  return 'general';
+}
+
+/** Respuesta de rechazo cuando el mensaje no es de negocio. Sin cifras. */
+export function buildOffTopicMarkdown(locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].offTopic;
+  return [m.line1, m.line2].join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// RESOLUCIÓN DE EQUIPO — sin cambios de comportamiento en esta fase (sigue
+// siendo el camino para equipos SIN tabla: dry_van/reefer/flatbed/step_deck/
+// power_only). El equipo "drayage" ya NO pasa por acá — Fase 3 lo resuelve
+// nativamente contra la tabla + derivación de tamaño (ver resolveDrayageQuote
+// más abajo); combineEquipoTamano (el puente temporal de la Fase 0) se retira
+// porque ya no hace falta.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type EquipmentResolution =
+  | { status: 'ok'; equipment: Equipment }
+  | { status: 'ask'; reason: 'missing' | 'size' };
+
+const CONTAINER_WITHOUT_SIZE_TOKENS = ['drayage', 'container', 'contenedor'];
+
+export function resolveEquipment(raw: unknown): EquipmentResolution {
+  if (typeof raw !== 'string') return { status: 'ask', reason: 'missing' };
+
+  // Convertimos a minúsculas para comparar fácilmente
+  const text = raw.toLowerCase();
+
+  // Búsqueda inteligente por fragmentos (atrapa casi cualquier error tipográfico)
+  if (text.includes('van')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van')! };
+  }
+  if (text.includes('ref') || text.includes('rif')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'reefer')! };
+  }
+  if (text.includes('flat') || text.includes('fat')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'flatbed')! };
+  }
+  if (text.includes('step') || text.includes('deck') || text.includes('dec')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'step_deck')! };
+  }
+  if (text.includes('power') || text.includes('poer') || text.includes('pwr')) {
+    return { status: 'ok', equipment: EQUIPMENT_BENCHMARKS.find(e => e.id === 'power_only')! };
+  }
+  if (text.includes('dray') || text.includes('dryage') || text.includes('contain') || text.includes('conten')) {
+    return { status: 'ask', reason: 'size' };
+  }
+
+  // Búsqueda de respaldo por coincidencia exacta
+  const exact = EQUIPMENT_BENCHMARKS.find(e => e.id === raw);
+  if (exact) return { status: 'ok', equipment: exact };
+
+  return { status: 'ask', reason: 'missing' };
+}
+
+/** Copia distinta según qué le falta al equipo: el equipo entero, o solo el tamaño. */
+export function buildEquipmentQuestionMarkdown(reason: 'missing' | 'size', locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].equipmentQuestion;
+  if (reason === 'size') {
+    return [m.sizeIntro, m.sizeQuestion].join('\n');
+  }
+  return [m.missingIntro, m.missingQuestion].join('\n');
+}
+
+export function formatUSD(n: number): string {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
+// TRUCKY-53 Q5: el label es una sugerencia, no una orden. El emoji y el band
+// (el semáforo) quedan igual — solo cambia el texto del label.
+//
+// reglas-v3-multiestado Fase 3: `floor` ahora puede ser `null` (FL sin tabla
+// de piso y sin dato del usuario — ver computeFloorTarget). Sin piso no hay
+// forma de "rechazar por debajo del piso", así que ese caso cae a comparar
+// solo contra el objetivo. El comportamiento con floor numérico (todas las
+// pruebas viejas) no cambia un bit.
+//
+// `locale` tiene default 'es': igual que el resto de los builders de armado
+// de respuesta, los call sites preexistentes que no pasan locale (pruebas
+// previas a chat-idioma-toggle) siguen funcionando sin cambios.
+export function computeVerdict(tarifa: number | null, floor: number | null, target: number, locale: Locale = 'es'): Verdict {
+  const labels = MESSAGES[locale].verdict;
+  if (tarifa == null) return { emoji: '📊', label: labels.reference, band: 'reference' };
+  if (floor != null && tarifa < floor) return { emoji: '🔴', label: labels.reject, band: 'reject' };
+  if (tarifa < target) return { emoji: '🟡', label: labels.negotiate, band: 'negotiate' };
+  return { emoji: '🟢', label: labels.accept, band: 'accept' };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PISO / OBJETIVO CONSCIENTES DE TABLA — reglas-v3-multiestado Fase 3, task 3.7.
+//
+// Reemplaza el sistema viejo de tramos flat (computeFloor/computeTarget por
+// bucket genérico). Regla unificada, la misma para drayage con tabla, drayage
+// sin tabla y cualquier otro equipo:
+//
+//   OBJETIVO:
+//     - hay tabla (nativa o derivada de TX) → el objetivo ES la tabla.
+//     - no hay tabla → objetivo = RPM base del equipo × millas de ida.
+//
+//   PISO:
+//     - Texas trae piso de tabla (nativo o derivado) → el piso ES la tabla.
+//     - Florida NUNCA trae piso de tabla (columna OO — NO EN USO). El piso
+//       sale del dato del usuario (lo que le paga al camión, Decisión 9-B).
+//     - Sin tabla de piso y sin dato del usuario → NO HAY PISO, y se declara
+//       explícitamente (nunca se inventa uno).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface FloorTargetInput {
+  tablaPiso: number | null;
+  tablaObjetivo: number | null;
+  targetEsDerivado: boolean;
+  millasIda: number;
+  rpmBase: number | null;
+  pagoCamionRpm: number | null;
+  // Fallback de piso: costo propio por milla (CostConfig.costo_por_milla) de
+  // la Calculadora de Costos. Se usa SOLO cuando no hay tabla de piso ni
+  // pagoCamionRpm declarado — da un piso real basado en los costos del usuario.
+  costoPorMillaPropio?: number | null;
+  // reglas-v3-multiestado Fase 4: mínimo de tramo corto (v3 §7). Solo se pasa
+  // desde el camino que lo admite (resolveGenericQuote); drayage sin tabla NO
+  // lo usa — sigue con su propio benchmark, sin cambios de esta tarea.
+  tramoCorto?: ShortHaulTier | null;
+}
+
+export interface FloorTargetResult {
+  floor: number | null;
+  floorSource: 'tabla' | 'dato_usuario' | 'tramo_corto' | 'sin_dato';
+  target: number;
+  targetSource: 'tabla' | 'derivado' | 'calculo' | 'tramo_corto';
+}
+
+export function computeFloorTarget(input: FloorTargetInput): FloorTargetResult {
+  const tramoCortoAplica = !!input.tramoCorto;
+
+  let target: number;
+  let targetSource: FloorTargetResult['targetSource'];
+  if (input.tablaObjetivo != null) {
+    target = input.tablaObjetivo;
+    targetSource = input.targetEsDerivado ? 'derivado' : 'tabla';
+  } else if (tramoCortoAplica) {
+    target = input.tramoCorto!.target;
+    targetSource = 'tramo_corto';
+  } else {
+    target = Math.round((input.rpmBase ?? 0) * input.millasIda);
+    targetSource = 'calculo';
+  }
+
+  let floor: number | null;
+  let floorSource: FloorTargetResult['floorSource'];
+  if (input.tablaPiso != null) {
+    // 1er prioridad: piso de tabla (Texas)
+    floor = input.tablaPiso;
+    floorSource = 'tabla';
+  } else if (targetSource === 'calculo' && input.pagoCamionRpm != null) {
+    // 2da prioridad: lo que el usuario paga al camión por milla (solo en calculo puro)
+    floor = Math.round(input.pagoCamionRpm * input.millasIda);
+    floorSource = 'dato_usuario';
+  } else if (tramoCortoAplica) {
+    // 3ra prioridad: mínimo de tramo corto (<100mi)
+    floor = input.tramoCorto!.floor;
+    floorSource = 'tramo_corto';
+  } else if (targetSource === 'calculo' && input.costoPorMillaPropio != null && isFinite(input.costoPorMillaPropio) && input.costoPorMillaPropio > 0) {
+    // 4ta prioridad: costo por milla propio de la Calculadora (solo en calculo puro).
+    floor = Math.round(input.costoPorMillaPropio * input.millasIda);
+    floorSource = 'dato_usuario';
+  } else {
+    floor = null;
+    floorSource = 'sin_dato';
+  }
+
+  // Sanity check: si el piso (calculado por RPM propio, etc) resulta ser mayor
+  // que el objetivo (benchmark general), igualamos el objetivo al piso para
+  // no mostrar rangos invertidos (ej. $7,098 - $6,825).
+  if (floor != null && target < floor) {
+    target = floor;
+  }
+
+  return { floor, floorSource, target, targetSource };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SEGUNDA LECTURA (ida y vuelta) — reglas-v3-multiestado Fase 4, kickoff §4 /
+// Decisión 1-A / criterio 5 (reproduce v3 §6 literalmente). El precio
+// sugerido SIEMPRE es de ida; esta es una SEGUNDA cifra, declarada como
+// HIPÓTESIS del regreso vacío (nunca un dato confirmado, nunca una carga real
+// asumida). Solo aplica al camino de cálculo puro por RPM (≥100mi, sin tabla,
+// sin tramo corto) — ver dónde se llama en resolveGenericQuote.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface SegundaLectura {
+  millasRedondo: number;
+  rpmRedondo: number;
+}
+
+export function computeSegundaLectura(objetivoIda: number, millasIda: number): SegundaLectura {
+  const millasRedondo = millasIda * 2;
+  const rpmRedondo = Math.round((objetivoIda / millasRedondo) * 100) / 100;
+  return { millasRedondo, rpmRedondo };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOPE DE SANIDAD — reglas-v3-multiestado Fase 3.
+//
+// El bug original ($97/mi aplicando una referencia larga a un tramo de 4
+// millas) queda estructuralmente eliminado por el rediseño: ya no se escala
+// ninguna tarifa plana por distancia. El riesgo residual es el espejo: un
+// cálculo por RPM aplicado a una distancia declarada por el usuario que sea
+// absurdamente corta o larga tampoco es defendible (RPM × 4 millas da un total
+// que no cubre ni el mínimo operativo real). Estos límites reutilizan el rango
+// de sanidad que ya existía para "confianza baja" en la versión anterior del
+// motor, ahora como un RECHAZO duro en vez de una advertencia blanda.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const SANITY_MIN_MILES = 10;
+export const SANITY_MAX_MILES = 3000;
+
+export function dentroDelRangoDeSanidad(millasIda: number): boolean {
+  return millasIda >= SANITY_MIN_MILES && millasIda <= SANITY_MAX_MILES;
+}
+
+export function buildSanityCapMarkdown(locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].sanityCap;
+  return [m.line1, m.line2].join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TRAMOS CORTOS — reglas-v3-multiestado Fase 4, kickoff §7 / Decisión 4 /
+// criterio 13. v3 §7 arranca su tabla en ~100 millas; por debajo de eso el
+// cálculo por RPM no tiene sentido económico (un tramo de 60mi a $3.01/mi da
+// $180, muy por debajo de cualquier piso operativo real). La lectura crítica
+// del PDF (sección E) aprueba reusar el bucket 50-100mi de los mínimos flat
+// viejos como referencia de arranque — es el único bucket con la frontera de
+// 100mi que pide la Decisión 4 ("el mínimo de 100mi aplica también por
+// debajo"): bajo=piso, alto=objetivo (Decisión 5), fijo para cualquier
+// distancia por debajo del umbral, sin escalar por RPM.
+//
+// Sin datos propios por equipo en v3 §7 (el documento solo da un bucket
+// genérico), se aplica el mismo mínimo a cualquier equipo del camino
+// genérico — documentado como simplificación deliberada, a refinar si Juan
+// entrega mínimos específicos por equipo.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ShortHaulTier {
+  floor: number;
+  target: number;
+  threshold: number;
+}
+
+export function resolveShortHaulTier(millasIda: number, equipmentId: string): ShortHaulTier | null {
+  if (millasIda >= 250) return null;
+
+  const is100 = millasIda < 150;
+  const threshold = is100 ? 100 : 200;
+
+  let floor: number;
+  let target: number;
+
+  switch (equipmentId) {
+    case 'reefer':
+      floor = is100 ? 550 : 850;
+      target = is100 ? 700 : 1100;
+      break;
+    case 'flatbed':
+      floor = is100 ? 600 : 950;
+      target = is100 ? 750 : 1200;
+      break;
+    case 'dry_van':
+    default:
+      floor = is100 ? 500 : 750;
+      target = is100 ? 650 : 1000;
+      break;
+  }
+
+  return { floor, target, threshold };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PAGO AL CAMIÓN — Decisión 9-B. (Sin cambios en esta fase respecto de la
+// Fase 0; ahora sí se consume como piso — ver computeFloorTarget arriba.)
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface TruckPaymentProfile {
+  pago_camion_rpm?: number | null;
+}
+
+export interface TruckPaymentDecision {
+  needsAsk: boolean;
+  rpm: number | null;
+  shouldPersist: boolean;
+}
+
+function esRpmValido(valor: unknown): valor is number {
+  return typeof valor === 'number' && isFinite(valor) && valor > 0;
+}
+
+function parseRpm(valor: unknown): number | null {
+  if (typeof valor === 'number' && isFinite(valor) && valor > 0) return valor;
+  if (typeof valor === 'string') {
+    const num = parseFloat(valor);
+    if (isFinite(num) && num > 0) return num;
+  }
+  return null;
+}
+
+export function resolveTruckPayment(
+  profile: TruckPaymentProfile | null | undefined,
+  declaradoPorUsuario: unknown,
+): TruckPaymentDecision {
+  // 1. Si el usuario nos dice su RPM en el chat, TIENE PRIORIDAD y lo guardamos
+  const declarado = parseRpm(declaradoPorUsuario);
+  if (declarado != null) {
+    return { needsAsk: false, rpm: declarado, shouldPersist: true };
+  }
+
+  // 2. Si no dijo nada nuevo, usamos lo que esté en la base de datos
+  const guardado = profile ? parseRpm(profile.pago_camion_rpm) : null;
+  if (guardado != null) {
+    return { needsAsk: false, rpm: guardado, shouldPersist: false };
+  }
+
+  // 3. Si no tenemos nada, necesitamos preguntar
+  return { needsAsk: true, rpm: null, shouldPersist: false };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VEREDICTO POR PERFIL — reglas-v3-multiestado Fase 6, kickoff §7.7 / spec
+// "Verdict Without Dollar Minimum, By Profile".
+//
+// Es un veredicto DISTINTO del de `computeVerdict` (que compara la tarifa
+// ofrecida contra {piso, objetivo} DE LA RUTA). Este compara la tarifa
+// ofrecida contra el COSTO PROPIO del que cotiza, en bandas de PORCENTAJE de
+// margen (≥40% / 25-40% / <25%) — nunca contra un piso en dólares.
+//
+// "Perfil" NO es un campo que se le pregunta al usuario ni que el LLM
+// declara (nada de datos en manos del modelo, kickoff §1): se DERIVA
+// determinísticamente de qué dato de costo tiene guardado, el mismo
+// principio que ya rige pago_camion_rpm (9-B):
+//   - pago_camion_rpm guardado (lo que paga a un camión subcontratado) → base "despachador"
+//   - costo_por_milla guardado (su propio costo operativo, de la Calculadora) → base "owner_operator"
+//   - AMBOS guardados (un carrier chico que despacha Y opera camión propio) → "carrier_pequeño":
+//     se reporta el veredicto de CADA base, y se señala cuál de las dos es la
+//     más restrictiva — nunca se esconde el dato menos favorable.
+//   - NINGUNO guardado → sin dato de margen; no hay veredicto de perfil (no se inventa un costo).
+//
+// Decisión 10-B: NO hay umbral en dólares. El monto absoluto se muestra
+// JUNTO al porcentaje, nunca como un corte adicional que bloquee o filtre —
+// el usuario decide con los dos números delante.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type MarginBand = 'fuerte' | 'ajustado' | 'debil';
+
+export const MARGIN_THRESHOLD_STRONG = 40;
+export const MARGIN_THRESHOLD_ACCEPTABLE = 25;
+
+export interface MarginVerdict {
+  base: 'pago_camion' | 'costo_propio';
+  costoBase: number;
+  montoMargen: number;
+  pctMargen: number;
+  band: MarginBand;
+  emoji: string;
+}
+
+/**
+ * Margen = tarifa ofrecida vs. un costo base (lo que se le paga al camión, o
+ * el costo propio del que cotiza). Bandas por PORCENTAJE únicamente — el
+ * monto en dólares se calcula y se devuelve siempre, pero nunca decide la
+ * banda por sí solo (Decisión 10-B).
+ *
+ * `label` (el texto de la banda) ya NO vive en este resultado — depende del
+ * locale, así que se resuelve en el builder (buildMarginVerdictMarkdown), no
+ * acá (esta función es puro cálculo, sin texto).
+ */
+export function computeMarginVerdict(
+  base: MarginVerdict['base'],
+  tarifaOfrecida: number,
+  costoBase: number,
+): MarginVerdict {
+  const montoMargen = Math.round(tarifaOfrecida - costoBase);
+  const pctMargen = costoBase > 0
+    ? Math.round(((tarifaOfrecida - costoBase) / costoBase) * 1000) / 10
+    : 0;
+
+  let band: MarginBand;
+  let emoji: string;
+  if (pctMargen >= MARGIN_THRESHOLD_STRONG) {
+    band = 'fuerte';
+    emoji = '🟢';
+  } else if (pctMargen >= MARGIN_THRESHOLD_ACCEPTABLE) {
+    band = 'ajustado';
+    emoji = '🟡';
+  } else {
+    band = 'debil';
+    emoji = '🔴';
+  }
+  return { base, costoBase, montoMargen, pctMargen, band, emoji };
+}
+
+export interface ProfileMarginInput {
+  tarifaOfrecida: number | null;
+  millasIda: number;
+  pagoCamionRpm: number | null;
+  costoPorMillaPropio: number | null;
+}
+
+export type PerfilCotizador = 'despachador' | 'owner_operator' | 'carrier_pequeno' | 'sin_dato';
+
+export interface ProfileMarginResult {
+  perfil: PerfilCotizador;
+  verdicts: MarginVerdict[];
+  masRestrictivo: MarginVerdict | null;
+}
+
+const MARGIN_BAND_RANK: Record<MarginBand, number> = { debil: 0, ajustado: 1, fuerte: 2 };
+
+/** El veredicto MÁS RESTRICTIVO es el de banda más baja (nunca el más optimista de los dos). */
+function elMasRestrictivo(verdicts: MarginVerdict[]): MarginVerdict {
+  return verdicts.reduce((peor, actual) => MARGIN_BAND_RANK[actual.band] < MARGIN_BAND_RANK[peor.band] ? actual : peor);
+}
+
+export function resolveProfileMarginVerdict(input: ProfileMarginInput): ProfileMarginResult {
+  const verdicts: MarginVerdict[] = [];
+  if (esRpmValido(input.tarifaOfrecida)) {
+    const tarifaOfrecida = input.tarifaOfrecida as number;
+    if (esRpmValido(input.pagoCamionRpm)) {
+      verdicts.push(computeMarginVerdict('pago_camion', tarifaOfrecida, Math.round((input.pagoCamionRpm as number) * input.millasIda)));
+    }
+    if (esRpmValido(input.costoPorMillaPropio)) {
+      verdicts.push(computeMarginVerdict('costo_propio', tarifaOfrecida, Math.round((input.costoPorMillaPropio as number) * input.millasIda)));
+    }
+  }
+
+  if (verdicts.length === 0) {
+    return { perfil: 'sin_dato', verdicts: [], masRestrictivo: null };
+  }
+  const perfil: PerfilCotizador = verdicts.length === 2
+    ? 'carrier_pequeno'
+    : verdicts[0].base === 'pago_camion' ? 'despachador' : 'owner_operator';
+
+  return { perfil, verdicts, masRestrictivo: elMasRestrictivo(verdicts) };
+}
+
+function formatUSDSigned(n: number): string {
+  return n < 0 ? `-${formatUSD(Math.abs(n))}` : formatUSD(n);
+}
+
+/**
+ * Texto del veredicto por perfil — se agrega en `buildRateCheckMarkdown`
+ * cuando hay tarifa ofrecida Y al menos un costo base declarado. Sin lenguaje
+ * imperativo (criterio 16): describe la banda, nunca ordena una acción.
+ */
+export function buildMarginVerdictMarkdown(resultado: ProfileMarginResult, locale: Locale = 'es'): string[] {
+  if (resultado.verdicts.length === 0) return [];
+  const m = MESSAGES[locale].marginVerdict;
+  const baseLabel: Record<MarginVerdict['base'], string> = {
+    pago_camion: m.baseLabelPagoCamion,
+    costo_propio: m.baseLabelCostoPropio,
+  };
+  const bandLabel: Record<MarginBand, string> = {
+    fuerte: m.bandFuerte,
+    ajustado: m.bandAjustado,
+    debil: m.bandDebil,
+  };
+  const lineas = resultado.verdicts.map(v =>
+    render(m.line, v.emoji, baseLabel[v.base], formatUSDSigned(v.montoMargen), v.pctMargen.toFixed(1), bandLabel[v.band])
+  );
+  if (resultado.perfil === 'carrier_pequeno' && resultado.masRestrictivo) {
+    lineas.push(render(m.masRestrictivoLine, baseLabel[resultado.masRestrictivo.base]));
+  }
+  return lineas;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COTIZACIÓN DE DRAYAGE — reglas-v3-multiestado Fase 3, el corazón del cambio.
+//
+// Orden de resolución para una consulta de drayage (equipo=drayage, con
+// tamaño ya conocido):
+//   1. Resolver el destino (nameResolution: alias/ZIP/ciudad tolerante).
+//   2. Si resuelve a una ciudad de FL o TX → buscar en la tabla; si el tamaño
+//      pedido no tiene fila propia (solo pasa en TX, que solo trae 40'
+//      nativo), derivar con sizeDerivation. Con match (nativo o derivado):
+//      UNA sola cifra — la tabla nunca compite con el cálculo (T-1).
+//   3. Sin match de tabla (ciudad no resuelta, o estado sin tabla): calcular
+//      por RPM del equipo drayage según tamaño, con las millas que dé el
+//      usuario (nunca se estiman). Sin millas del usuario → se pregunta. Con
+//      millas fuera del rango de sanidad → se declara y se pide el dato.
+//      Se ofrecen hasta 3 rutas de referencia del mismo estado si se conoce,
+//      o del estado vecino con tabla si no (Decisión 11-A).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type DrayageOutcome =
+  | { kind: 'ask_miles'; ciudadConocida: string | null }
+  | { kind: 'fuera_de_rango' }
+  | { kind: 'quote'; calculo: CalculatedQuote };
+
+export interface CalculatedQuote {
+  estado: Estado | string | null;
+  ciudad: string | null;
+  millasIda: number;
+  fuenteMillas: 'tabla' | 'usuario';
+  piso: number | null;
+  floorSource: FloorTargetResult['floorSource'];
+  objetivo: number;
+  targetSource: FloorTargetResult['targetSource'];
+  dobleSupuesto: boolean;
+  equipmentLabel: string;
+  referencias: ReferenceRoute[];
+  referenciasEstadoNombre: string | null;
+  tarifaOfrecida: number | null;
+  // Fase 4 — doble lectura (solo camino genérico por RPM, ≥100mi, sin tabla ni
+  // tramo corto). null en cualquier otro camino, SIEMPRE null en drayage
+  // (Decisión 1-A / "No Double Reading in Drayage").
+  segundaLectura: SegundaLectura | null;
+  // Fase 4 — drayage: de qué tabla sale la semántica de millas del match (o
+  // false si no hay match de tabla, calculado por RPM de ida). Alimenta
+  // buildDrayageRoundTripMarkdown (total redondo SOLO a pedido).
+  precioIncluyeRegreso: boolean | null;
+  // Fase 5 — accesoriales del estado consultado (o del vecino, declarado). Solo
+  // se llena cuando el usuario mencionó algo (accessorial_triggers no vacío);
+  // null en cualquier otro caso, incluyendo todo el camino genérico.
+  accesoriales: AccessorialResolution | null;
+  // Fase 6 — veredicto por perfil (margen % vs. costo propio declarado). Solo
+  // se calcula cuando hay tarifaOfrecida Y al menos un costo base (pago al
+  // camión u costo propio); `perfil: 'sin_dato'` con `verdicts: []` en
+  // cualquier otro caso — nunca se inventa un costo para completarlo.
+  perfilMargen: ProfileMarginResult;
+  // Semáforo — CPM y tarifa objetivo del usuario (de CostConfig). Null cuando
+  // el usuario no tiene la calculadora configurada. Se usan para delimitar
+  // zonas ROJO / AMARILLO / VERDE en buildRateCheckMarkdown.
+  costoPorMillaPropio: number | null;
+  tarifaObjetivaPropia: number | null;
+  tarifaBreakEvenPropia: number | null;
+  // Fase 4 — el umbral de millas usado para tramos cortos (~100 o ~200)
+  tramoCortoThreshold: number | null;
+  tarifaPromedioEstado?: number | null;
+}
+
+function benchmarkParaTamanoDrayage(tamano: Tamano): Equipment {
+  const drayage20 = EQUIPMENT_BENCHMARKS.find(e => e.id === 'drayage_20')!;
+  const drayage40 = EQUIPMENT_BENCHMARKS.find(e => e.id === 'drayage_40')!;
+  return tamano === '20' ? drayage20 : drayage40;
+}
+
+function nombreEstado(estado: Estado): string {
+  return estado === 'FL' ? 'Florida' : 'Texas';
+}
+
+// Cuando el propio texto nombra "Florida" o "Texas" explícitamente, la ciudad
+// ausente es del MISMO estado que tenemos tabla — no un vecino. Se resuelve
+// aparte de NEIGHBOR_STATE_GROUPS (referenceRoutes.ts) porque esa tabla es
+// específicamente de estados SIN tabla propia (la reutiliza también el
+// fallback de accesoriales de la Fase 5); Florida y Texas nunca deberían
+// aparecer ahí como "vecinos" de sí mismos.
+function detectarEstadoPropioMencionado(texto: unknown): Estado | null {
+  const t = normalizeText(texto);
+  if (/(^|[^a-z])florida([^a-z]|$)/.test(t)) return 'FL';
+  if (/(^|[^a-z])texas([^a-z]|$)/.test(t)) return 'TX';
+  return null;
+}
+
+interface TableMatch {
+  estado: Estado;
+  ciudad: string;
+  millasIda: number;
+  piso: number | null;
+  objetivo: number;
+  esDerivado: boolean;
+  dobleSupuesto: boolean;
+  precioIncluyeRegreso: boolean;
+}
+
+function buscarEnTabla(estado: Estado, ciudad: string, tamano: Tamano, mercado?: string | null): TableMatch | null {
+  const directo = lookupRoute(estado, ciudad, tamano, mercado);
+  if (directo) {
+    return {
+      estado,
+      ciudad: directo.route.ciudad,
+      millasIda: directo.route.millas_ida,
+      piso: directo.precio.piso_tabla,
+      objetivo: directo.precio.objetivo,
+      esDerivado: false,
+      dobleSupuesto: false,
+      precioIncluyeRegreso: directo.route.semantica_millas.precio_incluye_regreso,
+    };
+  }
+
+  // Solo Texas puede necesitar derivación: solo trae 40' nativo por fila.
+  if (estado !== 'TX') return null;
+  const nativo = lookupRoute('TX', ciudad, '40');
+  if (!nativo) return null;
+
+  const objetivoDerivado = deriveTxPrice(nativo.precio.objetivo, tamano);
+  const pisoDerivado = nativo.precio.piso_tabla != null ? deriveTxPrice(nativo.precio.piso_tabla, tamano) : null;
+  return {
+    estado,
+    ciudad: nativo.route.ciudad,
+    millasIda: nativo.route.millas_ida,
+    piso: pisoDerivado ? pisoDerivado.valor : null,
+    objetivo: objetivoDerivado.valor,
+    esDerivado: objetivoDerivado.derivado,
+    dobleSupuesto: TX_SIZE_FACTORS[tamano].dobleSupuesto,
+    precioIncluyeRegreso: nativo.route.semantica_millas.precio_incluye_regreso,
+  };
+}
+
+export function buscarEnRutasDinamicas(
+  rutas: any[],
+  estado: Estado | string,
+  ciudad: string,
+  tamano: Tamano,
+  mercado?: string | null
+): TableMatch | null {
+  if (!Array.isArray(rutas) || rutas.length === 0) return null;
+  const cNorm = normalizeText(ciudad);
+  const estUpper = String(estado).toUpperCase();
+
+  for (const r of rutas) {
+    if (String(r.estado).toUpperCase() !== estUpper) continue;
+    if (normalizeText(r.ciudad) !== cNorm) continue;
+    if (mercado && r.mercado && r.mercado !== 'Ambos' && r.mercado !== 'MIA/PEV' && r.mercado !== mercado) continue;
+
+    let obj: number | null = null;
+    let piso: number | null = null;
+
+    if (tamano === '20') {
+      obj = r.precio_20 ?? (r.precio_40 ? deriveTxPrice(r.precio_40, '20').valor : null);
+      piso = r.piso_20 ?? null;
+    } else if (tamano === '40') {
+      obj = r.precio_40 ?? null;
+      piso = r.piso_40 ?? null;
+    } else if (tamano === '45') {
+      obj = r.precio_45 ?? (r.precio_40 ? deriveTxPrice(r.precio_40, '45').valor : null);
+      piso = r.piso_45 ?? null;
+    } else if (tamano === '20_heavy') {
+      obj = r.precio_20_heavy ?? (r.precio_40 ? deriveTxPrice(r.precio_40, '20_heavy').valor : null);
+      piso = r.piso_20_heavy ?? null;
+    }
+
+    if (obj !== null && isFinite(obj) && obj > 0) {
+      return {
+        estado: (estUpper === 'FL' || estUpper === 'TX') ? (estUpper as Estado) : 'FL',
+        ciudad: r.ciudad,
+        millasIda: r.millas_ida || 0,
+        piso: piso,
+        objetivo: obj,
+        esDerivado: false,
+        dobleSupuesto: false,
+        precioIncluyeRegreso: true,
+      };
+    }
+  }
+  return null;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ACCESORIALES — reglas-v3-multiestado Fase 5, kickoff §7.6. Los del estado
+// consultado (FL/TX propios); si el estado no tiene tabla, se heredan de un
+// vecino EXPLÍCITAMENTE nombrado (mismo agrupamiento que las rutas de
+// referencia, reutilizado — GA/Carolinas/AL→FL, OK/NM/LA/AR→TX). A propósito
+// usa `detectNeighborState` (nunca adivina un vecino lejano) y NO
+// `resolveReferenceState` (que sí cae a TX por defecto para las referencias de
+// ruta) — heredar un accesorial de un estado no nombrado sería inventar una
+// fuente; la lectura crítica del PDF (hallazgo B6) ya advierte que el
+// fallback solo cubre 8 de ~48 estados, y los otros 40 se declaran sin dato,
+// nunca con un valor por defecto silencioso.
+//
+// La tarifa de ruta NUNCA se hereda por esta vía — un accesorial es un cargo
+// por concepto (chasis, reefer, etc.), independiente de la distancia y el
+// grupo de tarifa de una ruta específica (kickoff §3.5).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface AccessorialResolution {
+  estado: Estado | null;
+  heredado: boolean;
+  items: AccessorialRecord[];
+}
+
+export interface CustomAccessorial {
+  concepto: string;
+  monto: string;
+}
+
+export function parseCustomAccessorials(text: string): CustomAccessorial[] {
+  if (!text) return [];
+  return text.split('\n').map(line => {
+    const match = line.match(/^([^:$]+)[:\s]+(.+)$/);
+    if (match) {
+      return { concepto: match[1].trim(), monto: match[2].trim() };
+    }
+    return null;
+  }).filter(Boolean) as CustomAccessorial[];
+}
+
+function mapCustomToCanonical(cNorm: string): string {
+  if (/hmat|ahsmat|hasmat|hazmat|hazzmat/i.test(cNorm)) return 'hazmat';
+  if (/prepull|pre.*pull/i.test(cNorm)) return 'prepull';
+  if (/over.*weight|sobrepeso|overw/i.test(cNorm)) return 'overweight';
+  if (/detention|detencion/i.test(cNorm)) return 'detention';
+  if (/chasis|chassis/i.test(cNorm)) return 'chassis';
+  return cNorm;
+}
+
+export function applyCustomAccessorials(
+  defaults: AccessorialRecord[],
+  customText: string | null | undefined
+): AccessorialRecord[] {
+  if (!customText) return defaults.map(d => ({ ...d, isCustom: false }));
+
+  const customs = parseCustomAccessorials(customText);
+  if (!customs.length) return defaults.map(d => ({ ...d, isCustom: false }));
+
+  const merged = [...defaults.map(d => ({ ...d, isCustom: false }))];
+
+  for (const c of customs) {
+    const cNorm = normalizeText(c.concepto).replace(/[-\s]+/g, '');
+    const cCanonical = mapCustomToCanonical(cNorm);
+    let replaced = false;
+    
+    for (let i = 0; i < merged.length; i++) {
+      const dNormConcept = normalizeText(merged[i].concepto).replace(/[-\s]+/g, '');
+      const dCanonical = mapCustomToCanonical(dNormConcept);
+      if (dCanonical.includes(cCanonical) || cCanonical.includes(dCanonical)) {
+        merged[i] = {
+          ...merged[i],
+          concepto: merged[i].concepto.replace(/\s*\([A-Z]+\)/i, ''),
+          monto: c.monto,
+          isCustom: true
+        };
+        replaced = true;
+      }
+    }
+
+    if (!replaced) {
+      merged.push({
+        concepto: c.concepto,
+        gatillo: c.concepto,
+        monto: c.monto,
+        nota: "Custom",
+        fuente: { archivo: "user", fila: 0 },
+        isCustom: true
+      });
+    }
+  }
+
+  return merged;
+}
+
+export function resolveAccessorialsForState(estadoConsultado: Estado | null, textoDestino: unknown, customAccessorialsText?: string | null): AccessorialResolution {
+  let baseState = estadoConsultado;
+  let heredado = false;
+  if (!baseState) {
+    baseState = detectNeighborState(textoDestino);
+    heredado = !!baseState;
+  }
+
+  let items = baseState ? loadAccessorials(baseState) : [];
+  
+  // El usuario requiere que el Pre-pull y el Hazmat SIEMPRE se extraigan de la base
+  // de datos de Florida, incluso si estamos en Texas, porque esos son los valores base a usar.
+  const flItems = loadAccessorials('FL');
+  const flPrePull = flItems.filter(i => /prepull|pre.*pull/i.test(i.concepto));
+  const flHazmat = flItems.filter(i => /hmat|ahsmat|hasmat|hazmat|hazzmat/i.test(i.concepto));
+  
+  // Removemos los prepull/hazmat originales del estado (ej. TX "cotizar")
+  items = items.filter(i => !/prepull|pre.*pull/i.test(i.concepto) && !/hmat|ahsmat|hasmat|hazmat|hazzmat/i.test(i.concepto));
+  
+  // Insertamos los de Florida
+  items = [...items, ...flPrePull, ...flHazmat];
+
+  return { 
+    estado: baseState, 
+    heredado, 
+    items: applyCustomAccessorials(items, customAccessorialsText) 
+  };
+}
+
+/**
+ * Filtra por lo que el dispatcher mencionó (`accessorial_triggers` de
+ * EXTRACTION_SCHEMA) — sin triggers, no se muestra nada: no tiene sentido
+ * volcar 20 líneas de accesoriales en cada respuesta de rate_check si nadie
+ * preguntó por ninguno.
+ */
+export function filterAccessorialsByTriggers(
+  items: AccessorialRecord[], 
+  triggers: unknown, 
+  origenCiudad?: string | null
+): AccessorialRecord[] {
+  if (!Array.isArray(triggers) || triggers.length === 0) return [];
+  const normalizados = triggers.filter((t): t is string => typeof t === 'string' && t.trim() !== '').map(normalizeText);
+  if (normalizados.length === 0) return [];
+
+  const matched = items.filter(item => {
+    const campo = normalizeText(`${item.concepto} ${item.gatillo ?? ''}`).replace(/[-\s]+/g, '');
+    
+    // Si el accesorio es un Pre-Pull, requerimos que el trigger explícitamente mencione "pre" o "pull"
+    if (campo.includes('prepull')) {
+      return normalizados.some(t => {
+        const tNorm = t.replace(/[-\s]+/g, '');
+        return (tNorm.includes('pre') || tNorm.includes('pull')) && campo.includes(tNorm);
+      });
+    }
+
+    // Regla especial para Waiting Time (ahora Detention)
+    if (campo.includes('detention')) {
+      return normalizados.some(t => {
+        const tNorm = t.replace(/[-\s]+/g, '');
+        return tNorm.includes('detention') || tNorm.includes('detetion') || tNorm.includes('wait') || campo.includes(tNorm);
+      });
+    }
+
+    // Regla especial para Reefer (accesorial de puerto / genset):
+    // Cuando el usuario solo menciona "reefer" en la ruta, se refiere al equipo de camión y NO debe mostrar el adicional en el semáforo.
+    // Solo aplica como accesorial si el usuario explícitamente pregunta por el adicional, recargo, genset, o cuánto quedaría con el reefer.
+    if (campo.includes('reefer')) {
+      return normalizados.some(t => {
+        const tNorm = t.replace(/[-\s]+/g, '');
+        return tNorm.includes('genset') || 
+               tNorm.includes('recargo') || 
+               tNorm.includes('adicional') || 
+               tNorm.includes('extra') || 
+               tNorm.includes('conreefer') || 
+               tNorm.includes('cuantoquedaria') ||
+               tNorm.includes('cuantocobro');
+      });
+    }
+
+    return normalizados.some(t => {
+      const tNorm = t.replace(/[-\s]+/g, '');
+      if (campo.includes(tNorm)) return true;
+      if (tNorm.includes(campo)) return true;
+      // Correcciones manuales (typos comunes)
+      if (campo.includes('extrastop') && (tNorm.includes('extratop') || tNorm.includes('extrasop'))) return true;
+      if (campo.includes('chassis') && (tNorm.includes('chasis') || tNorm.includes('chasisi'))) return true;
+      if (campo.includes('layover') && (tNorm.includes('layovre') || tNorm.includes('laiover'))) return true;
+      return false;
+    });
+  });
+
+  const finalItems: AccessorialRecord[] = [];
+  let hasPrePull = false;
+  const seenConcept = new Set<string>();
+
+  const isPEV = origenCiudad ? (normalizeText(origenCiudad).includes('lauderdale') || normalizeText(origenCiudad).includes('everglades') || normalizeText(origenCiudad).includes('pev')) : false;
+  const isMIA = origenCiudad ? normalizeText(origenCiudad).includes('miami') : false;
+
+  for (const item of matched) {
+    const c = normalizeText(item.concepto).replace(/[-\s]+/g, '');
+    if (c.includes('prepull')) {
+      if (hasPrePull) continue; // Sólo un pre-pull
+      
+      // Si sabemos el origen, filtramos el incorrecto
+      if (c.includes('mia') && isPEV && !isMIA) continue;
+      if (c.includes('pev') && isMIA && !isPEV) continue;
+
+      hasPrePull = true;
+    } else {
+      // Deduplicar cualquier otro concepto (ej. Extra Stop, Drop Fee)
+      if (seenConcept.has(c)) continue;
+      seenConcept.add(c);
+    }
+    finalItems.push(item);
+  }
+
+  return finalItems;
+}
+
+export function resolveDrayageQuote(params: {
+  origenRaw?: unknown;
+  destinoRaw: unknown;
+  tamano: Tamano;
+  millasIdaDeclaradas: unknown;
+  pagoCamionRpm: number | null;
+  tarifaOfrecida: number | null;
+  accessorialTriggers?: unknown;
+  costoPorMillaPropio?: number | null;
+  tarifaObjetivaPropia?: number | null;
+  tarifaBreakEvenPropia?: number | null;
+  rawPrompt?: string;
+  customAccessorialsText?: string | null;
+  dynamicContainerRoutes?: any[];
+  stateMarketData?: any[];
+}): DrayageOutcome {
+  const { origenRaw, destinoRaw, tamano, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, accessorialTriggers, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, rawPrompt, customAccessorialsText, dynamicContainerRoutes, stateMarketData } = params;
+  const equipmentLabel = tamano === '20' ? "Drayage/Container 20'"
+    : tamano === '40' ? "Drayage/Container 40'"
+      : tamano === '45' ? "Drayage/Container 45'"
+        : "Drayage/Container 20' Heavy";
+
+  const locDestino = resolveLocation(destinoRaw);
+  const locOrigen = resolveLocation(origenRaw);
+
+  let ciudadDestinoStr: string | null = locDestino.status === 'ok' ? locDestino.ciudad : null;
+  let estadoDestinoStr: string | null = locDestino.status === 'ok' ? locDestino.estado : null;
+
+  if (!ciudadDestinoStr && typeof destinoRaw === 'string' && destinoRaw.trim()) {
+    const rawDestClean = destinoRaw.trim();
+    const parts = rawDestClean.split(',');
+    ciudadDestinoStr = parts[0].trim();
+    if (parts.length > 1) {
+      const statePart = parts[1].trim().toUpperCase();
+      if (/^[A-Z]{2}$/.test(statePart)) {
+        estadoDestinoStr = statePart;
+      }
+    }
+  }
+
+  const ciudadResuelta = ciudadDestinoStr || (locOrigen.status === 'ok' ? locOrigen.ciudad : null);
+  const origenCiudadPura = locOrigen.status === 'ok' ? (locOrigen.mercado || locOrigen.ciudad) : null;
+
+  const mercadoResuelto = (locDestino.status === 'ok' ? locDestino.mercado : null) || (locOrigen.status === 'ok' ? locOrigen.mercado : null);
+  const estadoResuelto = estadoDestinoStr || (locOrigen.status === 'ok' ? locOrigen.estado : null);
+
+  let mercadoFinal = mercadoResuelto;
+  if (!mercadoFinal && rawPrompt) {
+    const fromPrompt = resolveLocation(rawPrompt);
+    if (fromPrompt.status === 'ok' && fromPrompt.mercado) {
+      mercadoFinal = fromPrompt.mercado;
+    }
+  }
+
+  if (estadoResuelto && (estadoResuelto === 'FL' || estadoResuelto === 'TX')) {
+    let match: TableMatch | null = null;
+    let isMilesFallback = false;
+    const hasGoogleMiles = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0;
+
+    const limiteMillasTabla = estadoResuelto === 'FL' ? 450 : 800;
+
+    // 1. Prioridad: Buscar coincidencia EXACTA por ciudad en rutas dinámicas (Excel) o en la tabla nativa
+    if (ciudadResuelta) {
+      if (Array.isArray(dynamicContainerRoutes) && dynamicContainerRoutes.length > 0) {
+        match = buscarEnRutasDinamicas(dynamicContainerRoutes, estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
+      }
+      if (!match) {
+        match = buscarEnTabla(estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
+      }
+    }
+
+    // Si hubo coincidencia de ciudad pero tenemos millas reales de ruta (Google Maps)
+    // y la diferencia es significativa (> 10 millas), en drayage (especialmente Florida OTR),
+    // la tarifa está estructurada por bandas de millas (ej. Grupo 315 para ~208 mi -> $1,150 vs Grupo 400 para 227 mi -> $1,200).
+    // Por ende, ajustamos el precio al grupo correspondiente a las millas reales de la ruta.
+    if (match && hasGoogleMiles && (millasIdaDeclaradas as number) <= limiteMillasTabla) {
+      const diffMillas = Math.abs(match.millasIda - (millasIdaDeclaradas as number));
+      if (diffMillas > 10) {
+        let closest = findClosestRouteByMiles(estadoResuelto as Estado, tamano, millasIdaDeclaradas as number);
+        if (closest) {
+          match.objetivo = closest.precio.objetivo;
+          match.piso = closest.precio.piso_tabla;
+          match.millasIda = millasIdaDeclaradas as number;
+        }
+      } else {
+        match.millasIda = millasIdaDeclaradas as number;
+      }
+    }
+
+    // 2. Si la ciudad no está en la tabla, buscar la ruta más cercana por millas dentro de la tabla (hasta limiteMillasTabla).
+    if (!match && hasGoogleMiles && (millasIdaDeclaradas as number) <= limiteMillasTabla) {
+      let closest = findClosestRouteByMiles(estadoResuelto as Estado, tamano, millasIdaDeclaradas as number);
+      
+      // Fallback a buscar 40' si el tamaño exacto (ej. 45' o 20_heavy) no existe en la tabla de TX
+      if (!closest && estadoResuelto === 'TX') {
+        closest = findClosestRouteByMiles(estadoResuelto as Estado, '40', millasIdaDeclaradas as number);
+      }
+      
+      if (closest) {
+        if (estadoResuelto === 'FL') {
+          match = {
+            estado: estadoResuelto,
+            ciudad: ciudadResuelta || closest.route.ciudad,
+            millasIda: millasIdaDeclaradas as number,
+            piso: closest.precio.piso_tabla,
+            objetivo: closest.precio.objetivo,
+            esDerivado: false,
+            dobleSupuesto: false,
+            precioIncluyeRegreso: closest.route.semantica_millas.precio_incluye_regreso,
+          };
+        } else { // TX
+          const isDerived = closest.precio.tamano !== tamano;
+          const objetivoFinal = isDerived ? deriveTxPrice(closest.precio.objetivo, tamano).valor : closest.precio.objetivo;
+          const pisoFinal = (isDerived && closest.precio.piso_tabla != null) 
+            ? deriveTxPrice(closest.precio.piso_tabla, tamano).valor 
+            : (closest.precio.piso_tabla ?? null);
+          const derivadoFinal = isDerived ? true : (closest.precio.derivado ?? false);
+
+          match = {
+            estado: estadoResuelto,
+            ciudad: ciudadResuelta || closest.route.ciudad,
+            millasIda: millasIdaDeclaradas as number,
+            piso: pisoFinal,
+            objetivo: objetivoFinal,
+            esDerivado: derivadoFinal,
+            dobleSupuesto: isDerived ? TX_SIZE_FACTORS[tamano].dobleSupuesto : (TX_SIZE_FACTORS[tamano]?.dobleSupuesto ?? false),
+            precioIncluyeRegreso: closest.route.semantica_millas.precio_incluye_regreso,
+          };
+        }
+      }
+    }
+
+    if (match) {
+      const ft = computeFloorTarget({
+        tablaPiso: match.piso,
+        tablaObjetivo: match.objetivo,
+        targetEsDerivado: match.esDerivado,
+        millasIda: match.millasIda,
+        rpmBase: null,
+        pagoCamionRpm: null, // NO multiplicamos por RPM para rutas de tabla plana
+      });
+      const accesorialesMatch = resolveAccessorialsForState(match.estado as Estado, destinoRaw, customAccessorialsText);
+      const itemsMatch = filterAccessorialsByTriggers(accesorialesMatch.items, accessorialTriggers, origenCiudadPura);
+      // En contenedores para rutas mayores a 200 millas, al ser ida y vuelta (round trip),
+      // el RPM se calcula como: tarifa objetivo de la tabla / (2 * millas de la tabla).
+      const rpmObjetivo = match.millasIda > 200
+        ? Number((match.objetivo / (2 * match.millasIda)).toFixed(2))
+        : Number((match.objetivo / match.millasIda).toFixed(2));
+      return {
+        kind: 'quote',
+        calculo: {
+          estado: match.estado as Estado,
+          ciudad: mercadoFinal ? `${match.ciudad} ${mercadoFinal}` : match.ciudad,
+          millasIda: match.millasIda,
+          fuenteMillas: 'tabla',
+          piso: ft.floor,
+          floorSource: ft.floorSource,
+          objetivo: ft.target,
+          targetSource: ft.targetSource,
+          dobleSupuesto: match.dobleSupuesto,
+          equipmentLabel,
+          tarifaPromedioEstado: rpmObjetivo,
+          referencias: [],
+          referenciasEstadoNombre: null,
+          tarifaOfrecida,
+          segundaLectura: null,
+          precioIncluyeRegreso: match.precioIncluyeRegreso,
+          accesoriales: itemsMatch.length > 0 ? { ...accesorialesMatch, items: itemsMatch } : null,
+          perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda: match.millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+          costoPorMillaPropio: costoPorMillaPropio ?? null,
+          tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+          tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
+          tramoCortoThreshold: null, // drayage usa tabla
+        },
+      };
+    }
+  }
+
+  // Sin match de tabla: se registra para el reporte de rutas no encontradas
+  // (criterio 9) — nunca bloquea la respuesta.
+  if (typeof destinoRaw === 'string' && destinoRaw.trim()) {
+    recordUnmatchedRoute(destinoRaw.trim(), estadoResuelto ?? 'desconocido');
+  }
+
+  const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
+    ? millasIdaDeclaradas
+    : null;
+
+  if (millasIda == null) {
+    return { kind: 'ask_miles', ciudadConocida: ciudadResuelta };
+  }
+  if (!dentroDelRangoDeSanidad(millasIda)) {
+    return { kind: 'fuera_de_rango' };
+  }
+
+
+  const refState = resolveReferenceState(destinoRaw); 
+
+  let ft = {} as FloorTargetResult;
+  let tramoCortoAplicado = false;
+  let closestPrecioIncluyeRegreso = false;
+
+  // Lógica para rutas que no están en la tabla:
+  // Si estamos en un estado que tiene un vecino con tabla (ej. LA hereda de TX),
+  // o si estamos dentro de TX/FL pero la ruta exacta no existe,
+  // buscamos la ruta más parecida en millas en la tabla correspondiente para
+  // usarla de referencia, en lugar del cálculo genérico por tramos.
+  const isNeighborFallback = !estadoResuelto && refState.cercano;
+  const fallbackEstado: Estado = (estadoResuelto === 'FL' || estadoResuelto === 'TX') ? (estadoResuelto as Estado) : refState.estado;
+  const isIntraStateWithTable = estadoResuelto === 'TX' || estadoResuelto === 'FL';
+
+  const limiteMillas = isIntraStateWithTable ? (fallbackEstado === 'FL' ? 450 : 800) : 200;
+
+  // Comparamos millasIda contra el límite de la tabla
+  const closest = ((refState.cercano || isIntraStateWithTable) && millasIda <= limiteMillas)
+    ? findClosestRouteByMiles(fallbackEstado, tamano, millasIda, isNeighborFallback)
+    : null;
+
+
+  if (closest) {
+    tramoCortoAplicado = true;
+    closestPrecioIncluyeRegreso = closest.route.semantica_millas.precio_incluye_regreso;
+    ft = computeFloorTarget({
+      tablaPiso: closest.precio.piso_tabla,
+      tablaObjetivo: closest.precio.objetivo,
+      targetEsDerivado: closest.precio.derivado,
+      millasIda,
+      rpmBase: null,
+      pagoCamionRpm: null, // No se usa cálculo genérico
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+    });
+  } else {
+    // Fallback al cálculo genérico por tramos si no se encontró nada cercano o no hay vecino
+    const stateContainerData = Array.isArray(stateMarketData)
+      ? stateMarketData.find((s: any) => s.state_code === fallbackEstado || s.state_code === estadoResuelto)
+      : null;
+    const stateContainerRpm = stateContainerData?.container ? Number(stateContainerData.container) : null;
+
+    const benchmark = benchmarkParaTamanoDrayage(tamano);
+    const tramoCortoGen = millasIda <= 200 ? resolveShortHaulTier(millasIda, 'drayage') : null;
+    const targetRpmGen = (millasIda > 200 && tarifaObjetivaPropia != null && tarifaObjetivaPropia > 0)
+      ? tarifaObjetivaPropia
+      : (stateContainerRpm ?? benchmark.rpm_target);
+    ft = computeFloorTarget({
+      tablaPiso: null,
+      tablaObjetivo: null,
+      targetEsDerivado: false,
+      millasIda,
+      rpmBase: targetRpmGen,
+      pagoCamionRpm,
+      tramoCorto: tramoCortoGen,
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+    });
+  }
+
+  const referencias = selectReferenceRoutes(refState.estado, tamano, millasIda, ciudadResuelta);
+
+  // Accesoriales sin match de tabla: el propio estado consultado (si se
+  // conoce, aunque no tenga fila de ruta) o el vecino con tabla — NUNCA se usa
+  // refState.estado a ciegas (ese sí cae a TX por defecto para referencias de
+  // ruta; acá NO: un accesorial "heredado de Texas" sin nombrarlo sería
+  // inventar una fuente, ver nota de resolveAccessorialsForState).
+  const accesorialesCalc = resolveAccessorialsForState(fallbackEstado, destinoRaw, customAccessorialsText);
+  const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
+
+  return {
+    kind: 'quote',
+    calculo: {
+      estado: estadoResuelto,
+      ciudad: ciudadResuelta && mercadoResuelto && !ciudadResuelta.includes(mercadoResuelto) ? `${ciudadResuelta} ${mercadoResuelto}` : ciudadResuelta,
+      millasIda,
+      fuenteMillas: 'usuario',
+      piso: ft.floor,
+      floorSource: ft.floorSource,
+      objetivo: ft.target,
+      targetSource: ft.targetSource,
+      dobleSupuesto: false,
+      equipmentLabel,
+      tarifaPromedioEstado: (millasIda > 200 && tarifaObjetivaPropia != null && tarifaObjetivaPropia > 0) ? tarifaObjetivaPropia : null,
+      referencias,
+      referenciasEstadoNombre: refState.cercano ? nombreEstado(refState.estado) : null,
+      tarifaOfrecida,
+      segundaLectura: null,
+      precioIncluyeRegreso: tramoCortoAplicado ? closestPrecioIncluyeRegreso : false,
+      accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
+      perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+      tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+      tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
+      tramoCortoThreshold: null,
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// COTIZACIÓN GENÉRICA (sin tabla) — cualquier equipo que NO sea drayage. La
+// tabla de 259 rutas es solo de drayage; para dry_van/reefer/flatbed/
+// step_deck/power_only siempre se calcula por RPM del equipo × millas de ida.
+// Mismas reglas de piso (dato del usuario o ninguno) y tope de sanidad.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type GenericQuoteOutcome =
+  | { kind: 'ask_miles' }
+  | { kind: 'fuera_de_rango' }
+  | { kind: 'quote'; calculo: CalculatedQuote }
+  | { kind: 'national_rpm_only'; rpm: number; equipmentLabel: string; estadoBusqueda: string };
+
+export function resolveGenericQuote(params: {
+  origenRaw?: unknown;
+  destinoRaw?: unknown;
+  accessorialTriggers?: unknown;
+  equipment: Equipment;
+  millasIdaDeclaradas: unknown;
+  pagoCamionRpm: number | null;
+  tarifaOfrecida: number | null;
+  // Fase 6 — costo propio por milla (CostConfig.costo_por_milla).
+  costoPorMillaPropio?: number | null;
+  // Semáforo — tarifa objetivo del usuario (CostConfig.tarifa_objetivo).
+  tarifaObjetivaPropia?: number | null;
+  tarifaBreakEvenPropia?: number | null;
+  // Datos de mercado por estado extraídos por IA (Admin panel)
+  stateMarketData?: any[];
+  customAccessorialsText?: string | null;
+}): GenericQuoteOutcome {
+  const { origenRaw, destinoRaw, accessorialTriggers, equipment, millasIdaDeclaradas, pagoCamionRpm, tarifaOfrecida, costoPorMillaPropio, tarifaObjetivaPropia, tarifaBreakEvenPropia, stateMarketData = [], customAccessorialsText } = params;
+
+  const millasIda = typeof millasIdaDeclaradas === 'number' && isFinite(millasIdaDeclaradas) && millasIdaDeclaradas > 0
+    ? millasIdaDeclaradas
+    : null;
+
+  const fromPrompt = typeof origenRaw === 'string' ? resolveLocation(origenRaw) : { status: 'no_data' as const };
+  const origenCiudadPura = fromPrompt.status === 'ok' ? fromPrompt.ciudad : null;
+  const destPrompt = typeof destinoRaw === 'string' ? resolveLocation(destinoRaw) : { status: 'no_data' as const };
+  
+  // Determinamos el estado real (FL o TX u otros) a partir del origen o destino
+  let estadoConsultado: Estado | null = null;
+  let estadoDestinoStr: string | null = null;
+  let estadoOrigenStr: string | null = null;
+  
+  if (fromPrompt.status === 'ok') {
+    if (fromPrompt.estado === 'FL' || fromPrompt.estado === 'TX') estadoConsultado = fromPrompt.estado;
+    estadoOrigenStr = fromPrompt.estado;
+  }
+  if (destPrompt.status === 'ok') {
+    if (!estadoConsultado && (destPrompt.estado === 'FL' || destPrompt.estado === 'TX')) estadoConsultado = destPrompt.estado;
+    estadoDestinoStr = destPrompt.estado;
+  }
+
+  const STATE_NAMES: Record<string, string> = {
+    AL: 'Alabama', AK: 'Alaska', AZ: 'Arizona', AR: 'Arkansas', CA: 'California',
+    CO: 'Colorado', CT: 'Connecticut', DE: 'Delaware', FL: 'Florida', GA: 'Georgia',
+    HI: 'Hawaii', ID: 'Idaho', IL: 'Illinois', IN: 'Indiana', IA: 'Iowa',
+    KS: 'Kansas', KY: 'Kentucky', LA: 'Louisiana', ME: 'Maine', MD: 'Maryland',
+    MA: 'Massachusetts', MI: 'Michigan', MN: 'Minnesota', MS: 'Mississippi', MO: 'Missouri',
+    MT: 'Montana', NE: 'Nebraska', NV: 'Nevada', NH: 'New Hampshire', NJ: 'New Jersey',
+    NM: 'New Mexico', NY: 'New York', NC: 'North Carolina', ND: 'North Dakota', OH: 'Ohio',
+    OK: 'Oklahoma', OR: 'Oregon', PA: 'Pennsylvania', RI: 'Rhode Island', SC: 'South Carolina',
+    SD: 'South Dakota', TN: 'Tennessee', TX: 'Texas', UT: 'Utah', VT: 'Vermont',
+    VA: 'Virginia', WA: 'Washington', WV: 'West Virginia', WI: 'Wisconsin', WY: 'Wyoming',
+    DC: 'District of Columbia'
+  };
+
+  const DEFAULT_STATE_RATES: Record<string, Partial<Record<string, number>>> = {
+    FL: { dry_van: 2.87, reefer: 3.12, flatbed: 3.89 },
+    OK: { dry_van: 2.82, reefer: 2.82, flatbed: 2.82 },
+    TX: { dry_van: 2.82, reefer: 2.82, flatbed: 2.82 },
+    GA: { dry_van: 2.87, reefer: 3.20, flatbed: 3.12 },
+    NC: { dry_van: 2.75, reefer: 3.10, flatbed: 3.00 },
+    SC: { dry_van: 2.78, reefer: 3.12, flatbed: 3.02 },
+    TN: { dry_van: 2.80, reefer: 3.15, flatbed: 3.08 },
+    AL: { dry_van: 2.76, reefer: 3.10, flatbed: 3.05 },
+    US: { dry_van: 3.07, reefer: 3.66, flatbed: 3.65 },
+  };
+
+  // Detección complementaria de estados en texto si no vinieron en prompt resolution
+  if (!estadoOrigenStr && typeof origenRaw === 'string') {
+    const rawOrig = origenRaw.toLowerCase();
+    for (const [code, name] of Object.entries(STATE_NAMES)) {
+      if (rawOrig.includes(name.toLowerCase())) {
+        estadoOrigenStr = code;
+        break;
+      }
+    }
+    if (!estadoOrigenStr) {
+      const match = origenRaw.match(/\b([A-Z]{2})\b/i);
+      if (match) estadoOrigenStr = match[1].toUpperCase();
+    }
+  }
+
+  if (!estadoDestinoStr && typeof destinoRaw === 'string') {
+    const rawDest = destinoRaw.toLowerCase();
+    for (const [code, name] of Object.entries(STATE_NAMES)) {
+      if (rawDest.includes(name.toLowerCase())) {
+        estadoDestinoStr = code;
+        break;
+      }
+    }
+    if (!estadoDestinoStr) {
+      const match = destinoRaw.match(/\b([A-Z]{2})\b/i);
+      if (match) estadoDestinoStr = match[1].toUpperCase();
+    }
+  }
+
+  // REGLA: Si la ruta es entre dos estados diferentes (interestatal), toma la tarifa nacional (US)
+  const isInterstate = Boolean(estadoOrigenStr && estadoDestinoStr && estadoOrigenStr !== estadoDestinoStr);
+  let estadoBusqueda = isInterstate ? 'US' : (estadoDestinoStr || estadoOrigenStr || 'US');
+
+  let rpmBase = equipment.rpm_target;
+  let notaEstado = isInterstate ? ' (Promedio Nacional US)' : '';
+
+  let hasSpecificStateMatch = false;
+  if (estadoBusqueda && stateMarketData.length > 0) {
+    const dataEstado = stateMarketData.find((s: any) => 
+      s.state_code === estadoBusqueda || 
+      (STATE_NAMES[estadoBusqueda] && s.state_code.toLowerCase() === STATE_NAMES[estadoBusqueda].toLowerCase())
+    );
+    if (dataEstado && dataEstado[equipment.id]) {
+      rpmBase = dataEstado[equipment.id];
+      notaEstado = isInterstate ? ' (Promedio Nacional US)' : ` (Referencia estimada de ${estadoBusqueda})`;
+      hasSpecificStateMatch = true;
+    }
+  }
+
+  // Fallback con tarifas por estado extraídas del reporte DAT Trendlines subido por el admin:
+  if (!hasSpecificStateMatch && estadoBusqueda && DEFAULT_STATE_RATES[estadoBusqueda]?.[equipment.id]) {
+    rpmBase = DEFAULT_STATE_RATES[estadoBusqueda]![equipment.id]!;
+    notaEstado = isInterstate ? ' (Promedio Nacional US)' : ` (Referencia estimada de ${estadoBusqueda})`;
+    hasSpecificStateMatch = true;
+  }
+
+  // Intercepción: Si el usuario NO dio millas (o el LLM extrajo 0 por error), devolvemos la tarifa de referencia del estado o nacional (RPM base).
+  // Ya no pedimos las millas obligatoriamente para cotizaciones genéricas si no se pudieron calcular.
+  if (millasIda == null || millasIda === 0) {
+    return { kind: 'national_rpm_only', rpm: rpmBase, equipmentLabel: equipment.label, estadoBusqueda };
+  }
+  if (!dentroDelRangoDeSanidad(millasIda)) return { kind: 'fuera_de_rango' };
+
+  // Si millasIda <= 200: tomar las tarifas fijas de los contenedores (misma lógica de FL, TX o vecinos)
+  // Por defecto toma el contenedor 20 (no el 40)
+  let tableMatchFlat: { piso: number | null; objetivo: number; millasIda: number; precioIncluyeRegreso: boolean } | null = null;
+  if (millasIda != null && millasIda <= 200) {
+    const estadoDirecto = (destPrompt.status === 'ok' ? destPrompt.estado : null) || (fromPrompt.status === 'ok' ? fromPrompt.estado : null);
+    const ciudadDirecta = (destPrompt.status === 'ok' ? destPrompt.ciudad : null) || (fromPrompt.status === 'ok' ? fromPrompt.ciudad : null);
+
+    if (estadoDirecto && (estadoDirecto === 'FL' || estadoDirecto === 'TX') && ciudadDirecta) {
+      const match = buscarEnTabla(estadoDirecto as Estado, ciudadDirecta, '20');
+      if (match) {
+        tableMatchFlat = { piso: match.piso, objetivo: match.objetivo, millasIda: match.millasIda, precioIncluyeRegreso: match.precioIncluyeRegreso };
+      }
+    }
+
+    if (!tableMatchFlat) {
+      const refState = resolveReferenceState(destinoRaw || origenRaw);
+      const isNeighborFallback = !estadoDirecto && refState.cercano;
+      const fallbackEstado = (estadoDirecto === 'FL' || estadoDirecto === 'TX') ? estadoDirecto : (refState.cercano ? refState.estado : null);
+      if (fallbackEstado) {
+        const closest = findClosestRouteByMiles(fallbackEstado as Estado, '20', millasIda, isNeighborFallback);
+        if (closest) {
+          tableMatchFlat = {
+            piso: closest.precio.piso_tabla,
+            objetivo: closest.precio.objetivo,
+            millasIda: closest.route.millas_ida,
+            precioIncluyeRegreso: closest.route.semantica_millas.precio_incluye_regreso,
+          };
+        }
+      }
+    }
+  }
+
+  let ft: FloorTargetResult;
+  let tramoCorto: ReturnType<typeof resolveShortHaulTier> = null;
+
+  if (tableMatchFlat) {
+    ft = computeFloorTarget({
+      tablaPiso: tableMatchFlat.piso,
+      tablaObjetivo: tableMatchFlat.objetivo,
+      targetEsDerivado: false,
+      millasIda: tableMatchFlat.millasIda || millasIda,
+      rpmBase: null,
+      pagoCamionRpm: null,
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+    });
+  } else {
+    // Fase 4 — tramos cortos (v3 §7, Decisión 4)
+    tramoCorto = resolveShortHaulTier(millasIda, equipment.id);
+    ft = computeFloorTarget({
+      tablaPiso: null,
+      tablaObjetivo: null,
+      targetEsDerivado: false,
+      millasIda,
+      rpmBase,
+      pagoCamionRpm,
+      // Fallback: si no declaró pago_camion_rpm, usar costo_por_milla
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+      tramoCorto,
+    });
+  }
+
+  // Fase 4 — segunda lectura
+  const segundaLectura = ft.targetSource === 'calculo' ? computeSegundaLectura(ft.target, millasIda) : null;
+
+  const accesorialesCalc = resolveAccessorialsForState(estadoConsultado, destinoRaw, customAccessorialsText);
+  const itemsCalc = filterAccessorialsByTriggers(accesorialesCalc.items, accessorialTriggers, origenCiudadPura);
+
+  return {
+    kind: 'quote',
+    calculo: {
+      estado: estadoConsultado,
+      ciudad: destPrompt.status === 'ok' ? destPrompt.ciudad : (fromPrompt.status === 'ok' ? fromPrompt.ciudad : null),
+      millasIda: tableMatchFlat ? tableMatchFlat.millasIda : millasIda,
+      fuenteMillas: tableMatchFlat ? 'tabla' : 'usuario',
+      piso: ft.floor,
+      floorSource: ft.floorSource,
+      objetivo: ft.target,
+      targetSource: ft.targetSource,
+      dobleSupuesto: false,
+      equipmentLabel: equipment.label + notaEstado,
+      tarifaPromedioEstado: rpmBase,
+      referencias: [],
+      referenciasEstadoNombre: null,
+      tarifaOfrecida,
+      segundaLectura,
+      precioIncluyeRegreso: tableMatchFlat ? tableMatchFlat.precioIncluyeRegreso : false,
+      accesoriales: itemsCalc.length > 0 ? { ...accesorialesCalc, items: itemsCalc } : null,
+      perfilMargen: resolveProfileMarginVerdict({ tarifaOfrecida, millasIda, pagoCamionRpm, costoPorMillaPropio: costoPorMillaPropio ?? null }),
+      costoPorMillaPropio: costoPorMillaPropio ?? null,
+      tarifaObjetivaPropia: tarifaObjetivaPropia ?? null,
+      tarifaBreakEvenPropia: tarifaBreakEvenPropia ?? null,
+      tramoCortoThreshold: tableMatchFlat ? null : (tramoCorto ? tramoCorto.threshold : null),
+    },
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ARMADO DE RESPUESTAS — puro: recibe datos, devuelve texto. `locale` con
+// default 'es' en todos (mismo motivo que computeVerdict, arriba): los ~250
+// call sites preexistentes de la suite de reglas-v3-multiestado no pasan
+// locale y deben seguir devolviendo exactamente el mismo texto en español;
+// entry.ts pasa el locale resuelto de la request en cada llamada real.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function buildAskMilesMarkdown(ciudadConocida: string | null, locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].askMiles;
+  const cityPart = ciudadConocida ? ` (${ciudadConocida})` : '';
+  return [render(m.line1, cityPart), m.line2].join('\n');
+}
+
+export function buildRateCheckMarkdown(q: CalculatedQuote, locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].rateCheck;
+  const rutaLabel = q.ciudad
+    ? `${q.ciudad}${q.estado ? `, ${q.estado}` : ''}`
+    : m.fallbackRuta;
+  const millasTag = `~${q.millasIda}${m.milesIdaSuffix}${q.fuenteMillas === 'usuario' ? m.userDataTag : ''}`;
+  const equipLabel = q.equipmentLabel;
+
+  // ── SEMÁFORO ──────────────────────────────────────────────────────────────
+  // Si el usuario tiene CostConfig configurado, mostramos tres zonas de precio
+  // (ROJO / AMARILLO / VERDE) calculadas desde su propio CPM y tarifa objetivo.
+  // Si no tiene datos propios, caemos al formato clásico de piso/objetivo.
+  // ──────────────────────────────────────────────────────────────────────────
+  const cpm = q.costoPorMillaPropio;    // ej: 1.75 — límite inferior (ROJO)
+  let effectiveTarget = q.tarifaObjetivaPropia;   // ej: 3.00 — límite superior (VERDE)
+  const be = q.tarifaBreakEvenPropia;
+
+  // Si la tarifa objetivo es 0 o no definida, pero hay break-even válido, usar break-even como meta verde
+  const isUsingBreakEven = (effectiveTarget == null || effectiveTarget <= 0) && be != null && be > 0;
+  if (isUsingBreakEven) {
+    effectiveTarget = be;
+  }
+
+  if (cpm != null && effectiveTarget != null && cpm > 0 && effectiveTarget > 0) {
+    // Límite superior del semáforo: el mayor entre CPM y tarifa objetivo / break-even
+    const limSuperior = Math.max(cpm, effectiveTarget);
+    // Totales en dólares para esta ruta
+    const pisoCpm = Math.round(cpm * q.millasIda);
+    const totalObj = Math.round(limSuperior * q.millasIda);
+
+    const cpmFmt = `$${cpm.toFixed(2)}/mi`;
+    const tObjFmt = `$${effectiveTarget.toFixed(2)}/mi`;
+    const targetDescriptor = isUsingBreakEven ? (locale === 'en' ? 'your break-even' : 'tu break-even') : (locale === 'en' ? 'your target' : 'tu objetivo');
+
+    const lineas: string[] = [];
+
+    // Encabezado
+    lineas.push(`📍 **${rutaLabel}** · ${millasTag} · ${equipLabel}`);
+    lineas.push(`Te muestro tres escenarios para que decidas si tomar, negociar o declinar este flete según tu CPM.`);
+    lineas.push('');
+
+    // 🔴 ROJO
+    lineas.push(`🔴 **ROJO — Declinar o negociar**  < ${cpmFmt} (< tu CPM)`);
+    lineas.push(`● La tarifa está por debajo de tu costo operativo por milla.`);
+    lineas.push(`● Perderías dinero en este flete.`);
+    lineas.push(`● Considera declinar o pedir una tarifa significativamente más alta.`);
+    lineas.push('');
+
+    // 🟡 AMARILLO
+    lineas.push(`🟡 **AMARILLO — Negociar**  ${cpmFmt} – ${tObjFmt}  ≈ tu CPM`);
+    lineas.push(`● Esta tarifa está alrededor de tu break-even.`);
+    lineas.push(`● Cubre los costos pero deja poco margen de ganancia.`);
+    lineas.push(`● Intenta negociar más alto, especialmente si el regreso está incierto.`);
+    lineas.push('');
+
+    // 🟢 VERDE
+    lineas.push(`🟢 **VERDE — Aceptar**  ${tObjFmt}+ (≥ ${targetDescriptor})`);
+    lineas.push(`● Tarifa rentable.`);
+    lineas.push(`● Cubre tus costos y te deja margen de ganancia.`);
+    lineas.push(`● Buena opción, especialmente si conseguís buen regreso.`);
+    lineas.push('');
+
+    // Detalles de la ruta
+    lineas.push(`---`);
+    lineas.push(`📌 **Detalles de la ruta**`);
+    lineas.push(`- De: ${rutaLabel} · Distancia: ${millasTag}`);
+    const rpmMercado = q.precioIncluyeRegreso
+      ? (q.objetivo / (q.millasIda * 2))
+      : (q.objetivo / q.millasIda);
+    const rpmMercadoFmt = `$${rpmMercado.toFixed(2)}/mi`;
+    const rateDetalleFmt = (q.targetSource === 'tabla' || q.fuenteMillas === 'tabla') ? rpmMercadoFmt : tObjFmt;
+    lineas.push(`- Objetivo de mercado: ${formatUSD(q.objetivo)} total (${rateDetalleFmt})`);
+
+    // Accesoriales
+    let totalAccesoriales = 0;
+    if (q.accesoriales && q.accesoriales.items.length > 0) {
+      const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
+      lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
+      for (const a of q.accesoriales.items) {
+        const customFlag = a.isCustom ? " *(Personalizado)*" : "";
+        lineas.push(render(m.accesorialItemLine, a.concepto + customFlag, a.monto));
+        const match = a.monto.match(/\$(\d+(\.\d+)?)/);
+        if (match) {
+          totalAccesoriales += parseFloat(match[1]);
+        }
+      }
+      const trajoFuelSurcharge = q.accesoriales.items.some(a => normalizeText(a.concepto).includes('fuel surcharge'));
+      if (trajoFuelSurcharge && q.accesoriales.estado === 'TX' && !q.accesoriales.heredado && q.estado === 'TX') {
+        lineas.push(m.txFuelSurchargeWarning);
+      }
+      
+      if (totalAccesoriales > 0) {
+        lineas.push(`\n**Total sugerido (Objetivo + Accesoriales): ${formatUSD(q.objetivo + totalAccesoriales)}**`);
+      }
+    }
+
+    // Segunda lectura (regreso vacío)
+    if (q.segundaLectura) {
+      lineas.push('');
+      lineas.push(render(m.segundaLecturaLine, q.segundaLectura.rpmRedondo.toFixed(2), q.segundaLectura.millasRedondo));
+    }
+
+    // Veredicto si hay tarifa ofrecida
+    if (q.tarifaOfrecida != null) {
+      const verdict = computeVerdict(q.tarifaOfrecida, q.piso, q.objetivo, locale);
+      lineas.push(render(m.ofertaVerdictLine, verdict.emoji, formatUSD(q.tarifaOfrecida), verdict.label));
+    }
+
+    // Recomendación final
+    lineas.push('');
+    lineas.push(`---`);
+    lineas.push(`✅ **Recomendación TruckyAI**`);
+    lineas.push(`Apunta a mínimo **${tObjFmt} (${formatUSD(totalObj)} total)** o más para que este flete sea rentable.`);
+    lineas.push(`Si te ofrecen entre ${cpmFmt} y ${tObjFmt}, **negocia** y confirma si incluye el regreso.`);
+
+    lineas.push(...buildMarginVerdictMarkdown(q.perfilMargen, locale));
+    return lineas.join('\n');
+  }
+
+  // ── FORMATO CLÁSICO (sin CostConfig configurado) ──────────────────────────
+  const targetLine = q.targetSource === 'tabla'
+    ? render(m.targetTabla, formatUSD(q.objetivo))
+    : q.targetSource === 'derivado'
+      ? render(m.targetDerivadoPrefix, formatUSD(q.objetivo)) + (q.dobleSupuesto ? m.targetDerivadoDobleSupuesto : m.targetDerivadoSimple)
+      : q.targetSource === 'tramo_corto'
+        ? render(m.targetTramoCorto, q.tramoCortoThreshold ?? 100, formatUSD(q.objetivo))
+        : render(m.targetCalculo, formatUSD(q.objetivo));
+
+  const floorLine = q.floorSource === 'tabla'
+    ? render(m.floorTabla, formatUSD(q.piso as number))
+    : q.floorSource === 'dato_usuario'
+      ? render(m.floorDatoUsuario, formatUSD(q.piso as number))
+      : q.floorSource === 'tramo_corto'
+        ? render(m.floorTramoCorto, q.tramoCortoThreshold ?? 100, formatUSD(q.piso as number))
+        : m.floorSinDato;
+
+  const lineas = [
+    render(m.headerLine, rutaLabel, millasTag, q.equipmentLabel),
+    targetLine,
+    floorLine,
+  ];
+
+  if (q.segundaLectura) {
+    lineas.push(render(m.segundaLecturaLine, q.segundaLectura.rpmRedondo.toFixed(2), q.segundaLectura.millasRedondo));
+  }
+
+  if (q.referencias.length > 0) {
+    const refLabel = q.referenciasEstadoNombre
+      ? render(m.referenciasEstadoLabel, q.referenciasEstadoNombre)
+      : m.referenciasGeneralLabel;
+    lineas.push(refLabel);
+    for (const r of q.referencias) {
+      lineas.push(render(m.referenciaItemLine, r.ciudad, r.millas_ida, formatUSD(r.objetivo)));
+    }
+  }
+
+  let totalAccesorialesClassic = 0;
+  if (q.accesoriales && q.accesoriales.items.length > 0) {
+    const estadoAcc = q.accesoriales.estado ? nombreEstado(q.accesoriales.estado) : m.estadoGenericoFallback;
+    lineas.push(q.accesoriales.heredado ? render(m.accesorialesHeredados, estadoAcc) : render(m.accesorialesPropios, estadoAcc));
+    for (const a of q.accesoriales.items) {
+      const customFlag = a.isCustom ? " *(Personalizado)*" : "";
+      lineas.push(render(m.accesorialItemLine, a.concepto + customFlag, a.monto));
+      const match = a.monto.match(/\$?\s*(\d+(\.\d+)?)/);
+      if (match) {
+        totalAccesorialesClassic += parseFloat(match[1]);
+      }
+    }
+    const trajoFuelSurcharge = q.accesoriales.items.some(a => normalizeText(a.concepto).includes('fuel surcharge'));
+    if (trajoFuelSurcharge && q.accesoriales.estado === 'TX' && !q.accesoriales.heredado && q.estado === 'TX') {
+      lineas.push(m.txFuelSurchargeWarning);
+    }
+    
+    if (totalAccesorialesClassic > 0) {
+      lineas.push(`\n**Total sugerido (Objetivo + Accesoriales): ${formatUSD(q.objetivo + totalAccesorialesClassic)}**`);
+    }
+  }
+
+  if (q.tarifaOfrecida != null) {
+    const verdict = computeVerdict(q.tarifaOfrecida, q.piso, q.objetivo, locale);
+    lineas.push(render(m.ofertaVerdictLine, verdict.emoji, formatUSD(q.tarifaOfrecida), verdict.label));
+  }
+
+  lineas.push(...buildMarginVerdictMarkdown(q.perfilMargen, locale));
+  return lineas.join('\n');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// TOTAL REDONDO DE DRAYAGE, SOLO A PEDIDO — reglas-v3-multiestado Fase 4,
+// Decisión 2-A / criterio 7. Por defecto la doble lectura NUNCA aparece en
+// drayage; esta función solo se invoca desde entry.ts cuando
+// `preguntaPorTotalRedondo` detecta que el dispatcher preguntó explícitamente.
+// No hace un ×2 ciego: usa la semántica real de millas de cada tabla — FL ya
+// incluye el regreso en el CT (no hay nada que sumar); TX es de ida, así que
+// el total redondo es una HIPÓTESIS declarada, no un dato de tabla.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const ROUND_TRIP_QUESTION_TOKENS = [
+  'redondo', 'round trip', 'roundtrip', 'ida y vuelta', 'de vuelta', 'el regreso',
+  'y el regreso', 'la vuelta', 'incluyendo la vuelta', 'contando la vuelta',
+];
+
+/** true si el dispatcher preguntó explícitamente por el total de ida y vuelta. Nunca adivina. */
+export function preguntaPorTotalRedondo(texto: unknown): boolean {
+  const normalizado = normalizeText(texto);
+  if (!normalizado) return false;
+  return matchesAny(normalizado, ROUND_TRIP_QUESTION_TOKENS);
+}
+
+export function buildDrayageRoundTripMarkdown(q: CalculatedQuote, locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].drayageRoundTrip;
+  const millasRedondo = q.millasIda * 2;
+  if (q.precioIncluyeRegreso) {
+    return [
+      render(m.includedLine, formatUSD(q.objetivo)),
+      render(m.includedDistanceLine, millasRedondo),
+    ].join('\n');
+  }
+  const totalRedondo = Math.round(q.objetivo * 2);
+  return [
+    render(m.hypothesisLine, formatUSD(totalRedondo), q.millasIda),
+    render(m.estimatedDistanceLine, millasRedondo),
+  ].join('\n');
+}
+
+export function buildGeneralMarkdown(respuestaGeneral: unknown, locale: Locale = 'es'): string {
+  if (typeof respuestaGeneral !== 'string' || !respuestaGeneral.trim()) {
+    return safeFallbackContent(locale);
+  }
+  return respuestaGeneral.trim();
+}
+
+// Cuando no hay ciudad resuelta ni millas: pedir aclaración en vez de inventar.
+export function buildMissingDataMarkdown(locale: Locale = 'es'): string {
+  const m = MESSAGES[locale].missingData;
+  return [m.line1, m.line2].join('\n');
+}
+
+// `locale` con default 'es': entry.ts llama a esta función desde su catch-all
+// externo (antes de que el body se termine de parsear), donde todavía no hay
+// un locale resuelto de forma segura — ver Design (call sites "pre-locale").
+export function safeFallbackContent(locale: Locale = 'es'): string {
+  return MESSAGES[locale].safeFallback.content;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// VALIDACIÓN Y RECORTE DE ENTRADA
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function capHistory(messages: ChatMessage[], n: number = HISTORY_CAP): ChatMessage[] {
+  return messages.slice(-n);
+}
+
+export function isValidMessages(messages: unknown): messages is ChatMessage[] {
+  return Array.isArray(messages) && messages.length > 0 && messages.every(m =>
+    m && typeof m === 'object' && typeof m.role === 'string' && typeof m.content === 'string'
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SCHEMA DE EXTRACCIÓN — reglas-v3-multiestado, Fase 0 (modelo y frontera).
+//
+// Vive acá (no en entry.ts) para poder cubrirlo con `deno test`: es un objeto
+// puro, sin I/O, y entry.ts no se puede importar en una prueba sin levantar el
+// servidor (Deno.serve corre en el nivel superior del módulo).
+// ─────────────────────────────────────────────────────────────────────────────
+
+export const EXTRACTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    intent: { type: 'string', enum: ['rate_check', 'general', 'off_topic', 'ask_miles', 'draft_email'] },
+    origen: {
+      type: 'string',
+      description: "Ciudad y estado de origen (ej. 'Miami, FL')"
+    },
+    destino: {
+      type: 'string',
+      description: "Ciudad y estado de destino (ej. 'Atlanta, GA')"
+    },
+    millas_ida: { type: 'number' },
+    es_redondo: { type: 'boolean' },
+    equipo: {
+      type: 'string',
+      enum: ['dry_van', 'reefer', 'flatbed', 'step_deck', 'drayage', 'power_only', 'unknown'],
+    },
+    tamano: {
+      type: 'string',
+      enum: ['20', '40', '45', '20_heavy', 'unknown'],
+    },
+    tarifa_ofrecida: { type: 'number', description: "La tarifa total ofrecida por el broker. Si el usuario hace una pregunta de seguimiento (ej. 'cómo quedaría con pre-pull' o 'con esta tarjeta'), DEBES heredar la tarifa ofrecida del historial si existía. IMPORTANTE: Si el usuario usa la palabra 'semáforo' (ej. 'muéstrame el semáforo con hazmat'), DEBES devolver null para descartar la tarifa, ya que quiere ver los 3 escenarios generales." },
+    pago_camion: { type: 'number', description: "El pago por milla al camión (RPM). Si el usuario hace una pregunta de seguimiento sobre la misma cotización, hereda este valor del historial. null si pertenece a un contexto nuevo." },
+    accessorial_triggers: {
+      type: 'array',
+      items: { type: 'string' },
+    },
+    accessorial_query_mode: {
+      type: 'string',
+      enum: ['price_only', 'include_in_rate', 'none'],
+      description: "Determina el modo de consulta de accesorial. 'price_only' ÚNICAMENTE cuando el usuario pregunta de forma puntual y exclusiva el monto o precio de ese cargo accesorial (ej: '¿cuánto vale el pre-pull?', 'cuál es el valor de detention', 'how much is detention?'). Si el usuario hace preguntas más amplias, conceptuales o compuestas (ej: '¿qué es detention y cuánto cobro?', 'explícame el pre-pull', o si hace más de una pregunta), usa 'none' y responde a todo en respuesta_general con intent='general'. 'include_in_rate' cuando el usuario quiere saber el total de una ruta CON ese cargo incluido. 'none' si no se menciona ningún accesorial o es consulta conceptual."
+    },
+    respuesta_general: { type: 'string', description: "Tu respuesta general. Si el intent es draft_email, no redactes el correo aquí, simplemente pon un mensaje genérico de 'Redactando correo...' porque se hará en un segundo paso." },
+    broker_name: { type: 'string', description: "El nombre del broker mencionado en el chat (ej. 'CH Robinson', 'TQL'). null si no se menciona." },
+    driver_name: { type: 'string', description: "El nombre del conductor mencionado en el chat. null si no se menciona." }
+  },
+};
+
+export type { Estado, Tamano, RouteRecord };
