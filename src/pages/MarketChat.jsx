@@ -304,6 +304,10 @@ export default function MarketChat() {
   const [history, setHistory] = useState([]);
   const [translatingHistory, setTranslatingHistory] = useState(false);
   const prevLocaleRef = useRef(locale);
+  // Al abrir una conversación (Historial o al entrar) se traduce al idioma activo.
+  // Antes solo se traducía al cambiar el idioma: otra conversación del Historial
+  // se abría en el idioma en que se guardó.
+  const pendingTranslateRef = useRef(false);
   const sessionDbIdRef = useRef(sessionDbId);
   const sessionIdRef = useRef(sessionId);
   const isSavingRef = useRef(false);
@@ -371,6 +375,7 @@ export default function MarketChat() {
         try {
           const parsed = JSON.parse(cachedMsgs);
           if (Array.isArray(parsed) && parsed.length > 0) {
+            pendingTranslateRef.current = true;
             setMessages(parsed);
             loadedFromCache = true;
           }
@@ -409,6 +414,7 @@ export default function MarketChat() {
               }
             } catch (_) {}
           }
+          pendingTranslateRef.current = true;
           setMessages(msgs);
           return;
         } else if (!loadedFromCache) {
@@ -555,6 +561,17 @@ export default function MarketChat() {
     const versions = [m.content, ...Object.values(m.translations || {})];
     return versions.find(hasFence) || m.content;
   };
+  // Idioma aproximado de un mensaje (sin contar el bloque del correo), para no
+  // mandar a traducir lo que ya está en el idioma activo.
+  const detectLang = (text) => {
+    const t = ` ${String(text || '').replace(FENCE_RE, ' ').toLowerCase()} `;
+    const es = (t.match(/[áéíóúñ¿¡]| (el|la|los|las|de|que|para|con|una|por|tarifa|millas|carga) /g) || []).length;
+    const en = (t.match(/ (the|and|is|are|to|of|for|with|rate|miles|load|you|your) /g) || []).length;
+    if (es >= 2 && es > en * 1.5) return 'es';
+    if (en >= 2 && en > es * 1.5) return 'en';
+    return null;
+  };
+
   // Una traducción en caché sirve solo si no perdió el bloque del correo.
   const cachedOk = (m, lang) => {
     const cached = m.translations && m.translations[lang];
@@ -581,6 +598,8 @@ export default function MarketChat() {
       if (cachedOk(m, targetLang)) return;
       const source = sourceFor(m);
       if (!source || !source.trim()) return;
+      // Ya está en el idioma activo: no se traduce
+      if (detectLang(source) === targetLang && m.content === source) return;
       const parts = splitFenced(source);
       const jobIdx = jobs.length;
       jobs.push({ realIdx, source, parts });
@@ -694,6 +713,15 @@ export default function MarketChat() {
       }
     }
   }, [locale]);
+
+  // Conversación recién abierta → llevarla al idioma activo (usa la caché de
+  // traducciones, así que solo se traduce lo que falte; los correos no se tocan).
+  useEffect(() => {
+    if (pendingTranslateRef.current && messages.length > 0 && !translatingHistory) {
+      pendingTranslateRef.current = false;
+      translateHistory(locale);
+    }
+  }, [messages, translatingHistory]);
 
   // Límite de mensajes por perfil según el plan activo
   const userMessagesCount = useMemo(() => {
@@ -892,6 +920,7 @@ export default function MarketChat() {
     sessionIdRef.current = item.session_id;
     setSessionDbId(item.id);
     sessionDbIdRef.current = item.id;
+    pendingTranslateRef.current = true;
     setMessages(item.messages || []);
     setShowHistory(false);
   };
