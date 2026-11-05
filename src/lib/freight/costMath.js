@@ -77,12 +77,15 @@ export const CAMPO_LABEL = {
 export function deriveCosts(i) {
   const fuel = fuelCostPerMile(i);
   const fijo = fixedCostPerMile(i);
-  const share = num(i.pago_conductor_porcentaje) / 100; // % de la tarifa, no un costo
+  const pct = num(i.pago_conductor_porcentaje);
+  // El % del conductor es parte de la tarifa: debe estar en [0, 100).
+  // Con 100% o más no queda nada para cubrir costos, y un negativo baja el
+  // break-even por debajo del costo — ambos se marcan como inválidos en vez
+  // de "arreglar" el divisor en silencio (antes se usaba divisor 1).
+  const pctValido = pct >= 0 && pct < 100;
+  const share = pct / 100; // % de la tarifa, no un costo
   const costoPorMilla = fuel + fijo;
-  
-  // Evitar división por cero o negativo si el share es >= 100%
-  const divisor = (1 - share) > 0 ? (1 - share) : 1;
-  const tarifaBreakEven = costoPorMilla / divisor;
+  const tarifaBreakEven = pctValido ? costoPorMilla / (1 - share) : NaN;
 
   const faltante = !(num(i.diesel_precio) > 0)
     ? 'diesel_precio'
@@ -90,7 +93,9 @@ export function deriveCosts(i) {
       ? 'mpg'
       : !(num(i.millas_semana_promedio) > 0)
         ? 'millas_semana_promedio'
-        : null;
+        : !pctValido
+          ? 'pago_conductor_porcentaje'
+          : null;
 
   return { costoPorMilla, tarifaBreakEven, valido: faltante === null, faltante };
 }

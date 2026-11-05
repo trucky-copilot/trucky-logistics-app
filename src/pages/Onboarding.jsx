@@ -21,6 +21,7 @@ const DEFAULT_COSTS = { diesel: 5.40, mpg: 6.5, conductor: 25 };
 export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [setupError, setSetupError] = useState(false);
 
   // Paso 1
   const [rol, setRol] = useState(null);
@@ -45,38 +46,34 @@ export default function Onboarding({ onComplete }) {
     ...FIXED_COST_DEFAULTS,
   });
   const breakEvenDisplay = costos.valido ? `$${costos.tarifaBreakEven.toFixed(2)}` : 'sin calcular';
+  // Un % fuera de [0, 100) no se deja avanzar: se guardaría un costo sin sentido.
+  const pctConductor = Number(String(conductor ?? '').replace(',', '.'));
+  const pctInvalido = !(pctConductor >= 0 && pctConductor < 100);
 
   // ── Helpers ──────────────────────────────────────────────────────────────────
 
   const handleComplete = async () => {
     setLoading(true);
+    setSetupError(false);
     const user = await base44.auth.me();
 
-    // 1. Organización
+    // 1-2. Organización + membresía 'owner'
+    // Se crean en el servidor (ensureUserOrganization): el cliente ya no puede
+    // crear Organization ni OrganizationMember directamente, así nadie puede
+    // fabricarse una suscripción de pago ni entrar a una organización ajena.
     let org = null;
-    const existingOrgs = await base44.entities.Organization.filter({ created_by_user: user.email });
-    if (existingOrgs.length > 0) {
-      org = existingOrgs[0];
-    } else {
-      org = await base44.entities.Organization.create({
-        name:                 empresa || user.full_name || user.email,
-        created_by_user:      user.email,
-        workspace_status:     'production',
-        onboarding_completed: true,
-        production_ready:     true,
-        active:               true,
+    try {
+      const res = await base44.functions.invoke('ensureUserOrganization', {
+        company_name: empresa,
+        account_type: rol,
       });
-    }
-
-    // 2. OrganizationMember
-    const existingMembers = await base44.entities.OrganizationMember.filter({ organization_id: org.id, user_email: user.email });
-    if (existingMembers.length === 0) {
-      await base44.entities.OrganizationMember.create({
-        organization_id: org.id,
-        user_email:      user.email,
-        role:            'owner',
-        active:          true,
-      });
+      if (!res?.data?.org_id) throw new Error(res?.data?.error || 'Sin organización');
+      org = { id: res.data.org_id, name: res.data.name };
+    } catch (err) {
+      console.error('[Onboarding] No se pudo crear la organización:', err);
+      setLoading(false);
+      setSetupError(true);
+      return;
     }
 
     // 3. UserProfile
@@ -333,11 +330,16 @@ export default function Onboarding({ onComplete }) {
                     type="number"
                     step="1"
                     min="0"
-                    max="100"
+                    max="99"
                     value={conductor}
                     onChange={e => setConductor(e.target.value)}
                     className="mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
                   />
+                  {pctInvalido && (
+                    <p role="alert" className="mt-1 text-xs text-destructive">
+                      El % de pago al conductor debe estar entre 0 y 99.
+                    </p>
+                  )}
                 </div>
 
                 {/* Break-even en tiempo real */}
@@ -358,7 +360,8 @@ export default function Onboarding({ onComplete }) {
                 </button>
                 <button
                   onClick={() => setStep(4)}
-                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+                  disabled={pctInvalido}
+                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continuar <ChevronRight className="w-4 h-4" />
                 </button>
@@ -411,6 +414,12 @@ export default function Onboarding({ onComplete }) {
                   </span>
                 </div>
               </div>
+
+              {setupError && (
+                <p role="alert" className="text-xs text-destructive">
+                  No pudimos crear tu organización. Revisa tu conexión e inténtalo de nuevo.
+                </p>
+              )}
 
               <div className="flex gap-2 pt-2">
                 <button onClick={() => setStep(3)} className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-all">

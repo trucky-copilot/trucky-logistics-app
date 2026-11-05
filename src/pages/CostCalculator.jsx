@@ -145,7 +145,13 @@ export default function CostCalculator() {
   const saveConfig = async () => {
     if (saving) return;
     if (hasZeroOrNegative || !costos.valido) {
-      alert('Por favor verifica que Precio diésel, MPG y Millas/semana sean números mayores a 0.');
+      alert(costos.faltante === 'pago_conductor_porcentaje'
+        ? (locale === 'en'
+          ? 'Driver pay % must be between 0 and 99.'
+          : 'El % de pago al conductor debe estar entre 0 y 99.')
+        : (locale === 'en'
+          ? 'Please check that Diesel price, MPG and Miles/week are numbers greater than 0.'
+          : 'Por favor verifica que Precio diésel, MPG y Millas/semana sean números mayores a 0.'));
       return;
     }
     setSaving(true);
@@ -369,7 +375,8 @@ export default function CostCalculator() {
               value={config.pago_conductor_porcentaje ?? ''}
               onChange={e => {
                 const val = e.target.value;
-                if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('pago_conductor_porcentaje', val);
+                // Máximo 2 enteros: el % del conductor va de 0 a 99.
+                if (/^[0-9]{0,2}([.,][0-9]*)?$/.test(val)) set('pago_conductor_porcentaje', val);
               }}
               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
             />
@@ -498,7 +505,13 @@ export default function CostCalculator() {
                 diesel_precio: locale === 'en' ? 'Diesel price' : 'Precio del diésel',
                 mpg: 'MPG',
                 millas_semana_promedio: locale === 'en' ? 'Miles per week' : 'Millas por semana',
+                pago_conductor_porcentaje: locale === 'en' ? 'Driver pay %' : '% pago conductor',
               }[costos.faltante] || costos.faltante;
+              if (costos.faltante === 'pago_conductor_porcentaje') {
+                return locale === 'en'
+                  ? `Cannot calculate break-even: "${campo}" must be between 0 and 99.`
+                  : `No se puede calcular el break-even: "${campo}" debe estar entre 0 y 99.`;
+              }
               return locale === 'en'
                 ? `Cannot calculate cost per mile or break-even: "${campo}" must be greater than 0.`
                 : `No se puede calcular el costo por milla ni el break-even: "${campo}" debe ser mayor que 0.`;

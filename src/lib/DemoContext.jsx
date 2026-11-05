@@ -129,12 +129,15 @@ export function DemoProvider({ children }) {
     const isSubscribed = status === 'active' || status === 'trialing';
 
     if (isSubscribed) {
-      if (activeOrg?.plan_type === 'plan_99' || activeOrg?.account_type === 'dispatcher') return 'plan_99';
+      // El plan sale SOLO de lo que se pagó (plan_type, escrito por el webhook
+      // de Stripe). Antes cualquier dispatcher activo recibía plan_99 aunque
+      // hubiera pagado el de $29.
+      if (activeOrg?.plan_type === 'plan_99') return 'plan_99';
       return 'plan_29';
     }
 
     return 'demo';
-  }, [isWhitelisted, activeOrg?.subscription_status, activeOrg?.plan_type, activeOrg?.account_type]);
+  }, [isWhitelisted, activeOrg?.subscription_status, activeOrg?.plan_type]);
 
   const isDemoUser = planType === 'demo';
   const isPlan29 = planType === 'plan_29';
@@ -159,32 +162,14 @@ export function DemoProvider({ children }) {
       return;
     }
 
-    // Consultar estado de trial mediante la función segura de servidor
+    // Consultar el estado del trial en la entidad DemoTrial. Sus reglas de
+    // acceso solo devuelven el registro del propio usuario. (Antes se llamaba
+    // primero a una función 'checkDemoTrialStatus' que no existe: fallaba en
+    // cada carga y siempre caía aquí.)
     const checkTrial = async () => {
       try {
         setLoadingTrial(true);
 
-        let serverStatus = null;
-        try {
-          const res = await base44.functions.invoke('checkDemoTrialStatus');
-          if (res?.data && !res.data.error) {
-            serverStatus = res.data;
-          }
-        } catch (_) {}
-
-        if (!isMounted) return;
-
-        if (serverStatus) {
-          setTrialData({
-            hasTrial: Boolean(serverStatus.has_trial),
-            isExpired: Boolean(serverStatus.is_expired),
-            trialStartedAt: serverStatus.trial_started_at,
-            trialEndsAt: serverStatus.trial_ends_at,
-          });
-          return;
-        }
-
-        // Fallback directo a la entidad DemoTrial
         let trials = [];
         const cleanEmail = userEmail.toLowerCase().trim();
         try {

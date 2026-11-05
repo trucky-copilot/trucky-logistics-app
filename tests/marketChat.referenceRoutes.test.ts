@@ -53,6 +53,14 @@ Deno.test('vecino: Georgia/Carolinas/Alabama resuelven a Florida', () => {
   assertEquals(detectNeighborState('Mobile, Alabama'), 'FL');
 });
 
+Deno.test('vecino: abreviaturas de 2 letras solo cuentan después de coma', () => {
+  assertEquals(detectNeighborState('Shreveport, LA'), 'TX');
+  assertEquals(detectNeighborState('Savannah, GA'), 'FL');
+  assertEquals(detectNeighborState('pickup in LA'), null, 'LA suelto (Los Ángeles) no es Luisiana');
+  assertEquals(detectNeighborState('ok, la carga es para Miami'), null, '"ok, la" no son estados');
+  assertEquals(detectNeighborState('Tulsa, OK 74101'), 'TX');
+});
+
 Deno.test('vecino: Oklahoma/Nuevo México/Luisiana/Arkansas resuelven a Texas', () => {
   assertEquals(detectNeighborState('Tulsa, Oklahoma'), 'TX');
   assertEquals(detectNeighborState('Santa Fe, New Mexico'), 'TX');

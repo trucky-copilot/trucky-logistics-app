@@ -55,13 +55,6 @@
       "description": "Cuándo la usa Trucky: carga entregada: seguimiento a pago, detención o envío del POD.",
       "subject": "[Load ref] - [POD / Detention / Invoice]",
       "body": "Hi [Broker name],  \n  \nFollowing up on [load ref], delivered [date]. [POD attached.] [Detention accrued [X] hrs at [location] on [date] = $[amount] per the rate confirmation.] Please advise on processing.  \n  \nThank you,  \n[Your name]  \n[Company] · MC# [MC]"
-    },
-    {
-      "id": "cotizacion_es",
-      "name": "Cotización - versión en español",
-      "description": "Cuándo la usa Trucky: mismo caso de cotizar tarifa, cuando el broker habla español.",
-      "subject": "[Origen] -> [Entrega] - [Equipo] - Tarifa",
-      "body": "Hola [Broker],  \n  \nGracias por escribirnos. Le compartimos nuestra tarifa:  \n  \nRecogida: [origen / puerto + terminal]  \nEntrega: [dirección de entrega]  \n[Devolución de vacío: [depot] - solo drayage]  \n[Equipo]: [tamaño/tipo] - $[tarifa] All-In  \nIncluye: [LH + FSC + Chasis / LH + FSC]  \nMC#: [MC]  \nDisponibilidad: [Inmediata / fecha]  \n  \nAntes de confirmar, quisiéramos aclarar [operación / tiempos]. Por favor confírmenos para proceder.  \n  \nSaludos cordiales,  \n[Nombre] - [Empresa] · MC# [MC] | DOT# [DOT]  \nTel: [teléfono] · Email: [email]"
     }
   ]
 }

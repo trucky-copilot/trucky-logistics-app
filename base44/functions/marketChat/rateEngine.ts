@@ -591,6 +591,10 @@ export interface TruckPaymentDecision {
   needsAsk: boolean;
   rpm: number | null;
   shouldPersist: boolean;
+  /** De dónde salió `rpm` para esta consulta. */
+  fuente: 'mensaje' | 'perfil' | null;
+  /** Valor guardado en el perfil (si hay), para avisar cuando difiere del mensaje. */
+  guardado: number | null;
 }
 
 function esRpmValido(valor: unknown): valor is number {
@@ -610,20 +614,25 @@ export function resolveTruckPayment(
   profile: TruckPaymentProfile | null | undefined,
   declaradoPorUsuario: unknown,
 ): TruckPaymentDecision {
-  // 1. Si el usuario nos dice su RPM en el chat, TIENE PRIORIDAD y lo guardamos
   const declarado = parseRpm(declaradoPorUsuario);
+  const guardado = profile ? parseRpm(profile.pago_camion_rpm) : null;
+
+  // 1. Si el mensaje trae un valor, se usa para ESTA consulta (tarjeta de
+  //    veredicto vs. semáforo). Solo se guarda si el perfil está vacío:
+  //    un valor ya guardado nunca se sobrescribe desde el chat (se cambia en
+  //    la Calculadora). Así una oferta del broker mal interpretada no queda
+  //    guardada para las siguientes consultas.
   if (declarado != null) {
-    return { needsAsk: false, rpm: declarado, shouldPersist: true };
+    return { needsAsk: false, rpm: declarado, shouldPersist: guardado == null, fuente: 'mensaje', guardado };
   }
 
-  // 2. Si no dijo nada nuevo, usamos lo que esté en la base de datos
-  const guardado = profile ? parseRpm(profile.pago_camion_rpm) : null;
+  // 2. Si no dijo nada nuevo, usamos lo que esté en el perfil
   if (guardado != null) {
-    return { needsAsk: false, rpm: guardado, shouldPersist: false };
+    return { needsAsk: false, rpm: guardado, shouldPersist: false, fuente: 'perfil', guardado };
   }
 
   // 3. Si no tenemos nada, necesitamos preguntar
-  return { needsAsk: true, rpm: null, shouldPersist: false };
+  return { needsAsk: true, rpm: null, shouldPersist: false, fuente: null, guardado: null };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

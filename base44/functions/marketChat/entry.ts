@@ -520,7 +520,9 @@ async function fetchDrivingMiles(
       if (match) {
         const millasCalculadas = Math.round(parseFloat(match[0].replace(/,/g, '')));
         try {
-          await base44.entities.MilesCache.create({ clave: cacheKey, millas: millasCalculadas });
+          // Rol de servicio: el cliente ya no puede escribir en MilesCache (solo admin),
+          // así nadie puede envenenar las millas que usan todos los usuarios.
+          await base44.asServiceRole.entities.MilesCache.create({ clave: cacheKey, millas: millasCalculadas });
         } catch (e) {
           console.log(`[fetchDrivingMiles] Error guardando cache: ${e}`);
         }
@@ -530,7 +532,7 @@ async function fetchDrivingMiles(
 
     const millasCalculadasFallback = Math.round(element.distance.value / 1609);
     try {
-      await base44.entities.MilesCache.create({ clave: cacheKey, millas: millasCalculadasFallback });
+      await base44.asServiceRole.entities.MilesCache.create({ clave: cacheKey, millas: millasCalculadasFallback });
     } catch (e) {
       console.log(`[fetchDrivingMiles] Error guardando cache: ${e}`);
     }
@@ -1314,7 +1316,22 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
     // Ya no se inyecta el origen/destino como comentario HTML, ya que el 
     // frontend lo estaba renderizando visiblemente en algunos casos.
 
-    const responsePayload: any = { content: conFronteraVerificada(content, permitidasRateCheck) };
+    // Medio 7: si la consulta usó un pago al camión del mensaje distinto al
+    // guardado, se dice de dónde salió y que el perfil no cambió. Va después
+    // de la frontera de números porque son datos del usuario, no de la IA.
+    let notaPagoCamion = '';
+    if (
+      calculo && truckPayment.fuente === 'mensaje' && truckPayment.rpm != null &&
+      truckPayment.guardado != null && Math.abs(truckPayment.rpm - truckPayment.guardado) > 0.001
+    ) {
+      const usado = `$${truckPayment.rpm.toFixed(2)}/mi`;
+      const perfil = `$${truckPayment.guardado.toFixed(2)}/mi`;
+      notaPagoCamion = locale === 'en'
+        ? `\n\nℹ️ For this quote I used **${usado}** as truck pay (from your message). Your saved value (**${perfil}**) did not change — update it in the Calculator.`
+        : `\n\nℹ️ Para esta consulta usé **${usado}** como pago al camión (de tu mensaje). Tu valor guardado (**${perfil}**) no cambió — actualízalo en la Calculadora.`;
+    }
+
+    const responsePayload: any = { content: conFronteraVerificada(content, permitidasRateCheck) + notaPagoCamion };
     if (calculo && millasDeadhead > 0) {
       (calculo as any).millasDeadhead = millasDeadhead;
     }

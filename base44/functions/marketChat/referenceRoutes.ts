@@ -111,7 +111,13 @@ export function detectNeighborState(texto: unknown): Estado | null {
   if (!normalizado) return null;
   for (const [nombre, estado] of Object.entries(NEIGHBOR_STATE_GROUPS)) {
     const patron = nombre.replace(/ /g, '\\s+');
-    const re = new RegExp(`(^|[^a-z])${patron}([^a-z]|$)`);
+    // Las abreviaturas de 2 letras (la, ok, al, ga, nm, ar) son palabras
+    // comunes o ambiguas ("LA" = Los Ángeles, "ok, la carga…"): solo cuentan
+    // como estado en formato de dirección — después de una coma y al final,
+    // con ZIP opcional: "Shreveport, LA" o "Tulsa, OK 74101".
+    const re = nombre.length === 2
+      ? new RegExp(`,\\s*${patron}\\.?(\\s+\\d{5}(-\\d{4})?)?\\s*$`)
+      : new RegExp(`(^|[^a-z])${patron}([^a-z]|$)`);
     if (re.test(normalizado)) return estado;
   }
   return null;

@@ -36,11 +36,13 @@ Deno.test('truckPayment: ya guardado en el perfil — se reutiliza sin volver a 
   assertEquals(decision.shouldPersist, false, 'no debe reescribirse un valor que ya estaba guardado');
 });
 
-Deno.test('truckPayment: guardado en el perfil Y declarado de nuevo en el mensaje — gana el perfil, no se pregunta ni se sobreescribe en silencio', () => {
+Deno.test('truckPayment: guardado en el perfil Y declarado en el mensaje — la consulta usa el del mensaje, pero el perfil NO se sobrescribe', () => {
   const decision = resolveTruckPayment({ pago_camion_rpm: 3.10 }, 5.00);
   assertEquals(decision.needsAsk, false);
-  assertEquals(decision.rpm, 3.10);
-  assertEquals(decision.shouldPersist, false);
+  assertEquals(decision.rpm, 5.00, 'la tarjeta de veredicto compara con el valor del mensaje');
+  assertEquals(decision.fuente, 'mensaje');
+  assertEquals(decision.guardado, 3.10);
+  assertEquals(decision.shouldPersist, false, 'un valor ya guardado nunca se pisa desde el chat');
 });
 
 Deno.test('truckPayment: valores inválidos guardados (null, 0, negativo, NaN) se tratan como "no guardado"', () => {
