@@ -21,11 +21,11 @@ import {
   clearUnmatchedRoutes,
 } from '../base44/functions/marketChat/rateTable.ts';
 
-Deno.test('rateTable: carga exactamente 209 rutas FL + 50 TX = 259', () => {
+Deno.test('rateTable: carga exactamente 209 rutas FL (v9) + 63 TX (v3) = 272', () => {
   const counts = getRouteCounts();
   assertEquals(counts.fl, 209, 'FL debe tener exactamente 209 rutas');
-  assertEquals(counts.tx, 50, 'TX debe tener exactamente 50 rutas');
-  assertEquals(counts.total, 259, 'el total debe ser 209 + 50 = 259');
+  assertEquals(counts.tx, 63, 'TX v3 debe tener exactamente 63 rutas');
+  assertEquals(counts.total, 272, 'el total debe ser 209 + 63 = 272');
 });
 
 Deno.test('rateTable: cada ruta FL trae grupo de tarifa (26 grupos en total)', () => {
@@ -93,22 +93,23 @@ Deno.test('rateTable: OO y Margen jamás se cargan en ningún campo', () => {
   }
 });
 
-Deno.test('rateTable: Waiting Time se carga tal como viene en v6 — $75/hora, sin override', () => {
+// En v9 "Waiting Time" se presenta como "Detention" (loadAccessorials lo renombra).
+Deno.test('rateTable: Detention (antes Waiting Time) se carga a $75/hora, sin override', () => {
   const accesorialesFl = loadAccessorials('FL');
-  const waitingTime = accesorialesFl.find(a => a.concepto.toLowerCase().includes('waiting time'));
-  assertExists(waitingTime, 'debe existir el accesorial Waiting Time en FL');
-  assert(waitingTime!.monto.includes('75'), `Waiting Time debe ser $75/hora tal cual v6, vino: "${waitingTime!.monto}"`);
+  const detention = accesorialesFl.find(a => a.concepto.toLowerCase().includes('detention'));
+  assertExists(detention, 'debe existir el accesorial Detention en FL');
+  assert(detention!.monto.includes('75'), `Detention debe ser $75/hora, vino: "${detention!.monto}"`);
 });
 
-Deno.test('rateTable: accesoriales de ambos estados se cargan (FL 20 conceptos, TX 7 conceptos observados)', () => {
+Deno.test('rateTable: accesoriales de ambos estados se cargan (FL 20 conceptos v9, TX 8 conceptos v3)', () => {
   const fl = loadAccessorials('FL');
   const tx = loadAccessorials('TX');
-  assertEquals(fl.length, 20, 'FL debe traer los 20 cargos accesoriales de la hoja v6');
+  assertEquals(fl.length, 20, 'FL debe traer los 20 cargos accesoriales de la hoja v9');
   // NOTA: el kickoff dice "9 conceptos" para TX, pero la hoja Accesoriales_TX
   // solo tiene 7 filas de datos (fila 1=título, fila 2=encabezado, filas 3-9=
   // 7 conceptos). Se carga lo que realmente hay en el archivo, no lo que dice
   // el kickoff — ver apply-progress lote 1 para el detalle de la discrepancia.
-  assertEquals(tx.length, 7, 'TX debe traer los 7 conceptos accesoriales que realmente trae la hoja');
+  assertEquals(tx.length, 8, 'TX v3 trae 8 conceptos en Accesoriales_TX');
 });
 
 Deno.test('rateTable: lookupRoute encuentra una ruta FL conocida (Pompano) por ciudad y tamaño', () => {
@@ -149,7 +150,9 @@ Deno.test('rateTable: registrar una ruta no encontrada nunca lanza ni bloquea', 
   assert(true, 'no debe llegar a lanzar antes de esta línea');
 });
 
-Deno.test('rateTable: registrar una ruta no encontrada loguea un consumidor real (Decisión 14-A / kickoff §12)', () => {
+// El log en consola se quitó a propósito (se confundía con un error); el registro
+// queda disponible en getUnmatchedRoutes().
+Deno.test('rateTable: registrar una ruta no encontrada la deja en el reporte, sin ensuciar la consola', () => {
   clearUnmatchedRoutes();
   const llamadas: string[] = [];
   const originalError = console.error;
@@ -159,9 +162,11 @@ Deno.test('rateTable: registrar una ruta no encontrada loguea un consumidor real
   } finally {
     console.error = originalError;
   }
-  assertEquals(llamadas.length, 1, 'debe loguear exactamente una vez, apenas se registra la ruta');
-  assert(llamadas[0].includes('Ocala'), 'el log debe incluir la ciudad');
-  assert(llamadas[0].includes('FL'), 'el log debe incluir el estado');
+  assertEquals(llamadas.length, 0, 'ya no se loguea en consola');
+  const reporte = getUnmatchedRoutes();
+  assertEquals(reporte.length, 1);
+  assertEquals(reporte[0].ciudad, 'Ocala');
+  assertEquals(reporte[0].estado, 'FL');
 });
 
 Deno.test('rateTable: el log de ruta no encontrada no lanza aunque console.error falle', () => {
