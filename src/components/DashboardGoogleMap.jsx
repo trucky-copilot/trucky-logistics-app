@@ -3,6 +3,7 @@ import { motion, useReducedMotion } from 'framer-motion';
 import { effectiveRate } from '@/lib/loadRate';
 import { MapPin, Navigation, Compass } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import LoadsMap from '@/components/dashboard/LoadsMap';
 
 /**
  * Mapa Operativo del Dashboard usando Google Maps JavaScript API (modo oscuro).
@@ -119,6 +120,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const [selectedRouteInfo, setSelectedRouteInfo] = useState(null);
   const reduceMotion = useReducedMotion(); // true si el usuario pidio reducir movimiento
   const [mapError, setMapError] = useState(null);
+  const [retryKey, setRetryKey] = useState(0);
 
   const isEs = locale !== 'en';
   const activeLoads = loads.slice(0, 8);
@@ -134,6 +136,12 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         const apiKey = res?.data?.apiKey;
         if (!apiKey) throw new Error(res?.data?.error || 'GOOGLE_MAPS_API_KEY no disponible');
 
+        // Si Google rechaza la clave (p. ej. dominio no autorizado en Google Cloud),
+        // no hay error de carga: llama a gm_authFailure. También pasa al respaldo.
+        window.gm_authFailure = () => {
+          console.error('[DashboardGoogleMap] Google rechazó la API key (revisar restricciones de dominio en Google Cloud).');
+          if (!cancelled) setMapError('auth');
+        };
         const maps = await loadGoogleMaps(apiKey);
         if (cancelled || !containerRef.current) return;
 
@@ -226,7 +234,8 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         }
         setMapError(null);
       } catch (err) {
-        console.warn('[DashboardGoogleMap] Error cargando Google Maps:', err);
+        // Queda en la consola el motivo real para diagnosticar (bloqueador, red, clave…)
+        console.error('[DashboardGoogleMap] Google Maps no cargó; se usa el mapa de respaldo (OpenStreetMap):', err);
         if (!cancelled) setMapError(err?.message || 'Error');
       }
     }
@@ -235,7 +244,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
     return () => {
       cancelled = true;
     };
-  }, [loads, isEs]);
+  }, [loads, isEs, retryKey]);
 
   const handleRecenter = () => {
     setSelectedRouteInfo(null);
@@ -283,10 +292,23 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
       <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0d0818] shadow-inner">
         <div ref={containerRef} className="absolute inset-0 w-full h-full z-0" />
 
+        {/* Respaldo: si Google Maps no carga (bloqueador, red, firewall…), se muestra
+            el mapa de OpenStreetMap, que viene empaquetado con la app. */}
         {mapError && (
-          <div className="absolute inset-0 flex items-center justify-center text-xs text-white/60 px-6 text-center">
-            {isEs ? 'No se pudo cargar Google Maps: ' : 'Could not load Google Maps: '}
-            {mapError}
+          <div className="absolute inset-0 z-[300]">
+            <LoadsMap loads={loads} bare />
+            <div className="absolute top-2 right-2 z-[500] flex items-center gap-2">
+              <span className="px-2 py-1 rounded-lg bg-black/60 text-[10px] text-white/70 border border-white/10">
+                {isEs ? 'Mapa alternativo (OpenStreetMap)' : 'Fallback map (OpenStreetMap)'}
+              </span>
+              <button
+                type="button"
+                onClick={() => { setMapError(null); setRetryKey(k => k + 1); }}
+                className="px-2 py-1 rounded-lg bg-black/60 text-[10px] text-violet-200 border border-white/15 hover:bg-black/80"
+              >
+                {isEs ? 'Reintentar Google Maps' : 'Retry Google Maps'}
+              </button>
+            </div>
           </div>
         )}
 

@@ -1,4 +1,4 @@
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -32,8 +32,24 @@ function routeColor(load) {
   return '#8b5cf6';
 }
 
-export default function LoadsMap({ loads = [] }) {
+// Proveedores de cuadros del mapa: si el primero no carga (bloqueado por la red),
+// se pasa al segundo automáticamente.
+const TILE_PROVIDERS = [
+  {
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    attribution: '&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap contributors',
+  },
+  {
+    url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    attribution: '&copy; OpenStreetMap contributors',
+  },
+];
+
+export default function LoadsMap({ loads = [], bare = false }) {
   const { t } = useLanguage();
+  const [tileIdx, setTileIdx] = useState(0);
+  const tiles = TILE_PROVIDERS[tileIdx];
+  const onTileError = () => setTileIdx(i => (i < TILE_PROVIDERS.length - 1 ? i + 1 : i));
   // Build geocoded routes — keep only loads where both ends resolve.
   const routes = loads
     .map((load) => {
@@ -46,6 +62,34 @@ export default function LoadsMap({ loads = [] }) {
 
   const hasRoutes = routes.length > 0;
   const center = hasRoutes ? routes[0].origin : { lat: 27.66, lng: -81.5 }; // Florida center
+
+  // Solo el mapa, sin tarjeta (respaldo dentro del mapa del Dashboard)
+  const mapOnly = (
+    <MapContainer
+      center={[center.lat, center.lng]}
+      zoom={hasRoutes ? 7 : 6}
+      scrollWheelZoom={false}
+      style={{ height: '100%', width: '100%', background: 'hsl(268 45% 5%)' }}
+    >
+      <TileLayer
+        key={tiles.url}
+        attribution={tiles.attribution}
+        url={tiles.url}
+        eventHandlers={{ tileerror: onTileError }}
+      />
+      {routes.map(({ load, origin, dest, color }, i) => (
+        <Fragment key={load.id || i}>
+          <Polyline
+            positions={[[origin.lat, origin.lng], [dest.lat, dest.lng]]}
+            pathOptions={{ color, weight: 2.5, opacity: 0.85, dashArray: '6 6' }}
+          />
+          <Marker position={[origin.lat, origin.lng]} icon={pinIcon(color)} />
+          <Marker position={[dest.lat, dest.lng]} icon={pinIcon(color)} />
+        </Fragment>
+      ))}
+    </MapContainer>
+  );
+  if (bare) return mapOnly;
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
