@@ -1,18 +1,19 @@
 import test from 'node:test';import assert from 'node:assert/strict';
 import {reconcileLiveSubscription as sync} from '../../base44/functions/syncBillingSubscription/live.ts';
 import {assertMembershipProvenance} from '../../base44/functions/syncBillingSubscription/provenance.ts';
+import {createRedisMock} from './_liveSyncRedisMock.ts';
 const NOW=Date.UTC(2026,10,7);
 const body={mode:'live',organization_id:'org',subscription_id:'sub_live'};
 const member={id:'member',organization_id:'org',google_sub:'google',base44_user_id:'native',active:true,role:'owner'};
 const price={id:'price_owner',livemode:true,currency:'usd',unit_amount:2900,type:'recurring',recurring:{interval:'month',interval_count:1},billing_scheme:'per_unit'};
 const subscription={id:'sub_live',customer:'cus_live',metadata:{org_id:'org'},livemode:true,status:'active',trial_start:null,trial_end:null,items:{has_more:false,data:[{quantity:1,price}]}};
-function setup(){const store=new Map([
+function setup(){const mock=createRedisMock([
  ['trucky:billing:identity:v1:google','native'],['trucky:billing:native:v1:native','google'],
- ['trucky:billing:member:v1:org:google',JSON.stringify({orgId:'org',googleSub:'google',memberId:'member',role:'owner'})]]);
+ ['trucky:billing:member:v1:org:google',JSON.stringify({orgId:'org',googleSub:'google',memberId:'member',role:'owner'})]]);const store=mock.store;
  const org={id:'org',active:true,stripe_customer_id:'cus_test',stripe_subscription_id:'sub_test',subscription_status:'trialing',plan_type:'plan_29',name:'Existing',trial_ends_at:'2030-01-01T00:00:00Z'};
  const writes=[];let reads=0;
  const deps={enabled:true,orgIds:new Set(['org']),memberIds:new Set(['member']),prices:{owner_op:'price_owner',fleet:'price_fleet'},owner:()=> 'lock-fixture',now:()=>NOW,
- redis:async c=>{const [op,key,value]=c;if(op==='GET')return store.get(key)??null;if(op==='SET'){if(store.has(key))return null;store.set(key,value);return 'OK';}if(op==='EVAL'){if(c[2]==='1'){const lock=c[3],owner=c[4];if(store.get(lock)===owner){store.delete(lock);return 1;}return 0;}const lock=c[3],pend=c[4],owner=c[5];if(store.get(lock)!==owner)return 0;const p=store.get(pend);if(p&&JSON.parse(p).owner!==owner)return -1;store.delete(pend);store.delete(lock);return 1;}throw Error('unexpected');},
+ redis:mock.cmd,
  assertProvenance:assertMembershipProvenance,members:async()=>[structuredClone(member)],organizations:async()=>[org],retrieve:async()=>{reads++;return structuredClone(subscription);},update:async(id,fields)=>{writes.push({id,fields});Object.assign(org,fields);}};
  return {deps,store,org,writes,reads:()=>reads};}
 const lock='trucky:billing:sync:live:org:org';
@@ -33,3 +34,4 @@ test('historical trial that already ended is reconciled; new paid plans still ha
 test('successful write removes its own pending record together with the lock',async()=>{const s=setup();assert.equal((await sync(body,s.deps)).status,200);assert.equal(s.store.has(lock),false);assert.equal(s.store.has(pending),false);});
 test('leftover pending record without lock is never overwritten: requires recovery review',async()=>{const s=setup();s.store.set(pending,JSON.stringify({owner:'1:old',orgId:'org'}));assert.equal((await sync(body,s.deps)).body.code,'LIVE_RECOVERY_REQUIRED');assert.equal(s.reads(),0);assert.equal(s.writes.length,0);assert.equal(s.store.has(lock),false);assert.equal(s.store.has(pending),true);});
 test('Organization schema retains RLS and test fields; adds separate live fields',async()=>{const {readFile}=await import('node:fs/promises');const schema=JSON.parse(await readFile('base44/entities/Organization.jsonc','utf8'));assert.equal(schema.properties.stripe_subscription_id.type,'string');assert.equal(schema.properties.stripe_live_subscription_id.type,'string');assert.deepEqual(schema.rls.update,{user_condition:{role:'admin'}});});
+test('fencing: if the lock was released (no longer ours) before recording the write, nothing is written',async()=>{const s=setup();s.deps.retrieve=async()=>{s.store.set(lock,'1:other-owner');return structuredClone(subscription);};const r=await sync(body,s.deps);assert.equal(r.body.code,'LIVE_LOCK_LOST');assert.equal(s.writes.length,0);assert.equal(s.store.has(pending),false);assert.equal(s.store.get(lock),'1:other-owner');});

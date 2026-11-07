@@ -35,14 +35,48 @@ export const RELEASE_LOCK_SCRIPT =
   "if redis.call('GET',KEYS[1]) == ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end";
 
 /**
- * Libera lock y pending de forma atómica, solo si el lock sigue siendo de
- * `owner` y el pending (si existe) pertenece al mismo propietario.
+ * Registra la escritura pendiente SOLO si el lock sigue siendo de `owner`
+ * (fencing): si un administrador liberó el lock de un proceso que no había
+ * empezado a escribir, ese proceso ya no puede registrar ni escribir.
+ * 1 = registrado · 0 = el lock ya no es suyo · -1 = ya existe un pendiente.
+ */
+export const SET_PENDING_IF_OWNER_SCRIPT = [
+  "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end",
+  "if redis.call('EXISTS',KEYS[2]) == 1 then return -1 end",
+  "redis.call('SET',KEYS[2],ARGV[2])",
+  "return 1",
+].join('\n');
+
+/**
+ * Tras una escritura COMPLETADA por el propio proceso: libera lock y su
+ * pendiente de forma atómica, solo si ambos siguen siendo de `owner`.
  */
 export const RELEASE_LOCK_AND_PENDING_SCRIPT = [
   "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end",
   "local p = redis.call('GET',KEYS[2])",
   "if p and not string.find(p, '\"owner\":\"' .. ARGV[1] .. '\"', 1, true) then return -1 end",
   "redis.call('DEL',KEYS[2])",
+  "redis.call('DEL',KEYS[1])",
+  "return 1",
+].join('\n');
+
+/**
+ * Liberación administrativa: auditoría y liberación en UNA operación atómica.
+ * KEYS: lock, pending, audit · ARGV: owner, expectPending ('0'|'1'), entradaAuditoria.
+ * El RPUSH va ANTES de los DEL: si la auditoría falla, el script se aborta y
+ * el lock queda intacto. Nunca hay liberación sin registro.
+ * 1 = liberado y auditado · 0 = el lock cambió de dueño · -1/-2 = el pendiente no coincide.
+ */
+export const RECOVERY_RELEASE_SCRIPT = [
+  "if redis.call('GET',KEYS[1]) ~= ARGV[1] then return 0 end",
+  "local p = redis.call('GET',KEYS[2])",
+  "if ARGV[2] == '0' then",
+  "  if p then return -2 end",
+  "else",
+  "  if (not p) or (not string.find(p, '\"owner\":\"' .. ARGV[1] .. '\"', 1, true)) then return -1 end",
+  "end",
+  "redis.call('RPUSH',KEYS[3],ARGV[3])",
+  "if p then redis.call('DEL',KEYS[2]) end",
   "redis.call('DEL',KEYS[1])",
   "return 1",
 ].join('\n');

@@ -1,7 +1,7 @@
 // Only invoked after S2S authentication in entry.ts. Never creates charges or grants app access.
 import {
   type Command, lockKey, pendingKey, makeOwner, pickLiveFields,
-  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT,
+  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT, SET_PENDING_IF_OWNER_SCRIPT,
 } from './lock.ts';
 export type { Command };
 export interface LiveDeps {
@@ -60,8 +60,11 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
   const fields={stripe_live_subscription_id:sub.id,stripe_live_customer_id:customer,stripe_live_price_id:price.id,
    stripe_live_plan_type:plan,stripe_live_subscription_status:sub.status};
   // Record the intended write BEFORE touching Base44, so an uncertain outcome can be reviewed.
-  const pendingSet=await d.redis(['SET',pending,JSON.stringify({owner,orgId:org.id,subscriptionId:sub.id,fields,before:pickLiveFields(org),startedAt:new Date(nowMs).toISOString()}),'NX']);
-  if(pendingSet!=='OK')return res('LIVE_RECOVERY_REQUIRED',409);
+  // Fencing: only the current lock owner may record (and then perform) the write.
+  const pendingSet=await d.redis(['EVAL',SET_PENDING_IF_OWNER_SCRIPT,'2',lock,pending,owner,
+   JSON.stringify({owner,orgId:org.id,subscriptionId:sub.id,fields,before:pickLiveFields(org),startedAt:new Date(nowMs).toISOString()})]);
+  if(pendingSet===0)return res('LIVE_LOCK_LOST',409);
+  if(pendingSet!==1)return res('LIVE_RECOVERY_REQUIRED',409);
   writeStarted=true;
   await d.update(org.id,fields);
   done=true;
