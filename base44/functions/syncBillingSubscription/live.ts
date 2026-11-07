@@ -1,11 +1,17 @@
 // Only invoked after S2S authentication in entry.ts. Never creates charges or grants app access.
-export type Command = (command:unknown[])=>Promise<unknown>;
+import {
+  type Command, lockKey, pendingKey, makeOwner, pickLiveFields,
+  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT,
+} from './lock.ts';
+export type { Command };
 export interface LiveDeps {
  enabled:boolean; orgIds:Set<string>; memberIds:Set<string>; prices:{owner_op?:string;fleet?:string};
  redis:Command; assertProvenance:(redis:Command,member:any)=>Promise<void>;
  members:(q:Record<string,unknown>)=>Promise<any[]>; organizations:(id:string)=>Promise<any[]>;
  retrieve:(id:string)=>Promise<any>; update:(id:string,fields:Record<string,unknown>)=>Promise<unknown>;
  owner:()=>string;
+ /** Hora actual en ms (inyectada para las pruebas). */
+ now?:()=>number;
 }
 const res=(code:string,status=200)=>({status,body:{code,mode:'live'}});
 const safe=(s:unknown):s is string=>typeof s==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(s);
@@ -16,12 +22,16 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
  if(!d.orgIds.has(body.organization_id))return res('LIVE_ORGANIZATION_NOT_ALLOWED',403);
  const {owner_op,fleet}=d.prices;
  if(!/^price_[A-Za-z0-9]+$/.test(owner_op||'')||!/^price_[A-Za-z0-9]+$/.test(fleet||'')||owner_op===fleet)return res('LIVE_CONFIGURATION_REQUIRED',503);
- const lock=`trucky:billing:sync:live:org:${body.organization_id}`;
- let acquired=false,writeStarted=false,done=false;const owner=d.owner();
+ const nowMs=(d.now??Date.now)();
+ const lock=lockKey(body.organization_id);
+ const pending=pendingKey(body.organization_id);
+ let acquired=false,writeStarted=false,done=false;const owner=makeOwner(nowMs,d.owner());
  try{
   // No TTL: an unknown DB write must not silently unlock and allow stale overwrites.
   acquired=await d.redis(['SET',lock,owner,'NX'])==='OK';
   if(!acquired)return res('LIVE_RECONCILIATION_BUSY',503);
+  // A leftover pending write (from a recovered/inconsistent state) must be reviewed, never overwritten.
+  if(await d.redis(['GET',pending])!=null)return res('LIVE_RECOVERY_REQUIRED',409);
   const orgs=await d.organizations(body.organization_id);
   if(orgs.length!==1||orgs[0].id!==body.organization_id||orgs[0].active!==true)return res('ORGANIZATION_NOT_FOUND',404);
   const org=orgs[0];
@@ -42,11 +52,16 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
   const price=items[0].price;
   const plan=price?.id===owner_op?'owner_op':price?.id===fleet?'fleet':null;
   if(!plan||price.livemode!==true||price.currency!=='usd'||price.unit_amount!==(plan==='owner_op'?2900:9900)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return res('LIVE_PLAN_MISMATCH',409);
-  // Paid plans do not carry the free demo. Reject accidental Stripe trials without projecting active access.
-  if(sub.trial_start||sub.trial_end||sub.status==='trialing')return res('LIVE_TRIAL_NOT_ALLOWED',409);
+  // Paid plans do not carry a free month: reject an ACTIVE or FUTURE trial only.
+  // A historical trial that already ended (trial_end in the past) is allowed.
+  const trialEndMs=typeof sub.trial_end==='number'?sub.trial_end*1000:null;
+  if(sub.status==='trialing'||(trialEndMs!==null&&trialEndMs>nowMs))return res('LIVE_TRIAL_NOT_ALLOWED',409);
   if(!['active','past_due','unpaid','canceled','incomplete','incomplete_expired','paused'].includes(sub.status))return res('STATUS_REQUIRES_MIGRATION',409);
   const fields={stripe_live_subscription_id:sub.id,stripe_live_customer_id:customer,stripe_live_price_id:price.id,
    stripe_live_plan_type:plan,stripe_live_subscription_status:sub.status};
+  // Record the intended write BEFORE touching Base44, so an uncertain outcome can be reviewed.
+  const pendingSet=await d.redis(['SET',pending,JSON.stringify({owner,orgId:org.id,subscriptionId:sub.id,fields,before:pickLiveFields(org),startedAt:new Date(nowMs).toISOString()}),'NX']);
+  if(pendingSet!=='OK')return res('LIVE_RECOVERY_REQUIRED',409);
   writeStarted=true;
   await d.update(org.id,fields);
   done=true;
@@ -54,7 +69,11 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
  }catch{return res(writeStarted?'LIVE_WRITE_REQUIRES_REVIEW':'LIVE_RECONCILIATION_REQUIRED',503);}
  finally{
   if(acquired&&(!writeStarted||done)){
-   try{await d.redis(['EVAL',"if redis.call('GET',KEYS[1]) == ARGV[1] then return redis.call('DEL',KEYS[1]) else return 0 end",'1',lock,owner]);}catch{/* If unlock outcome is unknown, preserve lock and stop future writes. */}
+   try{
+    // Completed write: release lock + our own pending atomically. No write: release only the lock.
+    if(done)await d.redis(['EVAL',RELEASE_LOCK_AND_PENDING_SCRIPT,'2',lock,pending,owner]);
+    else await d.redis(['EVAL',RELEASE_LOCK_SCRIPT,'1',lock,owner]);
+   }catch{/* If unlock outcome is unknown, preserve lock and stop future writes. */}
   }
  }
 }
