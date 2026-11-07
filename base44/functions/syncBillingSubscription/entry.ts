@@ -1,3 +1,5 @@
+import { reconcileLiveSubscription } from './live.ts';
+import { assertMembershipProvenance } from './provenance.ts';
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
@@ -13,9 +15,28 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
   let difference = 0;
   for (let i = 0; i < a.length; i++) difference |= a[i] ^ b[i];
   if (difference !== 0) return reply('UNAUTHORIZED', 401);
-  if (Deno.env.get('BILLING_SYNC_TEST_ENABLED') !== 'true') return reply('SYNC_NOT_ENABLED', 503);
   try {
-    const body = await req.json();
+    let body:any;try{body=await req.json();}catch{return reply('INVALID_REQUEST',400);}
+    if(!body||typeof body!=='object'||Array.isArray(body))return reply('INVALID_REQUEST',400);
+    if(body.mode==='live'){
+      if(Deno.env.get('BILLING_SYNC_LIVE_ENABLED')!=='true')return reply('SYNC_NOT_ENABLED',503);
+      const db=createClientFromRequest(req).asServiceRole.entities;
+      const ids=(value:string|undefined)=>new Set((value||'').split(',').map(s=>s.trim()).filter(s=>/^[A-Za-z0-9_-]{1,128}$/.test(s)));
+      const result=await reconcileLiveSubscription(body,{
+        enabled:true,orgIds:ids(Deno.env.get('BILLING_LINK_PILOT_ORG_IDS')),memberIds:ids(Deno.env.get('BILLING_LINK_PILOT_MEMBER_IDS')),
+        prices:{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')},
+        redis:demoRedis,assertProvenance:assertMembershipProvenance,owner:()=>crypto.randomUUID(),
+        organizations:id=>db.Organization.filter({id}),members:q=>db.OrganizationMember.filter(q),
+        update:(id,fields)=>db.Organization.update(id,fields),
+        retrieve:async id=>{const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');
+          if(!key||!/^(sk|rk)_live_.+/.test(key))throw Error('LIVE_KEY_REQUIRED');
+          return await new Stripe(key,{timeout:12000,maxNetworkRetries:0}).subscriptions.retrieve(id);
+        },
+      });
+      return new Response(JSON.stringify(result.body),{status:result.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+    }
+    if(body.mode!==undefined&&body.mode!=='test')return reply('INVALID_MODE',400);
+    if (Deno.env.get('BILLING_SYNC_TEST_ENABLED') !== 'true') return reply('SYNC_NOT_ENABLED', 503);
     const allowed = new Set((Deno.env.get('STRIPE_TEST_ORGANIZATION_IDS') || '').split(',').map(x => x.trim()).filter(Boolean));
     if (typeof body.organization_id !== 'string' || (!allowed.has(body.organization_id) && !await isDemoOrganization(body.organization_id))) return reply('TEST_ORGANIZATION_NOT_ALLOWED', 403);
     if (typeof body.subscription_id !== 'string' || !/^sub_[a-zA-Z0-9]+$/.test(body.subscription_id)) return reply('INVALID_SUBSCRIPTION', 400);

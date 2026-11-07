@@ -110,6 +110,39 @@
     "stripe_price_id": {
       "type": "string",
       "description": "ID del precio contratado en Stripe (price_xxx)"
+    },
+    "stripe_live_customer_id": {
+      "type": "string",
+      "description": "Cliente Stripe real; separado del cliente de pruebas. Solo servidor."
+    },
+    "stripe_live_subscription_id": {
+      "type": "string",
+      "description": "Suscripción Stripe real vinculada por reconciliación autenticada. Solo servidor."
+    },
+    "stripe_live_price_id": {
+      "type": "string",
+      "description": "Precio exacto real autorizado. No se deriva solo del importe."
+    },
+    "stripe_live_plan_type": {
+      "type": "string",
+      "enum": [
+        "owner_op",
+        "fleet"
+      ],
+      "description": "Plan real; informativo, no concede acceso automáticamente."
+    },
+    "stripe_live_subscription_status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "past_due",
+        "unpaid",
+        "canceled",
+        "incomplete",
+        "incomplete_expired",
+        "paused"
+      ],
+      "description": "Estado canónico Stripe real. active no es un recibo de factura pagada."
     }
   },
   "required": [
