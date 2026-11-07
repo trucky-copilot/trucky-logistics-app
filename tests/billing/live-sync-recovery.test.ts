@@ -4,7 +4,7 @@
 import { assertEquals } from 'jsr:@std/assert@1';
 import { reconcileLiveSubscription } from '../../base44/functions/syncBillingSubscription/live.ts';
 import { recoverLiveSyncLock, MIN_LOCK_AGE_MS, type RecoverDeps } from '../../base44/functions/recoverLiveSyncLock/recover.ts';
-import { lockKey, pendingKey, RECOVERY_AUDIT_KEY } from '../../base44/functions/recoverLiveSyncLock/lock.ts';
+import { lockKey, pendingKey, RECOVERY_AUDIT_KEY, OP_FIELD, LIVE_FIELDS, pickLiveFields, sameLiveFields } from '../../base44/functions/recoverLiveSyncLock/lock.ts';
 import { assertMembershipProvenance } from '../../base44/functions/syncBillingSubscription/provenance.ts';
 import { createRedisMock } from './_liveSyncRedisMock.ts';
 
@@ -43,11 +43,17 @@ function world(opts: { failRpush?: boolean } = {}) {
   };
 }
 
-/** Escritura incierta: el lock y el pendiente quedan retenidos. */
-async function uncertainWrite(w: ReturnType<typeof world>, applied: boolean) {
-  const r = await reconcileLiveSubscription(body, w.syncDeps(async (_id, f) => { if (applied) Object.assign(w.org, f); throw new Error('timeout'); }));
+/**
+ * Escritura incierta: el lock y el pendiente quedan retenidos.
+ * Devuelve el payload exacto que viajaba en la actualización, para poder
+ * simular que esa misma escritura llega tarde.
+ */
+async function uncertainWrite(w: ReturnType<typeof world>, applied: boolean): Promise<Record<string, unknown>> {
+  let sent: Record<string, unknown> = {};
+  const r = await reconcileLiveSubscription(body, w.syncDeps(async (_id, f) => { sent = { ...f }; if (applied) Object.assign(w.org, f); throw new Error('timeout'); }));
   assertEquals(r.body.code, 'LIVE_WRITE_REQUIRES_REVIEW');
   assertEquals(w.store.has(LOCK) && w.store.has(PENDING), true);
+  return sent;
 }
 
 Deno.test('recuperación: apagada, sin sesión, no admin o fuera de la lista → rechazado sin leer', async () => {
@@ -77,14 +83,14 @@ Deno.test('«no aplicada todavía»: el preview lo informa sin escribir y NUNCA 
 
 Deno.test('escritura tardía: mientras el lock se conserva, ninguna cancelación puede ser sobrescrita', async () => {
   const w = world();
-  await uncertainWrite(w, false); // la escritura de `active` quedó en el aire
+  const inFlight = await uncertainWrite(w, false); // la escritura de `active` quedó en el aire
   w.clock.advance(DAY);
   // Mientras tanto Stripe cancela; una sincronización nueva no puede entrar.
   const blocked = await reconcileLiveSubscription(body, w.syncDeps(async (_id, f) => Object.assign(w.org, f), { retrieve: async () => ({ ...subscription, status: 'canceled' }) }));
   assertEquals(blocked.body.code, 'LIVE_RECONCILIATION_BUSY');
   // La escritura tardía de `active` finalmente se aplica…
-  Object.assign(w.org, JSON.parse(w.store.get(PENDING)).fields);
-  // …ahora sí hay evidencia de finalización: se libera con auditoría.
+  Object.assign(w.org, inFlight);
+  // …ahora sí hay evidencia de finalización (id de operación + campos): se libera con auditoría.
   const p = await recoverLiveSyncLock(preview, w.recDeps());
   assertEquals(p.body.outcome, 'WRITE_APPLIED');
   assertEquals((await recoverLiveSyncLock(release(p.body.owner), w.recDeps())).body.code, 'LOCK_RELEASED');
@@ -135,9 +141,9 @@ Deno.test('liberación: exige confirmación exacta, el mismo dueño revisado y l
 
 Deno.test('escritura PARCIAL o registro inconsistente → REVIEW_REQUIRED, nunca se libera', async () => {
   const w = world();
-  await uncertainWrite(w, false);
+  await uncertainWrite(w, true);
   w.clock.advance(DAY);
-  w.org.stripe_live_subscription_id = 'sub_live'; // solo un campo cambió
+  w.org.stripe_live_price_id = 'price_otro'; // está el id de la operación, pero un campo no coincide
   const r = await recoverLiveSyncLock(release(w.store.get(LOCK)), w.recDeps());
   assertEquals([r.body.code, r.body.outcome], ['REVIEW_REQUIRED', 'WRITE_PARTIAL']);
   assertEquals(w.store.has(LOCK) && w.store.has(PENDING), true);
@@ -148,6 +154,61 @@ Deno.test('escritura PARCIAL o registro inconsistente → REVIEW_REQUIRED, nunca
   w2.store.set(PENDING, JSON.stringify({ ...JSON.parse(w2.store.get(PENDING)), owner: '1:otro' }));
   const r2 = await recoverLiveSyncLock(release(w2.store.get(LOCK)), w2.recDeps());
   assertEquals([r2.body.code, r2.body.outcome], ['REVIEW_REQUIRED', 'INCONSISTENT']);
+});
+
+Deno.test('before === fields: la igualdad de campos NO libera; la escritura tardía llega después de una cancelación y no la pisa', async () => {
+  const w = world();
+  // 1) Sincronización previa completa: la org ya está `active` con estos mismos campos.
+  const ok = await reconcileLiveSubscription(body, w.syncDeps(async (_id, f) => Object.assign(w.org, f)));
+  assertEquals(ok.body.code, 'SUBSCRIPTION_RECONCILED');
+  const firstOp = w.org[OP_FIELD];
+  // 2) Nueva sincronización idéntica: la escritura queda pendiente (timeout sin aplicarse).
+  w.clock.advance(1000);
+  const inFlight = await uncertainWrite(w, false);
+  const pending = JSON.parse(w.store.get(PENDING));
+  assertEquals(sameLiveFields(pending.before, pending.fields), true); // before === fields
+  assertEquals(sameLiveFields(pickLiveFields(w.org), pending.fields), true); // la regla antigua habría liberado aquí
+  assertEquals(w.org[OP_FIELD], firstOp); // pero el id visible es el de la operación ANTERIOR
+  w.clock.advance(DAY);
+  const p = await recoverLiveSyncLock(preview, w.recDeps());
+  assertEquals([p.body.outcome, p.body.canRelease], ['WRITE_NOT_APPLIED_YET', false]);
+  const r = await recoverLiveSyncLock(release(p.body.owner), w.recDeps());
+  assertEquals(r.body.code, 'WRITE_NOT_APPLIED_YET');
+  assertEquals(w.store.has(LOCK) && w.store.has(PENDING), true);
+  assertEquals(w.store.has(RECOVERY_AUDIT_KEY), false);
+  // 3) Stripe cancela: la sincronización de la cancelación no puede entrar mientras el lock siga.
+  const cancel = { retrieve: async () => ({ ...subscription, status: 'canceled' }) };
+  const blocked = await reconcileLiveSubscription(body, w.syncDeps(async (_id, f) => Object.assign(w.org, f), cancel));
+  assertEquals(blocked.body.code, 'LIVE_RECONCILIATION_BUSY');
+  assertEquals(w.org.stripe_live_subscription_status, 'active');
+  // 4) La escritura tardía de `active` llega DESPUÉS de la cancelación: no pisa nada, porque la cancelación no se escribió.
+  Object.assign(w.org, inFlight);
+  const p2 = await recoverLiveSyncLock(preview, w.recDeps());
+  assertEquals(p2.body.outcome, 'WRITE_APPLIED');
+  assertEquals((await recoverLiveSyncLock(release(p2.body.owner), w.recDeps())).body.code, 'LOCK_RELEASED');
+  // 5) Ahora sí se sincroniza la cancelación y queda como estado final.
+  const after = await reconcileLiveSubscription(body, w.syncDeps(async (_id, f) => Object.assign(w.org, f), cancel));
+  assertEquals(after.body.code, 'SUBSCRIPTION_RECONCILED');
+  assertEquals(w.org.stripe_live_subscription_status, 'canceled');
+});
+
+Deno.test('atomicidad: los 5 campos live y el id de operación viajan en UNA sola actualización', async () => {
+  const w = world();
+  const calls: Array<[string, Record<string, unknown>]> = [];
+  const r = await reconcileLiveSubscription(body, w.syncDeps(async (id, f) => { calls.push([id, { ...f }]); Object.assign(w.org, f); }));
+  assertEquals(r.body.code, 'SUBSCRIPTION_RECONCILED');
+  assertEquals(calls.length, 1);
+  assertEquals(calls[0][0], ORG);
+  assertEquals(Object.keys(calls[0][1]).sort(), [...LIVE_FIELDS, OP_FIELD].sort());
+  // El id escrito es el token del dueño del lock que registró el pendiente.
+  assertEquals(typeof calls[0][1][OP_FIELD], 'string');
+  assertEquals(/^\d{10,16}:[A-Za-z0-9-]{1,64}$/.test(String(calls[0][1][OP_FIELD])), true);
+});
+
+Deno.test('esquema: Organization declara stripe_live_sync_operation_id', async () => {
+  const raw = await Deno.readTextFile(new URL('../../base44/entities/Organization.jsonc', import.meta.url));
+  const schema = JSON.parse(raw);
+  assertEquals(schema.properties[OP_FIELD]?.type, 'string');
 });
 
 Deno.test('si el lock cambia de dueño entre la revisión y la liberación → LOCK_CHANGED, sin borrar ni auditar', async () => {

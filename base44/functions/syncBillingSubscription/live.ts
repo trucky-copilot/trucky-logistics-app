@@ -1,7 +1,7 @@
 // Only invoked after S2S authentication in entry.ts. Never creates charges or grants app access.
 import {
   type Command, lockKey, pendingKey, makeOwner, pickLiveFields,
-  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT, SET_PENDING_IF_OWNER_SCRIPT,
+  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT, SET_PENDING_IF_OWNER_SCRIPT, OP_FIELD,
 } from './lock.ts';
 export type { Command };
 export interface LiveDeps {
@@ -66,7 +66,9 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
   if(pendingSet===0)return res('LIVE_LOCK_LOST',409);
   if(pendingSet!==1)return res('LIVE_RECOVERY_REQUIRED',409);
   writeStarted=true;
-  await d.update(org.id,fields);
+  // One single record update: the 5 live fields AND this operation's unique id.
+  // Recovery treats the write as finished only if it sees this exact id.
+  await d.update(org.id,{...fields,[OP_FIELD]:owner});
   done=true;
   return res('SUBSCRIPTION_RECONCILED');
  }catch{return res(writeStarted?'LIVE_WRITE_REQUIRES_REVIEW':'LIVE_RECONCILIATION_REQUIRED',503);}

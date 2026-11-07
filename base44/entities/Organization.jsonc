@@ -143,6 +143,10 @@
         "paused"
       ],
       "description": "Estado canónico Stripe real. active no es un recibo de factura pagada."
+    },
+    "stripe_live_sync_operation_id": {
+      "type": "string",
+      "description": "Identificador único de la última operación de sincronización live que escribió estos campos (misma actualización). Solo servidor; lo usa la recuperación del bloqueo."
     }
   },
   "required": [

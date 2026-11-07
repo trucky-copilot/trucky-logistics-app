@@ -18,6 +18,14 @@ export const LIVE_FIELDS = [
   'stripe_live_subscription_status',
 ] as const;
 
+/**
+ * Identificador único de la operación de sincronización (= token del dueño del
+ * lock). Se escribe en la MISMA actualización de Base44 que los 5 campos live,
+ * así la recuperación puede demostrar que fue ESA escritura la que se aplicó;
+ * la igualdad de campos sola no prueba nada (p. ej. si before === fields).
+ */
+export const OP_FIELD = 'stripe_live_sync_operation_id';
+
 export const lockKey = (orgId: string) => `trucky:billing:sync:live:org:${orgId}`;
 export const pendingKey = (orgId: string) => `trucky:billing:sync:live:pending:org:${orgId}`;
 export const RECOVERY_AUDIT_KEY = 'trucky:billing:sync:live:recovery:audit';

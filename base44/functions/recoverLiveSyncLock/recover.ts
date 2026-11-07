@@ -8,19 +8,23 @@
  *    todavía es dueño del lock (SET_PENDING_IF_OWNER_SCRIPT). Al liberarlo,
  *    ese proceso ya no puede escribir. La liberación verifica atómicamente
  *    que el pendiente siga sin existir.
- *  - WRITE_APPLIED: los 5 campos live actuales son exactamente los del
- *    pendiente → la escritura terminó. Liberable.
- *  - WRITE_NOT_APPLIED_YET: los campos siguen como antes. NO prueba que la
- *    escritura no vaya a aplicarse más tarde (podría sobrescribir una
- *    cancelación con `active`). Se conserva el bloqueo.
- *  - WRITE_PARTIAL / INCONSISTENT: revisión manual. Se conserva el bloqueo.
+ *  - WRITE_APPLIED: la Organization tiene `stripe_live_sync_operation_id`
+ *    igual al dueño del pendiente Y los 5 campos live son exactamente los
+ *    del pendiente. El id viaja en la MISMA actualización que los campos, así
+ *    que solo esa escritura pudo dejarlo → terminó. Liberable.
+ *    La igualdad de campos SIN el id no prueba nada (si before === fields la
+ *    escritura podría seguir en vuelo y aplicarse tras una cancelación).
+ *  - WRITE_NOT_APPLIED_YET: no aparece el id de esta operación. No hay
+ *    prueba de finalización → se conserva el bloqueo.
+ *  - WRITE_PARTIAL: aparece el id pero los campos no coinciden → revisión.
+ *  - INCONSISTENT: lock/pendiente/registro incoherentes → revisión.
  *
  * La auditoría y la liberación ocurren en UNA operación atómica de Redis
  * (RECOVERY_RELEASE_SCRIPT): si el registro de auditoría falla, no se libera.
  * Nunca modifica la Organization ni reintenta la escritura.
  */
 import {
-  type Command, lockKey, pendingKey, ownerTakenAt, sameLiveFields, pickLiveFields,
+  type Command, lockKey, pendingKey, ownerTakenAt, sameLiveFields, pickLiveFields, OP_FIELD,
   RECOVERY_RELEASE_SCRIPT, RECOVERY_AUDIT_KEY,
 } from './lock.ts';
 
@@ -68,9 +72,13 @@ async function inspect(orgId: string, deps: RecoverDeps) {
     if (orgs.length !== 1 || orgs[0].id !== orgId) outcome = 'INCONSISTENT';
     else {
       const current = pickLiveFields(orgs[0]);
-      outcome = sameLiveFields(current, pending.fields) ? 'WRITE_APPLIED'
-        : sameLiveFields(current, pending.before) ? 'WRITE_NOT_APPLIED_YET'
-        : 'WRITE_PARTIAL';
+      // Prueba de finalización = id único de ESTA operación escrito junto con los campos.
+      if (orgs[0][OP_FIELD] === owner) {
+        outcome = sameLiveFields(current, pending.fields) ? 'WRITE_APPLIED' : 'WRITE_PARTIAL';
+      } else {
+        // Sin el id no hay prueba, aunque los campos coincidan (before === fields).
+        outcome = 'WRITE_NOT_APPLIED_YET';
+      }
     }
   }
   return {
