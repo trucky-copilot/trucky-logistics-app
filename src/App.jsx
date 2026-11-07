@@ -11,6 +11,9 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import Layout from '@/components/Layout';
 import { DemoProvider, useDemo } from '@/lib/DemoContext';
 import DemoExpiredScreen from '@/components/DemoExpiredScreen';
+// Fase 1 de facturación: solo la confirmación de vinculación de identidad.
+// LiveBillingGate queda fuera hasta habilitar el control de acceso.
+import BillingLinkConfirmation from '@/components/BillingLinkConfirmation';
 
 // Page imports
 import Welcome         from '@/pages/Welcome';
@@ -128,6 +131,7 @@ function App() {
           <DemoProvider>
             <LanguageProvider>
               <ProfileProvider>
+                <BillingLinkConfirmation />
                 <AppContent />
               </ProfileProvider>
             </LanguageProvider>

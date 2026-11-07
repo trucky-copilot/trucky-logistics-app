@@ -1,3 +1,5 @@
+// Primero: capturar el enlace de facturación antes de que otro módulo toque la URL.
+import '@/lib/billingLinkCapture'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { MotionConfig } from 'framer-motion'
