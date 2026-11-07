@@ -3,6 +3,7 @@ import {demoRedis} from './demoRegistry.ts';
 import {reserveNativeBinding} from './binding.ts';
 import {assertMembershipProvenance} from './provenance.ts';
 import {redeemBillingLinkCore} from './redeem.ts';
+import {parseIdList} from './pilot.ts';
 
 async function sha256Hex(text:string){
  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');
@@ -20,6 +21,9 @@ export default async function redeemBillingLink(req:Request,_ctx:unknown){
  const db=client.asServiceRole.entities;
  const result=await redeemBillingLinkCore(body,{
   enabled,
+  // Piloto restringido en el backend: BILLING_LINK_PILOT_ORG_IDS y BILLING_LINK_PILOT_MEMBER_IDS.
+  pilotOrgIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_ORG_IDS')),
+  pilotMemberIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_MEMBER_IDS')),
   getUser:()=>client.auth.me(),
   redis:demoRedis,
   findMembers:(q)=>db.OrganizationMember.filter(q),

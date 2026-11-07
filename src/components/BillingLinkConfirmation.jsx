@@ -10,7 +10,13 @@ const MESSAGES = {
   VERIFIED_MEMBERSHIP_REQUIRED: 'No encontramos una membresía verificada para esta empresa. Contacta a soporte.',
   NATIVE_SESSION_REQUIRED: 'Inicia sesión en Trucky y solicita de nuevo la vinculación.',
   LINK_NOT_ENABLED: 'La vinculación no está habilitada en este momento.',
+  PILOT_NOT_ALLOWED: 'Esta cuenta no forma parte del piloto de vinculación.',
+  PILOT_NOT_CONFIGURED: 'La vinculación no está habilitada en este momento.',
+  NO_PENDING_LINK: 'No hay una vinculación pendiente para esta sesión. Contacta a soporte.',
 };
+// La identidad ya quedó verificada y reservada; solo falta guardarla en la cuenta.
+// No se pide otro enlace: se reintenta la finalización con la misma sesión.
+const PENDING = 'Tu identidad quedó verificada, pero no pudimos terminar de guardar la vinculación. Pulsa "Reintentar" en unos segundos; no hace falta un enlace nuevo.';
 const GENERIC = 'No se pudo vincular. Solicita un enlace nuevo desde la web; no se ha concedido acceso.';
 
 export default function BillingLinkConfirmation() {
@@ -18,6 +24,7 @@ export default function BillingLinkConfirmation() {
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     if (!code) return;
@@ -28,11 +35,11 @@ export default function BillingLinkConfirmation() {
 
   const close = () => { clearBillingLinkCode(); setCode(null); };
 
-  async function confirm() {
+  async function run(payload) {
     setBusy(true);
     setMessage('');
     try {
-      const response = await base44.functions.invoke('redeemBillingLink', { code, confirm: true });
+      const response = await base44.functions.invoke('redeemBillingLink', payload);
       const result = response?.data?.code;
       if (result !== 'IDENTITY_LINKED') throw Object.assign(new Error('LINK_FAILED'), { result });
       clearBillingLinkCode();
@@ -40,10 +47,19 @@ export default function BillingLinkConfirmation() {
       window.location.reload();
     } catch (err) {
       const result = err?.result || err?.response?.data?.code;
-      setMessage(MESSAGES[result] || GENERIC);
+      if (result === 'LINK_COMPLETION_PENDING') {
+        // El código ya se consumió en el servidor: desde aquí solo se reintenta la finalización.
+        clearBillingLinkCode();
+        setPending(true);
+        setMessage(PENDING);
+      } else {
+        setMessage(MESSAGES[result] || GENERIC);
+      }
       setBusy(false);
     }
   }
+
+  const confirm = () => run(pending ? { resume: true, confirm: true } : { code, confirm: true });
 
   if (!code) return null;
   return (
@@ -62,10 +78,10 @@ export default function BillingLinkConfirmation() {
           </button>
           <button type="button" onClick={confirm} disabled={busy || !email}
             className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
-            {busy ? 'Vinculando…' : 'Confirmar vinculación'}
+            {busy ? 'Vinculando…' : pending ? 'Reintentar' : 'Confirmar vinculación'}
           </button>
         </div>
-        {message && <p role="alert" className="text-xs text-destructive">{message}</p>}
+        {message && <p role="alert" className={`text-xs ${pending ? 'text-amber-400' : 'text-destructive'}`}>{message}</p>}
       </section>
     </div>
   );
