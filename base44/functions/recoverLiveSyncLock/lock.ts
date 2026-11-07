@@ -26,6 +26,16 @@ export const LIVE_FIELDS = [
  */
 export const OP_FIELD = 'stripe_live_sync_operation_id';
 
+/**
+ * Método de escritura con atomicidad DOCUMENTADA por Base44 (SDK
+ * entities.types.d.ts, updateMany): "All the update operators in a call ...
+ * are applied to each record in a single write", y con la consulta por un
+ * único `id` como valor plano. `update()` no documenta esa garantía, por eso
+ * no se usa. El pendiente guarda este marcador; la recuperación solo
+ * considera demostrada la finalización si el pendiente lo lleva.
+ */
+export const WRITE_METHOD = 'updateMany:$set:single-id';
+
 export const lockKey = (orgId: string) => `trucky:billing:sync:live:org:${orgId}`;
 export const pendingKey = (orgId: string) => `trucky:billing:sync:live:pending:org:${orgId}`;
 export const RECOVERY_AUDIT_KEY = 'trucky:billing:sync:live:recovery:audit';

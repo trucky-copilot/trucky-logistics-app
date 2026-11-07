@@ -1,14 +1,16 @@
 // Only invoked after S2S authentication in entry.ts. Never creates charges or grants app access.
 import {
   type Command, lockKey, pendingKey, makeOwner, pickLiveFields,
-  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT, SET_PENDING_IF_OWNER_SCRIPT, OP_FIELD,
+  RELEASE_LOCK_SCRIPT, RELEASE_LOCK_AND_PENDING_SCRIPT, SET_PENDING_IF_OWNER_SCRIPT, OP_FIELD, WRITE_METHOD,
 } from './lock.ts';
 export type { Command };
 export interface LiveDeps {
  enabled:boolean; orgIds:Set<string>; memberIds:Set<string>; prices:{owner_op?:string;fleet?:string};
  redis:Command; assertProvenance:(redis:Command,member:any)=>Promise<void>;
  members:(q:Record<string,unknown>)=>Promise<any[]>; organizations:(id:string)=>Promise<any[]>;
- retrieve:(id:string)=>Promise<any>; update:(id:string,fields:Record<string,unknown>)=>Promise<unknown>;
+ retrieve:(id:string)=>Promise<any>;
+ /** Escritura de UN registro en una sola operación: Organization.updateMany({id},{$set}) → {updated}. */
+ update:(id:string,fields:Record<string,unknown>)=>Promise<{updated?:unknown}|unknown>;
  owner:()=>string;
  /** Hora actual en ms (inyectada para las pruebas). */
  now?:()=>number;
@@ -62,13 +64,16 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
   // Record the intended write BEFORE touching Base44, so an uncertain outcome can be reviewed.
   // Fencing: only the current lock owner may record (and then perform) the write.
   const pendingSet=await d.redis(['EVAL',SET_PENDING_IF_OWNER_SCRIPT,'2',lock,pending,owner,
-   JSON.stringify({owner,orgId:org.id,subscriptionId:sub.id,fields,before:pickLiveFields(org),startedAt:new Date(nowMs).toISOString()})]);
+   JSON.stringify({owner,orgId:org.id,subscriptionId:sub.id,writeMethod:WRITE_METHOD,fields,before:pickLiveFields(org),startedAt:new Date(nowMs).toISOString()})]);
   if(pendingSet===0)return res('LIVE_LOCK_LOST',409);
   if(pendingSet!==1)return res('LIVE_RECOVERY_REQUIRED',409);
   writeStarted=true;
-  // One single record update: the 5 live fields AND this operation's unique id.
-  // Recovery treats the write as finished only if it sees this exact id.
-  await d.update(org.id,{...fields,[OP_FIELD]:owner});
+  // ONE single-record write ($set via updateMany, documented as a single write per
+  // record): the 5 live fields AND this operation's unique id. Recovery treats the
+  // write as finished only if it sees this exact id.
+  const written:any=await d.update(org.id,{...fields,[OP_FIELD]:owner});
+  // Anything other than exactly one record written is uncertain: keep lock and pending.
+  if(written?.updated!==1)throw Error('WRITE_NOT_CONFIRMED');
   done=true;
   return res('SUBSCRIPTION_RECONCILED');
  }catch{return res(writeStarted?'LIVE_WRITE_REQUIRES_REVIEW':'LIVE_RECONCILIATION_REQUIRED',503);}

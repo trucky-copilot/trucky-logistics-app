@@ -23,7 +23,7 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
         prices:{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')},
         redis:demoRedis,assertProvenance:assertMembershipProvenance,owner:()=>crypto.randomUUID(),now:()=>Date.now(),
         organizations:id=>db.Organization.filter({id}),members:q=>db.OrganizationMember.filter(q),
-        update:(id,fields)=>db.Organization.update(id,fields),
+        update:(id,fields)=>db.Organization.updateMany({id},{$set:fields}),
         retrieve:async id=>{const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');
           if(!key||!/^(sk|rk)_live_.+/.test(key))throw Error('LIVE_KEY_REQUIRED');
           return await new Stripe(key,{timeout:12000,maxNetworkRetries:0}).subscriptions.retrieve(id);

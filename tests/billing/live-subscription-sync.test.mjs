@@ -14,7 +14,7 @@ function setup(){const mock=createRedisMock([
  const writes=[];let reads=0;
  const deps={enabled:true,orgIds:new Set(['org']),memberIds:new Set(['member']),prices:{owner_op:'price_owner',fleet:'price_fleet'},owner:()=> 'lock-fixture',now:()=>NOW,
  redis:mock.cmd,
- assertProvenance:assertMembershipProvenance,members:async()=>[structuredClone(member)],organizations:async()=>[org],retrieve:async()=>{reads++;return structuredClone(subscription);},update:async(id,fields)=>{writes.push({id,fields});Object.assign(org,fields);}};
+ assertProvenance:assertMembershipProvenance,members:async()=>[structuredClone(member)],organizations:async()=>[org],retrieve:async()=>{reads++;return structuredClone(subscription);},update:async(id,fields)=>{writes.push({id,fields});Object.assign(org,fields);return {updated:1};}};
  return {deps,store,org,writes,reads:()=>reads};}
 const lock='trucky:billing:sync:live:org:org';
 const pending='trucky:billing:sync:live:pending:org:org';

@@ -16,7 +16,12 @@
  *    escritura podría seguir en vuelo y aplicarse tras una cancelación).
  *  - WRITE_NOT_APPLIED_YET: no aparece el id de esta operación. No hay
  *    prueba de finalización → se conserva el bloqueo.
+ *    El id y los campos viajan en UNA escritura de un solo registro
+ *    (Organization.updateMany({id},{$set}), documentada por Base44 como
+ *    "applied to each record in a single write").
  *  - WRITE_PARTIAL: aparece el id pero los campos no coinciden → revisión.
+ *  - ATOMICITY_NOT_PROVEN: el pendiente no declara ese método de escritura
+ *    (p. ej. lo dejó una versión anterior) → no hay prueba; se conserva.
  *  - INCONSISTENT: lock/pendiente/registro incoherentes → revisión.
  *
  * La auditoría y la liberación ocurren en UNA operación atómica de Redis
@@ -24,7 +29,7 @@
  * Nunca modifica la Organization ni reintenta la escritura.
  */
 import {
-  type Command, lockKey, pendingKey, ownerTakenAt, sameLiveFields, pickLiveFields, OP_FIELD,
+  type Command, lockKey, pendingKey, ownerTakenAt, sameLiveFields, pickLiveFields, OP_FIELD, WRITE_METHOD,
   RECOVERY_RELEASE_SCRIPT, RECOVERY_AUDIT_KEY,
 } from './lock.ts';
 
@@ -48,7 +53,7 @@ const out = (code: string, status = 200, extra: Record<string, unknown> = {}): R
   ({ status, body: { code, ...extra } });
 const safe = (s: unknown): s is string => typeof s === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(s);
 
-export type Outcome = 'NO_WRITE_STARTED' | 'WRITE_APPLIED' | 'WRITE_NOT_APPLIED_YET' | 'WRITE_PARTIAL' | 'INCONSISTENT';
+export type Outcome = 'NO_WRITE_STARTED' | 'WRITE_APPLIED' | 'WRITE_NOT_APPLIED_YET' | 'WRITE_PARTIAL' | 'ATOMICITY_NOT_PROVEN' | 'INCONSISTENT';
 /** Solo hay evidencia de que no queda escritura pendiente en estos dos casos. */
 const RELEASABLE: Outcome[] = ['NO_WRITE_STARTED', 'WRITE_APPLIED'];
 
@@ -72,8 +77,11 @@ async function inspect(orgId: string, deps: RecoverDeps) {
     if (orgs.length !== 1 || orgs[0].id !== orgId) outcome = 'INCONSISTENT';
     else {
       const current = pickLiveFields(orgs[0]);
+      // Sin el método de escritura atómica documentado no se puede demostrar la finalización.
+      if (pending.writeMethod !== WRITE_METHOD) {
+        outcome = 'ATOMICITY_NOT_PROVEN';
       // Prueba de finalización = id único de ESTA operación escrito junto con los campos.
-      if (orgs[0][OP_FIELD] === owner) {
+      } else if (orgs[0][OP_FIELD] === owner) {
         outcome = sameLiveFields(current, pending.fields) ? 'WRITE_APPLIED' : 'WRITE_PARTIAL';
       } else {
         // Sin el id no hay prueba, aunque los campos coincidan (before === fields).
