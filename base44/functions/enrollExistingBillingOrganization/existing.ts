@@ -1,5 +1,6 @@
 import {readEnrollment} from './enrollment.ts';
 import {registerReviewedEnrollment} from './reviewedEnrollment.ts';
+import {conditionalIdentityWrite} from './memberWrite.ts';
 export interface Deps {
  enabled:boolean;adminIds:Set<string>;trustedServer:()=>Promise<boolean>;native:()=>Promise<any>;google:(token:string)=>Promise<any>;
  member:(id:string)=>Promise<any>;org:(id:string)=>Promise<any>;owners:(id:string)=>Promise<any[]>;
@@ -69,11 +70,11 @@ export async function enrollExisting(body:any,d:Deps){
   if(body.confirm!==`ENROLL ${member.id}`||body.ownership_verified!==true||typeof body.evidence_reference!=='string'||!/^[A-Za-z0-9_.:-]{8,120}$/.test(body.evidence_reference))return out('ADMIN_REVIEW_REQUIRED',400);
   const event=JSON.stringify({event:'existing_enrollment_approved',requestId:a.requestId,adminId:caller.id,orgId:org.id,memberId:member.id,nativeId:a.nativeId,googleSub:a.googleSub,at:d.now(),evidenceReference:body.evidence_reference});
   if(await d.redis(['EVAL',consume,'2',approvalKey(a.requestId),audit,String(raw),event])!==1)return out('APPROVAL_ALREADY_USED',409);
-  // Pin exact IDs/role/active AND prior values so concurrent ownership changes
-  // cannot be overwritten. updateMany single-id condition is checked at write.
-  const query={id:member.id,organization_id:org.id,role:'owner',active:true,google_sub:member.google_sub??null,base44_user_id:member.base44_user_id??null};
-  const write=await d.updateMember(query,{google_sub:a.googleSub,base44_user_id:a.nativeId});
-  if(write?.updated!==1)return out('EXISTING_ENROLLMENT_REQUIRES_REVIEW',503);
+  // Pin exact IDs/role/active AND the exact prior state of BOTH identity fields
+  // (absent → $exists:false, null → null, value → value), checked at write time.
+  // `updated` counts modifications, so the outcome is confirmed by a fresh read.
+  const written=await conditionalIdentityWrite(d,member,org.id,{google_sub:a.googleSub,base44_user_id:a.nativeId});
+  if(written==='REJECTED')return out('EXISTING_ENROLLMENT_REQUIRES_REVIEW',503);
   await registerReviewedEnrollment(d.redis,org,{...member,google_sub:a.googleSub,base44_user_id:a.nativeId});
   // Normal redeem/link flow still creates/checks global bidirectional binding.
   return out('EXISTING_ENROLLMENT_RECORDED');

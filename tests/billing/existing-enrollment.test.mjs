@@ -1,3 +1,4 @@
+import {updateOne} from './_mongoLike.mjs';
 import {redeemBillingLinkCore,HANDOFF_PREFIX} from '../../base44/functions/redeemBillingLink/redeem.ts';
 import {reserveNativeBinding} from '../../base44/functions/redeemBillingLink/binding.ts';
 import {assertMembershipProvenance} from '../../base44/functions/redeemBillingLink/provenance.ts';
@@ -6,7 +7,7 @@ import {checkEligibility} from '../../base44/functions/checkLiveCheckoutEligibil
 import test from 'node:test';import assert from 'node:assert/strict';import {enrollExisting} from '../../base44/functions/enrollExistingBillingOrganization/existing.ts';import {inspectCreation} from '../../base44/functions/inspectBillingCreation/inspect.ts';
 function world(){const store=new Map(),m={id:'member',organization_id:'org',active:true,role:'owner',user_email:'owner@example.invalid'},o={id:'org',active:true,created_by_user:'owner@example.invalid'};let native={id:'native',email:'owner@example.invalid'},writes=0,now=1000000;const expiries=new Map();
  const redis=async c=>{const[op,k,v]=c;if(op==='GET'){if(expiries.has(k)&&expiries.get(k)<=now){store.delete(k);expiries.delete(k);}return store.get(k)??null;}if(op==='GETDEL'){const x=store.get(k)??null;store.delete(k);return x;}if(op==='SET'){if(c.includes('NX')&&store.has(k))return null;store.set(k,v);const ex=c.indexOf('EX');if(ex!==-1)expiries.set(k,now+Number(c[ex+1])*1000);return 'OK';}if(op==='EXISTS')return c.slice(1).filter(k=>store.has(k)).length;if(op==='EVAL'){if(String(c[1]).includes("redis.call('SET',KEYS[1],ARGV[1])")){const[,,,fwd,rev,native,google]=c;if((store.has(fwd)&&store.get(fwd)!==native)||(store.has(rev)&&store.get(rev)!==google))return 0;store.set(fwd,native);store.set(rev,google);return 1;}if(String(c[1]).includes('MSET')){const[,,,p,e,pv,ev]=c;const oldp=store.get(p),olde=store.get(e);for(const [old,wanted] of [[oldp,pv],[olde,ev]]){if(old){const x=JSON.parse(old),y=JSON.parse(wanted);if(Object.keys(y).some(k=>x[k]!==y[k]))return 0;}}if(olde&&!oldp)return 0;store.set(p,pv);store.set(e,ev);return 1;}const[,,,a,au,raw,event]=c;if(store.get(a)!==raw)return 0;store.set(au,event);store.delete(a);return 1;}throw Error('unexpected');};
- const d={enabled:true,adminIds:new Set(['admin']),trustedServer:async()=>true,native:async()=>native,google:async()=>({sub:'google',email:'owner@example.invalid',email_verified:true,iat:1000}),redis,now:()=>now,id:()=> 'approval',member:async()=>m,org:async()=>o,owners:async()=>[m],updateMember:async(q,f)=>{assert.equal(q.id,'member');writes++;Object.assign(m,f);return {updated:1};}};
+ const d={enabled:true,adminIds:new Set(['admin']),trustedServer:async()=>true,native:async()=>native,google:async()=>({sub:'google',email:'owner@example.invalid',email_verified:true,iat:1000}),redis,now:()=>now,id:()=> 'approval',member:async()=>m,org:async()=>o,owners:async()=>[m],updateMember:async(q,f)=>{assert.equal(q.id,'member');const r=updateOne(m,q,{$set:f});if(r.updated===1)writes++;return r;}};
  return{d,m,store,writes:()=>writes,setNative:v=>native=v,advance:ms=>now+=ms};}
 const target={organization_id:'org',member_id:'member'};
 async function approve(w){assert.equal((await enrollExisting({...target,mode:'owner_approval',google_id_token:'fixture',owner_consent:true},w.d)).body.code,'EXISTING_GOOGLE_APPROVAL_RECORDED');assert.equal((await enrollExisting({...target,mode:'request',request_id:'approval',owner_consent:true},w.d)).body.code,'EXISTING_OWNER_APPROVAL_RECORDED');}
@@ -55,3 +56,37 @@ test('completed creation is not reported as unfinished; inspector only reads',as
  const w=world();const r=await inspectCreation({google_sub:'google',company_name:'Company'},{enabled:true,adminIds:new Set(['admin']),user:async()=>({id:'admin',role:'admin'}),redis:async c=>{assert.equal(c[0],'GET');return 'org';},members:async()=>[w.m],orgs:async()=>[{id:'org',name:'Company',active:true}]});
  assert.equal(r.body.reservation_completed,true);assert.equal(r.body.may_have_unfinished_write,false);
 });
+
+test('conditional write pins BOTH identity fields: absent → $exists:false, value → exact',async()=>{
+ const w=world();let seen;const orig=w.d.updateMember;w.d.updateMember=async(q,f)=>{seen=q;return orig(q,f);};
+ await approve(w);w.setNative({id:'admin',role:'admin'});
+ const r=await enrollExisting({...target,mode:'execute',request_id:'approval',confirm:'ENROLL member',ownership_verified:true,evidence_reference:'operator-history-001'},w.d);
+ assert.equal(r.body.code,'EXISTING_ENROLLMENT_RECORDED');
+ assert.deepEqual(seen.google_sub,{$exists:false});assert.deepEqual(seen.base44_user_id,{$exists:false});
+ assert.equal(seen.id,'member');assert.equal(seen.organization_id,'org');assert.equal(seen.role,'owner');assert.equal(seen.active,true);
+});
+test('explicit null fields are pinned with null, not $exists:false',async()=>{
+ const w=world();w.m.google_sub=null;w.m.base44_user_id=null;let seen;const orig=w.d.updateMember;w.d.updateMember=async(q,f)=>{seen=q;return orig(q,f);};
+ await approve(w);w.setNative({id:'admin',role:'admin'});
+ const r=await enrollExisting({...target,mode:'execute',request_id:'approval',confirm:'ENROLL member',ownership_verified:true,evidence_reference:'operator-history-001'},w.d);
+ assert.equal(r.body.code,'EXISTING_ENROLLMENT_RECORDED');assert.equal(seen.google_sub,null);assert.equal(seen.base44_user_id,null);assert.equal(w.m.base44_user_id,'native');
+});
+test('concurrent identity change between read and write is rejected without overwrite',async()=>{
+ const w=world();await approve(w);w.setNative({id:'admin',role:'admin'});
+ const orig=w.d.updateMember;w.d.updateMember=async(q,f)=>{w.m.base44_user_id='intruder';return orig(q,f);};
+ const r=await enrollExisting({...target,mode:'execute',request_id:'approval',confirm:'ENROLL member',ownership_verified:true,evidence_reference:'operator-history-001'},w.d);
+ assert.equal(r.body.code,'EXISTING_ENROLLMENT_REQUIRES_REVIEW');assert.equal(w.m.base44_user_id,'intruder');assert.equal(w.store.has('trucky:billing:enrollment:v1:org:org'),false);
+});
+test('identical repeat (already linked, updated:0) is idempotent only after a verified read',async()=>{
+ const w=world();w.m.google_sub='google';w.m.base44_user_id='native';await approve(w);w.setNative({id:'admin',role:'admin'});
+ let res;const orig=w.d.updateMember;w.d.updateMember=async(q,f)=>{res=await orig(q,f);return res;};
+ const r=await enrollExisting({...target,mode:'execute',request_id:'approval',confirm:'ENROLL member',ownership_verified:true,evidence_reference:'operator-history-001'},w.d);
+ assert.equal(res.updated,0);assert.equal(r.body.code,'EXISTING_ENROLLMENT_RECORDED');assert.equal(w.writes(),0);
+});
+test('updated:0 with a different identity read back is NOT treated as idempotent',async()=>{
+ const w=world();await approve(w);w.setNative({id:'admin',role:'admin'});
+ w.d.updateMember=async()=>({updated:0});w.m.base44_user_id=undefined;
+ const r=await enrollExisting({...target,mode:'execute',request_id:'approval',confirm:'ENROLL member',ownership_verified:true,evidence_reference:'operator-history-001'},w.d);
+ assert.equal(r.body.code,'EXISTING_ENROLLMENT_REQUIRES_REVIEW');assert.equal(w.store.has('trucky:billing:enrollment:v1:org:org'),false);
+});
+test('memberWrite.ts copies are identical',async()=>{const {readFile}=await import('node:fs/promises');assert.equal(await readFile('base44/functions/enrollExistingBillingOrganization/memberWrite.ts','utf8'),await readFile('base44/functions/probeMembershipUpdateMany/memberWrite.ts','utf8'));});
