@@ -1,6 +1,6 @@
 import type {EligibilityDeps} from './eligibility.ts';
 import {checkEligibility} from './eligibility.ts';
-export interface HttpDeps {secret?:string;enabled:boolean;syncEnabled:boolean;makeDeps:()=>EligibilityDeps}
+export interface HttpDeps {secret?:string;enabled:boolean;syncEnabled:boolean;makeDeps:()=>EligibilityDeps|Promise<EligibilityDeps>}
 export async function eligibilityHttp(req:Request,d:HttpDeps){
  const headers={'Content-Type':'application/json','Cache-Control':'no-store'};
  const reply=(code:string,status:number)=>new Response(JSON.stringify({code}),{status,headers});
@@ -13,7 +13,7 @@ export async function eligibilityHttp(req:Request,d:HttpDeps){
  try{body=await req.json();}catch{return reply('INVALID_REQUEST',400);}
  if(!body||typeof body!=='object'||Array.isArray(body)||Object.keys(body).some(k=>!['google_sub','organization_id'].includes(k))||typeof body.google_sub!=='string'||typeof body.organization_id!=='string')return reply('INVALID_REQUEST',400);
  try{
-  const result=await checkEligibility(body.google_sub,body.organization_id,d.makeDeps());
+  const result=await checkEligibility(body.google_sub,body.organization_id,await d.makeDeps());
   return new Response(JSON.stringify(result.body),{status:result.status,headers});
  }catch{return reply('LIVE_CHECKOUT_REQUIRES_REVIEW',503);}
 }

@@ -22,6 +22,7 @@ export default function Onboarding({ onComplete }) {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [setupError, setSetupError] = useState(false);
+  const [linkRequired,setLinkRequired]=useState(false);
 
   // Paso 1
   const [rol, setRol] = useState(null);
@@ -55,6 +56,7 @@ export default function Onboarding({ onComplete }) {
   const handleComplete = async () => {
     setLoading(true);
     setSetupError(false);
+    setLinkRequired(false);
     const user = await base44.auth.me();
 
     // 1-2. Organización + membresía 'owner'
@@ -70,7 +72,9 @@ export default function Onboarding({ onComplete }) {
       if (!res?.data?.org_id) throw new Error(res?.data?.error || 'Sin organización');
       org = { id: res.data.org_id, name: res.data.name };
     } catch (err) {
-      console.error('[Onboarding] No se pudo crear la organización:', err);
+      const code=err?.response?.data?.error||err?.message;
+      setLinkRequired(code==='BILLING_IDENTITY_LINK_REQUIRED');
+      console.error('[Onboarding] organization_setup_failed');
       setLoading(false);
       setSetupError(true);
       return;
@@ -415,7 +419,8 @@ export default function Onboarding({ onComplete }) {
                 </div>
               </div>
 
-              {setupError && (
+              {linkRequired && <div role="alert" className="text-sm rounded-xl border border-primary p-4"><strong>Confirma tu cuenta</strong><p>La empresa ya existe. Vincula tu cuenta de Trucky con Google antes de continuar; no crees otra empresa.</p><a href="https://www.trucky-ai.com/billing-link" target="_blank" rel="noopener noreferrer" className="text-primary underline">Confirmar mi cuenta</a></div>}
+              {setupError && !linkRequired && (
                 <p role="alert" className="text-xs text-destructive">
                   No pudimos crear tu organización. Revisa tu conexión e inténtalo de nuevo.
                 </p>

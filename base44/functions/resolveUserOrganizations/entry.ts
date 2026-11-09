@@ -1,3 +1,4 @@
+import {readEnrollment} from './enrollment.ts';
 import {readBillingMode,organizationBillingView} from './billingMode.ts';
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
@@ -149,8 +150,14 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
       if (!org || org.active === false) continue;
 
       const billing=organizationBillingView(org,live);
+      let enrollment;
+      try{enrollment=await readEnrollment(demoRedis,org.id,true,identity.sub);}
+      catch{console.warn('billing_enrollment_unavailable');continue;} // Isolate corrupt/unavailable row; never trust it or fail every company.
+      const publicEligible=!!enrollment&&enrollment.memberId===m.id&&m.active===true&&m.role==='owner';
       organizations.push({
         id: org.id,
+        billing_public_enrollment:publicEligible,
+        billing_identity_linked:!!m.base44_user_id,
         billing_demo_enabled: await isDemoOrganization(org.id),
         name: org.name,
         role: m.role,

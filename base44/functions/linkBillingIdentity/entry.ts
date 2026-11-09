@@ -1,3 +1,4 @@
+import {expandedScope} from './enrollment.ts';
 import { assertMembershipProvenance } from "./provenance.ts";
 import { reserveNativeBinding } from "./binding.ts";
 import { demoRedis } from "./demoRegistry.ts";
@@ -33,16 +34,32 @@ export default async function linkBillingIdentity(req:Request,_ctx:unknown){
  const enabled=Deno.env.get('BILLING_IDENTITY_LINK_ENABLED')==='true';
  if(!enabled)return reply('LINK_NOT_ENABLED',503);
  try{
-  let body:unknown=null;
+  let body:any=null;
   try{body=await req.json();}catch{return reply('INVALID_REQUEST',400);}
   const client=createClientFromRequest(req);
   const db=client.asServiceRole.entities;
+ const nativeUser=await client.auth.me();
+ if(!nativeUser?.id||!nativeUser?.email)return reply('NATIVE_SESSION_REQUIRED',401);
+ let scope={orgIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_ORG_IDS')),memberIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_MEMBER_IDS'))};
+ // Recognize existing server enrollments even when new enrollment is closed.
+ const general=true;
+ let verifiedIdentity:VerifiedGoogleIdentity|null=null;
+ if(general){
+  if(body?.resume===true&&body.confirm===true){
+   const sub=await demoRedis(['GET',`trucky:billing:native:v1:${nativeUser.id}`]);
+   if(typeof sub==='string'){const members=await db.OrganizationMember.filter({google_sub:sub,active:true});for(const m of members)scope=await expandedScope(demoRedis,m.organization_id,true,scope.orgIds,scope.memberIds,sub);}
+  }else if(typeof body?.google_id_token==='string'&&body.google_id_token.length<=4096){
+   verifiedIdentity=await verifyGoogleIdToken(body.google_id_token).catch(()=>null);
+   if(verifiedIdentity?.email_verified&&verifiedIdentity.email.toLowerCase()===nativeUser.email.toLowerCase())scope=await expandedScope(demoRedis,body.organization_id,true,scope.orgIds,scope.memberIds,verifiedIdentity.sub);
+  }
+ }
+
   const result=await linkBillingIdentityCore(body,{
    enabled,
-   pilotOrgIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_ORG_IDS')),
-   pilotMemberIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_MEMBER_IDS')),
-   getUser:()=>client.auth.me(),
-   verifyGoogleIdToken,
+   pilotOrgIds:scope.orgIds,
+   pilotMemberIds:scope.memberIds,
+   getUser:async()=>nativeUser,
+   verifyGoogleIdToken:async token=>verifiedIdentity??await verifyGoogleIdToken(token),
    redis:demoRedis,
    findMembers:(q)=>db.OrganizationMember.filter(q),
    updateMember:(id,data)=>db.OrganizationMember.update(id,data),

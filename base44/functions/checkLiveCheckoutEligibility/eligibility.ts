@@ -12,8 +12,9 @@ export async function checkEligibility(sub:unknown,orgId:unknown,d:EligibilityDe
   const members=await d.members({organization_id:orgId,google_sub:sub,active:true});
   if(members.length!==1)return out('VERIFIED_MEMBERSHIP_REQUIRED',403);
   const m=members[0];
-  if(!d.memberIds.has(m.id)||m.organization_id!==orgId||m.google_sub!==sub||m.active!==true||!['owner','admin'].includes(m.role)||typeof m.base44_user_id!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(m.base44_user_id))return out('PILOT_NOT_ALLOWED',403);
+  if(!d.memberIds.has(m.id)||m.organization_id!==orgId||m.google_sub!==sub||m.active!==true||!['owner','admin'].includes(m.role))return out('PILOT_NOT_ALLOWED',403);
   await d.provenance(d.redis,m);
+  if(typeof m.base44_user_id!=='string'||!/^[A-Za-z0-9_-]{1,128}$/.test(m.base44_user_id))return out('LIVE_IDENTITY_LINK_REQUIRED',409);
   if(await d.redis(['GET',`trucky:billing:identity:v1:${sub}`])!==m.base44_user_id||await d.redis(['GET',`trucky:billing:native:v1:${m.base44_user_id}`])!==sub)return out('IDENTITY_REQUIRES_REVIEW',409);
   const orgs=await d.orgs(orgId);if(orgs.length!==1||orgs[0].id!==orgId||orgs[0].active!==true)return out('ORGANIZATION_UNAVAILABLE',409);
   const org=orgs[0];

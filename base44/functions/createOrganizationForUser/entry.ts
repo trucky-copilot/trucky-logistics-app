@@ -1,4 +1,6 @@
-import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
+import {takeCreation,RELEASE_CREATION,FINISH_CREATION} from './creation.ts';
+import {registerNewEnrollment} from './enrollment.ts';
+import { isDemoOrganization, demoRedis as cloudRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
 /**
@@ -79,7 +81,8 @@ async function verifyGoogleIdToken(idToken: string): Promise<GoogleIdentity | nu
   return { sub: String(claims.sub), email: String(claims.email).toLowerCase() };
 }
 
-export default async function createOrganizationForUser(req: Request, _ctx: unknown) {
+export default async function createOrganizationForUser(req: Request, _ctx: unknown, deps?: {verify:(token:string)=>Promise<GoogleIdentity|null>;db:any;redis:(c:unknown[])=>Promise<any>}) {
+  const demoRedis=deps?.redis??cloudRedis;
   if (req.method !== 'POST') return json({ error: 'Método no permitido' }, 405);
 
   // 1) Autenticación entre servidores
@@ -110,14 +113,16 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
 
   const diagnosticId = crypto.randomUUID();
   let stage = 'google_identity';
+  let creationKey:string|undefined;
+  const creationOwner=crypto.randomUUID();
+  let creationAcquired=false,writeMayHaveStarted=false;
   try {
     // 3) Identidad de Google
-    const identity = await verifyGoogleIdToken(idToken);
+    const identity = await (deps?.verify??verifyGoogleIdToken)(idToken);
     if (!identity) return json({ error: 'Token de Google inválido o expirado' }, 401);
 
     stage = 'service_client';
-    const base44 = createClientFromRequest(req);
-    const db = base44.asServiceRole.entities;
+    const db = deps?.db??createClientFromRequest(req).asServiceRole.entities;
 
     // 4) Idempotencia y verificación previa:
     // Comprobar si el usuario ya tiene una organización creada con ese nombre
@@ -144,24 +149,29 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     }
 
     const publicDemo = Deno.env.get('PUBLIC_TEST_DEMO_ENABLED') === 'true';
-    let creationKey: string | undefined;
-    if (publicDemo) {
-      // One canonical attempt per identity and normalized name. Unknown outcomes
-      // remain blocked rather than creating another organization on retry.
-      const digest = new Uint8Array(await crypto.subtle.digest('SHA-256',
-        new TextEncoder().encode(`${identity.sub}:${companyName.toLowerCase()}`)));
-      const suffix = Array.from(digest).map(b => b.toString(16).padStart(2, '0')).join('');
-      creationKey = `trucky:demo:test:create:${suffix}`;
-    stage = 'redis_creation_lock';
-      const acquired = await demoRedis(['SET', creationKey, 'pending', 'NX']);
-      if (acquired !== 'OK') return json({ error: 'DEMO_CREATION_REQUIRES_RECONCILIATION' }, 409);
-    stage = 'redis_quota';
-      const quota = await demoRedis(['EVAL', "local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],86400) end; return n", '1', `trucky:demo:test:quota:${identity.sub}`]);
-      if (quota > 3) return json({ error: 'DEMO_CREATION_LIMIT' }, 429);
+    const publicBilling=Deno.env.get('BILLING_PUBLIC_ENROLLMENT_ENABLED')==='true';
+    if(publicBilling){
+      // Email here is a conservative duplicate detector, NEVER proof of membership.
+      const legacy=await db.OrganizationMember.filter({user_email:identity.email,active:true});
+      const owned=await db.Organization.filter({created_by_user:identity.email});
+      if(existingMemberships?.length||legacy?.length||owned?.some((o:any)=>o.active!==false))return json({error:'EXISTING_ORGANIZATION_REQUIRES_VERIFIED_LINK'},409);
+      stage='billing_creation_reserve';
+      const reservation=await takeCreation(demoRedis,identity.sub,companyName,creationOwner);
+      if(!reservation.key)return json({error:reservation.code},reservation.status);
+      creationKey=reservation.key;creationAcquired=true;
+    }else if(publicDemo){
+      const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(`${identity.sub}:${companyName.toLowerCase()}`)));
+      creationKey=`trucky:demo:test:create:${Array.from(digest).map(b=>b.toString(16).padStart(2,'0')).join('')}`;
+      stage='redis_creation_lock';
+      if(await demoRedis(['SET',creationKey,'pending','NX'])!=='OK')return json({error:'DEMO_CREATION_REQUIRES_RECONCILIATION'},409);
+      stage='redis_quota';
+      const quota=await demoRedis(['EVAL',"local n=redis.call('INCR',KEYS[1]); if n==1 then redis.call('EXPIRE',KEYS[1],86400) end; return n",'1',`trucky:demo:test:quota:${identity.sub}`]);
+      if(quota>3)return json({error:'DEMO_CREATION_LIMIT'},429);
     }
 
     // 5) Crear la Organización
     stage = 'organization_create';
+    writeMayHaveStarted=true;
     const newOrg = await db.Organization.create({
       name: companyName,
       account_type: accountType,
@@ -176,7 +186,7 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
 
     // 6) Crear la membresía atómica como 'owner'
     stage = 'membership_create';
-    await db.OrganizationMember.create({
+    const newMember=await db.OrganizationMember.create({
       organization_id: newOrg.id,
       user_email: identity.email,
       google_sub: identity.sub,
@@ -184,11 +194,18 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       active: true
     });
 
+    if(publicBilling){
+      stage='billing_enrollment_register';
+      await registerNewEnrollment(demoRedis,newOrg,newMember);
+    }
     if (publicDemo) {
     stage = 'registry_register';
       await registerDemoOrganization(newOrg.id);
-    stage = 'registry_finalize';
-      await demoRedis(['SET', creationKey!, newOrg.id]);
+    }
+    if(publicDemo||publicBilling){
+      stage='registry_finalize';
+      if(publicBilling){if(await demoRedis(['EVAL',FINISH_CREATION,'1',creationKey!,creationOwner,newOrg.id])!==1)throw Error('BILLING_CREATION_REQUIRES_RECONCILIATION');}
+      else await demoRedis(['SET',creationKey!,newOrg.id]);
     }
     return json({
       status: 'created',
@@ -199,6 +216,9 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     }, 201);
 
   } catch (error) {
+    // Only pre-write local failures are safe to release. SDK/network errors after
+    // issuing Organization.create are uncertain; retain even an HTTP error until reviewed.
+    if(creationAcquired&&creationKey&&!writeMayHaveStarted){try{await demoRedis(['EVAL',RELEASE_CREATION,'1',creationKey,creationOwner]);}catch{}}
     const err = error as { name?: string; message?: string; status?: number; statusCode?: number; response?: { status?: number } };
     const known = ['DEMO_REGISTRY_UNAVAILABLE', 'DEMO_REGISTRY_CONFIGURATION', 'DEMO_REGISTRY_HTTP', 'DEMO_REGISTRY_COMMAND'];
     const status = err?.status ?? err?.statusCode ?? err?.response?.status;
