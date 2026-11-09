@@ -23,7 +23,7 @@ fi
 
 echo "pre-commit: corriendo las pruebas del motor de tarifas..."
 
-if ! deno test --allow-read --quiet tests/; then
+if ! deno test --allow-read --allow-env --quiet tests/; then
   echo "" >&2
   echo "pre-commit: las pruebas fallaron, el commit se detuvo." >&2
   echo "            Corré 'npm run test:functions' para ver el detalle." >&2
