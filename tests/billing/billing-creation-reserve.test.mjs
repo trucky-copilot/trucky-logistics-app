@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {takeCreation} from '../../base44/functions/createOrganizationForUser/creation.ts';
+test('quota rejects before lock so no pending company reservation is created',async()=>{const calls=[];const r=await takeCreation(async c=>{calls.push(c);return 0;},'sub','Company','owner');assert.equal(r.status,429);assert.equal(calls.length,1);assert.equal(calls[0][0],'EVAL');assert.ok(String(calls[0][3]).startsWith('trucky:billing:create:v1:quota:'));});
+test('reservation uses billing namespace and unique owner, not demo trial keys',async()=>{const calls=[];const r=await takeCreation(async c=>{calls.push(c);return c[0]==='EVAL'?1:'OK';},'sub','Company','owner');assert.equal(r.status,200);assert.equal(calls[1][2],'owner');assert.ok(r.key.startsWith('trucky:billing:create:v1:attempt:'));});
+test('busy reservation never overwrites and returns explicit reconciliation',async()=>{const r=await takeCreation(async c=>c[0]==='EVAL'?1:null,'sub','Company','owner');assert.equal(r.status,409);assert.equal(r.key,null);});
