@@ -1,3 +1,4 @@
+import {readBillingMode,organizationBillingView} from './billingMode.ts';
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
@@ -102,12 +103,16 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
   if (!isAuthorizedServer(req)) return json({ error: 'Unauthorized' }, 401);
 
   // 2) Validación del body
-  let body: { google_id_token?: unknown };
+  let body: { google_id_token?: unknown; mode?: unknown };
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Body JSON inválido' }, 400);
   }
+  if(!body||typeof body!=='object'||Array.isArray(body))return json({error:'INVALID_REQUEST'},400);
+  const selected=readBillingMode(body.mode,Deno.env.get('BILLING_LIVE_CHECKOUT_ELIGIBILITY_ENABLED')==='true');
+  if(selected.status!==200)return json({error:selected.code},selected.status);
+  const live=selected.mode==='live';
   const idToken = body.google_id_token;
   if (typeof idToken !== 'string' || idToken.length < 20 || idToken.length > 4096) {
     return json({ error: 'google_id_token requerido' }, 400);
@@ -143,22 +148,23 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
       const org = orgs?.[0];
       if (!org || org.active === false) continue;
 
-      const status: string = org.subscription_status ?? 'none';
+      const billing=organizationBillingView(org,live);
       organizations.push({
         id: org.id,
         billing_demo_enabled: await isDemoOrganization(org.id),
         name: org.name,
         role: m.role,
-        subscription_status: status,
-        plan_type: org.plan_type ?? 'none',
+        subscription_status: billing.subscription_status,
+        plan_type: billing.plan_type,
         // Solo informativo: el bloqueo real contra doble checkout se hará con
         // una reserva atómica en la función de checkout (paso posterior).
-        can_checkout: !ACTIVE_STATUSES.has(status),
+        can_checkout: billing.can_checkout,
       });
     }
 
     return json({
       status: 'success',
+      mode:live?'live':'test',
       user: { email: identity.email, google_sub: identity.sub },
       organizations,
     });
