@@ -23,6 +23,7 @@ async function isolated(run:(db:any,state:{status:string;invoice:string})=>Promi
     eq(new URL(url).searchParams.get('expand[]'),'latest_invoice');
     return Response.json({id:'sub_real',livemode:true,customer:'cus_real',metadata:{org_id:'org'},status:state.status,trial_end:null,items:{data:[{quantity:1,price}]},latest_invoice:{billing_reason:'subscription_create',status:state.invoice,livemode:true,customer:'cus_real',subscription:'sub_real'}});
    }
+   if(url.startsWith('https://api.stripe.com/v1/invoices?'))return Response.json({data:state.invoice==='paid'?[{id:'in_real',livemode:true,status:'paid',currency:'usd',amount_paid:2900,customer:'cus_real',subscription:'sub_real',billing_reason:'subscription_create',status_transitions:{paid_at:100},lines:{data:[{quantity:1,amount:2900,price:{id:'price_owner'}}]}}]:[]});
    throw Error('unexpected network');
   }) as typeof fetch;
   await run(db,state);

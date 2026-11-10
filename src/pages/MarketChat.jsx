@@ -832,6 +832,7 @@ export default function MarketChat() {
 
       console.time('[PERF marketChat invoke]');
       const res = await base44.functions.invoke('marketChat', {
+        request_id: crypto.randomUUID(),
         messages: apiMessages,
         costConfig,
         locale,
