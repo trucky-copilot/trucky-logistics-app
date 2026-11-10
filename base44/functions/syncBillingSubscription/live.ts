@@ -1,3 +1,4 @@
+import {publicLandingAccount} from '../../shared/publicLandingAccount.ts';
 // Only invoked after S2S authentication in entry.ts. Never creates charges or grants app access.
 import {
   type Command, lockKey, pendingKey, makeOwner, pickLiveFields,
@@ -41,9 +42,13 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
   const verified=members.filter(m=>d.memberIds.has(m.id)&&m.organization_id===org.id&&m.active===true&&['owner','admin'].includes(m.role));
   if(verified.length!==1)return res('VERIFIED_MEMBERSHIP_REQUIRED',403);
   const member=verified[0];
-  if(!safe(member.google_sub)||!safe(member.base44_user_id))return res('IDENTITY_NOT_LINKED',403);
+  if(!safe(member.google_sub))return res('IDENTITY_NOT_LINKED',403);
   await d.assertProvenance(d.redis,member);
+  const publicNew=await publicLandingAccount(d.redis,org,member,d.members);
+  if(!publicNew||member.base44_user_id!=null){
+   if(!safe(member.base44_user_id))return res('IDENTITY_NOT_LINKED',403);
   if(await d.redis(['GET',`trucky:billing:identity:v1:${member.google_sub}`])!==member.base44_user_id||await d.redis(['GET',`trucky:billing:native:v1:${member.base44_user_id}`])!==member.google_sub)return res('IDENTITY_REQUIRES_REVIEW',409);
+  }
   // Fetch canonical state inside the lock; never use status/customer/plan supplied in the request.
   const sub=await d.retrieve(body.subscription_id);
   const customer=typeof sub.customer==='string'?sub.customer:sub.customer?.id;
