@@ -41,3 +41,10 @@ Deno.test('gate OFF preserves old native admin path with no network and getMyPla
  const r=await authorizePlanFeature(db,{id:'legacy',email:'admin@example.invalid',role:'admin'},'email_module');eq(r.allowed,true);eq(r.plan,'admin');
  const response=await endpoint(new Request('https://example.invalid',{method:'POST'}),{});eq(response.status,200);eq(await response.json(),{managed:false});
 }));
+Deno.test('fresh authorization bypasses cached allow after renewal or cancellation',()=>isolated(async(db,state)=>{
+ const first=await authorizePlanFeature(db,user,'chat');eq(first.allowed,true);
+ state.status='canceled';
+ // Ordinary 5s cache still applies; explicit refresh must use provider truth.
+ eq((await authorizePlanFeature(db,user,'chat')).allowed,true);
+ eq((await authorizePlanFeature(db,user,'chat',{fresh:true})).allowed,false);
+}));

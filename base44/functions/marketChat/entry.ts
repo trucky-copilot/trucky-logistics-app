@@ -1,4 +1,5 @@
-import {consumeLiveChat} from '../../shared/liveChatQuota.ts';
+import {reserveChatWithRefresh} from '../../shared/liveChatQuota.ts';
+import {runMeteredChat,type ChatReservation} from '../../shared/chatQuotaLifecycle.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { authorizePlanFeature } from '../../shared/entitlements.ts';
 
@@ -622,7 +623,7 @@ async function getCachedContainerRoutes(base44: any, perf: PerfTracker): Promise
 
 // El handler recibe el tracker por parámetro (no global) para que requests
 // concurrentes en la misma instancia Deno no mezclen sus tiempos.
-async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Response> {
+async function handleMarketChat(req: Request, perf: PerfTracker, capture:(r:ChatReservation)=>void): Promise<Response> {
   // Cabeceras CORS por request: dependen del Origin que envía el navegador.
   const corsHeaders = corsHeadersFor(req);
 
@@ -645,7 +646,7 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
     }
 
     // Control de plan en el servidor: la pantalla del navegador no autoriza nada.
-    const access = await authorizePlanFeature(base44, user, 'chat');
+    let access = await authorizePlanFeature(base44, user, 'chat');
     if (!access.allowed) {
       return Response.json({ error: access.error, code: access.code }, { status: 403, headers: corsHeaders });
     }
@@ -669,8 +670,11 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
     if (JSON.stringify(cappedMessages).length > MAX_REQUEST_CHARS) {
       return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400, headers: corsHeaders });
     }
-    const quota=await consumeLiveChat(access,body.request_id);
-    if(!quota.allowed)return Response.json({code:quota.code,error:'No se pudo reservar este mensaje del cupo pagado.'},{status:quota.code==='CHAT_QUOTA_EXHAUSTED'?429:409,headers:corsHeaders});
+    const reserved=await reserveChatWithRefresh(access,body.request_id,()=>authorizePlanFeature(base44,user,'chat',{fresh:true}));
+    access=reserved.access;
+    const quota=reserved.quota;
+    if(!quota.allowed)return Response.json({code:quota.code,retryable:quota.code==='STALE_PAID_CREDIT',error:quota.code==='STALE_PAID_CREDIT'?(locale==='en'?'Your payment is still updating. Please retry; this attempt used no credit.':'Tu pago aún se está actualizando. Reintenta; este intento no consumió cupo.'):'No se pudo reservar este mensaje del cupo pagado.'},{status:quota.code==='CHAT_QUOTA_EXHAUSTED'?429:409,headers:corsHeaders});
+    if(access.credit)capture({access,requestId:body.request_id});
     // Fase 3: Paralelizar lecturas iniciales independientes para reducir la latencia total
     const [costConfigRecord, organizationName, rawStateData, userProfileRecords] = await Promise.all([
       user ? perf.time('db.costConfig', () => fetchCostConfigRecord(base44, user.email, activeProfileId)) : Promise.resolve(null),
@@ -774,7 +778,7 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
     const raw = await perf.time('llm.extract', () => extractWithRetry(base44, prompt));
 
     if (!raw) {
-      return Response.json({ content: safeFallbackContent(locale) });
+      return access.credit?Response.json({error:'No se pudo generar una respuesta.',code:'AI_RESPONSE_UNAVAILABLE'},{status:503,headers:corsHeaders}):Response.json({content:safeFallbackContent(locale)});
     }
 
     let intent = resolveIntent(raw.intent, cappedMessages);
@@ -1360,6 +1364,6 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 // un solo lugar, en vez de tocar cada `return Response.json(...)` del handler.
 Deno.serve(async (req: Request) => {
   const perf = createPerfTracker();
-  const response = await handleMarketChat(req, perf);
+  const response = await runMeteredChat(capture=>handleMarketChat(req, perf,capture));
   return attachPerf(response, perf);
 });

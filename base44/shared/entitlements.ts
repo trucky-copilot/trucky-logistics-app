@@ -88,11 +88,12 @@ export async function authorizePlanFeature(
   base44: any,
   user: any,
   feature: PlanFeature,
+  options:{fresh?:boolean}={},
 ): Promise<Authorization> {
   let plan: PlanType;
   let trialEndsAt: string | null;
   try{
-    const live=await livePlanForUser(base44,user);
+    const live=await livePlanForUser(base44,user,options);
     if(live.managed){
       if(!live.allowed)return {allowed:false,plan:'demo',code:live.code,error:'No se pudo autorizar una suscripción real válida para esta cuenta.'};
       if(!PLAN_FEATURES[live.plan][feature])return {allowed:false,plan:live.plan,code:'PLAN_UPGRADE_REQUIRED',error:'Tu plan no incluye esta función.'};

@@ -2,14 +2,14 @@ import {paidPlanCredit} from './paidPlanCredit.ts';
 import {createLivePlanCache} from './livePlanCache.ts';
 const cachedPlan=createLivePlanCache();
 import {resolveLivePlan} from './livePlanPolicy.ts';
-export async function livePlanForUser(base44:any,user:any){
+export async function livePlanForUser(base44:any,user:any,options:{fresh?:boolean}={}){
  // OFF preserves all current users and avoids Redis/Stripe reads.
  if(Deno.env.get('BILLING_LIVE_ENFORCEMENT_ENABLED')!=='true')return {managed:false as const};
  const db=base44.asServiceRole.entities;
  const redis=liveBillingRedis;
  // Scope cache to authenticated identity AND current server price configuration.
  const cacheKey=JSON.stringify([user?.id,user?.email,Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),Deno.env.get('STRIPE_LIVE_PRICE_FLEET')]);
- return cachedPlan(cacheKey,()=>resolveLivePlan(user,{enabled:true,redis,members:q=>db.OrganizationMember.filter(q),orgs:id=>db.Organization.filter({id}),prices:{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')},
+ const load=()=>resolveLivePlan(user,{enabled:true,redis,members:q=>db.OrganizationMember.filter(q),orgs:id=>db.Organization.filter({id}),prices:{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')},
   subscription:async id=>{
    const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');if(!key||!/^(sk|rk)_live_.+/.test(key))throw Error('LIVE_KEY_REQUIRED');
    if(typeof id!=='string'||!/^sub_[A-Za-z0-9]+$/.test(id))throw Error('LIVE_MAPPING_REQUIRED');
@@ -24,7 +24,8 @@ export async function livePlanForUser(base44:any,user:any){
    const credit=paidPlanCredit(sub,invoices.data||[],{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')});
    return {...sub,verifiedPaidCredit:credit};
   },
- }));
+ });
+ return options.fresh?load():cachedPlan(cacheKey,load);
 }
 
 export const liveBillingRedis=async(command:unknown[])=>{
