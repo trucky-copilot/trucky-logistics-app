@@ -14,7 +14,14 @@ export async function verifiedScope(
  for(const m of rows){
   if(m.organization_id!==orgId||m.active!==true||!safe(m.id)||!safe(m.google_sub)||!['owner','admin'].includes(m.role)||(sub!==undefined&&m.google_sub!==sub))continue;
   if(sub===undefined&&m.role!=='owner')continue; // Reconcile through the canonical owner, not every billing admin.
-  await assertProvenance(redis,m); // Redis failure/proof mismatch fails closed.
+  try{await assertProvenance(redis,m);}
+  catch(error){
+   if(error instanceof Error&&error.message==='MEMBERSHIP_PROVENANCE_REQUIRED'){
+    if(sub===undefined)continue; // Unproven co-owner cannot block the unique proven owner.
+    throw Error('BILLING_ACCOUNT_REVIEW_REQUIRED');
+   }
+   throw error; // Mismatch, malformed proof and Redis failures are NOT skippable.
+  }
   valid.push(m);
  }
  // Subscription reconciliation has no user token; require one canonical billing

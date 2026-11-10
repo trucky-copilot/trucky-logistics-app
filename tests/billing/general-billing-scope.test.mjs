@@ -29,7 +29,7 @@ test('previous phase-1 proven membership works without new registry; no legacy p
 });
 test('unproven/changed/inactive/foreign membership never obtains general scope',async()=>{
  const w=world(),m={id:'member',organization_id:'org',google_sub:'google',role:'owner',active:true};
- await assert.rejects(verifiedScope(w.redis,async()=>[m],assertMembershipProvenance,'org','google'),/PROVENANCE_REQUIRED/);
+ await assert.rejects(verifiedScope(w.redis,async()=>[m],assertMembershipProvenance,'org','google'),/BILLING_ACCOUNT_REVIEW_REQUIRED/);
  for(const changed of [{...m,active:false},{...m,organization_id:'other'},{...m,role:'driver'},{...m,google_sub:'other'}])assert.equal((await verifiedScope(w.redis,async()=>[changed],assertMembershipProvenance,'org','google')).orgIds.size,0);
 });
 test('ambiguous canonical owner and Redis failure cannot authorize general subscription sync',async()=>{
@@ -38,3 +38,18 @@ test('ambiguous canonical owner and Redis failure cannot authorize general subsc
  await assert.rejects(verifiedScope(async()=>{throw Error('network');},async()=>[rows[0]],async r=>{await r(['GET','key']);},'org'));
 });
 test('all packaged general scope implementations identical',async()=>{const{readFile}=await import('node:fs/promises');const names=['resolveUserOrganizations','checkLiveCheckoutEligibility','linkBillingIdentity','redeemBillingLink','syncBillingSubscription'];let first;for(const n of names){const s=await readFile(`base44/functions/${n}/verifiedScope.ts`,'utf8');first??=s;assert.equal(s,first);}});
+
+test('subscription scope skips ONLY absent co-owner proof and preserves the proven owner',async()=>{
+ const w=world(),proven={id:'verified',organization_id:'org',google_sub:'google',role:'owner',active:true},legacy={...proven,id:'legacy',google_sub:'legacy_google'};
+ w.store.set('trucky:billing:member:v1:org:google',JSON.stringify({memberId:'verified',orgId:'org',googleSub:'google',role:'owner'}));
+ const scope=await verifiedScope(w.redis,async()=>[legacy,proven],assertMembershipProvenance,'org');
+ assert.deepEqual([...scope.memberIds],['verified']);
+ const empty=await verifiedScope(w.redis,async()=>[legacy],assertMembershipProvenance,'org');assert.equal(empty.orgIds.size,0);
+});
+test('wrong or damaged co-owner proof and Redis failure block instead of silently skipping',async()=>{
+ const m={id:'legacy',organization_id:'org',google_sub:'legacy_google',role:'owner',active:true};
+ for(const raw of ['{bad json',JSON.stringify({memberId:'wrong',orgId:'org',googleSub:'legacy_google',role:'owner'})]){
+  await assert.rejects(verifiedScope(async()=>raw,async()=>[m],assertMembershipProvenance,'org'));
+ }
+ await assert.rejects(verifiedScope(async()=>{throw Error('MEMBERSHIP_PROVENANCE_MISMATCH');},async()=>[m],assertMembershipProvenance,'org'));
+});

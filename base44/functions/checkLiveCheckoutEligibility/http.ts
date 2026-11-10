@@ -15,5 +15,8 @@ export async function eligibilityHttp(req:Request,d:HttpDeps){
  try{
   const result=await checkEligibility(body.google_sub,body.organization_id,await d.makeDeps());
   return new Response(JSON.stringify(result.body),{status:result.status,headers});
- }catch{return reply('LIVE_CHECKOUT_REQUIRES_REVIEW',503);}
+ }catch(error){
+  if(error instanceof Error&&error.message==='BILLING_ACCOUNT_REVIEW_REQUIRED')return reply('BILLING_ACCOUNT_REVIEW_REQUIRED',409);
+  return reply('LIVE_CHECKOUT_REQUIRES_REVIEW',503);
+ }
 }

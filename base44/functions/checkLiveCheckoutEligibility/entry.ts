@@ -3,7 +3,6 @@ import {createClientFromRequest} from 'npm:@base44/sdk@0.8.54';
 import {demoRedis} from './demoRegistry.ts';
 import {assertMembershipProvenance} from './provenance.ts';
 import {eligibilityHttp} from './http.ts';
-const ids=(s:string|undefined)=>new Set((s||'').split(',').map(v=>v.trim()).filter(Boolean));
 export default async function handler(req:Request,_ctx:unknown){
  const contextRequest=req.clone();
  return eligibilityHttp(req,{

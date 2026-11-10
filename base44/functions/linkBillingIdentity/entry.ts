@@ -2,7 +2,6 @@ import {verifiedScope} from './verifiedScope.ts';
 import { assertMembershipProvenance } from "./provenance.ts";
 import { reserveNativeBinding } from "./binding.ts";
 import { demoRedis } from "./demoRegistry.ts";
-import { parseIdList } from "./pilot.ts";
 import { linkBillingIdentityCore, type VerifiedGoogleIdentity } from "./link.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6';

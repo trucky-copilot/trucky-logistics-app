@@ -4,7 +4,6 @@ import {demoRedis} from './demoRegistry.ts';
 import {reserveNativeBinding} from './binding.ts';
 import {assertMembershipProvenance} from './provenance.ts';
 import {redeemBillingLinkCore} from './redeem.ts';
-import {parseIdList} from './pilot.ts';
 
 async function sha256Hex(text:string){
  return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');

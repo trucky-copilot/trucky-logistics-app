@@ -18,7 +18,6 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
   try {
     if (gate.kind === 'live') {
       const db=createClientFromRequest(req).asServiceRole.entities;
-      const ids=(value:string|undefined)=>new Set((value||'').split(',').map(s=>s.trim()).filter(s=>/^[A-Za-z0-9_-]{1,128}$/.test(s)));
       const scope=await verifiedScope(demoRedis,q=>db.OrganizationMember.filter(q),assertMembershipProvenance,body.organization_id);
       const result=await reconcileLiveSubscription(body,{
         enabled:true,orgIds:scope.orgIds,memberIds:scope.memberIds,
