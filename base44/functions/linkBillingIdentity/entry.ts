@@ -1,8 +1,7 @@
-import {expandedScope} from './enrollment.ts';
+import {verifiedScope} from './verifiedScope.ts';
 import { assertMembershipProvenance } from "./provenance.ts";
 import { reserveNativeBinding } from "./binding.ts";
 import { demoRedis } from "./demoRegistry.ts";
-import { parseIdList } from "./pilot.ts";
 import { linkBillingIdentityCore, type VerifiedGoogleIdentity } from "./link.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { createRemoteJWKSet, jwtVerify } from 'npm:jose@5.9.6';
@@ -40,17 +39,17 @@ export default async function linkBillingIdentity(req:Request,_ctx:unknown){
   const db=client.asServiceRole.entities;
  const nativeUser=await client.auth.me();
  if(!nativeUser?.id||!nativeUser?.email)return reply('NATIVE_SESSION_REQUIRED',401);
- let scope={orgIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_ORG_IDS')),memberIds:parseIdList(Deno.env.get('BILLING_LINK_PILOT_MEMBER_IDS'))};
+ let scope={orgIds:new Set<string>(),memberIds:new Set<string>()};
  // Recognize existing server enrollments even when new enrollment is closed.
  const general=true;
  let verifiedIdentity:VerifiedGoogleIdentity|null=null;
  if(general){
   if(body?.resume===true&&body.confirm===true){
    const sub=await demoRedis(['GET',`trucky:billing:native:v1:${nativeUser.id}`]);
-   if(typeof sub==='string'){const members=await db.OrganizationMember.filter({google_sub:sub,active:true});for(const m of members)scope=await expandedScope(demoRedis,m.organization_id,true,scope.orgIds,scope.memberIds,sub);}
+   if(typeof sub==='string'){const members=await db.OrganizationMember.filter({google_sub:sub,active:true});for(const m of members){const v=await verifiedScope(demoRedis,q=>db.OrganizationMember.filter(q),assertMembershipProvenance,m.organization_id,sub);scope={orgIds:new Set([...scope.orgIds,...v.orgIds]),memberIds:new Set([...scope.memberIds,...v.memberIds])};}}
   }else if(typeof body?.google_id_token==='string'&&body.google_id_token.length<=4096){
    verifiedIdentity=await verifyGoogleIdToken(body.google_id_token).catch(()=>null);
-   if(verifiedIdentity?.email_verified&&verifiedIdentity.email.toLowerCase()===nativeUser.email.toLowerCase())scope=await expandedScope(demoRedis,body.organization_id,true,scope.orgIds,scope.memberIds,verifiedIdentity.sub);
+   if(verifiedIdentity?.email_verified&&verifiedIdentity.email.toLowerCase()===nativeUser.email.toLowerCase())scope=await verifiedScope(demoRedis,q=>db.OrganizationMember.filter(q),assertMembershipProvenance,body.organization_id,verifiedIdentity.sub);
   }
  }
 
