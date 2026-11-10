@@ -7,7 +7,7 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import DemoLimitModal from '@/components/DemoLimitModal';
 
 function DocAlert({ label, date }) {

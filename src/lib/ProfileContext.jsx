@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 import { withOrg } from '@/lib/orgScope';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import { useLanguage } from '@/lib/LanguageContext';
 import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from '@/components/ui/alert-dialog';
 

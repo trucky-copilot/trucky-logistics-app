@@ -9,7 +9,7 @@ import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import DemoLimitModal from '@/components/DemoLimitModal';
 import { useToast } from '@/components/ui/use-toast';
 import { ToastAction } from '@/components/ui/toast';

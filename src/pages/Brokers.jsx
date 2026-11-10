@@ -7,7 +7,7 @@ import { useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
 import { useProfile } from '@/lib/ProfileContext';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import DemoLimitModal from '@/components/DemoLimitModal';
 
 function ScoreDots({ score, max = 10 }) {

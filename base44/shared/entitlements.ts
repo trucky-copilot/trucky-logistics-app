@@ -1,3 +1,4 @@
+import {livePlanForUser} from './livePlanRuntime.ts';
 // ─────────────────────────────────────────────────────────────────────────────
 // Puerta de acceso por plan, resuelta en el SERVIDOR.
 // La interfaz calcula el plan para pintar pantallas, pero eso no protege nada:
@@ -14,7 +15,8 @@ export type DenialCode = 'TRIAL_EXPIRED' | 'PLAN_UPGRADE_REQUIRED' | 'ENTITLEMEN
 export interface Authorization {
   allowed: boolean;
   plan: PlanType;
-  code?: DenialCode;
+  code?: DenialCode|string;
+  organizationId?:string;
   error?: string;
 }
 
@@ -87,6 +89,15 @@ export async function authorizePlanFeature(
 ): Promise<Authorization> {
   let plan: PlanType;
   let trialEndsAt: string | null;
+  try{
+    const live=await livePlanForUser(base44,user);
+    if(live.managed){
+      if(!live.allowed)return {allowed:false,plan:'demo',code:live.code,error:'No se pudo autorizar una suscripción real válida para esta cuenta.'};
+      if(!PLAN_FEATURES[live.plan][feature])return {allowed:false,plan:live.plan,code:'PLAN_UPGRADE_REQUIRED',error:'Tu plan no incluye esta función.'};
+      return {allowed:true,plan:live.plan,organizationId:live.organizationId};
+    }
+  }catch{return {allowed:false,plan:'demo',code:'ENTITLEMENT_UNAVAILABLE',error:'No se pudo verificar la suscripción. Intenta más tarde.'};}
+
 
   try {
     ({ plan, trialEndsAt } = await resolvePlan(base44, user));
