@@ -1,5 +1,4 @@
-// Conditional single-membership identity write. Shared (identical copies) by
-// enrollExistingBillingOrganization and probeMembershipUpdateMany.
+// Conditional single-membership identity write for reviewed existing enrollment.
 // Each identity field is pinned to its exact state from a fresh read:
 //   absent → {$exists:false}, explicit null → null, value → that exact value.
 // Never replaced by "read, then unconditional write" (that reintroduces the race).
@@ -21,10 +20,11 @@ export interface MemberWriteDeps {
   member: (id: string) => Promise<Rec | null | undefined>;
 }
 /**
- * `updated` counts MODIFIED rows: an identical repeat returns 0. So the result is
+ * Service-role acceptance reports matched rows: an identical repeat may return 1.
+ * Neither 1 nor 0 proves the identity on its own. The result is
  * always confirmed by a fresh read of the exact record:
- *  - WRITTEN: updated===1 and the read shows exactly the target.
- *  - ALREADY_APPLIED: updated===0 and the read shows exactly the target (idempotent).
+ *  - WRITTEN: updated===1 and the read shows exactly the target (includes an identical repeat).
+ *  - ALREADY_APPLIED: updated===0 and the read shows exactly the target (defensive idempotent handling).
  *  - REJECTED: anything else (different identity, concurrent change, unknown answer).
  */
 export async function conditionalIdentityWrite(
