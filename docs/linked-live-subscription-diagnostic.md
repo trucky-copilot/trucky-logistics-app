@@ -46,3 +46,6 @@ Variables durante toda la prueba: `STRIPE_MODE=test`; LIVE, `BILLING_SYNC_LIVE_E
 6. Volver a apagar `BILLING_SUBSCRIPTION_CHECK_ENABLED`.
 
 Este resultado valida la lectura de identidad nativa y procedencia, **no** la conciliación de una suscripción live ni el control de acceso.
+
+## Retirado
+Este diagnóstico de la fase 2 fue retirado: era la última función que leía `BILLING_LINK_PILOT_ORG_IDS` / `BILLING_LINK_PILOT_MEMBER_IDS` y `BILLING_SUBSCRIPTION_CHECK_ENABLED`. Las funciones activas usan el alcance verificado por membresía y procedencia (`verifiedScope`). Tras despublicar la función en Base44, esas tres variables se pueden eliminar.
