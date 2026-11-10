@@ -1,4 +1,4 @@
-import {expandedScope} from './enrollment.ts';
+import {verifiedScope} from './verifiedScope.ts';
 import { reconcileLiveSubscription } from './live.ts';
 import { assertMembershipProvenance } from './provenance.ts';
 import { gateSyncRequest } from './gate.ts';
@@ -19,7 +19,7 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     if (gate.kind === 'live') {
       const db=createClientFromRequest(req).asServiceRole.entities;
       const ids=(value:string|undefined)=>new Set((value||'').split(',').map(s=>s.trim()).filter(s=>/^[A-Za-z0-9_-]{1,128}$/.test(s)));
-      const scope=await expandedScope(demoRedis,body.organization_id,Deno.env.get('BILLING_PUBLIC_ENROLLMENT_ENABLED')==='true',ids(Deno.env.get('BILLING_LINK_PILOT_ORG_IDS')),ids(Deno.env.get('BILLING_LINK_PILOT_MEMBER_IDS')));
+      const scope=await verifiedScope(demoRedis,q=>db.OrganizationMember.filter(q),assertMembershipProvenance,body.organization_id);
       const result=await reconcileLiveSubscription(body,{
         enabled:true,orgIds:scope.orgIds,memberIds:scope.memberIds,
         prices:{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')},

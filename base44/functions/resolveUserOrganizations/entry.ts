@@ -1,3 +1,5 @@
+import {verifiedScope} from './verifiedScope.ts';
+import {assertMembershipProvenance} from './provenance.ts';
 import {readEnrollment} from './enrollment.ts';
 import {readBillingMode,organizationBillingView} from './billingMode.ts';
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
@@ -154,9 +156,14 @@ export default async function resolveUserOrganizations(req: Request, _ctx: unkno
       try{enrollment=await readEnrollment(demoRedis,org.id,true,identity.sub);}
       catch{console.warn('billing_enrollment_unavailable');continue;} // Isolate corrupt/unavailable row; never trust it or fail every company.
       const publicEligible=!!enrollment&&enrollment.memberId===m.id&&m.active===true&&m.role==='owner';
+      let accountVerified=false;
+      try{const scope=await verifiedScope(demoRedis,q=>db.OrganizationMember.filter(q),assertMembershipProvenance,org.id,identity.sub);accountVerified=scope.memberIds.has(m.id);}
+      catch{console.warn('billing_membership_unavailable');} // Isolate the affected company.
+
       organizations.push({
         id: org.id,
         billing_public_enrollment:publicEligible,
+        billing_account_verified:accountVerified,
         billing_identity_linked:!!m.base44_user_id,
         billing_demo_enabled: await isDemoOrganization(org.id),
         name: org.name,
