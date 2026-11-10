@@ -1,6 +1,6 @@
 // Minimal MongoDB-like single-record semantics used to model Base44 updateMany in tests:
 // {$exists:false} = field absent; null = absent OR null; value = strict equality.
-// `updated` counts MODIFIED records (an identical $set returns 0), as observed in Base44.
+// Service-role acceptance: `updated` counts matched records, including an identical $set.
 export function matches(rec, query, { nullMatchesNull = true } = {}) {
   for (const [k, c] of Object.entries(query)) {
     const has = Object.hasOwn(rec, k) && rec[k] !== undefined;
@@ -18,5 +18,6 @@ export function applyUpdate(rec, data) {
 }
 export function updateOne(rec, query, data, opts) {
   if (!matches(rec, query, opts)) return { success: true, updated: 0, has_more: false };
-  return { success: true, updated: applyUpdate(rec, data) ? 1 : 0, has_more: false };
+  applyUpdate(rec, data);
+  return { success: true, updated: 1, has_more: false };
 }

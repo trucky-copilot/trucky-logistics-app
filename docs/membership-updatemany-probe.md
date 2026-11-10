@@ -1,38 +1,13 @@
-# updateMany con rol de servicio: prueba sobre una membresía de prueba
+# Service-role updateMany acceptance and retirement
 
-## Hallazgos del operador (navegador, sesión admin)
-- `filter` con `base44_user_id:null` y con `{$exists:false}` encuentra el campo ausente.
-- `updated` cuenta filas MODIFICADAS: un `$set` idéntico devuelve 0.
-- `updateMany` desde la sesión del navegador devuelve `success:true, updated:0` incluso sin condiciones null (no escribe: permisos/RLS). La semántica debe verificarse con rol de servicio.
+Operator report (2026-11-09): the controlled membership test is complete. Field absent + $exists:false matched; explicit null + null matched; $exists:false did not match explicit null. Wrong exact native/Google values and stale concurrent conditions returned 0 without overwrite. Repeating an identical update with service role returned updated:1: the provider counts matched rows, not only modified rows. Previous browser result updated:0 did not establish service-role semantics. This note records operator evidence, not a new cloud probe by the Agent.
 
-## Cambio en `enrollExistingBillingOrganization` (execute)
-`memberWrite.ts` (copia idéntica en `probeMembershipUpdateMany`) fija AMBOS identificadores al estado exacto leído:
-ausente → `{$exists:false}`, null explícito → `null`, valor → ese valor exacto; además `id`, `organization_id`, `role:'owner'`, `active:true`.
-Nunca lectura previa + escritura incondicional. Como `updated` cuenta modificaciones, el resultado se confirma con una lectura fresca:
-- `updated:1` + lectura exacta del objetivo → escrito;
-- `updated:0` + lectura exacta del objetivo → repetición idempotente (p. ej. miembro ya vinculado por la fase 1);
-- cualquier otra cosa (otra identidad, cambio concurrente, respuesta desconocida) → `EXISTING_ENROLLMENT_REQUIRES_REVIEW`, sin sobrescribir ni registrar.
+conditionalIdentityWrite keeps exactly the existing runtime behavior: pin id/org/active owner and BOTH identities (absent -> $exists:false, null -> null, populated -> exact); accept counts 0 or 1 only after a fresh exact read verifies all fields. The code comments and mock expectations now reflect actual service-role behavior. Tests cover identical repeats with updated:1 and defensive updated:0, plus changed identities and concurrent writes. Never weaken conditions to a read followed by unconditional update.
 
-## Función temporal `probeMembershipUpdateMany`
-Rol de servicio, una sola membresía de PRUEBA configurada en el servidor. Solo escribe `base44_user_id` con valores `probe-*`; `google_sub` solo se usa como condición y nunca se escribe. Restaura `base44_user_id` ausente al final. El informe contiene códigos, conteos y etiquetas, nunca identificadores reales.
+## Retired temporary endpoint
+The temporary probeMembershipUpdateMany source and its probe-only tests are removed. Keep MEMBERSHIP_UPDATE_PROBE_ENABLED=false until removal is confirmed on Base44. Deleting repository source does NOT prove the platform removed an already deployed function: operator must remove/unpublish the temporary function from Base44, then verify no executable endpoint remains. Do not re-enable it or rerun its write test.
 
-Variables (apagada por defecto):
-- `MEMBERSHIP_UPDATE_PROBE_ENABLED=true` solo durante la prueba.
-- `MEMBERSHIP_UPDATE_PROBE_ADMIN_IDS` — admin(es) autorizados (rol admin + lista).
-- `MEMBERSHIP_UPDATE_PROBE_MEMBER_ID`, `MEMBERSHIP_UPDATE_PROBE_ORG_ID` — la membresía de prueba.
-Rechaza miembros/orgs del piloto (`BILLING_LINK_PILOT_*`), organizaciones registradas y membresías con `base44_user_id` ya presente.
+After endpoint retirement, its four variables can be removed from Base44: MEMBERSHIP_UPDATE_PROBE_ENABLED, MEMBERSHIP_UPDATE_PROBE_ADMIN_IDS, MEMBERSHIP_UPDATE_PROBE_MEMBER_ID, MEMBERSHIP_UPDATE_PROBE_ORG_ID. This is a narrow diagnostic retirement, not a blanket environment clean-up. No Redis keys, proof, members, subscriptions or app secrets are deleted by the patch. The controlled membership was already restored according to operator report.
 
-Llamada: POST con sesión admin, body `{"confirm":"PROBE <member-id>"}`.
-
-Pasos y resultado esperado:
-1. `absent_matches_exists_false`: ausente + `{$exists:false}` → updated 1.
-2. `identical_repeat_idempotent_by_verified_read`: mismo valor → updated 0 y lectura = objetivo.
-3. `wrong_value_rejected`: valor distinto exigido → updated 0, sin cambio.
-4. `other_identity_rejected`: otro `google_sub` → updated 0, sin cambio.
-5. `set_explicit_null`: guarda null (se informa `nullStoredAs`).
-6. `exists_false_on_null_informational`: se informa `existsFalseMatchesNull`.
-7. `null_matches_null`: null explícito + condición null → updated 1.
-8. `concurrent_writer` + `stale_condition_rejected`: otro escritor cambia el valor; la condición vieja → updated 0, sin sobrescribir.
-Final: `restored:true`, `googleSubUnchanged:true`, `PROBE_PASSED`. Si algo no coincide → `PROBE_FAILED` con el paso exacto; NO encender `BILLING_EXISTING_ENROLLMENT_ENABLED`.
-
-Después: `MEMBERSHIP_UPDATE_PROBE_ENABLED=false`. La función puede retirarse en un PR posterior.
+## Next acceptance remains separate
+Existing company: new Google approval -> native consent -> administrator preview/execution with independent ownership evidence -> ordinary link IDENTITY_LINKED -> eligibility LIVE_CHECKOUT_ELIGIBLE; same company, no duplicate. No new charge or general rollout authorized by this patch. BILLING_PUBLIC_ENROLLMENT_ENABLED and existing enrollment gate remain OFF until coordinated acceptance and paid operational access TRUCKY-90. No production flag is changed here.
