@@ -1,3 +1,4 @@
+import {consumeLiveChat} from '../../shared/liveChatQuota.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { authorizePlanFeature } from '../../shared/entitlements.ts';
 
@@ -668,6 +669,8 @@ async function handleMarketChat(req: Request, perf: PerfTracker): Promise<Respon
     if (JSON.stringify(cappedMessages).length > MAX_REQUEST_CHARS) {
       return Response.json({ error: 'La conversación es demasiado larga' }, { status: 400, headers: corsHeaders });
     }
+    const quota=await consumeLiveChat(access,body.request_id);
+    if(!quota.allowed)return Response.json({code:quota.code,error:'No se pudo reservar este mensaje del cupo pagado.'},{status:quota.code==='CHAT_QUOTA_EXHAUSTED'?429:409,headers:corsHeaders});
     // Fase 3: Paralelizar lecturas iniciales independientes para reducir la latencia total
     const [costConfigRecord, organizationName, rawStateData, userProfileRecords] = await Promise.all([
       user ? perf.time('db.costConfig', () => fetchCostConfigRecord(base44, user.email, activeProfileId)) : Promise.resolve(null),

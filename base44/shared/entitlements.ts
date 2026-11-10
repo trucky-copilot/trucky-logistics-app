@@ -17,6 +17,8 @@ export interface Authorization {
   plan: PlanType;
   code?: DenialCode|string;
   organizationId?:string;
+  subscriptionId?:string;
+  credit?:any;
   error?: string;
 }
 
@@ -94,7 +96,7 @@ export async function authorizePlanFeature(
     if(live.managed){
       if(!live.allowed)return {allowed:false,plan:'demo',code:live.code,error:'No se pudo autorizar una suscripción real válida para esta cuenta.'};
       if(!PLAN_FEATURES[live.plan][feature])return {allowed:false,plan:live.plan,code:'PLAN_UPGRADE_REQUIRED',error:'Tu plan no incluye esta función.'};
-      return {allowed:true,plan:live.plan,organizationId:live.organizationId};
+      return {allowed:true,plan:live.plan,organizationId:live.organizationId,subscriptionId:live.subscriptionId,credit:live.credit};
     }
   }catch{return {allowed:false,plan:'demo',code:'ENTITLEMENT_UNAVAILABLE',error:'No se pudo verificar la suscripción. Intenta más tarde.'};}
 

@@ -12,8 +12,13 @@ export function validateLivePlan(org:any,sub:any,prices:{owner_op?:string;fleet?
  const price=items[0].price;
  const plan:PaidPlan|null=price?.id===prices.owner_op?'plan_29':price?.id===prices.fleet?'plan_99':null;
  if(!plan||price.livemode!==true||price.currency!=='usd'||price.unit_amount!==(plan==='plan_29'?2900:9900)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return fail('LIVE_PLAN_MISMATCH');
+ const paid=sub.verifiedPaidCredit;
+ if(paid){
+  if(!/^in_[A-Za-z0-9]+$/.test(paid.invoiceId||'')||!Number.isSafeInteger(paid.paidAt)||paid.paidAt<=0||!['plan_29','plan_99'].includes(paid.plan)||paid.priceId!==(paid.plan==='plan_29'?prices.owner_op:prices.fleet))return fail('LIVE_INVOICE_MISMATCH');
+  return {allowed:true as const,plan:paid.plan as PaidPlan,organizationId:String(org.id),code:'LIVE_PLAN_VERIFIED',subscriptionId:sub.id,credit:paid};
+ }
  const invoice=sub.latest_invoice;
- if(!invoice||typeof invoice!=='object'||invoice.livemode!==true||(invoice.billing_reason==='subscription_create'&&invoice.status!=='paid')||(typeof invoice.customer==='string'?invoice.customer:invoice.customer?.id)!==customer)return fail('LIVE_INVOICE_PAYMENT_REQUIRED');
+ if(!invoice||typeof invoice!=='object'||invoice.livemode!==true||(['subscription_create','subscription_update'].includes(invoice.billing_reason)&&invoice.status!=='paid')||(typeof invoice.customer==='string'?invoice.customer:invoice.customer?.id)!==customer)return fail('LIVE_INVOICE_PAYMENT_REQUIRED');
  if(!['subscription_create','subscription_cycle','subscription_update'].includes(invoice.billing_reason))return fail('LIVE_INVOICE_PAYMENT_REQUIRED');
  const ref=invoice.parent?.subscription_details?.subscription??invoice.subscription;
  if((typeof ref==='string'?ref:ref?.id)!==sub.id)return fail('LIVE_INVOICE_MISMATCH');
