@@ -1,6 +1,6 @@
 // Server-only enrollment, distinct from demos, subscriptions and native identity bindings.
 export type Redis = (command:unknown[])=>Promise<unknown>;
-export type Enrollment={version:1;orgId:string;memberId:string;googleSub:string;role:'owner'};
+export type Enrollment={version:1;orgId:string;memberId:string;googleSub:string;role:'owner';origin?:'landing_public_new'};
 const safe=(v:unknown):v is string=>typeof v==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(v);
 export function enrollmentKey(orgId:string){if(!safe(orgId))throw Error('INVALID_ENROLLMENT');return `trucky:billing:enrollment:v1:org:${orgId}`;}
 export async function readEnrollment(redis:Redis,orgId:unknown,enabled:boolean,sub?:unknown):Promise<Enrollment|null>{
@@ -31,7 +31,7 @@ export async function registerNewEnrollment(redis:Redis,org:{id:string},member:{
  if(!safe(org.id)||!safe(member.id)||!safe(member.google_sub)||member.organization_id!==org.id||member.role!=='owner'||member.active!==true)throw Error('INVALID_ENROLLMENT');
  const proofKey=`trucky:billing:member:v1:${org.id}:${member.google_sub}`;
  const proof={memberId:member.id,orgId:org.id,googleSub:member.google_sub,role:'owner'};
- const entry:Enrollment={version:1,orgId:org.id,memberId:member.id,googleSub:member.google_sub,role:'owner'};
+ const entry:Enrollment={version:1,orgId:org.id,memberId:member.id,googleSub:member.google_sub,role:'owner',origin:'landing_public_new'};
  const result=await redis(['EVAL',REGISTER_ENROLLMENT,'2',proofKey,enrollmentKey(org.id),JSON.stringify(proof),JSON.stringify(entry)]);
  if(result!==1)throw Error('ENROLLMENT_CONFLICT');
 }

@@ -1,3 +1,4 @@
+import {autoLinkPublicAccount} from '../../shared/autoLinkPublicAccount.ts';
 import {readEnrollment} from './enrollment.ts';
 import {demoRedis} from './demoRegistry.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
@@ -72,6 +73,9 @@ export async function ensureUserOrganization(req:Request,deps?:{user:any;db:any;
 
     const db = deps?.db??base44!.asServiceRole.entities;
     const email: string = user.email;
+
+    const auto=Deno.env.get('BILLING_IDENTITY_LINK_ENABLED')==='true'?await autoLinkPublicAccount(user,{redis:readRedis,members:q=>db.OrganizationMember.filter(q),orgs:q=>db.Organization.filter(q),update:(q,f)=>db.OrganizationMember.updateMany(q,{$set:f})}):{linked:false,organization_id:undefined};
+    if(auto.linked){const linked=(await db.Organization.filter({id:auto.organization_id}))[0];return json({status:'existing',org_id:linked.id,name:linked.name});}
 
     // 1) Organización existente del usuario (idempotente: nunca crea una segunda).
     const owned = await db.Organization.filter({ created_by_user: email });
