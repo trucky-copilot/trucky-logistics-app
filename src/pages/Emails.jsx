@@ -13,7 +13,7 @@ import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
 import { filterByOrg, withOrg } from '@/lib/orgScope';
 import { useToast } from '@/components/ui/use-toast';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import {
   AUTOMATION_EMAIL_TO_CHECKER_KEY,
   AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,

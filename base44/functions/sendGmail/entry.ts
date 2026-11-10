@@ -124,6 +124,10 @@ export default async function sendGmail(req: Request, ctx: any) {
     }
 
     const body = await req.json();
+    if(access.organizationId){
+      if(body.organization_id&&body.organization_id!==access.organizationId)return new Response(JSON.stringify({code:'ORGANIZATION_MISMATCH'}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      body.organization_id=access.organizationId;
+    }
 
     const {
       to,

@@ -1,3 +1,4 @@
+import {LivePlanProvider,LivePlanBoundary,useLivePlan} from '@/lib/LivePlanProvider';
 import ExistingBillingConsent from '@/components/ExistingBillingConsent';
 import { Toaster } from "@/components/ui/toaster"
 import { QueryClientProvider } from '@tanstack/react-query'
@@ -78,6 +79,7 @@ function AppContent() {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
   const { appState, resolveState, setupDetails } = useAppState();
   const { isTrialExpired, loadingTrial, trialData } = useDemo();
+  const live=useLivePlan();
 
   // Platform-level loading / errors
   if (isLoadingPublicSettings || isLoadingAuth || appState === 'loading' || loadingTrial) return <AppLoading />;
@@ -91,7 +93,7 @@ function AppContent() {
   if (appState === 'unauthenticated') return <Welcome />;
 
   // ── CONTROL DE DEMO TRIAL ──────────────────────────────────────────────────
-  if (isTrialExpired) {
+  if (isTrialExpired && !(live.managed && live.allowed)) {
     const reason = !trialData?.hasTrial ? 'no_trial' : 'expired';
     return <DemoExpiredScreen reason={reason} />;
   }
@@ -131,11 +133,13 @@ function App() {
         <AppStateProvider>
           <DemoProvider>
             <LanguageProvider>
+              <LivePlanProvider>
               <ProfileProvider>
                 <ExistingBillingConsent />
                 <BillingLinkConfirmation />
-                <AppContent />
+                <LivePlanBoundary><AppContent /></LivePlanBoundary>
               </ProfileProvider>
+              </LivePlanProvider>
             </LanguageProvider>
           </DemoProvider>
         </AppStateProvider>

@@ -21,7 +21,7 @@ import MarketTicker from './MarketTicker';
 import ProfileSelector from './ProfileSelector';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { base44 } from '@/api/base44Client';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 
 const NAV_ITEMS = [
   { path: '/', label: 'dashboard', icon: LayoutDashboard },

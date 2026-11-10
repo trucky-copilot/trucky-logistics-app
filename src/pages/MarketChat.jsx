@@ -7,7 +7,7 @@ import { useToast } from '@/components/ui/use-toast';
 import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import { sendEmailWithAutoAuth } from '@/lib/googleAuthHelper';
 
 const SESSION_KEY = 'trucky_chat_session';

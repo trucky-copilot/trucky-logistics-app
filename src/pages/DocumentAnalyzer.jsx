@@ -14,7 +14,7 @@ import CarrierSelector from '@/components/doc-analyzer/CarrierSelector';
 import { useOrganizationId } from '@/lib/AppStateContext';
 import { filterByOrg } from '@/lib/orgScope';
 import { useLanguage } from '@/lib/LanguageContext';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import DemoLimitModal from '@/components/DemoLimitModal';
 import {
   AUTOMATION_EMAIL_TO_CHECKER_KEY,

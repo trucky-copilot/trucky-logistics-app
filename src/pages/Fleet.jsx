@@ -8,7 +8,7 @@ import { useOrganizationId, useAppState } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { listByOrg, withOrg } from '@/lib/orgScope';
-import { useDemo } from '@/lib/DemoContext';
+import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import DemoLimitModal from '@/components/DemoLimitModal';
 import { useToast } from '@/components/ui/use-toast';
 import AssignLoadModal from '@/components/AssignLoadModal';

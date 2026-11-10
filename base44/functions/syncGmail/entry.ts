@@ -1,3 +1,4 @@
+import {livePlanForUser} from '../../shared/livePlanRuntime.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { ImapFlow } from 'npm:imapflow';
 import { simpleParser } from 'npm:mailparser';
@@ -334,6 +335,12 @@ export default async function syncGmail(req: Request, ctx: any) {
     }
 
     const body = await req.json().catch(() => ({}));
+    const access=await livePlanForUser(base44,currentUser);
+    if(access.managed){
+      if(!access.allowed)return new Response(JSON.stringify({code:access.code}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      if(body.organization_id&&body.organization_id!==access.organizationId)return new Response(JSON.stringify({code:'ORGANIZATION_MISMATCH'}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
+      body.organization_id=access.organizationId;
+    }
     const { organization_id, profile_id, limit = 80, gmailUser: reqGmailUser, accessToken, user_id: reqUserId } = body;
     const finalUserId = currentUser?.id || reqUserId || null;
     const finalProfileId = profile_id ? String(profile_id) : null;

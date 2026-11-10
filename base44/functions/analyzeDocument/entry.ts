@@ -968,7 +968,7 @@ Deno.serve(async (req) => {
 
     // Resolver organización activa del usuario — fail-closed para las lecturas
     // org-scoped que siguen (Truck/Broker/CarrierProfile/BrokerProfile).
-    const orgId = await resolveOrgId(base44, user.email);
+    const orgId = access.organizationId ?? await resolveOrgId(base44, user.email);
 
     // ── PASO 2: Hash del documento — si ya existe, devolver resultado cacheado ──
     const [docHash, contextData] = await Promise.all([
