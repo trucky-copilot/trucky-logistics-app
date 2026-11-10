@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { detectEquipment } from '@/lib/emailEquipment';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail, RotateCw, Plus, Search, Star, MessageSquare,
@@ -180,27 +181,6 @@ function displayCategory(email) {
   const text = `${email?.asunto || ''} ${email?.snippet || ''} ${email?.cuerpo || ''}`.toLowerCase();
   const brokerAdmin = /(setup\s*packet|carrier\s*packet|carrier\s*setup|onboarding|credit\s*(application|check)|certificate\s*of\s*insurance|\bcoi\b|broker[- ]carrier\s*agreement|carrier\s*agreement|w-?9\b|alta\s*de\s*carrier|contrato\s*con\s*el\s*broker)/;
   return brokerAdmin.test(text) ? 'brokers' : 'cargas';
-}
-
-// QA: equipo detectado en el correo (40' reefer, 20' overweight, 1x40 HC, chasis tri-axle…)
-function detectEquipment(email) {
-  const t = `${email?.asunto || ''}\n${email?.cuerpo || email?.snippet || ''}`;
-  const out = [];
-  // Tamaño con tipo ("1x40 HC", "40HC", "20 GP") o con comillas/ft ("20'", '40"', "53 ft")
-  const typed = [...t.matchAll(/\b(?:\d+\s*x\s*)?(20|40|45|53)\s*(?:'|’|"|ft\b|-?\s*foot|-?\s*feet)?\s*(hc|high\s*cube|gp|dc|std|rf)\b/gi)];
-  const plain = [...t.matchAll(/\b(?:\d+\s*x\s*)?(20|40|45|53)\s*(?:'|’|"|ft\b|-?\s*foot|-?\s*feet|pies)/gi)];
-  const sizes = new Map();
-  for (const m of typed) sizes.set(m[1], `${m[1]}' ${m[2].toUpperCase().replace(/HIGH\s*CUBE/, 'HC')}`);
-  for (const m of plain) if (!sizes.has(m[1])) sizes.set(m[1], `${m[1]}'`);
-  out.push(...sizes.values());
-  if (/\breefer\b|refrigerat|\brf\b/i.test(t)) out.push('Reefer');
-  if (/flat\s*-?bed|step\s*-?deck/i.test(t)) out.push('Flatbed');
-  if (/dry\s*-?van/i.test(t)) out.push('Dry van');
-  if (/tri-?\s*ax[le]+/i.test(t)) out.push('Tri-axle');
-  else if (/\bchassis\b|\bchasis\b/i.test(t)) out.push('Chassis');
-  if (/overweight|\bheavy\b|\b[6-9]\d,?\d{3}\s*lbs/i.test(t)) out.push('Overweight');
-  if (!out.length && /drayage|container|contenedor/i.test(t)) out.push('Container');
-  return [...new Set(out)].slice(0, 4);
 }
 
 function hasLogisticsSignal(email) {
