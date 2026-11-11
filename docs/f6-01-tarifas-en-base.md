@@ -1,7 +1,8 @@
 # F6-01 · Tarifas en base de datos
 
-Las tarifas drayage (rutas, zonas, accesoriales y alias) viven en Base44, se ven y
-editan en **Tarifas** (`/tarifas`) y el chat las lee de ahí. La lógica del
+Las tarifas drayage (rutas, zonas, accesoriales y alias) viven en Base44, se
+cargan y editan en **Panel Admin → Tarifas drayage** y el chat las lee de ahí.
+El Excel es la entrada principal: cada carga es una nueva versión de las tarifas. La lógica del
 cotizador no cambió: solo la fuente de los datos.
 
 ## Quién puede usarlo
@@ -18,7 +19,8 @@ Rol `admin` en Base44 **y** correo en `src/lib/adminAccess.js` /
 | `RateChangeLog` | Historial: quién, cuándo, antes → después (también lo eliminado). Se conserva 12 meses. |
 | `marketChat/rateSource.ts` | El chat lee las tablas (caché 60 s). Base vacía, migración a medias, error o dato inválido → sigue con los JSON del repo / lo último bueno. |
 | `adminSaveRates` | Única puerta de escritura: vista previa → confirmar. Valida todo; si hay un error no guarda nada. Detecta si otro admin guardó en medio. |
-| `adminMigrateRates` | Copia inicial de los JSON a la base (una vez) y verificación de 0 diferencias. |
+| `adminMigrateRates` | Carga inicial automática: la primera vez que se abre la sección, copia las tarifas actuales (JSON del repo) a las tablas vacías y verifica 0 diferencias. No tiene botón. |
+| `adminUploadStateData` | Ya NO escribe `ContainerRoute`; solo analiza con IA tarifas por milla por estado. Si recibe el Excel drayage, la pantalla lo redirige a Tarifas drayage. |
 | `shared/rateEdits.ts`, `shared/rateApply.ts`, `shared/rateCatalog.ts` | Reglas puras (validación, UPSERT, conversión), probadas con `deno test`. |
 
 ## Excel
@@ -31,11 +33,10 @@ casilla marcada, lo que no viene en el archivo se **elimina** (no se acumula).
 
 ## Puesta en marcha
 
-1. Publicar (sincroniza tablas y funciones). Con la base vacía el chat responde igual que hoy.
-2. Tarifas → Migración → **Previsualizar** (esperado: 272 rutas, 28 accesoriales, 61 alias, 10 zonas nuevas).
-3. **Migrar** y luego **Verificar** → debe decir *0 diferencias*. Desde ahí el chat lee la base.
-4. Alias → corregir los 48 ZIP de TX marcados "ruta no existe" (ya estaban rotos antes de F6-01).
-5. Cuando la verificación esté ok en producción, se puede quitar `adminMigrateRates` y la pestaña Migración.
+1. Publicar. Con las tablas vacías el chat responde igual que hoy.
+2. Entrar a **Panel Admin → Tarifas drayage**: la primera vez se cargan solas las tarifas actuales y aparece *0 diferencias*. Desde ahí el chat lee la base.
+3. Alias → corregir los 48 ZIP de TX marcados "ruta no existe" (ya estaban rotos antes de F6-01).
+4. Si aparece el aviso de tarifas antiguas (`ContainerRoute`), decidir qué hacer con ellas: el cotizador las consulta primero.
 
 ## Fuera de alcance
 

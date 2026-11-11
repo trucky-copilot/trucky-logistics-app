@@ -38,67 +38,17 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
     }
 
     const body = await req.json();
-    const { textData, containerRoutes } = body;
+    const { textData } = body;
 
-    if (!textData && (!containerRoutes || containerRoutes.length === 0)) {
-      return new Response('Missing textData or containerRoutes', { status: 400 });
+    // F6-01: esta función ya NO escribe tarifas de contenedor (ContainerRoute).
+    // Las tarifas drayage se cargan en Panel Admin → Tarifas drayage
+    // (adminSaveRates: vista previa, UPSERT e historial). Aquí solo queda el
+    // análisis con IA de tarifas por milla por estado (StateMarketData).
+    if (!textData || !String(textData).trim()) {
+      return new Response('Missing textData', { status: 400 });
     }
 
-    let containerRoutesCount = 0;
-
-    // 1. Procesar rutas estructuradas de contenedores (Excel FL/TX u otras)
-    if (Array.isArray(containerRoutes) && containerRoutes.length > 0) {
-      let existingRoutes: any[] = [];
-      try {
-        existingRoutes = await base44.entities.ContainerRoute.filter({});
-      } catch (err) {
-        console.warn("Aviso: ContainerRoute aún no tiene registros o falló la consulta inicial:", err);
-      }
-
-      const routeMap = new Map<string, any>();
-      for (const er of existingRoutes) {
-        const key = `${(er.estado || '').toUpperCase()}_${(er.ciudad || '').trim().toLowerCase()}_${(er.mercado || '').trim().toLowerCase()}`;
-        routeMap.set(key, er);
-      }
-
-      for (const cr of containerRoutes) {
-        if (!cr.ciudad) continue;
-        const estado = (cr.estado || 'FL').trim().toUpperCase();
-        const ciudad = String(cr.ciudad).trim();
-        const mercado = (cr.mercado || '').trim();
-        const key = `${estado}_${ciudad.toLowerCase()}_${mercado.toLowerCase()}`;
-
-        const payload = {
-          route_key: `${estado}-${ciudad}${mercado ? '-' + mercado : ''}`.toUpperCase(),
-          estado,
-          ciudad,
-          mercado: mercado || null,
-          zona: cr.zona || null,
-          grupo: cr.grupo || null,
-          millas_ida: typeof cr.millas_ida === 'number' ? cr.millas_ida : (parseFloat(cr.millas_ida) || 0),
-          precio_20: cr.precio_20 != null ? Number(cr.precio_20) : null,
-          piso_20: cr.piso_20 != null ? Number(cr.piso_20) : null,
-          precio_40: cr.precio_40 != null ? Number(cr.precio_40) : null,
-          piso_40: cr.piso_40 != null ? Number(cr.piso_40) : null,
-          precio_45: cr.precio_45 != null ? Number(cr.precio_45) : null,
-          piso_45: cr.piso_45 != null ? Number(cr.piso_45) : null,
-          precio_20_heavy: cr.precio_20_heavy != null ? Number(cr.precio_20_heavy) : null,
-          piso_20_heavy: cr.piso_20_heavy != null ? Number(cr.piso_20_heavy) : null,
-          fuente: cr.fuente || 'Excel Upload'
-        };
-
-        const existing = routeMap.get(key);
-        if (existing) {
-          await base44.entities.ContainerRoute.update(existing.id, payload);
-        } else {
-          const created = await base44.entities.ContainerRoute.create(payload);
-          routeMap.set(key, created);
-        }
-        containerRoutesCount++;
-      }
-    }
-
-    // 2. Si hay texto disponible, extraer con IA tarifas promedio por estado (DAT / Market report)
+    // Si hay texto disponible, extraer con IA tarifas promedio por estado (DAT / Market report)
     let statesCount = 0;
     if (textData && textData.trim()) {
       // Limitar el texto a un tamaño razonable para el LLM para evitar exceder tokens
@@ -155,7 +105,7 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
     return Response.json({
       success: true,
       statesParsed: statesCount,
-      containerRoutesParsed: containerRoutesCount
+      containerRoutesParsed: 0
     });
   } catch (e: any) {
     return new Response(JSON.stringify(logAndSanitizeError('adminUploadStateData', e)), {

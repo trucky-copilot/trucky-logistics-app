@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { ShieldAlert, Save, FileText, Upload, Loader2, CheckCircle2 } from 'lucide-react';
+import { ShieldAlert, Save, Upload, Loader2, CheckCircle2 } from 'lucide-react';
+import RatesSection from './rates/RatesSection';
+
+// F6-01: las hojas del Excel oficial de tarifas drayage. Ese archivo se carga
+// en la sección Tarifas drayage (UPSERT + vista previa + historial), no aquí.
+const DRAYAGE_SHEETS = ['Rates_Drayage', 'Rates_Drayage_TX'];
 
 export default function AdminDashboard() {
+  const [section, setSection] = useState('tarifas');
 
   const [ticker, setTicker] = useState({
     dry_van: '', reefer: '', flatbed: '', step_deck: '', power_only: '', container: '', diesel: ''
   });
   const [savingTicker, setSavingTicker] = useState(false);
   const [textData, setTextData] = useState('');
-  const [pendingContainerRoutes, setPendingContainerRoutes] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [loadingOCR, setLoadingOCR] = useState(false);
   const [modal, setModal] = useState({ isOpen: false, title: '', message: '', type: 'success' });
@@ -75,18 +80,12 @@ export default function AdminDashboard() {
   };
 
   const handleStateDataUpload = async () => {
-    if (!textData.trim() && pendingContainerRoutes.length === 0) return;
+    if (!textData.trim()) return;
     setUploading(true);
     try {
-      const res = await base44.functions.invoke('adminUploadStateData', { 
-        textData,
-        containerRoutes: pendingContainerRoutes
-      });
+      const res = await base44.functions.invoke('adminUploadStateData', { textData });
       if (res && res.data && res.data.success) {
         let msg = 'Datos procesados y guardados exitosamente.';
-        if (res.data.containerRoutesParsed > 0) {
-          msg += ` Se actualizaron ${res.data.containerRoutesParsed} tarifas de contenedor en el sistema.`;
-        }
         if (res.data.statesParsed > 0) {
           msg += ` Se actualizaron ${res.data.statesParsed} estados.`;
         }
@@ -97,7 +96,6 @@ export default function AdminDashboard() {
           type: 'success'
         });
         setTextData('');
-        setPendingContainerRoutes([]);
       } else {
         setModal({
           isOpen: true,
@@ -141,14 +139,19 @@ export default function AdminDashboard() {
         const arrayBuffer = await file.arrayBuffer();
         const workbook = XLSX.read(arrayBuffer, { type: 'array' });
         
-        let fullTablesMarkdown = '';
-        const allExtractedRoutes = [];
+        if (workbook.SheetNames.some(n => DRAYAGE_SHEETS.includes(n))) {
+          setModal({
+            isOpen: true,
+            title: 'Este es el Excel de tarifas drayage',
+            message: 'Súbelo en la pestaña "Tarifas drayage" → "Cargar Excel": ahí verás qué cambia antes de guardar y queda en el historial.',
+            type: 'error'
+          });
+          setLoadingOCR(false);
+          e.target.value = '';
+          return;
+        }
 
-        // Detectar estado por nombre de archivo
-        let fileState = '';
-        const lowerName = file.name.toLowerCase();
-        if (lowerName.includes('fl') || lowerName.includes('florida')) fileState = 'FL';
-        else if (lowerName.includes('tx') || lowerName.includes('texas')) fileState = 'TX';
+        let fullTablesMarkdown = '';
 
         for (const sheetName of workbook.SheetNames) {
           const sheet = workbook.Sheets[sheetName];
@@ -158,11 +161,6 @@ export default function AdminDashboard() {
           // Filtrar filas completamente vacías
           const rows = rawRows.filter(r => Array.isArray(r) && r.some(cell => String(cell).trim() !== ''));
           if (rows.length === 0) continue;
-
-          let sheetState = fileState;
-          const lowerSheet = sheetName.toLowerCase();
-          if (lowerSheet.includes('fl') || lowerSheet.includes('florida')) sheetState = 'FL';
-          else if (lowerSheet.includes('tx') || lowerSheet.includes('texas')) sheetState = 'TX';
 
           fullTablesMarkdown += `### Hoja: ${sheetName}\n\n`;
 
@@ -184,38 +182,6 @@ export default function AdminDashboard() {
           fullTablesMarkdown += `| ${headers.join(' | ')} |\n`;
           fullTablesMarkdown += `| ${headers.map(() => '---').join(' | ')} |\n`;
 
-          // Detectar columnas clave para rutas y tarifas de contenedor
-          let colCiudad = -1;
-          let colZona = -1;
-          let colPuerto = -1;
-          let colMillas = -1;
-          let colGrupo = -1;
-          let colP20 = -1, colPiso20 = -1;
-          let colP40 = -1, colPiso40 = -1;
-          let colP45 = -1;
-          let colP20H = -1;
-          let colEstado = -1;
-
-          headers.forEach((h, idx) => {
-            const hl = h.toLowerCase().trim();
-            if (hl.includes('ciudad') || hl.includes('city') || hl.includes('destino') || hl.includes('destination')) colCiudad = idx;
-            else if (hl.includes('zona') || hl.includes('zone')) colZona = idx;
-            else if (hl.includes('puerto') || hl.includes('port') || hl.includes('mercado') || hl.includes('market')) colPuerto = idx;
-            else if (hl.includes('milla') || hl.includes('mile')) colMillas = idx;
-            else if (hl.includes('grupo') || hl.includes('group')) colGrupo = idx;
-            else if (hl.includes('estado') || hl.includes('state')) colEstado = idx;
-            else if (hl.includes('heavy') || hl.includes('20h') || hl.includes('20 h') || hl.includes('pesado')) colP20H = idx;
-            else if (hl.includes('45')) colP45 = idx;
-            else if (hl.includes('20')) {
-              if (hl.includes('piso') || hl.includes('floor')) colPiso20 = idx;
-              else colP20 = idx;
-            }
-            else if (hl.includes('40')) {
-              if (hl.includes('piso') || hl.includes('floor')) colPiso40 = idx;
-              else colP40 = idx;
-            }
-          });
-
           for (let r = headerIndex + 1; r < rows.length; r++) {
             const row = rows[r];
             const rowValues = Array.from({ length: maxCols }, (_, i) => {
@@ -229,53 +195,11 @@ export default function AdminDashboard() {
 
             fullTablesMarkdown += `| ${rowValues.join(' | ')} |\n`;
 
-            // Extraer tarifas estructuradas de contenedor
-            if (colCiudad >= 0 && (colP20 >= 0 || colP40 >= 0 || colP45 >= 0)) {
-              const ciudadVal = String(row[colCiudad] || '').trim();
-              const millasVal = colMillas >= 0 ? parseFloat(String(row[colMillas]).replace(/[^0-9.]/g, '')) : null;
-              const rowState = colEstado >= 0 ? String(row[colEstado] || '').trim().toUpperCase() : sheetState;
-
-              if (ciudadVal && !ciudadVal.toLowerCase().includes('total') && (rowState === 'FL' || rowState === 'TX' || rowState.length === 2)) {
-                const parseNum = (idx) => {
-                  if (idx < 0 || row[idx] === undefined || row[idx] === null) return null;
-                  const n = parseFloat(String(row[idx]).replace(/[^0-9.]/g, ''));
-                  return isFinite(n) && n > 0 ? n : null;
-                };
-
-                const p20 = parseNum(colP20);
-                const piso20 = parseNum(colPiso20);
-                const p40 = parseNum(colP40);
-                const piso40 = parseNum(colPiso40);
-                const p45 = parseNum(colP45);
-                const p20h = parseNum(colP20H);
-
-                if (p20 || p40 || p45 || p20h) {
-                  allExtractedRoutes.push({
-                    estado: rowState || 'FL',
-                    ciudad: ciudadVal,
-                    mercado: colPuerto >= 0 ? String(row[colPuerto] || '').trim() : null,
-                    zona: colZona >= 0 ? String(row[colZona] || '').trim() : null,
-                    grupo: colGrupo >= 0 ? String(row[colGrupo] || '').trim() : null,
-                    millas_ida: millasVal && isFinite(millasVal) ? millasVal : 0,
-                    precio_20: p20,
-                    piso_20: piso20,
-                    precio_40: p40,
-                    piso_40: piso40,
-                    precio_45: p45,
-                    piso_45: null,
-                    precio_20_heavy: p20h,
-                    piso_20_heavy: null,
-                    fuente: file.name
-                  });
-                }
-              }
-            }
           }
           fullTablesMarkdown += '\n';
         }
 
         setTextData(fullTablesMarkdown.trim());
-        setPendingContainerRoutes(allExtractedRoutes);
       } catch (err) {
         console.error(err);
         setModal({
@@ -301,7 +225,6 @@ export default function AdminDashboard() {
           text += content.items.map(item => item.str).join(' ') + '\n';
         }
         setTextData(text);
-        setPendingContainerRoutes([]);
       } catch (err) {
         console.error(err);
         setModal({
@@ -320,7 +243,6 @@ export default function AdminDashboard() {
         const extracted = extractRes.data?.text;
         if (!extracted) throw new Error(extractRes.data?.error || 'No se pudo extraer el texto');
         setTextData(extracted);
-        setPendingContainerRoutes([]);
       } catch (err) {
         console.error(err);
         setModal({
@@ -334,7 +256,6 @@ export default function AdminDashboard() {
     } else if (['txt', 'csv'].includes(ext)) {
       const text = await file.text();
       setTextData(text);
-      setPendingContainerRoutes([]);
     } else {
       setModal({
         isOpen: true,
@@ -347,7 +268,7 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 space-y-8 animate-in fade-in">
+    <div className={`${section === 'tarifas' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto p-4 md:p-6 space-y-6 animate-in fade-in`}>
       <div className="flex items-center gap-3 border-b border-white/10 pb-4">
         <ShieldAlert className="w-8 h-8 text-amber-500" />
         <div>
@@ -355,6 +276,19 @@ export default function AdminDashboard() {
           <p className="text-white/60 text-sm">Control global del mercado y la IA</p>
         </div>
       </div>
+
+      <div className="flex gap-2 overflow-x-auto">
+        {[['tarifas', 'Tarifas drayage'], ['mercado', 'Mercado por estado y cinta']].map(([id, label]) => (
+          <button key={id} type="button" onClick={() => setSection(id)}
+            className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${section === id ? 'bg-amber-500 text-black' : 'bg-white/5 text-white/70 hover:bg-white/10'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'tarifas' && <RatesSection />}
+
+      {section === 'mercado' && (<>
 
       {/* Ticker Form */}
       <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-2xl space-y-4">
@@ -391,8 +325,8 @@ export default function AdminDashboard() {
 
       {/* AI Market Data Parser */}
       <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-2xl space-y-4">
-        <h2 className="text-lg font-semibold text-white">Actualizar Tarifas por Estado y Contenedores</h2>
-        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube directamente tu archivo Excel (.xlsx), PDF o imagen. El sistema organizará los datos en tablas y actualizará las tarifas para que el chat las utilice.</p>
+        <h2 className="text-lg font-semibold text-white">Actualizar Tarifas por Estado (RPM)</h2>
+        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube un Excel, PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). Las tarifas drayage por ruta se cargan en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-amber-400 underline">Tarifas drayage</button>.</p>
         
         <textarea
           value={textData}
@@ -403,7 +337,7 @@ export default function AdminDashboard() {
         ></textarea>
 
         {textData && !loadingOCR && (
-          <p className="text-xs text-emerald-400/80 font-medium">✓ Documento listo para procesar{pendingContainerRoutes.length > 0 ? ` (${pendingContainerRoutes.length} tarifas de contenedor detectadas)` : ''}. Haz clic en "Analizar con IA".</p>
+          <p className="text-xs text-emerald-400/80 font-medium">✓ Documento listo para procesar. Haz clic en "Analizar con IA".</p>
         )}
         
         <div className="flex justify-between pt-2">
@@ -426,7 +360,7 @@ export default function AdminDashboard() {
 
           <button 
             onClick={handleStateDataUpload}
-            disabled={uploading || loadingOCR || (!textData.trim() && pendingContainerRoutes.length === 0)}
+            disabled={uploading || loadingOCR || !textData.trim()}
             className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-medium transition-colors disabled:opacity-50 min-w-[150px] justify-center"
           >
             {uploading ? (
@@ -439,6 +373,8 @@ export default function AdminDashboard() {
           </button>
         </div>
       </div>
+
+      </>)}
 
       {/* Modal estilizado con diseño de la aplicación */}
       {modal.isOpen && (

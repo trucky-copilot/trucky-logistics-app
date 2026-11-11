@@ -1,9 +1,9 @@
-// Pestañas Cargar Excel, Historial y Migración.
+// Pestañas Cargar Excel e Historial.
 import React, { useEffect, useState } from 'react';
 import { Upload, RefreshCw } from 'lucide-react';
 import { Card, Btn, Field, Select, Badge, ErrorBox, Empty, Table, Td } from './ui';
 import ChangePreview, { fmt } from './ChangePreview';
-import { previewExcel, applyExcel, fileToBase64, loadHistory, migrateRates } from '@/lib/ratesApi';
+import { previewExcel, applyExcel, fileToBase64, loadHistory } from '@/lib/ratesApi';
 
 const MAX_MB = 5;
 
@@ -123,58 +123,6 @@ export function HistoryTab({ reloadKey }) {
                 </td></tr>
               )}
             </React.Fragment>
-          ))}
-        </Table>
-      )}
-    </Card>
-  );
-}
-
-// ── Migración inicial ────────────────────────────────────────────────────────
-export function MigrationTab({ data, onSaved }) {
-  const [busy, setBusy] = useState(null);
-  const [result, setResult] = useState(null);
-  const [error, setError] = useState(null);
-  const run = async (action) => {
-    setBusy(action); setError(null);
-    try {
-      const r = await migrateRates(action);
-      setResult(r);
-      if (action === 'apply') await onSaved?.();
-    } catch (e) { setError(e.message); } finally { setBusy(null); }
-  };
-  const vacia = data.routes.length === 0;
-  return (
-    <Card className="space-y-4">
-      <p className="text-sm text-white/60">
-        Copia UNA VEZ las tarifas que hoy usa el chat (archivos del sistema) a la base de datos. Mientras la base esté vacía el chat sigue usando esos archivos.
-        Correrla de nuevo no pisa lo que se haya editado desde esta pantalla. El historial guarda los últimos 12 meses.
-      </p>
-      <div className="flex flex-wrap gap-2 text-xs">
-        <Badge tone={vacia ? 'amber' : 'green'}>{vacia ? 'Base vacía: el chat usa los archivos' : `En la base: ${data.routes.length} rutas`}</Badge>
-        <Badge>Accesoriales: {data.accessorials.length}</Badge>
-        <Badge>Alias: {data.aliases.length}</Badge>
-        <Badge>Zonas: {data.zones.length}</Badge>
-      </div>
-      <div className="flex flex-wrap gap-2">
-        <Btn variant="ghost" busy={busy === 'preview'} onClick={() => run('preview')}>1 · Previsualizar</Btn>
-        <Btn busy={busy === 'apply'} onClick={() => run('apply')}>2 · Migrar</Btn>
-        <Btn variant="ghost" busy={busy === 'verify'} onClick={() => run('verify')}>3 · Verificar</Btn>
-      </div>
-      <ErrorBox error={error} />
-      {result?.action === 'verify' && (
-        <div className="space-y-2">
-          {result.ok ? <Badge tone="green">✓ 0 diferencias: la base es idéntica a las tarifas actuales</Badge> : <Badge tone="red">Hay diferencias</Badge>}
-          <pre className="text-xs text-white/70 bg-black/30 rounded-xl p-3 overflow-x-auto">{JSON.stringify({ conteos: result.counts, revision: result.checks, diferencias: result.diffs }, null, 2)}</pre>
-        </div>
-      )}
-      {result?.resumen && (
-        <Table head={['Tabla', 'Nuevas', 'Distintas a los archivos', 'Iguales', result.action === 'apply' ? 'Guardado' : '']}>
-          {Object.entries(result.resumen).map(([k, v]) => (
-            <tr key={k}>
-              <Td className="text-white">{k}</Td><Td>{v.crear}</Td><Td>{v.cambiarian}</Td><Td>{v.iguales}</Td>
-              <Td>{result.action === 'apply' ? <Badge tone="green">ok</Badge> : ''}</Td>
-            </tr>
           ))}
         </Table>
       )}
