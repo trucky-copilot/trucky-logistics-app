@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import { useAppState } from './AppStateContext';
 import { base44 } from '@/api/base44Client';
+import { matrixFromRows } from '../../base44/shared/planModules.ts';
 
 const DemoContext = createContext(null);
 
@@ -31,8 +32,8 @@ export const PLAN_LIMITS = {
     PROFILES: 5,
     DOCUMENTS_PER_MONTH: 50,
     ANALYZE_IN_CHAT: false,
-    EMAIL_MODULE: true,
-    name: 'Plan $29 (Carrier)',
+    EMAIL_MODULE: false, // ticket 101: el correo es solo del plan Pro
+    name: 'Plan Carrier',
   },
   plan_99: {
     CHAT_MESSAGES: 2000,
@@ -44,7 +45,7 @@ export const PLAN_LIMITS = {
     DOCUMENTS_PER_MONTH: Infinity,
     ANALYZE_IN_CHAT: true,
     EMAIL_MODULE: true,
-    name: 'Plan $99 (Flota / Dispatcher)',
+    name: 'Plan Pro (Flota / Dispatcher)',
   },
   admin: {
     CHAT_MESSAGES: Infinity,
@@ -61,6 +62,17 @@ export const PLAN_LIMITS = {
 };
 
 export const DEMO_LIMITS = PLAN_LIMITS.demo;
+
+// Ticket 101: qué módulos ve cada plan sale de la tabla PlanModule (misma regla
+// que usa el servidor en shared/planModules.ts). Los cupos siguen arriba.
+export function withPlanModules(matrix) {
+  const out = {};
+  for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
+    const m = matrix?.[plan];
+    out[plan] = m ? { ...limits, EMAIL_MODULE: m.email_module === true, ANALYZE_IN_CHAT: m.analyze_in_chat === true } : limits;
+  }
+  return out;
+}
 
 export function DemoProvider({ children }) {
   const { user } = useAuth();
@@ -122,6 +134,18 @@ export function DemoProvider({ children }) {
 
   const activeOrg = appOrg || userOrg;
 
+  // Matriz de módulos por plan (tabla PlanModule). Sin datos: la de por defecto.
+  const [planModuleRows, setPlanModuleRows] = useState([]);
+  useEffect(() => {
+    let active = true;
+    if (!userEmail) return;
+    base44.entities.PlanModule.list()
+      .then((rows) => { if (active) setPlanModuleRows(Array.isArray(rows) ? rows : []); })
+      .catch(() => {});
+    return () => { active = false; };
+  }, [userEmail]);
+  const planLimits = useMemo(() => withPlanModules(matrixFromRows(planModuleRows)), [planModuleRows]);
+
   // Resolución de Plan Activo
   const planType = useMemo(() => {
     if (isWhitelisted) return 'admin';
@@ -143,7 +167,7 @@ export function DemoProvider({ children }) {
   const isPlan29 = planType === 'plan_29';
   const isPlan99 = planType === 'plan_99';
   const isSubscribed = isPlan29 || isPlan99 || isWhitelisted;
-  const currentLimits = PLAN_LIMITS[planType] || PLAN_LIMITS.demo;
+  const currentLimits = planLimits[planType] || planLimits.demo;
   const canAnalyzeInChat = Boolean(currentLimits.ANALYZE_IN_CHAT);
 
   useEffect(() => {
@@ -225,7 +249,7 @@ export function DemoProvider({ children }) {
     trialData,
     loadingTrial: loadingTrial || loadingTestAccount,
     limits: currentLimits,
-    planLimits: PLAN_LIMITS,
+    planLimits,
   }), [
     planType,
     isDemoUser,
@@ -238,6 +262,7 @@ export function DemoProvider({ children }) {
     loadingTrial,
     loadingTestAccount,
     currentLimits,
+    planLimits,
   ]);
 
   return (

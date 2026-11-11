@@ -270,7 +270,7 @@ export default function Emails() {
   const { activeProfileId, activeProfile } = useProfile();
   const { locale } = useLanguage();
   const { toast } = useToast();
-  const { isDemoUser } = useDemo();
+  const { isDemoUser, limits: planLimits } = useDemo();
   const navigate = useNavigate();
 
   const [emails, setEmails] = useState([]);
@@ -1569,6 +1569,17 @@ export default function Emails() {
     return `${d.toLocaleDateString(dateLocale, { day: '2-digit', month: 'short' })} · ${d.toLocaleTimeString(dateLocale, { hour: '2-digit', minute: '2-digit' })}`;
   };
 
+
+  // Ticket 101: si el plan no incluye el módulo de correo (tabla PlanModule),
+  // se muestra el aviso en lugar de la bandeja. El servidor también lo bloquea.
+  if (!isDemoUser && planLimits?.EMAIL_MODULE === false) {
+    return (
+      <div className="max-w-xl mx-auto p-6 mt-10 bg-card border border-border rounded-xl space-y-2 text-center">
+        <h1 className="text-lg font-semibold text-foreground">{locale === 'en' ? 'Email is not included in your plan' : 'El módulo de correo no está incluido en tu plan'}</h1>
+        <p className="text-sm text-muted-foreground">{locale === 'en' ? 'Upgrade to the Pro plan to connect your email and manage loads from your inbox.' : 'Cámbiate al plan Pro para conectar tu correo y gestionar cargas desde tu bandeja.'}</p>
+      </div>
+    );
+  }
   return (
     <div className="flex flex-col lg:h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
       {/* ─── Encabezado Principal ──────────────────────────────────────────────── */}

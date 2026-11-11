@@ -1,4 +1,5 @@
 import {livePlanForUser} from './livePlanRuntime.ts';
+import {loadPlanMatrix,planAllows} from './planModules.ts';
 // ─────────────────────────────────────────────────────────────────────────────
 // Puerta de acceso por plan, resuelta en el SERVIDOR.
 // La interfaz calcula el plan para pintar pantallas, pero eso no protege nada:
@@ -24,14 +25,10 @@ export interface Authorization {
 
 const SUBSCRIBED_STATUSES = new Set(['active', 'trialing']);
 
-// Qué funciones existen en cada plan. Los cupos de volumen (mensajes, documentos
-// al mes) se siguen contando en la interfaz; aquí solo se decide sí o no.
-const PLAN_FEATURES: Record<PlanType, Record<PlanFeature, boolean>> = {
-  admin: { chat: true, document_analysis: true, email_module: true },
-  plan_99: { chat: true, document_analysis: true, email_module: true },
-  plan_29: { chat: true, document_analysis: true, email_module: true },
-  demo: { chat: true, document_analysis: true, email_module: false },
-};
+// Qué funciones existen en cada plan: ticket 101, tabla PlanModule
+// (shared/planModules.ts). Los cupos de volumen se siguen contando aparte.
+const allows = async (base44: any, plan: string, feature: PlanFeature) =>
+  planAllows(await loadPlanMatrix(base44.asServiceRole.entities), plan, feature);
 
 const FEATURE_LABELS: Record<PlanFeature, string> = {
   chat: 'El chat de mercado',
@@ -96,7 +93,7 @@ export async function authorizePlanFeature(
     const live=await livePlanForUser(base44,user,options);
     if(live.managed){
       if(!live.allowed)return {allowed:false,plan:'demo',code:live.code,error:'No se pudo autorizar una suscripción real válida para esta cuenta.'};
-      if(!PLAN_FEATURES[live.plan][feature])return {allowed:false,plan:live.plan,code:'PLAN_UPGRADE_REQUIRED',error:'Tu plan no incluye esta función.'};
+      if(!await allows(base44,live.plan,feature))return {allowed:false,plan:live.plan,code:'PLAN_UPGRADE_REQUIRED',error:'Tu plan no incluye esta función.'};
       return {allowed:true,plan:live.plan,organizationId:live.organizationId,subscriptionId:live.subscriptionId,credit:live.credit};
     }
   }catch{return {allowed:false,plan:'demo',code:'ENTITLEMENT_UNAVAILABLE',error:'No se pudo verificar la suscripción. Intenta más tarde.'};}
@@ -114,7 +111,7 @@ export async function authorizePlanFeature(
     };
   }
 
-  if (!PLAN_FEATURES[plan][feature]) {
+  if (!await allows(base44, plan, feature)) {
     return {
       allowed: false,
       plan,

@@ -11,7 +11,10 @@ export function validateLivePlan(org:any,sub:any,prices:{owner_op?:string;fleet?
  const items=sub.items?.data;if(!Array.isArray(items)||items.length!==1||sub.items?.has_more||items[0].quantity!==1)return fail('LIVE_PLAN_MISMATCH');
  const price=items[0].price;
  const plan:PaidPlan|null=price?.id===prices.owner_op?'plan_29':price?.id===prices.fleet?'plan_99':null;
- if(!plan||price.livemode!==true||price.currency!=='usd'||price.unit_amount!==(plan==='plan_29'?2900:9900)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return fail('LIVE_PLAN_MISMATCH');
+ // Tickets 91/100: el plan se reconoce SOLO por el ID de precio configurado en los
+ // secretos (STRIPE_LIVE_PRICE_OWNER_OP / _FLEET), nunca por un monto fijo: para
+ // cambiar el precio se crea el precio nuevo en Stripe y se actualiza el secreto.
+ if(!plan||price.livemode!==true||price.currency!=='usd'||!(Number.isSafeInteger(price.unit_amount)&&price.unit_amount>0)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return fail('LIVE_PLAN_MISMATCH');
  const paid=sub.verifiedPaidCredit;
  if(paid){
   if(!/^in_[A-Za-z0-9]+$/.test(paid.invoiceId||'')||!Number.isSafeInteger(paid.paidAt)||paid.paidAt<=0||!['plan_29','plan_99'].includes(paid.plan)||paid.priceId!==(paid.plan==='plan_29'?prices.owner_op:prices.fleet))return fail('LIVE_INVOICE_MISMATCH');

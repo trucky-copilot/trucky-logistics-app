@@ -58,7 +58,8 @@ export async function reconcileLiveSubscription(body:any,d:LiveDeps){
   if(!Array.isArray(items)||items.length!==1||sub.items?.has_more||items[0].quantity!==1)return res('LIVE_PLAN_MISMATCH',409);
   const price=items[0].price;
   const plan=price?.id===owner_op?'owner_op':price?.id===fleet?'fleet':null;
-  if(!plan||price.livemode!==true||price.currency!=='usd'||price.unit_amount!==(plan==='owner_op'?2900:9900)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return res('LIVE_PLAN_MISMATCH',409);
+  // Plan por ID de precio configurado, no por monto fijo (tickets 91/100).
+  if(!plan||price.livemode!==true||price.currency!=='usd'||!(Number.isSafeInteger(price.unit_amount)&&price.unit_amount>0)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return res('LIVE_PLAN_MISMATCH',409);
   // Paid plans do not carry a free month: reject an ACTIVE or FUTURE trial only.
   // A historical trial that already ended (trial_end in the past) is allowed.
   const trialEndMs=typeof sub.trial_end==='number'?sub.trial_end*1000:null;

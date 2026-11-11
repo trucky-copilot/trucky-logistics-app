@@ -1,4 +1,5 @@
 import {livePlanForUser} from '../../shared/livePlanRuntime.ts';
+import { authorizePlanFeature } from '../../shared/entitlements.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { ImapFlow } from 'npm:imapflow';
 import { simpleParser } from 'npm:mailparser';
@@ -341,6 +342,9 @@ export default async function syncGmail(req: Request, ctx: any) {
       if(body.organization_id&&body.organization_id!==access.organizationId)return new Response(JSON.stringify({code:'ORGANIZATION_MISMATCH'}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
       body.organization_id=access.organizationId;
     }
+    // Ticket 101: sincronizar correo exige que el plan incluya el módulo de correo.
+    const emailAccess=await authorizePlanFeature(base44,currentUser,'email_module');
+    if(!emailAccess.allowed)return new Response(JSON.stringify({code:emailAccess.code,error:emailAccess.error}),{status:403,headers:{...corsHeaders,'Content-Type':'application/json'}});
     const { organization_id, profile_id, limit = 80, gmailUser: reqGmailUser, accessToken, user_id: reqUserId } = body;
     const finalUserId = currentUser?.id || reqUserId || null;
     const finalProfileId = profile_id ? String(profile_id) : null;

@@ -5,6 +5,7 @@ import { gateSyncRequest } from './gate.ts';
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
+import { planFromPrice } from '../../shared/planFromPrice.ts';
 export default async function syncBillingSubscription(req: Request, _ctx: unknown) {
   const reply = (code: string, status = 200) => new Response(JSON.stringify({ code }), { status, headers: { 'Content-Type': 'application/json' } });
   // Autenticación S2S, modo e indicadores: ver gate.ts (probado en tests/billing/live-sync-gate.test.ts).
@@ -46,15 +47,13 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     if (!org) return reply('ORGANIZATION_NOT_FOUND', 404);
     const customer = typeof sub.customer === 'string' ? sub.customer : sub.customer.id;
     const firstItem = sub.items?.data?.[0];
-    const unitAmount = firstItem?.price?.unit_amount;
     const priceId = typeof firstItem?.price?.id === 'string' ? firstItem.price.id : null;
 
-    let planType = 'none';
-    if (unitAmount === 2900) {
-      planType = 'plan_29';
-    } else if (unitAmount === 9900) {
-      planType = 'plan_99';
-    }
+    // Tickets 91/100: el plan sale del ID de precio configurado, no del monto.
+    const planType = planFromPrice(firstItem?.price, {
+      owner_op: Deno.env.get('STRIPE_TEST_PRICE_OWNER_OP') || Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),
+      fleet: Deno.env.get('STRIPE_TEST_PRICE_FLEET') || Deno.env.get('STRIPE_LIVE_PRICE_FLEET'),
+    }) ?? 'none';
 
     await db.Organization.update(org.id, {
       subscription_status: sub.status,

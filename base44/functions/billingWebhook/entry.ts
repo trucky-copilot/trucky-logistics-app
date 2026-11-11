@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import Stripe from 'npm:stripe@23.0.0';
+import { planFromPrice } from '../../shared/planFromPrice.ts';
 
 const EVENTS = new Set([
   'customer.subscription.created', 'customer.subscription.updated',
@@ -93,15 +94,13 @@ export default async function billingWebhook(req: Request, _ctx: unknown) {
     if (['paused', 'incomplete_expired'].includes(subscription.status)) throw Error('STATUS_REQUIRES_SCHEMA_MIGRATION');
     databaseWriteStarted = true;
     const firstItem = subscription.items?.data?.[0];
-    const unitAmount = firstItem?.price?.unit_amount;
     const priceId = typeof firstItem?.price?.id === 'string' ? firstItem.price.id : null;
 
-    let planType = 'none';
-    if (unitAmount === 2900) {
-      planType = 'plan_29';
-    } else if (unitAmount === 9900) {
-      planType = 'plan_99';
-    }
+    // Tickets 91/100: el plan sale del ID de precio configurado, no del monto.
+    const planType = planFromPrice(firstItem?.price, {
+      owner_op: Deno.env.get('STRIPE_TEST_PRICE_OWNER_OP') || Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),
+      fleet: Deno.env.get('STRIPE_TEST_PRICE_FLEET') || Deno.env.get('STRIPE_LIVE_PRICE_FLEET'),
+    }) ?? 'none';
 
     await db.Organization.update(org.id, {
       stripe_subscription_id: subscription.id,

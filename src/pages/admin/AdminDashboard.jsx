@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { ShieldAlert, Save, Upload, Loader2, CheckCircle2 } from 'lucide-react';
 import RatesSection from './rates/RatesSection';
+import PlansSection from './PlansSection';
 
 
 export default function AdminDashboard() {
@@ -197,7 +198,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto">
-        {[['tarifas', 'Tarifas'], ['mercado', 'Mercado por estado y cinta']].map(([id, label]) => (
+        {[['tarifas', 'Tarifas'], ['planes', 'Planes'], ['mercado', 'Mercado por estado y cinta']].map(([id, label]) => (
           <button key={id} type="button" onClick={() => setSection(id)}
             className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${section === id ? 'bg-amber-500 text-black' : 'bg-white/5 text-white/70 hover:bg-white/10'}`}>
             {label}
@@ -206,6 +207,7 @@ export default function AdminDashboard() {
       </div>
 
       {section === 'tarifas' && <RatesSection />}
+      {section === 'planes' && <PlansSection />}
 
       {section === 'mercado' && (<>
 

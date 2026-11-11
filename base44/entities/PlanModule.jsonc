@@ -1,0 +1,45 @@
+{
+  "name": "PlanModule",
+  "type": "object",
+  "properties": {
+    "plan": {
+      "type": "string",
+      "description": "demo | plan_29 | plan_99"
+    },
+    "module": {
+      "type": "string",
+      "description": "chat | document_analysis | analyze_in_chat | email_module"
+    },
+    "enabled": {
+      "type": "boolean",
+      "description": "true = el plan incluye el módulo"
+    },
+    "actualizado_por": {
+      "type": "string",
+      "description": "Correo de quien hizo el último cambio"
+    }
+  },
+  "required": [
+    "plan",
+    "module",
+    "enabled"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": null,
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

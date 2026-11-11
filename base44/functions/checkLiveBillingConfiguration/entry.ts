@@ -12,12 +12,14 @@ export default async function checkLiveBillingConfiguration(req:Request,_ctx:unk
  if(!key || !/^(sk|rk)_live_.+/.test(key || ''))return reply('LIVE_KEY_REQUIRED',503);
  try{
   const body=await req.json();
-  if(!Array.isArray(body.prices)||body.prices.length!==2)return reply('PRICES_REQUIRED',400);
+  if(!Array.isArray(body.prices)||body.prices.length!==2||body.prices[0]===body.prices[1])return reply('PRICES_REQUIRED',400);
   const stripe=new Stripe(key);
-  for(const [index,id] of body.prices.entries()){
+  // El monto lo decide Stripe (tickets 91/100): aquí solo se valida que sea un precio
+  // real, activo, en dólares y mensual.
+  for(const id of body.prices){
    if(typeof id!=='string'||!/^price_[a-zA-Z0-9]+$/.test(id))return reply('INVALID_PRICE',400);
    const price=await stripe.prices.retrieve(id);
-   if(!price.livemode||!price.active||price.currency!=='usd'||price.unit_amount!==[2900,9900][index]||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return reply('LIVE_PRICE_MISMATCH',409);
+   if(!price.livemode||!price.active||price.currency!=='usd'||!(Number.isSafeInteger(price.unit_amount)&&(price.unit_amount??0)>0)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return reply('LIVE_PRICE_MISMATCH',409);
   }
   return reply('LIVE_CONFIGURATION_VALID');
  }catch{return reply('LIVE_CONFIGURATION_UNAVAILABLE',503);}

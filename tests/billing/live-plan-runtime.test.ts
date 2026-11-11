@@ -30,7 +30,9 @@ async function isolated(run:(db:any,state:{status:string;invoice:string})=>Promi
  }finally{Date.now=originalNow;globalThis.fetch=original;Object.keys(vars).forEach((k,i)=>saved[i]===undefined?Deno.env.delete(k):Deno.env.set(k,saved[i]!));}
 }
 Deno.test('actual shared server entitlement uses verified live plan, not dispatcher/test upgrade',()=>isolated(async db=>{
- const r=await authorizePlanFeature(db,user,'email_module');eq(r.allowed,true);eq(r.plan,'plan_29');eq(r.organizationId,'org');
+ const r=await authorizePlanFeature(db,user,'chat');eq(r.allowed,true);eq(r.plan,'plan_29');eq(r.organizationId,'org');
+ // Ticket 101: el plan de $29 ya no incluye el módulo de correo (solo Pro).
+ const mail=await authorizePlanFeature(db,user,'email_module');eq(mail.allowed,false);eq(mail.code,'PLAN_UPGRADE_REQUIRED');
 }));
 Deno.test('actual server rejects canceled subscription or unpaid invoice despite old test fields',()=>isolated(async(db,state)=>{
  state.status='canceled';eq((await authorizePlanFeature(db,user,'chat')).allowed,false);
