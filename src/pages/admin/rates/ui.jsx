@@ -34,8 +34,11 @@ export const Field = ({ label, children, hint }) => (
 
 const inputCls = 'w-full bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-sm text-white focus:outline-none focus:border-amber-500/50';
 export const Input = (props) => <input {...props} className={`${inputCls} ${props.className || ''}`} />;
+// colorScheme 'dark' hace que la lista desplegable nativa también sea oscura
+// (antes salía blanca con texto blanco); las opciones usan el mismo fondo del panel.
 export const Select = ({ children, ...props }) => (
-  <select {...props} className={`${inputCls} ${props.className || ''}`}>{children}</select>
+  <select {...props} style={{ colorScheme: 'dark', ...props.style }}
+    className={`${inputCls} [&>option]:bg-[#1C1C1E] [&>option]:text-white ${props.className || ''}`}>{children}</select>
 );
 export const TextArea = (props) => <textarea rows={3} {...props} className={`${inputCls} ${props.className || ''}`} />;
 

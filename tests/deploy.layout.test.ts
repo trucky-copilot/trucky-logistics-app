@@ -36,3 +36,13 @@ Deno.test('despliegue: ninguna función importa archivos de otra función', asyn
   }
   assertEquals([...new Set(malos)], []);
 });
+
+// adminSaveRates no publicó con la librería de Excel (npm:xlsx); el Excel se lee
+// en el navegador. Ninguna función ni shared/ debe volver a importarla.
+Deno.test('despliegue: ninguna función ni shared/ usa la librería de Excel', async () => {
+  const malos: string[] = [];
+  for (const dir of [fnRoot, sharedRoot]) {
+    for await (const f of walk(dir)) if ((await Deno.readTextFile(f)).includes("'npm:xlsx")) malos.push(f.href.replace(root.href, ''));
+  }
+  assertEquals(malos, []);
+});

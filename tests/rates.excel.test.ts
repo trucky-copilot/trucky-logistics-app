@@ -18,11 +18,16 @@ function db(): Db {
 }
 const price = (r: any, t: string, k = 'objetivo') => r.precios.find((p: any) => p.tamano === t)?.[k] ?? null;
 
+// Arma un .xlsx real, lo vuelve a leer y lo convierte en filas por hoja con las
+// MISMAS opciones que usa el navegador (src/pages/admin/rates/OtherTabs.jsx).
 function roundTrip(sheets: Record<string, unknown[][]>) {
   const wb = XLSX.utils.book_new();
   for (const [n, rows] of Object.entries(sheets)) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), n);
   const bytes = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-  return XLSX.read(new Uint8Array(bytes), { type: 'array' });
+  const read = XLSX.read(new Uint8Array(bytes), { type: 'array' });
+  const out: Record<string, unknown[][]> = {};
+  for (const n of read.SheetNames) out[n] = XLSX.utils.sheet_to_json(read.Sheets[n], { header: 1, defval: null }) as unknown[][];
+  return out;
 }
 
 // La tabla oficial actual trae Lake Worth Beach repetida (filas 81 y 82): con la

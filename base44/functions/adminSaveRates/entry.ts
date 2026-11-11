@@ -8,33 +8,42 @@
 // (shared/rateEdits.ts), 3) preview lo devuelve; apply lo ejecuta SOLO si no
 // hay errores y si nadie cambió los datos desde la vista previa (firma).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
-import XLSX from 'npm:xlsx@0.18.5';
 import { logAndSanitizeError } from '../../shared/safeError.ts';
 import { isAppAdmin } from '../../shared/adminAccess.ts';
 import { KEY_FIELD, type CatalogEntity } from '../../shared/rateCatalog.ts';
 import { planManual, planExcel, type Plan } from '../../shared/rateEdits.ts';
 import { readDb, firmaDe, strip, execute } from '../../shared/rateApply.ts';
-import { convertFlorida, convertTexas, sha256Bytes } from '../../shared/rateExcel.ts';
+import { convertFlorida, convertTexas, type SheetRows } from '../../shared/rateExcel.ts';
 
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_ROWS = 20000;   // suma de filas de todas las hojas
+const MAX_COLS = 60;
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
 class UserError extends Error {}
 
-async function parseExcel(estado: string, fileName: string, fileBase64: string) {
-  if (!fileBase64 || typeof fileBase64 !== 'string') throw new UserError('Falta el archivo');
-  let bytes: Uint8Array;
-  try { bytes = Uint8Array.from(atob(fileBase64), (c) => c.charCodeAt(0)); } catch { throw new UserError('El archivo llegó dañado'); }
-  if (bytes.length > MAX_FILE_BYTES) throw new UserError('El archivo supera 5 MB');
+// El navegador lee el Excel y manda sus hojas como filas (sheet_to_json con
+// header:1, defval:null). Aquí solo se verifica la forma y se convierte con el
+// mismo conversor que generó las tablas originales.
+function parseExcel(estado: string, fileName: unknown, sha: unknown, sheets: unknown) {
+  if (!sheets || typeof sheets !== 'object' || Array.isArray(sheets)) throw new UserError('Falta el archivo');
+  let total = 0;
+  for (const rows of Object.values(sheets as Record<string, unknown>)) {
+    if (!Array.isArray(rows)) throw new UserError('El archivo llegó dañado');
+    total += rows.length;
+    for (const r of rows) {
+      if (r != null && !Array.isArray(r)) throw new UserError('El archivo llegó dañado');
+      if (Array.isArray(r) && (r.length > MAX_COLS || r.some((c) => c !== null && typeof c === 'object'))) throw new UserError('El archivo llegó dañado');
+    }
+  }
+  if (total > MAX_ROWS) throw new UserError('El archivo es demasiado grande');
   const archivo = String(fileName || 'archivo.xlsx').split(/[\\/]/).pop()!.slice(0, 120);
-  const sha = await sha256Bytes(bytes);
+  const firma = /^[0-9a-f]{64}$/.test(String(sha)) ? String(sha) : '';
   try {
-    const wb = XLSX.read(bytes, { type: 'array' });
-    return estado === 'FL' ? convertFlorida(wb, archivo, sha) : convertTexas(wb, archivo, sha);
+    return estado === 'FL' ? convertFlorida(sheets as SheetRows, archivo, firma) : convertTexas(sheets as SheetRows, archivo, firma);
   } catch (e) {
-    // Los errores del conversor son mensajes propios ("No existe la hoja ...").
+    // Los errores del conversor son mensajes propios ("No existe la hoja ...", "FL fila N ...").
     throw new UserError(`No se pudo leer el Excel de ${estado}: ${(e as Error).message}`);
   }
 }
@@ -78,7 +87,7 @@ export default async function adminSaveRates(req: Request) {
     } else if (action === 'previewExcel' || action === 'applyExcel') {
       const estado = body?.estado;
       if (estado !== 'FL' && estado !== 'TX') return json({ error: 'Estado no válido' }, 400);
-      const incoming = await parseExcel(estado, body?.fileName, body?.fileBase64);
+      const incoming = parseExcel(estado, body?.fileName, body?.sha, body?.sheets);
       plan = planExcel(estado, incoming as any, current, body?.eliminarFaltantes === true);
       origen = 'excel';
     } else {

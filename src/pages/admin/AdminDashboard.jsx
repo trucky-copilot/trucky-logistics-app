@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { ShieldAlert, Save, Upload, Loader2, CheckCircle2 } from 'lucide-react';
 import RatesSection from './rates/RatesSection';
+import { loadXLSX } from '@/lib/xlsxLoader';
 
 // F6-01: las hojas del Excel oficial de tarifas drayage. Ese archivo se carga
 // en la sección Tarifas (UPSERT + control de calidad + vista previa), no aquí.
@@ -114,17 +115,6 @@ export default function AdminDashboard() {
       });
     }
     setUploading(false);
-  };
-
-  const loadXLSX = async () => {
-    if (window.XLSX) return window.XLSX;
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      script.onload = () => resolve(window.XLSX);
-      script.onerror = () => reject(new Error('No se pudo cargar el visor de Excel'));
-      document.head.appendChild(script);
-    });
   };
 
   const handleFileUpload = async (e) => {

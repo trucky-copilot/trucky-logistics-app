@@ -42,21 +42,13 @@ async function invoke(fn, payload) {
 export const previewChanges = (entity, changes) => invoke('adminSaveRates', { action: 'preview', entity, changes });
 export const applyChanges = (entity, changes, firma) => invoke('adminSaveRates', { action: 'apply', entity, changes, firma });
 
-// Carga de Excel (mismo conversor que generó las tablas originales).
+// Carga de Excel: el navegador manda las hojas como filas; el servidor valida y convierte.
 export const previewExcel = (p) => invoke('adminSaveRates', { action: 'previewExcel', ...p });
 export const applyExcel = (p) => invoke('adminSaveRates', { action: 'applyExcel', ...p });
 
 // Migración inicial (fase B).
 export const migrateRates = (action, extra = {}) => invoke('adminMigrateRates', { action, ...extra });
 
-export function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).split(',')[1] || '');
-    r.onerror = () => reject(new Error('No se pudo leer el archivo'));
-    r.readAsDataURL(file);
-  });
-}
 
 export const TAMANOS = [
   { id: '20', label: "20'" },

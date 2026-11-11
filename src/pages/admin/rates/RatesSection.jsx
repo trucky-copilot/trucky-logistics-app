@@ -4,7 +4,7 @@
 // consultar y hacer ajustes puntuales. La primera vez, si la base está vacía, se cargan
 // solas las tarifas actuales del sistema (no hay que hacer nada a mano).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { loadCatalog, migrateRates } from '@/lib/ratesApi';
 import { ErrorBox, Empty } from './ui';
@@ -71,11 +71,6 @@ export default function RatesSection() {
       {init?.estado === 'cargando' && (
         <div className="text-sm text-sky-200 bg-sky-500/10 border border-sky-500/20 rounded-xl p-3">
           Preparando las tarifas por primera vez: copiando las tarifas actuales del sistema…
-        </div>
-      )}
-      {init?.estado === 'ok' && (
-        <div className="text-sm text-emerald-200 bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3 flex items-center gap-2">
-          <CheckCircle2 className="w-4 h-4 shrink-0" /> Se cargaron las tarifas actuales del sistema: son idénticas a las que usaba el chat (0 diferencias).
         </div>
       )}
       {init?.estado === 'diferencias' && (

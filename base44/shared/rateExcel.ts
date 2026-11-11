@@ -1,27 +1,11 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// CONVERSOR OFFLINE Excel → JSON — reglas-v3-multiestado, Fase 1.
+// CONVERSOR Excel → tarifas — reglas-v3-multiestado, Fase 1 / F6-01.
 //
-// Corre UNA SOLA VEZ, a mano, para regenerar los JSON versionados que vive en
-// ./rateData/*.json (en shared/ para que todas las funciones de Base44
-// —marketChat, adminSaveRates, adminMigrateRates— lo reciban al publicar). NO es parte del runtime: entry.ts y rateEngine.ts NUNCA lo
-// importan (grep-verificado en apply-progress). No hay importador en tiempo
-// de ejecución — fuera de alcance de este SDD (kickoff §8).
-//
-// Uso (desde la raíz del repo):
-//   DENO_NO_PACKAGE_JSON=1 deno run --allow-read --allow-write --allow-net --allow-env \
-//     base44/shared/rateExcel.ts \
-//     --fl <ruta a Trucky_Flat_Rates_Drayage_FL_v6.xlsx> \
-//     --tx <ruta a Trucky_Flat_Rates_Drayage_TX_v1.xlsx>
-//
-// DENO_NO_PACKAGE_JSON=1 es necesario porque el repo tiene package.json/
-// node_modules (proyecto npm): sin esa variable, Deno intenta resolver
-// "npm:xlsx" contra node_modules local en vez de bajarlo, y falla porque no
-// está instalado ahí (no hace falta agregarlo a package.json — es una
-// dependencia SOLO de este script offline, no del runtime).
-//
-// --allow-net hace falta solo para que Deno resuelva "npm:xlsx" (se cachea
-// después de la primera corrida); el script no hace ninguna llamada de red
-// con los datos.
+// Convierte las hojas del Excel oficial (Rates_Drayage + Accesoriales para FL,
+// Rates_Drayage_TX + Accesoriales_TX para TX) a la forma de las tablas.
+// Lo usan: la función adminSaveRates (Excel subido en Panel Admin → Tarifas) y
+// el script offline tools/convertRateTables.ts (regenera shared/rateData/*.json).
+// Vive en shared/ para que Base44 lo publique con cada función.
 //
 // Principio de esta conversión: CARGAR TAL CUAL, nunca inventar ni ajustar.
 // - Las columnas "OO ... — NO EN USO" y "Margen % — NO EN USO" NO se leen.
@@ -33,7 +17,11 @@
 //   este script).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import XLSX from 'npm:xlsx@0.18.5';
+// Las hojas llegan ya leídas como filas (`sheet_to_json(sheet, { header: 1,
+// defval: null })`): en la pantalla las lee el navegador y en el script offline
+// (tools/convertRateTables.ts) la librería xlsx. Así ninguna función de Base44
+// depende de la librería de Excel.
+export type SheetRows = Record<string, unknown[][]>;
 
 interface RoutePriceEntry {
   tamano: '20' | '40' | '45' | '20_heavy';
@@ -86,16 +74,11 @@ export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
   return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-async function sha256File(path: string): Promise<string> {
-  const bytes = await Deno.readFile(path);
-  const digest = await crypto.subtle.digest('SHA-256', bytes);
-  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
-}
 
-function readSheetRows(workbook: XLSX.WorkBook, sheetName: string): unknown[][] {
-  const sheet = workbook.Sheets[sheetName];
-  if (!sheet) throw new Error(`No existe la hoja "${sheetName}" en el archivo`);
-  return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null }) as unknown[][];
+function readSheetRows(sheets: SheetRows, sheetName: string): unknown[][] {
+  const rows = sheets?.[sheetName];
+  if (!Array.isArray(rows)) throw new Error(`No existe la hoja "${sheetName}" en el archivo`);
+  return rows;
 }
 
 function num(value: unknown): number | null {
@@ -110,11 +93,11 @@ function str(value: unknown): string {
 // FLORIDA
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: string): {
+export function convertFlorida(sheets: SheetRows, archivo: string, sha: string): {
   routes: RouteRecord[];
   accessorials: AccessorialRecord[];
 } {
-  const rows = readSheetRows(workbook, 'Rates_Drayage');
+  const rows = readSheetRows(sheets, 'Rates_Drayage');
   const routes: RouteRecord[] = [];
 
   // fila 0 = título de la hoja, fila 1 = encabezados, datos desde fila 2.
@@ -162,7 +145,7 @@ export function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: st
     });
   }
 
-  const accRows = readSheetRows(workbook, 'Accesoriales');
+  const accRows = readSheetRows(sheets, 'Accesoriales');
   const accessorials: AccessorialRecord[] = [];
   for (let i = 2; i < accRows.length; i++) {
     const r = accRows[i];
@@ -184,11 +167,11 @@ export function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: st
 // TEXAS
 // ─────────────────────────────────────────────────────────────────────────────
 
-export function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: string): {
+export function convertTexas(sheets: SheetRows, archivo: string, sha: string): {
   routes: RouteRecord[];
   accessorials: AccessorialRecord[];
 } {
-  const rows = readSheetRows(workbook, 'Rates_Drayage_TX');
+  const rows = readSheetRows(sheets, 'Rates_Drayage_TX');
   const routes: RouteRecord[] = [];
 
   for (let i = 2; i < rows.length; i++) {
@@ -243,7 +226,7 @@ export function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: stri
     });
   }
 
-  const accRows = readSheetRows(workbook, 'Accesoriales_TX');
+  const accRows = readSheetRows(sheets, 'Accesoriales_TX');
   const accessorials: AccessorialRecord[] = [];
   for (let i = 2; i < accRows.length; i++) {
     const r = accRows[i];
@@ -259,66 +242,4 @@ export function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: stri
   }
 
   return { routes, accessorials };
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// MAIN
-// ─────────────────────────────────────────────────────────────────────────────
-
-function parseArgs(args: string[]): { fl: string; tx: string } {
-  const get = (flag: string): string | null => {
-    const idx = args.indexOf(flag);
-    return idx >= 0 ? args[idx + 1] : null;
-  };
-  const fl = get('--fl');
-  const tx = get('--tx');
-  if (!fl || !tx) {
-    throw new Error('Uso: convertRateTables.ts --fl <ruta FL v6.xlsx> --tx <ruta TX v1.xlsx>');
-  }
-  return { fl, tx };
-}
-
-async function main() {
-  const { fl: flPath, tx: txPath } = parseArgs(Deno.args);
-
-  const flSha = await sha256File(flPath);
-  const txSha = await sha256File(txPath);
-
-  const flWorkbook = XLSX.readFile(flPath);
-  const txWorkbook = XLSX.readFile(txPath);
-
-  const flArchivo = flPath.split('/').pop()!;
-  const txArchivo = txPath.split('/').pop()!;
-
-  const fl = convertFlorida(flWorkbook, flArchivo, flSha);
-  const tx = convertTexas(txWorkbook, txArchivo, txSha);
-
-  if (fl.routes.length === 0) {
-    throw new Error(`Error: se convirtieron 0 rutas FL. Revisa el archivo.`);
-  }
-  if (tx.routes.length === 0) {
-    throw new Error(`Error: se convirtieron 0 rutas TX. Revisa el archivo.`);
-  }
-
-  console.log(`Integridad superada: ${fl.routes.length} rutas FL, ${tx.routes.length} rutas TX`);
-
-  const dataDir = new URL('./rateData/', import.meta.url);
-  await Deno.mkdir(dataDir, { recursive: true });
-
-  const write = async (name: string, value: unknown) => {
-    await Deno.writeTextFile(new URL(name, dataDir), JSON.stringify(value, null, 2) + '\n');
-    console.log(`escrito: ${name}`);
-  };
-
-  await write('routes.fl.json', fl.routes);
-  await write('routes.tx.json', tx.routes);
-  await write('accessorials.fl.json', fl.accessorials);
-  await write('accessorials.tx.json', tx.accessorials);
-
-  console.log(`\nOK — FL: ${fl.routes.length} rutas, ${fl.accessorials.length} accesoriales`);
-  console.log(`OK — TX: ${tx.routes.length} rutas, ${tx.accessorials.length} accesoriales`);
-}
-
-if (import.meta.main) {
-  await main();
 }
