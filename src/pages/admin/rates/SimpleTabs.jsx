@@ -103,8 +103,8 @@ export function ZonesTab({ data, flow }) {
 
 // ── Cargos adicionales (accesoriales) ────────────────────────────────────────
 // Los cargos principales siempre visibles con su monto editable; el resto en un
-// menú desplegable (solo consulta: se editan con "Editar detalles"), para no
-// saturar el panel. Los montos se guardan todos juntos con "Revisar cambios".
+// menú desplegable con una caja al lado para su valor, para no saturar el panel.
+// Los montos se guardan todos juntos con "Revisar cambios".
 const PRINCIPALES = [
   { id: 'prepull', test: /pre-?pull/i },
   { id: 'hazmat', test: /hazmat/i },
@@ -188,21 +188,24 @@ export function AccessorialsTab({ data, flow }) {
         {otros.length > 0 && (
           <div className="pt-4 border-t border-white/10 space-y-2">
             <span className="block text-xs font-medium text-white/60">Otros cargos adicionales</span>
-            <div>
-              <Select value={sel?.accessorial_key || ''} onChange={(e) => setOtro(e.target.value)}>
+            <div className="flex flex-col sm:flex-row gap-3">
+              <Select className="sm:w-2/3" value={sel?.accessorial_key || ''} onChange={(e) => setOtro(e.target.value)}>
                 {otros.map((a) => (
                   <option key={a.accessorial_key} value={a.accessorial_key}>
                     {a.concepto}{otros.filter((x) => x.concepto === a.concepto).length > 1 && a.gatillo ? ` · ${corto(a.gatillo)}` : ''}{a.activo === false ? ' (apagado)' : ''}
                   </option>
                 ))}
               </Select>
+              {sel && (
+                <div className="sm:w-1/3">
+                  <input className={montoCls} value={valor(sel)} placeholder="$..." onChange={(e) => cambiar(sel, e.target.value)} />
+                  {unidadVisible(sel.monto) && <span className="block text-[11px] text-white/40 mt-1">{unidadVisible(sel.monto)}</span>}
+                </div>
+              )}
             </div>
             {sel && (
               <div className="flex items-start gap-2 text-[11px] text-white/40">
-                <span className="flex-1">
-                  <span className="text-white/80">Monto: {sel.monto || '—'}</span>
-                  {sel.gatillo ? ` · ${sel.gatillo}` : ''}{sel.nota ? ` · ${sel.nota}` : ''}
-                </span>
+                <span className="flex-1">{sel.gatillo || 'Sin condición especial.'}{sel.nota ? ` · ${sel.nota}` : ''}</span>
                 <button type="button" onClick={() => setEditing(sel)} className="text-amber-400 hover:text-amber-300 whitespace-nowrap">Editar detalles</button>
               </div>
             )}
