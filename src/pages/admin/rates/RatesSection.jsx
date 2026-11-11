@@ -11,13 +11,14 @@ import { ErrorBox, Empty } from './ui';
 import ChangePreview from './ChangePreview';
 import useSaveFlow from './useSaveFlow';
 import RoutesTab from './RoutesTab';
-import { ZonesTab } from './SimpleTabs';
+import { ZonesTab, AccessorialsTab } from './SimpleTabs';
 import { ExcelTab } from './OtherTabs';
 
 const TABS = [
   { id: 'excel', label: 'Cargar Excel' },
   { id: 'rutas', label: 'Rutas' },
   { id: 'zonas', label: 'Zonas' },
+  { id: 'cargos', label: 'Cargos adicionales' },
 ];
 
 const anyEmpty = (d) => !d.routes.length || !d.zones.length || !d.accessorials.length || !d.aliases.length;
@@ -65,7 +66,7 @@ export default function RatesSection() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-white/50">
-        Rutas, zonas y accesoriales que usa el chat para cotizar drayage. Cada cambio se revisa antes de guardar y el chat lo usa en máximo 1 minuto.
+        Rutas, zonas y cargos adicionales que usa el chat para cotizar drayage. Cada cambio se revisa antes de guardar y el chat lo usa en máximo 1 minuto.
       </p>
 
       {init?.estado === 'cargando' && (
@@ -98,6 +99,7 @@ export default function RatesSection() {
           {tab === 'excel' && <ExcelTab onSaved={reload} />}
           {tab === 'rutas' && <RoutesTab data={data} flow={flow} />}
           {tab === 'zonas' && <ZonesTab data={data} flow={flow} />}
+          {tab === 'cargos' && <AccessorialsTab data={data} flow={flow} />}
         </>
       )}
 

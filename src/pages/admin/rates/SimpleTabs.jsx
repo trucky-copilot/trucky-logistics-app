@@ -1,6 +1,6 @@
-// Pestaña Zonas (y el editor genérico que usa):
+// Pestañas Zonas y Cargos adicionales (y el editor genérico que usan):
 // lista filtrada por estado + editor con los campos definidos abajo.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Card, Btn, Field, Input, Select, TextArea, Badge, Modal, ErrorBox, Empty, Table, Td } from './ui';
 
@@ -96,6 +96,139 @@ export function ZonesTab({ data, flow }) {
           ]}
           onClose={() => { setEditing(undefined); flow.setError(null); }} onSubmit={submit}
           onDelete={editing ? async () => { if (await flow.review('RateZone', [{ key: editing.zone_key, eliminar: true }])) setEditing(undefined); } : undefined} />
+      )}
+    </>
+  );
+}
+
+// ── Cargos adicionales (accesoriales) ────────────────────────────────────────
+// Los cargos principales siempre visibles con su monto editable; el resto en un
+// menú desplegable (solo consulta: se editan con "Editar detalles"), para no
+// saturar el panel. Los montos se guardan todos juntos con "Revisar cambios".
+const PRINCIPALES = [
+  { id: 'prepull', test: /pre-?pull/i },
+  { id: 'hazmat', test: /hazmat/i },
+  { id: 'detention', test: /waiting|espera|detenci|detention/i },
+  { id: 'overweight', test: /overweight|sobrepeso/i },
+];
+const esPrincipal = (a) => PRINCIPALES.some((p) => p.test.test(a.concepto || ''));
+const etiqueta = (a) => (/^waiting time$/i.test(a.concepto) ? 'Detention / Waiting Time' : a.concepto);
+// El monto viene como texto con su unidad ("$100 · por contenedor", "$75 · por hora").
+// En el campo solo se edita el valor; la unidad se conserva tal cual al guardar
+// (el chat recibe exactamente el mismo texto). "por contenedor" no se muestra
+// porque es lo normal en drayage; otras unidades (por hora, por pierna...) sí.
+function splitMonto(monto) {
+  const parts = String(monto || '').split(' · ');
+  const i = parts.findIndex((p) => /\d|cotizar|incluido/i.test(p));
+  return i < 0 ? { parts: [String(monto || '')], i: 0 } : { parts, i };
+}
+const valorDe = (monto) => { const s = splitMonto(monto); return s.parts[s.i]; };
+const unidadDe = (monto) => { const s = splitMonto(monto); return s.parts.filter((_, j) => j !== s.i).join(' · '); };
+const conValor = (monto, v) => { const s = splitMonto(monto); const parts = [...s.parts]; parts[s.i] = v.trim(); return parts.join(' · '); };
+const unidadVisible = (monto) => { const u = unidadDe(monto); return /^por contenedor$/i.test(u.trim()) ? '' : u; };
+
+const montoCls = 'w-full bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-sm text-white font-mono focus:outline-none focus:border-amber-500/50';
+
+export function AccessorialsTab({ data, flow }) {
+  const [estado, setEstado] = useState('FL');
+  const [editing, setEditing] = useState(undefined);
+  const [draft, setDraft] = useState({});          // accessorial_key → monto editado
+  const [otro, setOtro] = useState('');
+
+  const rows = useMemo(() => data.accessorials.filter((a) => a.estado === estado), [data.accessorials, estado]);
+  const principales = useMemo(() => PRINCIPALES.flatMap((p) => rows.filter((a) => p.test.test(a.concepto || ''))), [rows]);
+  const otros = useMemo(() => rows.filter((a) => !esPrincipal(a)), [rows]);
+  const sel = otros.find((a) => a.accessorial_key === otro) || otros[0];
+
+  // Al recargar los datos (después de guardar) o cambiar de estado, se limpian los borradores.
+  useEffect(() => { setDraft({}); }, [data.accessorials, estado]);
+
+  // draft guarda solo el VALOR editado; al guardar se vuelve a unir con su unidad.
+  const valor = (a) => (a.accessorial_key in draft ? draft[a.accessorial_key] : valorDe(a.monto));
+  const cambiar = (a, v) => setDraft((d) => ({ ...d, [a.accessorial_key]: v }));
+  const cambios = rows.filter((a) => a.accessorial_key in draft && draft[a.accessorial_key].trim() !== valorDe(a.monto).trim());
+
+  const revisar = () => flow.review('RateAccessorial', cambios.map((a) => ({ key: a.accessorial_key, data: { monto: conValor(a.monto, draft[a.accessorial_key]) } })));
+  const submit = async (f) => {
+    const d = { concepto: (f.concepto || '').trim(), gatillo: f.gatillo || null, monto: (f.monto || '').trim(), nota: f.nota || null, activo: f.activo !== false, ...(editing ? {} : { estado }) };
+    if (await flow.review('RateAccessorial', [{ key: editing?.accessorial_key ?? null, data: d }])) setEditing(undefined);
+  };
+  const corto = (s) => (s && s.length > 45 ? `${s.slice(0, 45)}…` : s);
+
+  return (
+    <>
+      <Card className="space-y-5">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Estado">
+            <Select value={estado} onChange={(e) => { setEstado(e.target.value); setOtro(''); }}><option>FL</option><option>TX</option></Select>
+          </Field>
+          <div className="flex-1" />
+          <Btn variant="ghost" onClick={() => setEditing(null)}><Plus className="w-4 h-4" /> Nuevo cargo</Btn>
+        </div>
+        <p className="text-xs text-white/40">Cargos que se suman a la tarifa de la ruta cuando pasa algo especial. El chat los usa para todos los usuarios; también se actualizan con la hoja de accesoriales del Excel.</p>
+
+        {principales.length === 0 ? <Empty>Sin cargos principales en {estado}.</Empty> : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {principales.map((a) => (
+              <div key={a.accessorial_key} className={a.activo === false ? 'opacity-50' : ''}>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-white/70">
+                    {etiqueta(a)}{unidadVisible(a.monto) && <span className="text-white/40 font-normal"> · {unidadVisible(a.monto)}</span>}
+                    {a.activo === false && <> <Badge tone="red">apagado</Badge></>}
+                  </span>
+                  <EditBtn onClick={() => setEditing(a)} />
+                </div>
+                <input className={montoCls} value={valor(a)} placeholder="$..." onChange={(e) => cambiar(a, e.target.value)} />
+                {a.gatillo && <span className="block text-[11px] text-white/40 mt-1">{a.gatillo}</span>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {otros.length > 0 && (
+          <div className="pt-4 border-t border-white/10 space-y-2">
+            <span className="block text-xs font-medium text-white/60">Otros cargos adicionales</span>
+            <div>
+              <Select value={sel?.accessorial_key || ''} onChange={(e) => setOtro(e.target.value)}>
+                {otros.map((a) => (
+                  <option key={a.accessorial_key} value={a.accessorial_key}>
+                    {a.concepto}{otros.filter((x) => x.concepto === a.concepto).length > 1 && a.gatillo ? ` · ${corto(a.gatillo)}` : ''}{a.activo === false ? ' (apagado)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            {sel && (
+              <div className="flex items-start gap-2 text-[11px] text-white/40">
+                <span className="flex-1">
+                  <span className="text-white/80">Monto: {sel.monto || '—'}</span>
+                  {sel.gatillo ? ` · ${sel.gatillo}` : ''}{sel.nota ? ` · ${sel.nota}` : ''}
+                </span>
+                <button type="button" onClick={() => setEditing(sel)} className="text-amber-400 hover:text-amber-300 whitespace-nowrap">Editar detalles</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
+          {cambios.length > 0 && <span className="text-xs text-white/50">{cambios.length} {cambios.length === 1 ? 'monto modificado' : 'montos modificados'}</span>}
+          {cambios.length > 0 && <Btn variant="ghost" onClick={() => setDraft({})}>Descartar</Btn>}
+          <Btn onClick={revisar} busy={flow.busy} disabled={cambios.length === 0}>Revisar cambios</Btn>
+        </div>
+        <ErrorBox error={editing === undefined ? flow.error : null} />
+      </Card>
+
+      {editing !== undefined && (
+        <GenericEditor title={editing ? `Cargo · ${etiqueta(editing)}` : `Nuevo cargo adicional (${estado})`} busy={flow.busy} error={flow.error}
+          initial={{ concepto: editing?.concepto || '', monto: editing?.monto || '', gatillo: editing?.gatillo || '', nota: editing?.nota || '', activo: editing?.activo !== false }}
+          fields={[
+            { k: 'concepto', label: 'Cargo' },
+            { k: 'monto', label: 'Monto', hint: 'Tal como lo verá el chat, ej: $100 · por contenedor' },
+            { k: 'gatillo', label: 'Cuándo aplica', type: 'textarea' },
+            { k: 'nota', label: 'Nota', type: 'textarea' },
+            { k: 'activo', label: 'Activo', type: 'bool' },
+          ]}
+          onClose={() => { setEditing(undefined); flow.setError(null); }} onSubmit={submit}
+          onDelete={editing ? async () => { if (await flow.review('RateAccessorial', [{ key: editing.accessorial_key, eliminar: true }])) setEditing(undefined); } : undefined} />
       )}
     </>
   );

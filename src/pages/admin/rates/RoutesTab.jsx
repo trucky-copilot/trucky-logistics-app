@@ -135,7 +135,10 @@ export default function RoutesTab({ data, flow }) {
         <div className="flex-1" />
         <Btn onClick={() => setEditing(null)}><Plus className="w-4 h-4" /> Nueva ruta</Btn>
       </div>
-      <p className="text-xs text-white/40">{rows.length} rutas</p>
+      <p className="text-xs text-white/40">
+        {rows.length} rutas · Cada ruta trae sus <b>millas de ida</b> desde el puerto y el <b>precio por contenedor</b> según el tamaño (objetivo y, si existe, piso).
+        Si la ciudad no está en la tabla, el chat usa la ruta con las millas más parecidas.
+      </p>
       {rows.length === 0 ? <Empty>No hay rutas con este filtro.</Empty> : (
         <Table head={['Ciudad', 'Mercado', 'Zona', 'Grupo', 'Millas', ...TAMANOS.map((t) => t.label), '']}>
           {rows.map((r) => (
