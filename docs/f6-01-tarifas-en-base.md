@@ -20,7 +20,7 @@ Rol `admin` en Base44 **y** correo en `src/lib/adminAccess.js` /
 | `marketChat/rateSource.ts` | El chat lee las tablas (caché 60 s). Base vacía, migración a medias, error o dato inválido → sigue con los JSON del repo / lo último bueno. |
 | `adminSaveRates` | Única puerta de escritura: vista previa → confirmar. Valida todo; si hay un error no guarda nada. Detecta si otro admin guardó en medio. |
 | `adminMigrateRates` | Carga inicial automática: la primera vez que se abre la sección, copia las tarifas actuales (JSON del repo) a las tablas vacías y verifica 0 diferencias. No tiene botón. |
-| `adminUploadStateData` | Ya NO escribe `ContainerRoute`; solo analiza con IA tarifas por milla por estado. Si recibe el Excel drayage, la pantalla lo redirige a Tarifas. |
+| `adminUploadStateData` | Ya NO escribe `ContainerRoute`; solo analiza con IA tarifas por milla por estado. No acepta Excel: los Excel se cargan en Tarifas. |
 | `shared/rateEdits.ts`, `shared/rateApply.ts`, `shared/rateCatalog.ts` | Reglas puras (validación, UPSERT, conversión), probadas con `deno test`. |
 
 ## Excel

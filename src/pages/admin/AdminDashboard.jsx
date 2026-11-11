@@ -2,11 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { ShieldAlert, Save, Upload, Loader2, CheckCircle2 } from 'lucide-react';
 import RatesSection from './rates/RatesSection';
-import { loadXLSX } from '@/lib/xlsxLoader';
 
-// F6-01: las hojas del Excel oficial de tarifas drayage. Ese archivo se carga
-// en la sección Tarifas (UPSERT + control de calidad + vista previa), no aquí.
-const DRAYAGE_SHEETS = ['Rates_Drayage', 'Rates_Drayage_TX'];
 
 export default function AdminDashboard() {
   const [section, setSection] = useState('tarifas');
@@ -123,84 +119,17 @@ export default function AdminDashboard() {
     const ext = file.name.split('.').pop().toLowerCase();
     
     if (['xlsx', 'xls'].includes(ext)) {
-      setLoadingOCR(true);
-      try {
-        const XLSX = await loadXLSX();
-        const arrayBuffer = await file.arrayBuffer();
-        const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-        
-        if (workbook.SheetNames.some(n => DRAYAGE_SHEETS.includes(n))) {
-          setModal({
-            isOpen: true,
-            title: 'Este es el Excel de tarifas drayage',
-            message: 'Súbelo en la pestaña "Tarifas" → "Cargar Excel": ahí verás el control de calidad y qué cambia antes de guardar.',
-            type: 'error'
-          });
-          setLoadingOCR(false);
-          e.target.value = '';
-          return;
-        }
-
-        let fullTablesMarkdown = '';
-
-        for (const sheetName of workbook.SheetNames) {
-          const sheet = workbook.Sheets[sheetName];
-          const rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-          if (!rawRows || rawRows.length === 0) continue;
-
-          // Filtrar filas completamente vacías
-          const rows = rawRows.filter(r => Array.isArray(r) && r.some(cell => String(cell).trim() !== ''));
-          if (rows.length === 0) continue;
-
-          fullTablesMarkdown += `### Hoja: ${sheetName}\n\n`;
-
-          // Detectar la fila de encabezados
-          let headerIndex = 0;
-          for (let i = 0; i < Math.min(6, rows.length); i++) {
-            const strCells = rows[i].filter(c => typeof c === 'string' && c.trim().length > 0);
-            if (strCells.length >= 2) {
-              headerIndex = i;
-              break;
-            }
-          }
-
-          const rawHeaders = rows[headerIndex].map(h => String(h || '').trim());
-          const maxCols = Math.max(...rows.slice(headerIndex).map(r => r.length));
-          const headers = Array.from({ length: maxCols }, (_, i) => rawHeaders[i] || `Col ${i + 1}`);
-
-          // Construir tabla Markdown organizada
-          fullTablesMarkdown += `| ${headers.join(' | ')} |\n`;
-          fullTablesMarkdown += `| ${headers.map(() => '---').join(' | ')} |\n`;
-
-          for (let r = headerIndex + 1; r < rows.length; r++) {
-            const row = rows[r];
-            const rowValues = Array.from({ length: maxCols }, (_, i) => {
-              const val = row[i];
-              if (val === null || val === undefined) return '';
-              if (typeof val === 'number') {
-                return Number.isInteger(val) ? String(val) : val.toFixed(2);
-              }
-              return String(val).replace(/\|/g, '-').trim();
-            });
-
-            fullTablesMarkdown += `| ${rowValues.join(' | ')} |\n`;
-
-          }
-          fullTablesMarkdown += '\n';
-        }
-
-        setTextData(fullTablesMarkdown.trim());
-      } catch (err) {
-        console.error(err);
-        setModal({
-          isOpen: true,
-          title: 'Error al leer Excel',
-          message: `Error al procesar el archivo Excel: ${err.message}`,
-          type: 'error'
-        });
-      }
-      setLoadingOCR(false);
-    } else if (ext === 'pdf') {
+      // F6-01: los Excel se cargan en la pestaña Tarifas (validación estricta).
+      setModal({
+        isOpen: true,
+        title: 'Los Excel se cargan en Tarifas',
+        message: 'Sube el Excel en la pestaña "Tarifas" → "Cargar Excel". Aquí solo se usan PDF, imágenes o texto con las tarifas por milla de cada estado.',
+        type: 'error'
+      });
+      e.target.value = '';
+      return;
+    }
+    if (ext === 'pdf') {
       setLoadingOCR(true);
       try {
         const pdfjsLib = await import('pdfjs-dist');
@@ -250,7 +179,7 @@ export default function AdminDashboard() {
       setModal({
         isOpen: true,
         title: 'Formato no soportado',
-        message: 'Por favor utiliza un archivo Excel (.xlsx, .xls), PDF, JPG, PNG, CSV o TXT.',
+        message: 'Por favor utiliza un archivo PDF, JPG, PNG, CSV o TXT.',
         type: 'error'
       });
     }
@@ -316,12 +245,12 @@ export default function AdminDashboard() {
       {/* AI Market Data Parser */}
       <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-2xl space-y-4">
         <h2 className="text-lg font-semibold text-white">Actualizar Tarifas por Estado (RPM)</h2>
-        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube un Excel, PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). Las tarifas drayage por ruta se cargan en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-amber-400 underline">Tarifas</button>.</p>
+        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube un PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). El Excel de tarifas drayage se carga en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-amber-400 underline">Tarifas</button>.</p>
         
         <textarea
           value={textData}
           onChange={e => setTextData(e.target.value)}
-          placeholder="Pega el texto aquí o sube un archivo Excel (.xlsx), PDF o imagen..."
+          placeholder="Pega el texto aquí o sube un PDF o imagen..."
           disabled={loadingOCR}
           className="w-full h-48 bg-white/5 border border-white/10 rounded-xl p-4 text-white font-mono text-xs focus:outline-none focus:border-amber-500/50 resize-none disabled:opacity-50"
         ></textarea>
@@ -334,7 +263,7 @@ export default function AdminDashboard() {
           <div className="relative">
             <input 
               type="file" 
-              accept=".xlsx,.xls,.pdf,.jpg,.jpeg,.png,.txt,.csv" 
+              accept=".pdf,.jpg,.jpeg,.png,.txt,.csv" 
               onChange={handleFileUpload}
               disabled={loadingOCR || uploading}
               className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
@@ -344,7 +273,7 @@ export default function AdminDashboard() {
               className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
             >
               {loadingOCR ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-              {loadingOCR ? 'Procesando...' : 'Cargar Archivo (Excel, PDF, IMG)'}
+              {loadingOCR ? 'Procesando...' : 'Cargar Archivo (PDF, IMG)'}
             </button>
           </div>
 
