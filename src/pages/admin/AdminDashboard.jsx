@@ -4,7 +4,7 @@ import { ShieldAlert, Save, Upload, Loader2, CheckCircle2 } from 'lucide-react';
 import RatesSection from './rates/RatesSection';
 
 // F6-01: las hojas del Excel oficial de tarifas drayage. Ese archivo se carga
-// en la sección Tarifas drayage (UPSERT + vista previa + historial), no aquí.
+// en la sección Tarifas (UPSERT + control de calidad + vista previa), no aquí.
 const DRAYAGE_SHEETS = ['Rates_Drayage', 'Rates_Drayage_TX'];
 
 export default function AdminDashboard() {
@@ -143,7 +143,7 @@ export default function AdminDashboard() {
           setModal({
             isOpen: true,
             title: 'Este es el Excel de tarifas drayage',
-            message: 'Súbelo en la pestaña "Tarifas drayage" → "Cargar Excel": ahí verás qué cambia antes de guardar y queda en el historial.',
+            message: 'Súbelo en la pestaña "Tarifas" → "Cargar Excel": ahí verás el control de calidad y qué cambia antes de guardar.',
             type: 'error'
           });
           setLoadingOCR(false);
@@ -278,7 +278,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="flex gap-2 overflow-x-auto">
-        {[['tarifas', 'Tarifas drayage'], ['mercado', 'Mercado por estado y cinta']].map(([id, label]) => (
+        {[['tarifas', 'Tarifas'], ['mercado', 'Mercado por estado y cinta']].map(([id, label]) => (
           <button key={id} type="button" onClick={() => setSection(id)}
             className={`px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-colors ${section === id ? 'bg-amber-500 text-black' : 'bg-white/5 text-white/70 hover:bg-white/10'}`}>
             {label}
@@ -326,7 +326,7 @@ export default function AdminDashboard() {
       {/* AI Market Data Parser */}
       <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-2xl space-y-4">
         <h2 className="text-lg font-semibold text-white">Actualizar Tarifas por Estado (RPM)</h2>
-        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube un Excel, PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). Las tarifas drayage por ruta se cargan en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-amber-400 underline">Tarifas drayage</button>.</p>
+        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube un Excel, PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). Las tarifas drayage por ruta se cargan en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-amber-400 underline">Tarifas</button>.</p>
         
         <textarea
           value={textData}

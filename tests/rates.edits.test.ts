@@ -1,9 +1,9 @@
 // F6-01 · Fase E — reglas de escritura (validación, UPSERT por identidad, eliminar).
 import { assertEquals, assert, assertNotEquals } from 'jsr:@std/assert@1';
 import { seedAll } from '../base44/shared/rateCatalog.ts';
-import { planManual, planExcel, signature, expiredHistory, type Db } from '../base44/shared/rateEdits.ts';
-import routesFl from '../base44/functions/marketChat/data/routes.fl.json' with { type: 'json' };
-import accFl from '../base44/functions/marketChat/data/accessorials.fl.json' with { type: 'json' };
+import { planManual, planExcel, signature, type Db } from '../base44/shared/rateEdits.ts';
+import routesFl from '../base44/shared/rateData/routes.fl.json' with { type: 'json' };
+import accFl from '../base44/shared/rateData/accessorials.fl.json' with { type: 'json' };
 
 const asDb = (rows: any[], p: string): any[] => rows.map((r, i) => ({ id: `${p}${i}`, created_date: '2026-11-11T00:00:00Z', ...r }));
 function db(): Db {
@@ -97,26 +97,29 @@ Deno.test('manual: el registro de documentación interna no se elimina', () => {
 
 // Simula una versión nueva del Excel: misma data pero con una fila insertada
 // arriba (todas las filas e ids se corren +1), que es lo que antes duplicaba.
-function excelCorrido() {
-  const routes = clone(routesFl as any[]).map((r) => ({ ...r, id: r.id.replace(/-(\d+)$/, (_: string, n: string) => `-${+n + 1}`), fuente: { ...r.fuente, fila: r.fuente.fila + 1, sha: 'nuevo' } }));
+// Sin la fila repetida de Lake Worth Beach (la validación estricta la bloquea).
+const LW_DUP = 'fl-south-palm-beach-lake-worth-beach-grupo-145-81';
+function excelCorrido(conDuplicado = false) {
+  const routes = clone(routesFl as any[]).filter((r) => conDuplicado || r.id !== LW_DUP).map((r) => ({ ...r, id: r.id.replace(/-(\d+)$/, (_: string, n: string) => `-${+n + 1}`), fuente: { ...r.fuente, fila: r.fuente.fila + 1, sha: 'nuevo' } }));
   return { routes, accessorials: clone(accFl as any[]) };
 }
 
 Deno.test('excel: mismas tarifas con filas corridas → 0 nuevas, 0 cambios, claves conservadas', () => {
   const d = db();
-  const p = planExcel('FL', excelCorrido(), d, true);
+  const p = planExcel('FL', excelCorrido(), d, false);
   assertEquals(p.errores, []);
   assertEquals([p.crear.length, p.actualizar.length, p.eliminar.length], [0, 0, 0]);
-  assertEquals(p.iguales, 209 + 20);
-  assertEquals(p.metadatos.length, 209); // solo se actualiza el origen (fila/sha), sin historial
+  assertEquals(p.iguales, 208 + 20);
+  assertEquals(p.metadatos.length, 208); // solo se actualiza el origen (fila/sha)
+  // La copia repetida que ya no viene se puede eliminar marcando la casilla.
+  assertEquals(planExcel('FL', excelCorrido(), d, true).eliminar.map((e) => e.key), [LW_DUP]);
 });
 
-Deno.test('excel: el duplicado lake worth beach empareja sus 2 filas (no crea ni elimina)', () => {
-  const d = db();
-  const p = planExcel('FL', excelCorrido(), d, true);
-  const lw = p.metadatos.filter((m) => m.key.includes('lake-worth-beach-grupo-145'));
-  assertEquals(lw.length, 2);
-  assertNotEquals(lw[0].id, lw[1].id);
+Deno.test('excel estricto: una ruta repetida en el archivo bloquea el guardado', () => {
+  const p = planExcel('FL', excelCorrido(true), db(), false);
+  assert(p.errores.some((e) => e.mensaje.startsWith('Ruta repetida: Lake Worth Beach')), JSON.stringify(p.errores));
+  const dup = p.calidad!.find((c) => c.id === 'duplicados')!;
+  assert(!dup.ok && dup.bloquea);
 });
 
 Deno.test('excel: precio cambiado, ruta nueva, zona nueva y ruta que ya no viene', () => {
@@ -129,7 +132,8 @@ Deno.test('excel: precio cambiado, ruta nueva, zona nueva y ruta que ya no viene
   assertEquals(p.errores, []);
   assertEquals(p.actualizar.map((u) => u.key), ['fl-local-miami-grupo-100-2']);
   assertEquals(p.crear.map((c) => c.entidad).sort(), ['RateRoute', 'RateZone']);
-  assertEquals(p.eliminar.map((e) => e.key), [d.RateRoute.find((r) => r.route_id === quitada.id.replace(/-(\d+)$/, (_: string, n: string) => `-${+n - 1}`))!.route_id]);
+  const keyQuitada = d.RateRoute.find((r) => r.route_id === quitada.id.replace(/-(\d+)$/, (_: string, n: string) => `-${+n - 1}`))!.route_id;
+  assertEquals(p.eliminar.map((e) => e.key).sort(), [keyQuitada, LW_DUP].sort());
   const sin = planExcel('FL', inc, d, false);
   assertEquals(sin.eliminar.length, 0);
   assert(sin.avisos[0].includes('no vienen en el archivo'));
@@ -154,8 +158,50 @@ Deno.test('firma: cambia si alguien modificó un registro después de la vista p
   assertNotEquals(signature(d.RateRoute), a);
 });
 
-Deno.test('historial: se limpia lo de más de 12 meses', () => {
-  const now = Date.parse('2026-11-11T00:00:00Z');
-  const rows = [{ id: 'a', created_date: '2025-10-01T00:00:00Z' }, { id: 'b', created_date: '2026-01-01T00:00:00Z' }, { id: 'c' }];
-  assertEquals(expiredHistory(rows, now).map((r) => r.id), ['a']);
+// ── Control de calidad del Excel ─────────────────────────────────────────────
+
+const qc = (p: any, id: string) => p.calidad.find((c: any) => c.id === id);
+
+Deno.test('calidad: archivo correcto → todo ✓ y se puede guardar', () => {
+  const p = planExcel('FL', excelCorrido(), db(), false);
+  assertEquals(qc(p, 'filas').titulo, 'Filas leídas: 208 rutas y 20 accesoriales de FL');
+  assert(qc(p, 'vacios').ok && qc(p, 'duplicados').ok && qc(p, 'millas').ok && qc(p, 'cambios').ok);
+  assertEquals(p.errores, []);
+});
+
+Deno.test('calidad: detecta precio +50%, millas 20→200, tamaño que desaparece y millas fuera de zona', () => {
+  const inc = excelCorrido();
+  const miami = inc.routes.find((r: any) => r.ciudad === 'Miami' && r.mercado === 'MIA')!;
+  miami.precios[1].objetivo = Math.round(miami.precios[1].objetivo * 1.5);
+  const hialeah = inc.routes.find((r: any) => r.ciudad === 'Hialeah')!;
+  hialeah.millas_ida = 200;                                  // LOCAL va de 4 a 47 mi
+  const doral = inc.routes.find((r: any) => r.ciudad === 'Doral')!;
+  doral.precios = doral.precios.filter((x: any) => x.tamano !== '45');
+  const p = planExcel('FL', inc, db(), false);
+  // Millas imposibles bloquean; los cambios grandes solo avisan.
+  assertEquals(p.errores.map((e) => e.mensaje), ['Millas imposibles: fila 7 Hialeah: 200 mi, la zona LOCAL va de 4 a 47 mi']);
+  assert(!qc(p, 'cambios').bloquea);
+  const cambios = qc(p, 'cambios').detalle.join(' | ');
+  assert(cambios.includes('Miami: precio 40 $429 → $644 (+50%)'), cambios);
+  assert(cambios.includes('Hialeah: millas 13 → 200'), cambios);
+  assert(cambios.includes('Doral: ya no trae precio de 45'), cambios);
+  assert(qc(p, 'millas').detalle[0].includes('Hialeah: 200 mi, la zona LOCAL va de 4 a 47 mi'));
+});
+
+Deno.test('calidad: un campo vacío o precio en 0 se reporta y bloquea', () => {
+  const inc = excelCorrido(); inc.routes[2].precios[0].objetivo = 0;
+  const p = planExcel('FL', inc, db(), false);
+  assert(!qc(p, 'vacios').ok);
+  assert(p.errores.length > 0);
+});
+
+Deno.test('calidad estricta: 0 millas bloquea; un cambio grande de precio solo avisa', () => {
+  const inc = excelCorrido();
+  inc.routes[1].millas_ida = 0;
+  const p = planExcel('FL', inc, db(), false);
+  assert(p.errores.some((e) => e.mensaje.includes('0 millas')));
+  const inc2 = excelCorrido(); inc2.routes[0].precios[1].objetivo = 900;
+  const p2 = planExcel('FL', inc2, db(), false);
+  assertEquals(p2.errores, []);
+  assert(!p2.calidad!.find((c) => c.id === 'cambios')!.ok);
 });

@@ -7,15 +7,14 @@
 // Siempre: 1) se lee el estado actual, 2) se arma y valida el plan
 // (shared/rateEdits.ts), 3) preview lo devuelve; apply lo ejecuta SOLO si no
 // hay errores y si nadie cambió los datos desde la vista previa (firma).
-// Cada cambio queda en RateChangeLog; el historial de más de 12 meses se limpia.
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import XLSX from 'npm:xlsx@0.18.5';
 import { logAndSanitizeError } from '../../shared/safeError.ts';
 import { isAppAdmin } from '../../shared/adminAccess.ts';
 import { KEY_FIELD, type CatalogEntity } from '../../shared/rateCatalog.ts';
 import { planManual, planExcel, type Plan } from '../../shared/rateEdits.ts';
-import { readDb, firmaDe, strip, execute, purgeHistory } from '../../shared/rateApply.ts';
-import { convertFlorida, convertTexas, sha256Bytes } from '../marketChat/scripts/convertRateTables.ts';
+import { readDb, firmaDe, strip, execute } from '../../shared/rateApply.ts';
+import { convertFlorida, convertTexas, sha256Bytes } from '../../shared/rateExcel.ts';
 
 const MAX_FILE_BYTES = 5 * 1024 * 1024;
 
@@ -53,6 +52,7 @@ const forClient = (p: Plan) => ({
   iguales: p.iguales,
   errores: p.errores,
   avisos: p.avisos,
+  calidad: p.calidad,
 });
 
 export default async function adminSaveRates(req: Request) {
@@ -91,9 +91,8 @@ export default async function adminSaveRates(req: Request) {
     if (body?.firma !== firma) {
       return json({ action, errores: [{ mensaje: 'Los datos cambiaron desde la vista previa (otro administrador guardó algo). Vuelve a revisar los cambios.' }] }, 409);
     }
-    const lote = await execute(db, plan, user.email, origen);
-    const historialLimpio = await purgeHistory(db);
-    return json({ action, ok: true, lote_id: lote, resumen: resumen(plan), historialLimpio });
+    await execute(db, plan, user.email, origen);
+    return json({ action, ok: true, resumen: resumen(plan) });
   } catch (error) {
     if (error instanceof UserError) return json({ errores: [{ mensaje: error.message }] }, 400);
     return json(logAndSanitizeError('adminSaveRates', error), 500);

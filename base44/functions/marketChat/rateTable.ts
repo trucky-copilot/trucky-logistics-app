@@ -2,7 +2,7 @@
 // TABLA DE RUTAS — dominio puro (sin llamadas de red, sin IA), reglas-v3-multiestado
 // Fase 1 (conversión y carga).
 //
-// Carga los JSON versionados generados OFFLINE por scripts/convertRateTables.ts
+// Carga los JSON versionados generados OFFLINE por shared/rateExcel.ts
 // (ese script NUNCA se importa desde acá ni desde entry.ts/rateEngine.ts — no
 // hay importador de Excel en tiempo de ejecución, fuera de alcance de este SDD).
 //
@@ -75,10 +75,10 @@ export interface UnmatchedRouteEntry {
 // en el repo, no una base de datos).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import routesFlRaw from './data/routes.fl.json' with { type: 'json' };
-import routesTxRaw from './data/routes.tx.json' with { type: 'json' };
-import accessorialsFlRaw from './data/accessorials.fl.json' with { type: 'json' };
-import accessorialsTxRaw from './data/accessorials.tx.json' with { type: 'json' };
+import routesFlRaw from '../../shared/rateData/routes.fl.json' with { type: 'json' };
+import routesTxRaw from '../../shared/rateData/routes.tx.json' with { type: 'json' };
+import accessorialsFlRaw from '../../shared/rateData/accessorials.fl.json' with { type: 'json' };
+import accessorialsTxRaw from '../../shared/rateData/accessorials.tx.json' with { type: 'json' };
 
 const BUNDLED_ROUTES_FL = routesFlRaw as unknown as RouteRecord[];
 const BUNDLED_ROUTES_TX = routesTxRaw as unknown as RouteRecord[];
@@ -211,7 +211,7 @@ export function lookupRoute(estado: Estado, ciudad: string, tamano: Tamano, merc
 }
 
 
-// Busca por `id` exacto (slug estable, ver scripts/convertRateTables.ts). Existe
+// Busca por `id` exacto (slug estable, ver shared/rateExcel.ts). Existe
 // para la resolución por ZIP de Texas (nameResolution.ts, Fase 2): un ZIP
 // identifica una fila específica sin la ambigüedad de "varias filas comparten
 // la misma ciudad" que tiene lookupRoute por nombre (p. ej. Houston tiene 10

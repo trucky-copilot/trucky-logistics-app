@@ -2,13 +2,14 @@
 // CONVERSOR OFFLINE Excel → JSON — reglas-v3-multiestado, Fase 1.
 //
 // Corre UNA SOLA VEZ, a mano, para regenerar los JSON versionados que vive en
-// ../data/*.json. NO es parte del runtime: entry.ts y rateEngine.ts NUNCA lo
+// ./rateData/*.json (en shared/ para que todas las funciones de Base44
+// —marketChat, adminSaveRates, adminMigrateRates— lo reciban al publicar). NO es parte del runtime: entry.ts y rateEngine.ts NUNCA lo
 // importan (grep-verificado en apply-progress). No hay importador en tiempo
 // de ejecución — fuera de alcance de este SDD (kickoff §8).
 //
 // Uso (desde la raíz del repo):
 //   DENO_NO_PACKAGE_JSON=1 deno run --allow-read --allow-write --allow-net --allow-env \
-//     base44/functions/marketChat/scripts/convertRateTables.ts \
+//     base44/shared/rateExcel.ts \
 //     --fl <ruta a Trucky_Flat_Rates_Drayage_FL_v6.xlsx> \
 //     --tx <ruta a Trucky_Flat_Rates_Drayage_TX_v1.xlsx>
 //
@@ -301,7 +302,7 @@ async function main() {
 
   console.log(`Integridad superada: ${fl.routes.length} rutas FL, ${tx.routes.length} rutas TX`);
 
-  const dataDir = new URL('../data/', import.meta.url);
+  const dataDir = new URL('./rateData/', import.meta.url);
   await Deno.mkdir(dataDir, { recursive: true });
 
   const write = async (name: string, value: unknown) => {

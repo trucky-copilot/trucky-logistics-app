@@ -2,7 +2,7 @@
 // Pruebas de rateTable.ts (reglas-v3-multiestado, Fase 1 — conversión y carga).
 //
 // rateTable.ts carga los JSON versionados generados OFFLINE por
-// scripts/convertRateTables.ts (ese script NO corre en runtime — ver grep de
+// shared/rateExcel.ts (ese script NO corre en runtime — ver grep de
 // integridad más abajo). Estas pruebas cubren:
 //   - conteo exacto: 209 FL + 50 TX = 259 rutas (criterio de éxito 1)
 //   - OO y Margen jamás se cargan (criterio de éxito 15)

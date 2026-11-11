@@ -4,7 +4,7 @@ import {
   seedAll, seedRoutes, planUpsert, verifyAgainstSeed, toRouteRecords, toAliasesFile,
 } from '../base44/shared/rateCatalog.ts';
 import { loadRoutes, loadAccessorials } from '../base44/functions/marketChat/rateTable.ts';
-import aliases from '../base44/functions/marketChat/data/aliases.json' with { type: 'json' };
+import aliases from '../base44/shared/rateData/aliases.json' with { type: 'json' };
 
 // Simula cómo devuelve Base44 las filas: con id propio, fechas y llaves en otro orden.
 const asDb = (rows: any[]): any[] => rows.map((r, i) => ({

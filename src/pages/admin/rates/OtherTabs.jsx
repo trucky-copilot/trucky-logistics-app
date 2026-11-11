@@ -1,9 +1,9 @@
-// Pestañas Cargar Excel e Historial.
-import React, { useEffect, useState } from 'react';
-import { Upload, RefreshCw } from 'lucide-react';
-import { Card, Btn, Field, Select, Badge, ErrorBox, Empty, Table, Td } from './ui';
-import ChangePreview, { fmt } from './ChangePreview';
-import { previewExcel, applyExcel, fileToBase64, loadHistory } from '@/lib/ratesApi';
+// Pestaña Cargar Excel.
+import React, { useState } from 'react';
+import { Upload } from 'lucide-react';
+import { Card, Btn, Field, Select, ErrorBox } from './ui';
+import ChangePreview from './ChangePreview';
+import { previewExcel, applyExcel, fileToBase64 } from '@/lib/ratesApi';
 
 const MAX_MB = 5;
 
@@ -54,77 +54,12 @@ export function ExcelTab({ onSaved }) {
       </div>
       <label className="flex items-start gap-2 text-xs text-white/60">
         <input type="checkbox" className="mt-0.5" checked={eliminarFaltantes} onChange={(e) => setEliminarFaltantes(e.target.checked)} />
-        <span>Eliminar las rutas y accesoriales de {estado} que <b>no</b> vienen en este archivo. Se listan en la revisión antes de confirmar y quedan registrados en el historial.</span>
+        <span>Eliminar las rutas y accesoriales de {estado} que <b>no</b> vienen en este archivo. Se listan en la revisión antes de confirmar.</span>
       </label>
       <ErrorBox error={error} />
       <Btn onClick={revisar} busy={busy} disabled={!file}><Upload className="w-4 h-4" /> Revisar archivo</Btn>
       {preview && (
         <ChangePreview preview={preview} onConfirm={confirmar} onClose={() => setPreview(null)} />
-      )}
-    </Card>
-  );
-}
-
-// ── Historial ────────────────────────────────────────────────────────────────
-const ENT_LABEL = { RateRoute: 'Ruta', RateAccessorial: 'Accesorial', RateAlias: 'Alias', RateZone: 'Zona' };
-const ACC_TONE = { crear: 'green', actualizar: 'amber', eliminar: 'red' };
-
-export function HistoryTab({ reloadKey }) {
-  const [rows, setRows] = useState(null);
-  const [error, setError] = useState(null);
-  const [entidad, setEntidad] = useState('');
-  const [origen, setOrigen] = useState('');
-  const [open, setOpen] = useState(null);
-
-  const load = async () => {
-    setError(null);
-    try { setRows(await loadHistory(300)); } catch (e) { setError(e.message); setRows([]); }
-  };
-  useEffect(() => { load(); }, [reloadKey]);
-
-  const list = (rows || []).filter((r) => (!entidad || r.entidad === entidad) && (!origen || r.origen === origen));
-  return (
-    <Card className="space-y-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <Field label="Tipo">
-          <Select value={entidad} onChange={(e) => setEntidad(e.target.value)}>
-            <option value="">Todos</option>{Object.entries(ENT_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </Select>
-        </Field>
-        <Field label="Origen">
-          <Select value={origen} onChange={(e) => setOrigen(e.target.value)}>
-            <option value="">Todos</option><option value="manual">Manual</option><option value="excel">Excel</option><option value="migracion">Migración</option>
-          </Select>
-        </Field>
-        <div className="flex-1" />
-        <Btn variant="ghost" onClick={load}><RefreshCw className="w-4 h-4" /> Actualizar</Btn>
-      </div>
-      <ErrorBox error={error} />
-      {rows === null ? <Empty>Cargando…</Empty> : list.length === 0 ? <Empty>Sin cambios registrados.</Empty> : (
-        <Table head={['Fecha', 'Usuario', 'Tipo', 'Acción', 'Registro', 'Campos']}>
-          {list.map((r) => (
-            <React.Fragment key={r.id}>
-              <tr className="cursor-pointer hover:bg-white/5" onClick={() => setOpen(open === r.id ? null : r.id)}>
-                <Td className="whitespace-nowrap">{r.created_date ? new Date(r.created_date).toLocaleString() : '—'}</Td>
-                <Td>{r.usuario_email}</Td>
-                <Td>{ENT_LABEL[r.entidad] || r.entidad} <span className="text-white/40 text-[11px]">· {r.origen}</span></Td>
-                <Td><Badge tone={ACC_TONE[r.accion] || 'gray'}>{r.accion}</Badge></Td>
-                <Td className="break-all text-xs">{r.registro_key}</Td>
-                <Td className="text-xs">{(r.campos || []).join(', ') || '—'}</Td>
-              </tr>
-              {open === r.id && (
-                <tr><td colSpan={6} className="bg-white/5 p-3 text-xs space-y-1">
-                  {(r.campos?.length ? r.campos : Object.keys(r.despues || {})).map((c) => (
-                    <div key={c} className="grid md:grid-cols-[120px_1fr] gap-1">
-                      <span className="text-white/50">{c}</span>
-                      <span><span className="text-red-300">{fmt(c, r.antes?.[c])}</span>{' → '}<span className="text-emerald-300">{fmt(c, r.despues?.[c])}</span></span>
-                    </div>
-                  ))}
-                </td></tr>
-              )}
-            </React.Fragment>
-          ))}
-        </Table>
       )}
     </Card>
   );

@@ -5,11 +5,11 @@ import { assertEquals, assert } from 'jsr:@std/assert@1';
 import XLSX from 'npm:xlsx@0.18.5';
 import { seedAll } from '../base44/shared/rateCatalog.ts';
 import { planExcel, type Db } from '../base44/shared/rateEdits.ts';
-import { convertFlorida, convertTexas } from '../base44/functions/marketChat/scripts/convertRateTables.ts';
-import routesFl from '../base44/functions/marketChat/data/routes.fl.json' with { type: 'json' };
-import routesTx from '../base44/functions/marketChat/data/routes.tx.json' with { type: 'json' };
-import accFl from '../base44/functions/marketChat/data/accessorials.fl.json' with { type: 'json' };
-import accTx from '../base44/functions/marketChat/data/accessorials.tx.json' with { type: 'json' };
+import { convertFlorida, convertTexas } from '../base44/shared/rateExcel.ts';
+import routesFl from '../base44/shared/rateData/routes.fl.json' with { type: 'json' };
+import routesTx from '../base44/shared/rateData/routes.tx.json' with { type: 'json' };
+import accFl from '../base44/shared/rateData/accessorials.fl.json' with { type: 'json' };
+import accTx from '../base44/shared/rateData/accessorials.tx.json' with { type: 'json' };
 
 const asDb = (rows: any[], p: string): any[] => rows.map((r, i) => ({ id: `${p}${i}`, ...r }));
 function db(): Db {
@@ -25,25 +25,33 @@ function roundTrip(sheets: Record<string, unknown[][]>) {
   return XLSX.read(new Uint8Array(bytes), { type: 'array' });
 }
 
-function flWorkbook(extraTopRow = false) {
+// La tabla oficial actual trae Lake Worth Beach repetida (filas 81 y 82): con la
+// validación estricta hay que quitar una antes de cargar el Excel.
+function flWorkbook(extraTopRow = false, conDuplicado = false) {
   const head: unknown[][] = [['Tarifas FL'], ['Zona', 'Puerto', 'Ciudad', 'Millas', 'Grupo', "20'", "40'", "45'", "20' Heavy"]];
   if (extraTopRow) head.push(['', '', '', null]); // fila vacía insertada: todas las filas se corren
-  const rows = (routesFl as any[]).map((r) => [r.zona, r.mercado, r.ciudad, r.millas_ida, r.grupo, price(r, '20'), price(r, '40'), price(r, '45'), price(r, '20_heavy')]);
+  const rows = (routesFl as any[]).filter((r) => conDuplicado || r.id !== 'fl-south-palm-beach-lake-worth-beach-grupo-145-81').map((r) => [r.zona, r.mercado, r.ciudad, r.millas_ida, r.grupo, price(r, '20'), price(r, '40'), price(r, '45'), price(r, '20_heavy')]);
   const acc = (accFl as any[]).map((a) => [a.concepto, a.gatillo, a.monto, a.nota]);
   return roundTrip({ Rates_Drayage: [...head, ...rows], Accesoriales: [['Accesoriales'], ['Concepto', 'Gatillo', 'Monto', 'Nota'], ...acc] });
 }
 
 Deno.test('excel FL real: mismo contenido → 0 nuevas, 0 cambios, 0 eliminadas', () => {
   const inc = convertFlorida(flWorkbook(), 'Trucky_Rates_Drayage_FL_v10.xlsx', 'sha-nuevo');
-  assertEquals(inc.routes.length, 209);
-  const p = planExcel('FL', inc as any, db(), true);
+  assertEquals(inc.routes.length, 208);
+  const p = planExcel('FL', inc as any, db(), false);
   assertEquals(p.errores, []);
   assertEquals([p.crear.length, p.actualizar.length, p.eliminar.length], [0, 0, 0]);
 });
 
+Deno.test('excel FL real con la fila repetida de Lake Worth Beach → bloqueado', () => {
+  const inc = convertFlorida(flWorkbook(false, true), 'v10.xlsx', 's');
+  const p = planExcel('FL', inc as any, db(), false);
+  assert(p.errores.some((e) => e.mensaje.startsWith('Ruta repetida: Lake Worth Beach')));
+});
+
 Deno.test('excel FL real: con una fila insertada arriba tampoco duplica', () => {
   const inc = convertFlorida(flWorkbook(true), 'v11.xlsx', 'sha-2');
-  const p = planExcel('FL', inc as any, db(), true);
+  const p = planExcel('FL', inc as any, db(), false);
   assertEquals([p.crear.length, p.actualizar.length, p.eliminar.length], [0, 0, 0]);
   assert(p.metadatos.length > 0); // solo cambia la fila de origen
 });

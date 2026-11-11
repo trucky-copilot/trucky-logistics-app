@@ -1,6 +1,6 @@
 // F6-01 · Fase D — acceso de la pantalla "Tarifas" a los datos.
 // Lectura: directo de las tablas (Base44 solo deja leer a administradores).
-// Escritura: SIEMPRE por funciones del servidor, que validan y guardan historial.
+// Escritura: SIEMPRE por funciones del servidor, que validan antes de guardar.
 import { base44 } from '@/api/base44Client';
 
 const PAGE = 500;
@@ -22,10 +22,6 @@ export async function loadCatalog() {
   return { routes, zones, accessorials, aliases };
 }
 
-export async function loadHistory(limit = 200) {
-  const rows = await base44.entities.RateChangeLog.filter({}, '-created_date', limit);
-  return Array.isArray(rows) ? rows : [];
-}
 
 async function invoke(fn, payload) {
   try {

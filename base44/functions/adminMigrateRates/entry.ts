@@ -6,7 +6,7 @@
 //   - "apply": crea lo que falta (con soloVacias:true, solo en tablas vacías:
 //     así la llama sola la pantalla la primera vez). Lo que ya existe y es distinto NO se pisa
 //     salvo que se envíe overwriteChanged:true (así una re-ejecución no borra
-//     ediciones hechas desde la pantalla). Cada escritura queda en RateChangeLog.
+//     ediciones hechas desde la pantalla). 
 //   - "verify": reconstruye desde la base la forma que usa el chat y la compara
 //     con los JSON; ok:true significa 0 diferencias.
 // Nunca borra registros.
@@ -53,7 +53,6 @@ export default async function adminMigrateRates(req: Request) {
     if (action === 'verify') return json({ action, ...verifyAgainstSeed(current) });
 
     const seed = seedAll();
-    const loteId = `migracion-${new Date().toISOString()}`;
     const resumen: Record<string, unknown> = {};
 
     for (const e of ENTITIES) {
@@ -75,16 +74,10 @@ export default async function adminMigrateRates(req: Request) {
       const updates = overwriteChanged ? plan.update : [];
       for (const u of updates) await db[e].update(u.id, { ...u.despues, ...audit });
 
-      // Un solo registro por tabla en el historial (no uno por fila).
-      const logs = [
-        ...(plan.create.length ? [{ entidad: e, registro_key: 'carga-inicial', accion: 'crear', antes: null, despues: { registros: plan.create.length, origen: 'tarifas del sistema (JSON del repo)' }, campos: [], usuario_email: user.email, origen: 'migracion', lote_id: loteId }] : []),
-        ...updates.map((u) => ({ entidad: e, registro_key: u.key, accion: 'actualizar', antes: u.antes, despues: u.despues, campos: u.campos, usuario_email: user.email, origen: 'migracion', lote_id: loteId })),
-      ];
-      for (let i = 0; i < logs.length; i += CHUNK) await db.RateChangeLog.bulkCreate(logs.slice(i, i + CHUNK));
       (resumen[e] as any).actualizados = updates.length;
     }
 
-    return json({ action, overwriteChanged, lote_id: action === 'apply' ? loteId : null, resumen });
+    return json({ action, overwriteChanged, resumen });
   } catch (error) {
     return json(logAndSanitizeError('adminMigrateRates', error), 500);
   }

@@ -22,17 +22,26 @@ export interface Plan {
   crear: PlanItem[];
   actualizar: PlanItem[];
   eliminar: PlanItem[];
-  metadatos: PlanItem[];   // solo cambia origen/orden del Excel: se guarda sin ensuciar el historial
+  metadatos: PlanItem[];   // solo cambia origen/orden del Excel (no es un cambio de tarifa)
   iguales: number;
   errores: { key?: string; mensaje: string }[];
   avisos: string[];
+  calidad?: QualityCheck[]; // solo en cargas de Excel
 }
+
+// Control de calidad del archivo (validación ESTRICTA, ticket de carga de tablas):
+//   bloquean → campos vacíos / precios inválidos, rutas duplicadas, millas imposibles.
+//   avisan   → cambios de más del 30 % frente a lo guardado (pueden ser reales).
+// Cada problema muestra la fila exacta. Si algo bloquea, no se guarda nada.
+export interface QualityCheck { id: string; titulo: string; ok: boolean; bloquea: boolean; detalle: string[] }
 
 export const emptyPlan = (): Plan => ({ crear: [], actualizar: [], eliminar: [], metadatos: [], iguales: 0, errores: [], avisos: [] });
 
+export const QC_CAMBIO_GRANDE = 0.3;   // ±30 % en precio o millas frente a la versión guardada
+const QC_MAX_DETALLE = 30;
+
 const TAMANOS = ['20', '40', '45', '20_heavy'];
 const ESTADOS = ['FL', 'TX'];
-export const HISTORY_RETENTION_DAYS = 365;
 
 export const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase().replace(/\s+/g, ' ');
 export const slug = (...p: unknown[]) => p.filter((x) => x != null && x !== '').map(norm).join('-').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -264,11 +273,14 @@ export function planExcel(estado: 'FL' | 'TX', incoming: { routes: Row[]; access
   const usedKeys = new Set(db.RateRoute.map((r) => r.route_id));
   const base = existentes.length ? Math.min(...existentes.map((r) => r.orden ?? 0)) : db.RateRoute.reduce((m, r) => Math.max(m, (r.orden ?? 0) + 1), 0);
 
+  const pares: { next: Row; cur: Row | null }[] = [];
   rutas.forEach((inc, i) => {
     const { id: incId, ...rest } = inc;
     const next: Row = { ...rest, estado, orden: base + i, activo: true };
     const errs = validateRoute(next, zonasActivas);
     if (errs.length) { plan.errores.push(...errs.map((m) => ({ key: `fila ${inc.fuente?.fila ?? '?'} (${inc.ciudad})`, mensaje: m }))); return; }
+    const par: { next: Row; cur: Row | null } = { next, cur: null };
+    pares.push(par);
 
     let cur = (porIdentidad.get(routeIdentity(next)) || []).find((e) => !usados.has(e.id));
     if (!cur) cur = existentes.find((e) => !usados.has(e.id) && e.route_id === incId);
@@ -278,6 +290,7 @@ export function planExcel(estado: 'FL' | 'TX', incoming: { routes: Row[]; access
       return;
     }
     usados.add(cur.id);
+    par.cur = cur;
     next.route_id = cur.route_id; // la clave se conserva: el chat y los ZIP siguen apuntando bien
     const campos = ROUTE_TARIFA.filter((f) => !sameValue(cur[f], next[f]));
     const meta = ['orden', 'fuente', 'semantica_millas'].filter((f) => !sameValue(cur[f], next[f]));
@@ -336,6 +349,10 @@ export function planExcel(estado: 'FL' | 'TX', incoming: { routes: Row[]; access
   if (eliminarFaltantes && (incoming.accessorials || []).length) {
     for (const a of accEx) if (!accUsados.has(a.id)) plan.eliminar.push({ entidad: 'RateAccessorial', key: a.accessorial_key, id: a.id, antes: a, resumen: `${a.concepto}: ${a.monto}` });
   }
+  plan.calidad = qualityReport(estado, rutas.length, (incoming.accessorials || []).length, pares, existentes, plan.errores.length);
+  for (const c of plan.calidad) {
+    if (c.bloquea && !c.ok && c.id !== 'vacios') plan.errores.push(...c.detalle.map((d) => ({ mensaje: `${c.id === 'duplicados' ? 'Ruta repetida' : 'Millas imposibles'}: ${d}` })));
+  }
   return plan;
 }
 
@@ -348,8 +365,68 @@ export function signature(rows: Row[]): string {
   return `${rows.length}-${(h >>> 0).toString(16)}`;
 }
 
-// Historial a eliminar por antigüedad (más de HISTORY_RETENTION_DAYS días).
-export function expiredHistory(rows: Row[], now = Date.now(), days = HISTORY_RETENTION_DAYS): Row[] {
-  const limite = now - days * 86400000;
-  return rows.filter((r) => { const t = Date.parse(r.created_date ?? ''); return isFinite(t) && t < limite; });
+
+// ── Control de calidad del Excel ─────────────────────────────────────────────
+
+const fila = (r: Row) => `fila ${r.fuente?.fila ?? '?'}`;
+const pct = (a: number, b: number) => Math.round(((b - a) / a) * 100);
+
+export function qualityReport(
+  estado: string, nRutas: number, nAcc: number,
+  pares: { next: Row; cur: Row | null }[], existentes: Row[], nErrores: number,
+): QualityCheck[] {
+  const cut = (l: string[]) => (l.length > QC_MAX_DETALLE ? [...l.slice(0, QC_MAX_DETALLE), `… y ${l.length - QC_MAX_DETALLE} más`] : l);
+  const checks: QualityCheck[] = [];
+
+  checks.push({ id: 'filas', titulo: `Filas leídas: ${nRutas} rutas y ${nAcc} accesoriales de ${estado}`, ok: nRutas > 0, bloquea: true, detalle: [] });
+  checks.push({
+    id: 'vacios', ok: nErrores === 0, bloquea: true, detalle: [],
+    titulo: nErrores === 0 ? 'Sin campos vacíos ni precios inválidos' : `${nErrores} ${nErrores === 1 ? 'problema impide' : 'problemas impiden'} guardar (ver abajo)`,
+  });
+
+  // Duplicados dentro del archivo (misma ciudad + mercado + zona).
+  const grupos = new Map<string, Row[]>();
+  for (const { next } of pares) grupos.set(routeIdentity(next), [...(grupos.get(routeIdentity(next)) || []), next]);
+  const dups = [...grupos.values()].filter((g) => g.length > 1)
+    .map((g) => `${g[0].ciudad} · ${g[0].mercado} · ${g[0].zona} (${g.map(fila).join(', ')})`);
+  checks.push({ id: 'duplicados', titulo: dups.length ? `${dups.length} ${dups.length === 1 ? 'ruta repetida' : 'rutas repetidas'} en el archivo` : 'Sin rutas repetidas', ok: !dups.length, bloquea: true, detalle: dups });
+
+  // Millas coherentes con la zona: se compara con el rango que ya tiene esa zona.
+  const rango = new Map<string, [number, number]>();
+  for (const e of existentes) {
+    const r = rango.get(e.zona); const m = e.millas_ida;
+    rango.set(e.zona, r ? [Math.min(r[0], m), Math.max(r[1], m)] : [m, m]);
+  }
+  const millas: string[] = [];
+  for (const { next } of pares) {
+    const m = next.millas_ida;
+    if (m === 0) { millas.push(`${fila(next)} ${next.ciudad}: 0 millas`); continue; }
+    const r = rango.get(next.zona);
+    if (r && (m < r[0] * 0.75 - 5 || m > r[1] * 1.25 + 10)) millas.push(`${fila(next)} ${next.ciudad}: ${m} mi, la zona ${next.zona} va de ${r[0]} a ${r[1]} mi`);
+  }
+  checks.push({ id: 'millas', titulo: millas.length ? `${millas.length} ${millas.length === 1 ? 'ruta' : 'rutas'} con millas imposibles para su zona` : 'Millas coherentes con su zona', ok: !millas.length, bloquea: true, detalle: millas });
+
+  // Cambios grandes frente a lo guardado (posible error de digitación).
+  const grandes: string[] = [];
+  for (const { next, cur } of pares) {
+    if (!cur) continue;
+    const a = cur.millas_ida; const b = next.millas_ida;
+    if (a > 0 && Math.abs(b - a) > 10 && Math.abs(b - a) / a > QC_CAMBIO_GRANDE) grandes.push(`${fila(next)} ${next.ciudad}: millas ${a} → ${b} (${pct(a, b) > 0 ? '+' : ''}${pct(a, b)}%)`);
+    const antes = new Map<string, Row>((cur.precios || []).map((p: Row) => [p.tamano, p]));
+    const ahora = new Map<string, Row>((next.precios || []).map((p: Row) => [p.tamano, p]));
+    for (const [t, p] of ahora) {
+      const o = antes.get(t);
+      if (!o) continue;
+      for (const [campo, etiqueta] of [['objetivo', 'precio'], ['piso_tabla', 'piso']] as const) {
+        const x = o[campo]; const y = p[campo];
+        if (x > 0 && y > 0 && Math.abs(y - x) / x > QC_CAMBIO_GRANDE) grandes.push(`${fila(next)} ${next.ciudad}: ${etiqueta} ${t} $${x} → $${y} (${pct(x, y) > 0 ? '+' : ''}${pct(x, y)}%)`);
+      }
+    }
+    for (const t of antes.keys()) if (!ahora.has(t)) grandes.push(`${fila(next)} ${next.ciudad}: ya no trae precio de ${t}`);
+  }
+  checks.push({
+    id: 'cambios', ok: !grandes.length, bloquea: false, detalle: cut(grandes),
+    titulo: grandes.length ? `${grandes.length} ${grandes.length === 1 ? 'cambio' : 'cambios'} de más del ${QC_CAMBIO_GRANDE * 100}% frente a lo guardado` : `Ningún precio ni millaje cambia más del ${QC_CAMBIO_GRANDE * 100}%`,
+  });
+  return checks;
 }

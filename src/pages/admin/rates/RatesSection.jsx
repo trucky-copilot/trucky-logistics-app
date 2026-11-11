@@ -1,7 +1,7 @@
-// F6-01 — Sección "Tarifas drayage" dentro del Panel Admin.
+// F6-01 — Sección "Tarifas" dentro del Panel Admin.
 // El Excel es la entrada principal (cada carga = una nueva versión de las
-// tarifas, con vista previa e historial). Las listas sirven para consultar y
-// hacer ajustes puntuales. La primera vez, si la base está vacía, se cargan
+// tarifas, con control de calidad y vista previa). Rutas y Zonas sirven para
+// consultar y hacer ajustes puntuales. La primera vez, si la base está vacía, se cargan
 // solas las tarifas actuales del sistema (no hay que hacer nada a mano).
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
@@ -11,16 +11,13 @@ import { ErrorBox, Empty } from './ui';
 import ChangePreview from './ChangePreview';
 import useSaveFlow from './useSaveFlow';
 import RoutesTab from './RoutesTab';
-import { ZonesTab, AccessorialsTab, AliasesTab } from './SimpleTabs';
-import { ExcelTab, HistoryTab } from './OtherTabs';
+import { ZonesTab } from './SimpleTabs';
+import { ExcelTab } from './OtherTabs';
 
 const TABS = [
   { id: 'excel', label: 'Cargar Excel' },
   { id: 'rutas', label: 'Rutas' },
   { id: 'zonas', label: 'Zonas' },
-  { id: 'accesoriales', label: 'Accesoriales' },
-  { id: 'alias', label: 'Alias' },
-  { id: 'historial', label: 'Historial' },
 ];
 
 const anyEmpty = (d) => !d.routes.length || !d.zones.length || !d.accessorials.length || !d.aliases.length;
@@ -29,7 +26,6 @@ export default function RatesSection() {
   const [tab, setTab] = useState('excel');
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
-  const [reloadKey, setReloadKey] = useState(0);
   const [init, setInit] = useState(null); // { estado: 'cargando' | 'ok' | 'diferencias', diffs }
   const [legacy, setLegacy] = useState(0);
   const triedInit = useRef(false);
@@ -53,7 +49,6 @@ export default function RatesSection() {
       setInit((s) => (s?.estado === 'cargando' ? null : s));
       setData((prev) => prev || { routes: [], zones: [], accessorials: [], aliases: [] });
     }
-    setReloadKey((k) => k + 1);
   }, []);
   useEffect(() => { reload(); }, [reload]);
 
@@ -70,7 +65,7 @@ export default function RatesSection() {
   return (
     <div className="space-y-4">
       <p className="text-xs text-white/50">
-        Rutas, zonas y accesoriales que usa el chat para cotizar drayage. Cada cambio se revisa antes de guardar, queda en el historial y el chat lo usa en máximo 1 minuto.
+        Rutas, zonas y accesoriales que usa el chat para cotizar drayage. Cada cambio se revisa antes de guardar y el chat lo usa en máximo 1 minuto.
       </p>
 
       {init?.estado === 'cargando' && (
@@ -108,9 +103,6 @@ export default function RatesSection() {
           {tab === 'excel' && <ExcelTab onSaved={reload} />}
           {tab === 'rutas' && <RoutesTab data={data} flow={flow} />}
           {tab === 'zonas' && <ZonesTab data={data} flow={flow} />}
-          {tab === 'accesoriales' && <AccessorialsTab data={data} flow={flow} />}
-          {tab === 'alias' && <AliasesTab data={data} flow={flow} />}
-          {tab === 'historial' && <HistoryTab reloadKey={reloadKey} />}
         </>
       )}
 

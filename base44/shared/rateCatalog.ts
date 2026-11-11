@@ -2,7 +2,7 @@
 // F6-01 · Catálogo de tarifas en base de datos — dominio puro (sin red, sin IA).
 //
 // Tres responsabilidades, todas deterministas y testeables con deno test:
-//   1. SEMILLA:   JSON versionados (marketChat/data) → filas de entidad.
+//   1. SEMILLA:   JSON versionados (shared/rateData) → filas de entidad.
 //   2. INVERSA:   filas de entidad → la MISMA forma que hoy consume rateTable /
 //                 nameResolution (RouteRecord, AccessorialRecord, aliases).
 //                 Es lo que Fase C usará para que el chat lea de la base sin
@@ -11,11 +11,11 @@
 //                 con el detalle de qué campos cambian (para el historial).
 // ─────────────────────────────────────────────────────────────────────────────
 
-import routesFl from '../functions/marketChat/data/routes.fl.json' with { type: 'json' };
-import routesTx from '../functions/marketChat/data/routes.tx.json' with { type: 'json' };
-import accFl from '../functions/marketChat/data/accessorials.fl.json' with { type: 'json' };
-import accTx from '../functions/marketChat/data/accessorials.tx.json' with { type: 'json' };
-import aliasesRaw from '../functions/marketChat/data/aliases.json' with { type: 'json' };
+import routesFl from './rateData/routes.fl.json' with { type: 'json' };
+import routesTx from './rateData/routes.tx.json' with { type: 'json' };
+import accFl from './rateData/accessorials.fl.json' with { type: 'json' };
+import accTx from './rateData/accessorials.tx.json' with { type: 'json' };
+import aliasesRaw from './rateData/aliases.json' with { type: 'json' };
 
 export type CatalogEntity = 'RateRoute' | 'RateAccessorial' | 'RateAlias' | 'RateZone';
 

@@ -1,15 +1,15 @@
 // F6-01 · Fase F — prueba de aceptación de punta a punta con una base en memoria:
-// base vacía → migración → chat igual → edición manual → Excel → eliminar → historial.
+// base vacía → carga inicial → chat igual → edición manual → Excel (con control de calidad) → eliminar.
 import { assertEquals, assert, assertNotEquals } from 'jsr:@std/assert@1';
 import { seedAll, verifyAgainstSeed } from '../base44/shared/rateCatalog.ts';
 import { planManual, planExcel } from '../base44/shared/rateEdits.ts';
-import { readDb, firmaDe, execute, purgeHistory, ENTITIES } from '../base44/shared/rateApply.ts';
+import { readDb, firmaDe, execute, ENTITIES } from '../base44/shared/rateApply.ts';
 import { ensureRatesFromDb, resetRateSourceCache } from '../base44/functions/marketChat/rateSource.ts';
 import { resetRateTablesToBundled, getRateSource, loadRoutes } from '../base44/functions/marketChat/rateTable.ts';
 import { resetAliasesToBundled, resolveCiudad } from '../base44/functions/marketChat/nameResolution.ts';
 import { resolveDrayageQuote } from '../base44/functions/marketChat/rateEngine.ts';
-import routesFl from '../base44/functions/marketChat/data/routes.fl.json' with { type: 'json' };
-import accFl from '../base44/functions/marketChat/data/accessorials.fl.json' with { type: 'json' };
+import routesFl from '../base44/shared/rateData/routes.fl.json' with { type: 'json' };
+import accFl from '../base44/shared/rateData/accessorials.fl.json' with { type: 'json' };
 
 // Base en memoria con la misma interfaz que base44.asServiceRole.entities.
 function memoryDb() {
@@ -59,7 +59,7 @@ Deno.test('aceptación F6-01: ciclo completo de tarifas en base de datos', async
   assertEquals(getRateSource(), 'db');
   assertEquals(JSON.stringify(quote40('Miami')), original);
 
-  // 4. Edición manual del 40' de Miami → historial → el chat la usa.
+  // 4. Edición manual del 40' de Miami → el chat la usa.
   let db = await readDb(m.entities);
   const miami = db.RateRoute.find((r) => r.route_id === 'fl-local-miami-grupo-100-2')!;
   const firma1 = firmaDe(db);
@@ -70,26 +70,26 @@ Deno.test('aceptación F6-01: ciclo completo de tarifas en base de datos', async
   assertNotEquals(firmaDe(db), firma1, 'la firma cambia: otra vista previa vieja ya no se puede aplicar');
   await chat(m.base44);
   assertEquals(quote40('Miami').calculo.objetivo, 450);
-  assertEquals(m.tables.RateChangeLog.length, 1);
-  assertEquals(m.tables.RateChangeLog[0].usuario_email, EMAIL);
-  assertEquals(m.tables.RateChangeLog[0].campos, ['precios']);
+  assertEquals(m.tables.RateRoute.find((r) => r.route_id === miami.route_id)!.actualizado_por, EMAIL);
+  assertEquals(m.tables.RateChangeLog.length, 0, 'no se guarda historial');
 
   // 5. Excel nuevo (filas corridas) con las tarifas originales → solo vuelve Miami a 429.
   const excel = {
-    routes: structuredClone(routesFl as any[]).map((r) => ({ ...r, id: r.id + '-v10', fuente: { ...r.fuente, fila: r.fuente.fila + 1, sha: 'v10' } })),
+    routes: structuredClone(routesFl as any[]).filter((r) => r.id !== 'fl-south-palm-beach-lake-worth-beach-grupo-145-81').map((r) => ({ ...r, id: r.id + '-v10', fuente: { ...r.fuente, fila: r.fuente.fila + 1, sha: 'v10' } })),
     accessorials: structuredClone(accFl as any[]),
   };
   const antes = m.tables.RateRoute.length;
-  const p2 = planExcel('FL', excel, db, true);
+  const p2 = planExcel('FL', excel, db, false);
   assertEquals([p2.crear.length, p2.actualizar.length, p2.eliminar.length], [0, 1, 0]);
   await execute(m.entities, p2, EMAIL, 'excel');
   assertEquals(m.tables.RateRoute.length, antes, 'no se acumulan filas');
   await chat(m.base44);
   assertEquals(quote40('Miami').calculo.objetivo, 429);
-  assertEquals(m.tables.RateChangeLog.length, 2, 'los cambios solo de fila de origen no llenan el historial');
+  const cambios = p2.calidad!.find((c) => c.id === 'cambios')!;
+  assert(cambios.ok, 'un cambio de $450 a $429 (-5%) no es un cambio grande');
   assertEquals(m.tables.RateRoute.find((r) => r.route_id === miami.route_id)!.fuente.sha, 'v10');
 
-  // 6. Eliminar una ruta: desaparece del chat y de la base; el historial guarda su copia.
+  // 6. Eliminar una ruta: desaparece del chat y de la base.
   db = await readDb(m.entities);
   const doral = db.RateRoute.find((r) => r.estado === 'FL' && r.ciudad === 'Doral')!;
   const p3 = planManual('RateRoute', [{ key: doral.route_id, eliminar: true }], db);
@@ -97,14 +97,8 @@ Deno.test('aceptación F6-01: ciclo completo de tarifas en base de datos', async
   assertEquals(m.tables.RateRoute.length, antes - 1);
   await chat(m.base44);
   assert(!loadRoutes('FL').some((r) => r.id === doral.route_id));
-  const log = m.tables.RateChangeLog.at(-1)!;
-  assertEquals([log.accion, log.antes.ciudad, log.antes.precios.length], ['eliminar', 'Doral', 4]);
   assertEquals(resolveCiudad('FL', 'Miami')?.ciudad, 'Miami');
 
-  // 7. Historial de más de 12 meses se limpia; lo reciente se queda.
-  await m.entities.RateChangeLog.bulkCreate([{ entidad: 'RateRoute', registro_key: 'viejo', accion: 'actualizar', created_date: '2025-01-01T00:00:00Z' }]);
-  assertEquals(await purgeHistory(m.entities), 1);
-  assertEquals(m.tables.RateChangeLog.length, 3);
   resetAll();
 });
 

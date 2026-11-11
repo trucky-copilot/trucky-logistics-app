@@ -23,7 +23,7 @@
 // aproximado por distancia de edición ni el más parecido.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import aliasesRaw from './data/aliases.json' with { type: 'json' };
+import aliasesRaw from '../../shared/rateData/aliases.json' with { type: 'json' };
 import { loadRoutes, findRouteById, type Estado } from './rateTable.ts';
 
 export interface AliasesFile {

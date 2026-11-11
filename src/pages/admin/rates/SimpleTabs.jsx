@@ -1,4 +1,4 @@
-// Pestañas Zonas, Accesoriales y Alias. Comparten un mismo patrón:
+// Pestaña Zonas (y el editor genérico que usa):
 // lista filtrada por estado + editor con los campos definidos abajo.
 import React, { useMemo, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
@@ -96,94 +96,6 @@ export function ZonesTab({ data, flow }) {
           ]}
           onClose={() => { setEditing(undefined); flow.setError(null); }} onSubmit={submit}
           onDelete={editing ? async () => { if (await flow.review('RateZone', [{ key: editing.zone_key, eliminar: true }])) setEditing(undefined); } : undefined} />
-      )}
-    </>
-  );
-}
-
-// ── Accesoriales ─────────────────────────────────────────────────────────────
-export function AccessorialsTab({ data, flow }) {
-  const [estado, setEstado] = useState('FL');
-  const [editing, setEditing] = useState(undefined);
-  const rows = data.accessorials.filter((a) => a.estado === estado);
-  const submit = async (f) => {
-    const d = { concepto: (f.concepto || '').trim(), gatillo: f.gatillo || null, monto: (f.monto || '').trim(), nota: f.nota || null, activo: f.activo !== false, ...(editing ? {} : { estado }) };
-    if (await flow.review('RateAccessorial', [{ key: editing?.accessorial_key ?? null, data: d }])) setEditing(undefined);
-  };
-  return (
-    <>
-      <ListTab rows={rows} estado={estado} setEstado={setEstado} newLabel="Nuevo accesorial" onNew={() => setEditing(null)}
-        head={['Concepto', 'Monto', 'Cuándo aplica', 'Nota']}
-        renderRow={(a) => (
-          <tr key={a.id} className={a.activo === false ? 'opacity-40' : ''}>
-            <Td className="text-white">{a.concepto}{a.activo === false && <> <Badge tone="red">inactivo</Badge></>}</Td>
-            <Td className="whitespace-nowrap">{a.monto}</Td>
-            <Td>{a.gatillo || '—'}</Td>
-            <Td className="text-white/60">{a.nota || '—'}</Td>
-            <Td><EditBtn onClick={() => setEditing(a)} /></Td>
-          </tr>
-        )} />
-      {editing !== undefined && (
-        <GenericEditor title={editing ? `Accesorial · ${editing.concepto}` : `Nuevo accesorial (${estado})`} busy={flow.busy} error={flow.error}
-          initial={{ concepto: editing?.concepto || '', monto: editing?.monto || '', gatillo: editing?.gatillo || '', nota: editing?.nota || '', activo: editing?.activo !== false }}
-          fields={[
-            { k: 'concepto', label: 'Concepto' },
-            { k: 'monto', label: 'Monto', hint: 'Tal como lo verá el chat, ej: $100 · por contenedor' },
-            { k: 'gatillo', label: 'Cuándo aplica', type: 'textarea' },
-            { k: 'nota', label: 'Nota', type: 'textarea' },
-            { k: 'activo', label: 'Activo', type: 'bool' },
-          ]}
-          onClose={() => { setEditing(undefined); flow.setError(null); }} onSubmit={submit}
-          onDelete={editing ? async () => { if (await flow.review('RateAccessorial', [{ key: editing.accessorial_key, eliminar: true }])) setEditing(undefined); } : undefined} />
-      )}
-    </>
-  );
-}
-
-// ── Alias (terminales FL / ZIP TX) ───────────────────────────────────────────
-export function AliasesTab({ data, flow }) {
-  const [estado, setEstado] = useState('FL');
-  const [editing, setEditing] = useState(undefined);
-  const txRoutes = useMemo(() => data.routes.filter((r) => r.estado === 'TX' && r.activo !== false), [data.routes]);
-  const txIds = useMemo(() => new Map(txRoutes.map((r) => [r.route_id, r])), [txRoutes]);
-  const tipo = estado === 'FL' ? 'terminal' : 'zip';
-  const rows = data.aliases.filter((a) => a.estado === estado && a.tipo === tipo);
-  const rotos = tipo === 'zip' ? rows.filter((a) => !txIds.has(a.valor)).length : 0;
-
-  const submit = async (f) => {
-    const d = { valor: f.valor, activo: f.activo !== false, ...(editing ? {} : { estado, tipo, clave: (f.clave || '').trim().toLowerCase() }) };
-    if (await flow.review('RateAlias', [{ key: editing?.alias_key ?? null, data: d }])) setEditing(undefined);
-  };
-  const valorField = tipo === 'terminal'
-    ? { k: 'valor', label: 'Puerto', type: 'select', options: [{ value: 'MIA', label: 'MIA (Miami)' }, { value: 'PEV', label: 'PEV (Port Everglades)' }] }
-    : { k: 'valor', label: 'Ruta TX', type: 'select', options: [{ value: '', label: '— elegir —' }, ...txRoutes.map((r) => ({ value: r.route_id, label: `${r.ciudad} · ${r.mercado} (${r.millas_ida} mi)` }))] };
-
-  return (
-    <>
-      <ListTab rows={rows} estado={estado} setEstado={setEstado} newLabel={tipo === 'zip' ? 'Nuevo ZIP' : 'Nueva terminal'} onNew={() => setEditing(null)}
-        info={<>
-          <p className="text-xs text-white/40">{tipo === 'terminal' ? 'Nombres de terminal que el chat reconoce como MIA o PEV.' : 'Códigos postales de Texas que el chat convierte directamente en una ruta.'}</p>
-          {rotos > 0 && <p className="text-xs text-amber-300">⚠ {rotos} ZIP apuntan a una ruta que no existe: hoy el chat no los reconoce. Edítalos para asignarles la ruta correcta.</p>}
-        </>}
-        head={tipo === 'zip' ? ['ZIP', 'Ruta', 'Estado'] : ['Nombre', 'Puerto', 'Estado']}
-        renderRow={(a) => {
-          const ruta = txIds.get(a.valor);
-          return (
-            <tr key={a.id} className={a.activo === false ? 'opacity-40' : ''}>
-              <Td className="text-white">{a.clave}</Td>
-              <Td>{tipo === 'zip' ? (ruta ? `${ruta.ciudad} · ${ruta.mercado}` : <Badge tone="red">ruta no existe ({a.valor})</Badge>) : a.valor}</Td>
-              <Td>{a.activo === false ? <Badge tone="red">inactivo</Badge> : <Badge tone="green">activo</Badge>}</Td>
-              <Td><EditBtn onClick={() => setEditing(a)} /></Td>
-            </tr>
-          );
-        }} />
-      {editing !== undefined && (
-        <GenericEditor title={editing ? `${tipo === 'zip' ? 'ZIP' : 'Terminal'} ${editing.clave}` : (tipo === 'zip' ? 'Nuevo ZIP' : 'Nueva terminal')}
-          busy={flow.busy} error={flow.error}
-          initial={{ clave: editing?.clave || '', valor: editing?.valor || (tipo === 'terminal' ? 'MIA' : ''), activo: editing?.activo !== false }}
-          fields={[{ k: 'clave', label: tipo === 'zip' ? 'ZIP (5 dígitos)' : 'Nombre que escribe el usuario', disabled: !!editing }, valorField, { k: 'activo', label: 'Activo', type: 'bool' }]}
-          onClose={() => { setEditing(undefined); flow.setError(null); }} onSubmit={submit}
-          onDelete={editing ? async () => { if (await flow.review('RateAlias', [{ key: editing.alias_key, eliminar: true }])) setEditing(undefined); } : undefined} />
       )}
     </>
   );
