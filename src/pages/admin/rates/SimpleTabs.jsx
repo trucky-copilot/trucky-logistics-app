@@ -122,9 +122,19 @@ function splitMonto(monto) {
   const i = parts.findIndex((p) => /\d|cotizar|incluido/i.test(p));
   return i < 0 ? { parts: [String(monto || '')], i: 0 } : { parts, i };
 }
-const valorDe = (monto) => { const s = splitMonto(monto); return s.parts[s.i]; };
+// "cotizar" (sin monto fijo) se muestra como caja vacía con "$..."; si se escribe
+// un valor, reemplaza a "cotizar" y se conserva la unidad.
+const valorDe = (monto) => { const s = splitMonto(monto); const v = s.parts[s.i]; return /^cotizar$/i.test(v.trim()) ? '' : v; };
 const unidadDe = (monto) => { const s = splitMonto(monto); return s.parts.filter((_, j) => j !== s.i).join(' · '); };
-const conValor = (monto, v) => { const s = splitMonto(monto); const parts = [...s.parts]; parts[s.i] = v.trim(); return parts.join(' · '); };
+const conValor = (monto, v) => {
+  const s = splitMonto(monto);
+  // "Por contenedor · cotizar" + "$300" → "$300 · por contenedor" (el valor primero, como los demás).
+  if (/^cotizar$/i.test(s.parts[s.i].trim())) {
+    const resto = s.parts.filter((_, j) => j !== s.i).map((u) => u.charAt(0).toLowerCase() + u.slice(1));
+    return [v.trim(), ...resto].join(' · ');
+  }
+  const parts = [...s.parts]; parts[s.i] = v.trim(); return parts.join(' · ');
+};
 const unidadVisible = (monto) => { const u = unidadDe(monto); return /^por contenedor$/i.test(u.trim()) ? '' : u; };
 
 const montoCls = 'w-full bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-sm text-white font-mono focus:outline-none focus:border-amber-500/50';
@@ -146,7 +156,8 @@ export function AccessorialsTab({ data, flow }) {
   // draft guarda solo el VALOR editado; al guardar se vuelve a unir con su unidad.
   const valor = (a) => (a.accessorial_key in draft ? draft[a.accessorial_key] : valorDe(a.monto));
   const cambiar = (a, v) => setDraft((d) => ({ ...d, [a.accessorial_key]: v }));
-  const cambios = rows.filter((a) => a.accessorial_key in draft && draft[a.accessorial_key].trim() !== valorDe(a.monto).trim());
+  // Una caja vacía no es un cambio (no se borra un monto por accidente).
+  const cambios = rows.filter((a) => a.accessorial_key in draft && draft[a.accessorial_key].trim() !== '' && draft[a.accessorial_key].trim() !== valorDe(a.monto).trim());
 
   const revisar = () => flow.review('RateAccessorial', cambios.map((a) => ({ key: a.accessorial_key, data: { monto: conValor(a.monto, draft[a.accessorial_key]) } })));
   const submit = async (f) => {
