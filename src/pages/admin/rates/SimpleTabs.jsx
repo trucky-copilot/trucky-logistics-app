@@ -199,24 +199,26 @@ export function AccessorialsTab({ data, flow }) {
         {otros.length > 0 && (
           <div className="pt-4 border-t border-white/10 space-y-2">
             <span className="block text-xs font-medium text-white/60">Otros cargos adicionales</span>
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Select className="sm:w-2/3" value={sel?.accessorial_key || ''} onChange={(e) => setOtro(e.target.value)}>
+            {/* Dos columnas iguales y fijas: el ancho no cambia al elegir otro cargo. */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <Select className="min-w-0 truncate" value={sel?.accessorial_key || ''} onChange={(e) => setOtro(e.target.value)}>
                 {otros.map((a) => (
                   <option key={a.accessorial_key} value={a.accessorial_key}>
                     {a.concepto}{otros.filter((x) => x.concepto === a.concepto).length > 1 && a.gatillo ? ` · ${corto(a.gatillo)}` : ''}{a.activo === false ? ' (apagado)' : ''}
                   </option>
                 ))}
               </Select>
+              {/* La caja arranca vacía ($...): solo se escribe el valor nuevo. */}
               {sel && (
-                <div className="sm:w-1/3">
-                  <input className={montoCls} value={valor(sel)} placeholder="$..." onChange={(e) => cambiar(sel, e.target.value)} />
-                  {unidadVisible(sel.monto) && <span className="block text-[11px] text-white/40 mt-1">{unidadVisible(sel.monto)}</span>}
-                </div>
+                <input className={`${montoCls} min-w-0`} value={draft[sel.accessorial_key] ?? ''} placeholder="$..." onChange={(e) => cambiar(sel, e.target.value)} />
               )}
             </div>
             {sel && (
               <div className="flex items-start gap-2 text-[11px] text-white/40">
-                <span className="flex-1">{sel.gatillo || 'Sin condición especial.'}{sel.nota ? ` · ${sel.nota}` : ''}</span>
+                <span className="flex-1">
+                  <span className="text-white/70">Valor actual: {valorDe(sel.monto) || 'cotizar'}{unidadVisible(sel.monto) ? ` ${unidadVisible(sel.monto)}` : ''}</span>
+                  {sel.gatillo ? ` · ${sel.gatillo}` : ''}{sel.nota ? ` · ${sel.nota}` : ''}
+                </span>
                 <button type="button" onClick={() => setEditing(sel)} className="text-amber-400 hover:text-amber-300 whitespace-nowrap">Editar detalles</button>
               </div>
             )}
