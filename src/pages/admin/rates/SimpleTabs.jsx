@@ -1,6 +1,6 @@
 // Pestañas Zonas y Cargos adicionales (y el editor genérico que usan):
 // lista filtrada por estado + editor con los campos definidos abajo.
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Pencil, Plus, Trash2 } from 'lucide-react';
 import { Card, Btn, Field, Input, Select, TextArea, Badge, Modal, ErrorBox, Empty, Table, Td } from './ui';
 
@@ -151,7 +151,19 @@ export function AccessorialsTab({ data, flow }) {
   const sel = otros.find((a) => a.accessorial_key === otro) || otros[0];
 
   // Al recargar los datos (después de guardar) o cambiar de estado, se limpian los borradores.
-  useEffect(() => { setDraft({}); }, [data.accessorials, estado]);
+  // Al guardar (los datos se recargan) la caja de "otros cargos" conserva el valor
+  // guardado en vez de quedar vacía. Al cambiar de estado se limpia todo.
+  const enviado = useRef({});
+  const [guardado, setGuardado] = useState({});
+  useEffect(() => {
+    // Solo lo que de verdad quedó guardado (si se canceló la revisión, no se muestra).
+    const ok = Object.fromEntries(Object.entries(enviado.current).filter(([k, v]) =>
+      data.accessorials.some((a) => a.accessorial_key === k && valorDe(a.monto).trim() === v)));
+    setGuardado((g) => ({ ...g, ...ok }));
+    enviado.current = {};
+    setDraft({});
+  }, [data.accessorials]);
+  useEffect(() => { setDraft({}); setGuardado({}); enviado.current = {}; }, [estado]);
 
   // draft guarda solo el VALOR editado; al guardar se vuelve a unir con su unidad.
   const valor = (a) => (a.accessorial_key in draft ? draft[a.accessorial_key] : valorDe(a.monto));
@@ -159,7 +171,12 @@ export function AccessorialsTab({ data, flow }) {
   // Una caja vacía no es un cambio (no se borra un monto por accidente).
   const cambios = rows.filter((a) => a.accessorial_key in draft && draft[a.accessorial_key].trim() !== '' && draft[a.accessorial_key].trim() !== valorDe(a.monto).trim());
 
-  const revisar = () => flow.review('RateAccessorial', cambios.map((a) => ({ key: a.accessorial_key, data: { monto: conValor(a.monto, draft[a.accessorial_key]) } })));
+  // Un número solo ("410") se guarda con signo de dólar ("$410").
+  const conDolar = (v) => (/^\d[\d,.]*$/.test(v.trim()) ? `$${v.trim()}` : v.trim());
+  const revisar = () => {
+    enviado.current = Object.fromEntries(cambios.map((a) => [a.accessorial_key, conDolar(draft[a.accessorial_key])]));
+    return flow.review('RateAccessorial', cambios.map((a) => ({ key: a.accessorial_key, data: { monto: conValor(a.monto, conDolar(draft[a.accessorial_key])) } })));
+  };
   const submit = async (f) => {
     const d = { concepto: (f.concepto || '').trim(), gatillo: f.gatillo || null, monto: (f.monto || '').trim(), nota: f.nota || null, activo: f.activo !== false, ...(editing ? {} : { estado }) };
     if (await flow.review('RateAccessorial', [{ key: editing?.accessorial_key ?? null, data: d }])) setEditing(undefined);
@@ -210,7 +227,7 @@ export function AccessorialsTab({ data, flow }) {
               </Select>
               {/* La caja arranca vacía ($...): solo se escribe el valor nuevo. */}
               {sel && (
-                <input className={`${montoCls} min-w-0`} value={draft[sel.accessorial_key] ?? ''} placeholder="$..." onChange={(e) => cambiar(sel, e.target.value)} />
+                <input className={`${montoCls} min-w-0`} value={draft[sel.accessorial_key] ?? guardado[sel.accessorial_key] ?? ''} placeholder="$..." onChange={(e) => cambiar(sel, e.target.value)} />
               )}
             </div>
             {sel && (
