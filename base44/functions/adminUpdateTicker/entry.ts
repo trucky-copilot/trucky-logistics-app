@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
+import { isAppAdmin } from '../../shared/adminAccess.ts';
 
 export default async function adminUpdateTicker(req: Request, ctx: any) {
   const base44 = createClientFromRequest(req);
@@ -6,9 +7,8 @@ export default async function adminUpdateTicker(req: Request, ctx: any) {
   try {
     user = await base44.auth.me();
   } catch (e) {}
-  // Acceso por el rol de la plataforma (App Users), nunca por una lista de
-  // correos escrita en el código.
-  if (!user || user.role !== 'admin') {
+  // Solo administradores: rol "admin" en Base44 y correo en shared/adminAccess.ts.
+  if (!isAppAdmin(user)) {
     return new Response('Unauthorized', { status: 403 });
   }
 

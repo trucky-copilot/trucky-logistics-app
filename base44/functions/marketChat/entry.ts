@@ -53,6 +53,7 @@ import {
 } from './rateEngine.ts';
 import type { Tamano, CalculatedQuote } from './rateEngine.ts';
 import { getRouteCounts, loadAccessorials } from './rateTable.ts';
+import { ensureRatesFromDb } from './rateSource.ts';
 import {
   assertNoInventedFigures,
   buildBoundaryFallbackMarkdown,
@@ -77,7 +78,6 @@ import type { Locale } from './messageCatalog.ts';
 import { createPerfTracker, attachPerf } from './perf.ts';
 import type { PerfTracker } from './perf.ts';
 
-const ROUTE_COUNTS = getRouteCounts();
 
 const EQUIPMENT_LINES = EQUIPMENT_BENCHMARKS
   .map(e => `- ${e.id} (${e.label}): $${e.rpm_target.toFixed(2)}/mi`)
@@ -676,11 +676,14 @@ async function handleMarketChat(req: Request, perf: PerfTracker, capture:(r:Chat
     if(!quota.allowed)return Response.json({code:quota.code,retryable:quota.code==='STALE_PAID_CREDIT',error:quota.code==='STALE_PAID_CREDIT'?(locale==='en'?'Your payment is still updating. Please retry; this attempt used no credit.':'Tu pago aún se está actualizando. Reintenta; este intento no consumió cupo.'):'No se pudo reservar este mensaje del cupo pagado.'},{status:quota.code==='CHAT_QUOTA_EXHAUSTED'?429:409,headers:corsHeaders});
     if(access.credit)capture({access,requestId:body.request_id});
     // Fase 3: Paralelizar lecturas iniciales independientes para reducir la latencia total
+    // F6-01 Fase C: tarifas desde la base (caché 60 s; si falla, se quedan las actuales).
     const [costConfigRecord, organizationName, rawStateData, userProfileRecords] = await Promise.all([
       user ? perf.time('db.costConfig', () => fetchCostConfigRecord(base44, user.email, activeProfileId)) : Promise.resolve(null),
       perf.time('db.organizationName', () => getOrganizationName(base44, user.email)),
       getCachedStateMarketData(base44, perf),
       user ? perf.time('db.userProfile', () => base44.entities.UserProfile.filter({ usuario: user.email })) : Promise.resolve([]),
+      // Va al final a propósito: no altera los 4 valores que se desestructuran arriba.
+      perf.time('db.rates', () => ensureRatesFromDb(base44)),
     ]);
 
     const userRole = (userProfileRecords && userProfileRecords.length > 0 && userProfileRecords[0].rol) ? userProfileRecords[0].rol : 'dispatcher';
@@ -705,8 +708,8 @@ async function handleMarketChat(req: Request, perf: PerfTracker, capture:(r:Chat
     let systemContext = MESSAGES[locale].baseContext({
       freightKbVersion: FREIGHT_KB_VERSION,
       equipmentLines: EQUIPMENT_LINES,
-      routeCountFl: ROUTE_COUNTS.fl,
-      routeCountTx: ROUTE_COUNTS.tx,
+      routeCountFl: getRouteCounts().fl,
+      routeCountTx: getRouteCounts().tx,
       accessorialsLine: buildAccessorialsLine(locale),
       detentionStandard: DETENTION.standard,
       detentionFreeHours: DETENTION.free_hours,

@@ -1,0 +1,69 @@
+{
+  "name": "RateAlias",
+  "type": "object",
+  "properties": {
+    "alias_key": {
+      "type": "string",
+      "description": "Clave única: fl-terminal-<clave> | tx-zip-<zip> | fl-nota-terminales"
+    },
+    "estado": {
+      "type": "string",
+      "description": "FL | TX"
+    },
+    "tipo": {
+      "type": "string",
+      "description": "terminal | zip | nota"
+    },
+    "clave": {
+      "type": "string",
+      "description": "Texto o ZIP que escribe el usuario"
+    },
+    "valor": {
+      "type": "string",
+      "description": "MIA/PEV (terminal), route_id (zip) o texto (nota)"
+    },
+    "orden": {
+      "type": "number",
+      "description": "Posición original"
+    },
+    "activo": {
+      "type": "boolean",
+      "description": "false = apagada temporalmente (el chat la ignora). Para quitarla del todo se elimina."
+    },
+    "notas": {
+      "type": "string",
+      "description": "Nota libre del administrador"
+    },
+    "actualizado_por": {
+      "type": "string",
+      "description": "Correo de quien hizo el último cambio"
+    },
+    "origen": {
+      "type": "string",
+      "description": "migracion | manual | excel"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

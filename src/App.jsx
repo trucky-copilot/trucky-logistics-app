@@ -31,6 +31,8 @@ import CostCalculator  from '@/pages/CostCalculator';
 import Notifications   from '@/pages/Notifications';
 import Onboarding      from '@/pages/Onboarding';
 import AdminDashboard  from '@/pages/admin/AdminDashboard';
+import AdminOnly from '@/components/AdminOnly';
+import RatesAdmin from '@/pages/admin/rates/RatesAdmin';
 
 if (typeof document !== 'undefined' && !window.__gads_loaded) {
   window.__gads_loaded = true;
@@ -117,7 +119,8 @@ function AppContent() {
         <Route path="/brokers"      element={<Brokers />} />
         <Route path="/calculadora"  element={<CostCalculator />} />
         <Route path="/notificaciones" element={<Notifications />} />
-        <Route path="/admin"        element={<AdminDashboard />} />
+        <Route path="/admin"        element={<AdminOnly><AdminDashboard /></AdminOnly>} />
+        <Route path="/tarifas"      element={<AdminOnly><RatesAdmin /></AdminOnly>} />
       </Route>
       <Route path="*" element={<PageNotFound />} />
     </Routes>

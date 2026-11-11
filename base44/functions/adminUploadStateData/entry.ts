@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { logAndSanitizeError } from '../../shared/safeError.ts';
+import { isAppAdmin } from '../../shared/adminAccess.ts';
 
 const SCHEMA = {
   type: "object",
@@ -31,9 +32,8 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
     } catch (e) {
       // ignore
     }
-    // Acceso por el rol de la plataforma (App Users), nunca por una lista de
-    // correos escrita en el código.
-    if (!user || user.role !== 'admin') {
+    // Solo administradores: rol "admin" en Base44 y correo en shared/adminAccess.ts.
+    if (!isAppAdmin(user)) {
       return new Response('Unauthorized', { status: 403 });
     }
 

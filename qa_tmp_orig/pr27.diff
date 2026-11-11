@@ -1,0 +1,765 @@
+diff --git a/base44/entities/OrganizationMember.jsonc b/base44/entities/OrganizationMember.jsonc
+index 5decb28..41fdb0d 100644
+--- a/base44/entities/OrganizationMember.jsonc
++++ b/base44/entities/OrganizationMember.jsonc
+@@ -28,6 +28,10 @@
+     "google_sub": {
+       "type": "string",
+       "description": "Identificador único y permanente de Google (sub claim del token)"
++    },
++    "base44_user_id": {
++      "type": "string",
++      "description": "ID de usuario nativo de Base44 vinculado por el servidor (redeemBillingLink/linkBillingIdentity). Nunca se deriva del correo ni se acepta del cliente."
+     }
+   },
+   "required": [
+diff --git a/base44/functions/getBillingLinkState/demoRegistry.ts b/base44/functions/getBillingLinkState/demoRegistry.ts
+new file mode 100644
+index 0000000..167b8e8
+--- /dev/null
++++ b/base44/functions/getBillingLinkState/demoRegistry.ts
+@@ -0,0 +1,22 @@
++export async function demoRedis(command: unknown[]) {
++  const url = Deno.env.get('CHECKOUT_REDIS_REST_URL');
++  const token = Deno.env.get('CHECKOUT_REDIS_REST_TOKEN');
++  if (!url || !token || new URL(url).protocol !== 'https:') throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  const response = await fetch(url, { method: 'POST', redirect: 'manual',
++    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
++    body: JSON.stringify(command), signal: AbortSignal.timeout(8000) });
++  if (response.status >= 300 && response.status < 400) {
++    throw new Error('DEMO_REGISTRY_REDIRECT_REJECTED');
++  }
++  if (!response.ok) throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  const data = await response.json();
++  if (data.error || !Object.hasOwn(data, 'result')) throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  return data.result;
++}
++export async function isDemoOrganization(id: string) {
++  if (Deno.env.get('PUBLIC_TEST_DEMO_ENABLED') !== 'true') return false;
++  return await demoRedis(['GET', `trucky:demo:test:eligible:${id}`]) === '1';
++}
++export async function registerDemoOrganization(id: string) {
++  await demoRedis(['SET', `trucky:demo:test:eligible:${id}`, '1', 'NX']);
++}
+diff --git a/base44/functions/getBillingLinkState/entry.ts b/base44/functions/getBillingLinkState/entry.ts
+new file mode 100644
+index 0000000..0eba69f
+--- /dev/null
++++ b/base44/functions/getBillingLinkState/entry.ts
+@@ -0,0 +1,16 @@
++import {createClientFromRequest} from 'npm:@base44/sdk@0.8.54';
++import {demoRedis} from './demoRegistry.ts';
++export default async function getBillingLinkState(req:Request,_ctx:unknown){
++ const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
++ if(req.method!=='POST')return reply({code:'METHOD_NOT_ALLOWED'},405);
++ // Never activate this endpoint as a blanket legacy migration.
++ if(Deno.env.get('BILLING_LIVE_ENFORCEMENT_ENABLED')!=='true')return reply({enforced:false});
++ try{
++  const client=createClientFromRequest(req);const user=await client.auth.me();
++  if(!user?.id)return reply({code:'UNAUTHORIZED'},401);
++  const sub=await demoRedis(['GET',`trucky:billing:native:v1:${user.id}`]);
++  if(!sub)return reply({enforced:false});
++  const members=await client.asServiceRole.entities.OrganizationMember.filter({base44_user_id:user.id,google_sub:sub,active:true});
++  return reply({enforced:true,organizations:members.map((m:any)=>({id:m.organization_id}))});
++ }catch{return reply({code:'BILLING_STATE_UNAVAILABLE'},503);}
++}
+diff --git a/base44/functions/linkBillingIdentity/binding.mjs b/base44/functions/linkBillingIdentity/binding.mjs
+new file mode 100644
+index 0000000..d29dc8d
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/binding.mjs
+@@ -0,0 +1,12 @@
++export const BIND_IDENTITIES = `
++local native = redis.call('GET',KEYS[1])
++local google = redis.call('GET',KEYS[2])
++if (native and native ~= ARGV[1]) or (google and google ~= ARGV[2]) then return 0 end
++redis.call('SET',KEYS[1],ARGV[1])
++redis.call('SET',KEYS[2],ARGV[2])
++return 1`;
++export async function reserveNativeBinding(command, googleSub, nativeId) {
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(googleSub||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(nativeId||''))throw Error('INVALID_IDENTITY');
++ const result=await command(['EVAL',BIND_IDENTITIES,'2',`trucky:billing:identity:v1:${googleSub}`,`trucky:billing:native:v1:${nativeId}`,nativeId,googleSub]);
++ if(result!==1)throw Error('IDENTITY_ALREADY_BOUND');
++}
+diff --git a/base44/functions/linkBillingIdentity/binding.ts b/base44/functions/linkBillingIdentity/binding.ts
+new file mode 100644
+index 0000000..d29dc8d
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/binding.ts
+@@ -0,0 +1,12 @@
++export const BIND_IDENTITIES = `
++local native = redis.call('GET',KEYS[1])
++local google = redis.call('GET',KEYS[2])
++if (native and native ~= ARGV[1]) or (google and google ~= ARGV[2]) then return 0 end
++redis.call('SET',KEYS[1],ARGV[1])
++redis.call('SET',KEYS[2],ARGV[2])
++return 1`;
++export async function reserveNativeBinding(command, googleSub, nativeId) {
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(googleSub||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(nativeId||''))throw Error('INVALID_IDENTITY');
++ const result=await command(['EVAL',BIND_IDENTITIES,'2',`trucky:billing:identity:v1:${googleSub}`,`trucky:billing:native:v1:${nativeId}`,nativeId,googleSub]);
++ if(result!==1)throw Error('IDENTITY_ALREADY_BOUND');
++}
+diff --git a/base44/functions/linkBillingIdentity/demoRegistry.ts b/base44/functions/linkBillingIdentity/demoRegistry.ts
+new file mode 100644
+index 0000000..167b8e8
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/demoRegistry.ts
+@@ -0,0 +1,22 @@
++export async function demoRedis(command: unknown[]) {
++  const url = Deno.env.get('CHECKOUT_REDIS_REST_URL');
++  const token = Deno.env.get('CHECKOUT_REDIS_REST_TOKEN');
++  if (!url || !token || new URL(url).protocol !== 'https:') throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  const response = await fetch(url, { method: 'POST', redirect: 'manual',
++    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
++    body: JSON.stringify(command), signal: AbortSignal.timeout(8000) });
++  if (response.status >= 300 && response.status < 400) {
++    throw new Error('DEMO_REGISTRY_REDIRECT_REJECTED');
++  }
++  if (!response.ok) throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  const data = await response.json();
++  if (data.error || !Object.hasOwn(data, 'result')) throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  return data.result;
++}
++export async function isDemoOrganization(id: string) {
++  if (Deno.env.get('PUBLIC_TEST_DEMO_ENABLED') !== 'true') return false;
++  return await demoRedis(['GET', `trucky:demo:test:eligible:${id}`]) === '1';
++}
++export async function registerDemoOrganization(id: string) {
++  await demoRedis(['SET', `trucky:demo:test:eligible:${id}`, '1', 'NX']);
++}
+diff --git a/base44/functions/linkBillingIdentity/entry.ts b/base44/functions/linkBillingIdentity/entry.ts
+new file mode 100644
+index 0000000..1cb87f0
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/entry.ts
+@@ -0,0 +1,34 @@
++import { assertMembershipProvenance } from "./provenance.ts";
++import { reserveNativeBinding } from "./binding.ts";
++import { demoRedis } from "./demoRegistry.ts";
++import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
++export default async function linkBillingIdentity(req:Request,_ctx:unknown){
++ const reply=(code:string,status=200)=>new Response(JSON.stringify({code}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
++ if(req.method!=='POST')return reply('METHOD_NOT_ALLOWED',405);
++ // Do not enable until client writes to OrganizationMember are restricted.
++ if(Deno.env.get('BILLING_IDENTITY_LINK_ENABLED')!=='true')return reply('LINK_NOT_ENABLED',503);
++ try{
++  const client=createClientFromRequest(req);
++  const native=await client.auth.me();
++  if(!native?.id||!native?.email)return reply('NATIVE_SESSION_REQUIRED',401);
++  const body=await req.json();
++  if(typeof body.google_id_token!=='string'||body.google_id_token.length>4096||typeof body.organization_id!=='string')return reply('INVALID_REQUEST',400);
++  const verified=await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(body.google_id_token)}`,{signal:AbortSignal.timeout(10000)});
++  if(!verified.ok)return reply('GOOGLE_AUTHORIZATION_REQUIRED',401);
++  const identity=await verified.json();
++  if(identity.aud!==Deno.env.get('GOOGLE_CLIENT_ID')||!['accounts.google.com','https://accounts.google.com'].includes(identity.iss)||!(Number(identity.exp)>Date.now()/1000)||!identity.sub||!['true',true].includes(identity.email_verified))return reply('GOOGLE_AUTHORIZATION_REQUIRED',401);
++  // Native authenticated session AND independently verified Google ownership.
++  if(typeof identity.email!=='string'||identity.email.toLowerCase()!==native.email.toLowerCase())return reply('IDENTITY_MISMATCH',403);
++  const db=client.asServiceRole.entities;
++  const members=await db.OrganizationMember.filter({organization_id:body.organization_id,google_sub:identity.sub,active:true});
++  if(members.length!==1)return reply('VERIFIED_MEMBERSHIP_REQUIRED',403);
++  const member=members[0];
++  await assertMembershipProvenance(demoRedis,member);
++  if(member.base44_user_id&&member.base44_user_id!==native.id)return reply('IDENTITY_ALREADY_BOUND',409);
++  // Persistent atomic registry prevents concurrent native identities winning
++  // separate database reads. Unknown writes retain the binding for recovery.
++  await reserveNativeBinding(demoRedis,identity.sub,native.id);
++  if(!member.base44_user_id)await db.OrganizationMember.update(member.id,{base44_user_id:native.id});
++  return reply('IDENTITY_LINKED');
++ }catch{return reply('LINK_REQUIRES_REVIEW',503);}
++}
+diff --git a/base44/functions/linkBillingIdentity/entry_test.ts b/base44/functions/linkBillingIdentity/entry_test.ts
+new file mode 100644
+index 0000000..281f07d
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/entry_test.ts
+@@ -0,0 +1,6 @@
++import handler from './entry.ts';
++Deno.test('disabled identity link never invokes backend',async()=>{
++ Deno.env.delete('BILLING_IDENTITY_LINK_ENABLED');
++ const r=await handler(new Request('https://example.test',{method:'POST',body:'{}'}),{});
++ if(r.status!==503||(await r.json()).code!=='LINK_NOT_ENABLED')throw Error('gate failed');
++});
+diff --git a/base44/functions/linkBillingIdentity/provenance.mjs b/base44/functions/linkBillingIdentity/provenance.mjs
+new file mode 100644
+index 0000000..857281c
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/provenance.mjs
+@@ -0,0 +1,10 @@
++export function provenanceKey(orgId,sub){
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(orgId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(sub||''))throw Error('INVALID_MEMBERSHIP_IDENTITY');
++ return `trucky:billing:member:v1:${orgId}:${sub}`;
++}
++export async function assertMembershipProvenance(command,member){
++ const raw=await command(['GET',provenanceKey(member.organization_id,member.google_sub)]);
++ if(!raw)throw Error('MEMBERSHIP_PROVENANCE_REQUIRED');
++ const value=JSON.parse(raw);
++ if(value.memberId!==member.id||value.role!==member.role||value.googleSub!==member.google_sub||value.orgId!==member.organization_id)throw Error('MEMBERSHIP_PROVENANCE_MISMATCH');
++}
+diff --git a/base44/functions/linkBillingIdentity/provenance.ts b/base44/functions/linkBillingIdentity/provenance.ts
+new file mode 100644
+index 0000000..857281c
+--- /dev/null
++++ b/base44/functions/linkBillingIdentity/provenance.ts
+@@ -0,0 +1,10 @@
++export function provenanceKey(orgId,sub){
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(orgId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(sub||''))throw Error('INVALID_MEMBERSHIP_IDENTITY');
++ return `trucky:billing:member:v1:${orgId}:${sub}`;
++}
++export async function assertMembershipProvenance(command,member){
++ const raw=await command(['GET',provenanceKey(member.organization_id,member.google_sub)]);
++ if(!raw)throw Error('MEMBERSHIP_PROVENANCE_REQUIRED');
++ const value=JSON.parse(raw);
++ if(value.memberId!==member.id||value.role!==member.role||value.googleSub!==member.google_sub||value.orgId!==member.organization_id)throw Error('MEMBERSHIP_PROVENANCE_MISMATCH');
++}
+diff --git a/base44/functions/redeemBillingLink/binding.mjs b/base44/functions/redeemBillingLink/binding.mjs
+new file mode 100644
+index 0000000..d29dc8d
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/binding.mjs
+@@ -0,0 +1,12 @@
++export const BIND_IDENTITIES = `
++local native = redis.call('GET',KEYS[1])
++local google = redis.call('GET',KEYS[2])
++if (native and native ~= ARGV[1]) or (google and google ~= ARGV[2]) then return 0 end
++redis.call('SET',KEYS[1],ARGV[1])
++redis.call('SET',KEYS[2],ARGV[2])
++return 1`;
++export async function reserveNativeBinding(command, googleSub, nativeId) {
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(googleSub||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(nativeId||''))throw Error('INVALID_IDENTITY');
++ const result=await command(['EVAL',BIND_IDENTITIES,'2',`trucky:billing:identity:v1:${googleSub}`,`trucky:billing:native:v1:${nativeId}`,nativeId,googleSub]);
++ if(result!==1)throw Error('IDENTITY_ALREADY_BOUND');
++}
+diff --git a/base44/functions/redeemBillingLink/binding.ts b/base44/functions/redeemBillingLink/binding.ts
+new file mode 100644
+index 0000000..d29dc8d
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/binding.ts
+@@ -0,0 +1,12 @@
++export const BIND_IDENTITIES = `
++local native = redis.call('GET',KEYS[1])
++local google = redis.call('GET',KEYS[2])
++if (native and native ~= ARGV[1]) or (google and google ~= ARGV[2]) then return 0 end
++redis.call('SET',KEYS[1],ARGV[1])
++redis.call('SET',KEYS[2],ARGV[2])
++return 1`;
++export async function reserveNativeBinding(command, googleSub, nativeId) {
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(googleSub||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(nativeId||''))throw Error('INVALID_IDENTITY');
++ const result=await command(['EVAL',BIND_IDENTITIES,'2',`trucky:billing:identity:v1:${googleSub}`,`trucky:billing:native:v1:${nativeId}`,nativeId,googleSub]);
++ if(result!==1)throw Error('IDENTITY_ALREADY_BOUND');
++}
+diff --git a/base44/functions/redeemBillingLink/demoRegistry.ts b/base44/functions/redeemBillingLink/demoRegistry.ts
+new file mode 100644
+index 0000000..167b8e8
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/demoRegistry.ts
+@@ -0,0 +1,22 @@
++export async function demoRedis(command: unknown[]) {
++  const url = Deno.env.get('CHECKOUT_REDIS_REST_URL');
++  const token = Deno.env.get('CHECKOUT_REDIS_REST_TOKEN');
++  if (!url || !token || new URL(url).protocol !== 'https:') throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  const response = await fetch(url, { method: 'POST', redirect: 'manual',
++    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
++    body: JSON.stringify(command), signal: AbortSignal.timeout(8000) });
++  if (response.status >= 300 && response.status < 400) {
++    throw new Error('DEMO_REGISTRY_REDIRECT_REJECTED');
++  }
++  if (!response.ok) throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  const data = await response.json();
++  if (data.error || !Object.hasOwn(data, 'result')) throw Error('DEMO_REGISTRY_UNAVAILABLE');
++  return data.result;
++}
++export async function isDemoOrganization(id: string) {
++  if (Deno.env.get('PUBLIC_TEST_DEMO_ENABLED') !== 'true') return false;
++  return await demoRedis(['GET', `trucky:demo:test:eligible:${id}`]) === '1';
++}
++export async function registerDemoOrganization(id: string) {
++  await demoRedis(['SET', `trucky:demo:test:eligible:${id}`, '1', 'NX']);
++}
+diff --git a/base44/functions/redeemBillingLink/entry.ts b/base44/functions/redeemBillingLink/entry.ts
+new file mode 100644
+index 0000000..a9cc2c5
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/entry.ts
+@@ -0,0 +1,33 @@
++import {createClientFromRequest} from 'npm:@base44/sdk@0.8.54';
++import {demoRedis} from './demoRegistry.ts';
++import {reserveNativeBinding} from './binding.ts';
++import {assertMembershipProvenance} from './provenance.ts';
++import {redeemBillingLinkCore} from './redeem.ts';
++
++async function sha256Hex(text:string){
++ return Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)))).map(b=>b.toString(16).padStart(2,'0')).join('');
++}
++
++export default async function redeemBillingLink(req:Request,_ctx:unknown){
++ const reply=(code:string,status=200)=>new Response(JSON.stringify({code}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
++ if(req.method!=='POST')return reply('METHOD_NOT_ALLOWED',405);
++ const enabled=Deno.env.get('BILLING_IDENTITY_LINK_ENABLED')==='true';
++ if(!enabled)return reply('LINK_NOT_ENABLED',503);
++ try{
++ let body:unknown=null;
++ try{body=await req.json();}catch{return reply('INVALID_REQUEST',400);}
++ const client=createClientFromRequest(req);
++ const db=client.asServiceRole.entities;
++ const result=await redeemBillingLinkCore(body,{
++  enabled,
++  getUser:()=>client.auth.me(),
++  redis:demoRedis,
++  findMembers:(q)=>db.OrganizationMember.filter(q),
++  updateMember:(id,data)=>db.OrganizationMember.update(id,data),
++  assertProvenance:assertMembershipProvenance,
++  reserveBinding:reserveNativeBinding,
++  sha256Hex,
++ });
++ return reply(result.code,result.status);
++ }catch{return reply('LINK_REQUIRES_REVIEW',503);}
++}
+diff --git a/base44/functions/redeemBillingLink/entry_test.ts b/base44/functions/redeemBillingLink/entry_test.ts
+new file mode 100644
+index 0000000..4653b92
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/entry_test.ts
+@@ -0,0 +1,10 @@
++import handler from './entry.ts';
++Deno.test('link disabled does not touch backend or Redis',async()=>{
++ Deno.env.delete('BILLING_IDENTITY_LINK_ENABLED');
++ const response=await handler(new Request('https://example.test',{method:'POST',body:'{}'}),{});
++ if(response.status!==503||(await response.json()).code!=='LINK_NOT_ENABLED')throw Error('gate failed');
++});
++Deno.test('link redemption requires POST',async()=>{
++ const response=await handler(new Request('https://example.test'),{});
++ if(response.status!==405)throw Error('method accepted');
++});
+diff --git a/base44/functions/redeemBillingLink/provenance.mjs b/base44/functions/redeemBillingLink/provenance.mjs
+new file mode 100644
+index 0000000..857281c
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/provenance.mjs
+@@ -0,0 +1,10 @@
++export function provenanceKey(orgId,sub){
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(orgId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(sub||''))throw Error('INVALID_MEMBERSHIP_IDENTITY');
++ return `trucky:billing:member:v1:${orgId}:${sub}`;
++}
++export async function assertMembershipProvenance(command,member){
++ const raw=await command(['GET',provenanceKey(member.organization_id,member.google_sub)]);
++ if(!raw)throw Error('MEMBERSHIP_PROVENANCE_REQUIRED');
++ const value=JSON.parse(raw);
++ if(value.memberId!==member.id||value.role!==member.role||value.googleSub!==member.google_sub||value.orgId!==member.organization_id)throw Error('MEMBERSHIP_PROVENANCE_MISMATCH');
++}
+diff --git a/base44/functions/redeemBillingLink/provenance.ts b/base44/functions/redeemBillingLink/provenance.ts
+new file mode 100644
+index 0000000..857281c
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/provenance.ts
+@@ -0,0 +1,10 @@
++export function provenanceKey(orgId,sub){
++ if(!/^[a-zA-Z0-9_-]{1,128}$/.test(orgId||'')||!/^[a-zA-Z0-9_-]{1,128}$/.test(sub||''))throw Error('INVALID_MEMBERSHIP_IDENTITY');
++ return `trucky:billing:member:v1:${orgId}:${sub}`;
++}
++export async function assertMembershipProvenance(command,member){
++ const raw=await command(['GET',provenanceKey(member.organization_id,member.google_sub)]);
++ if(!raw)throw Error('MEMBERSHIP_PROVENANCE_REQUIRED');
++ const value=JSON.parse(raw);
++ if(value.memberId!==member.id||value.role!==member.role||value.googleSub!==member.google_sub||value.orgId!==member.organization_id)throw Error('MEMBERSHIP_PROVENANCE_MISMATCH');
++}
+diff --git a/base44/functions/redeemBillingLink/redeem.ts b/base44/functions/redeemBillingLink/redeem.ts
+new file mode 100644
+index 0000000..b00d0d8
+--- /dev/null
++++ b/base44/functions/redeemBillingLink/redeem.ts
+@@ -0,0 +1,55 @@
++/**
++ * Lógica de redeemBillingLink sin E/S directa (dependencias inyectadas) para
++ * poder probarla: identidad incorrecta, expiración, reutilización y
++ * vinculación idempotente. Mismo comportamiento que la versión de la rama
++ * vercel-agent/live-stripe-mode.
++ *
++ * El código del enlace nunca se guarda ni se registra: solo se usa su SHA-256
++ * como clave del ticket en Redis, que se consume con GETDEL (un solo uso).
++ */
++export type RedisCommand = (command: unknown[]) => Promise<unknown>;
++
++export interface RedeemDeps {
++  enabled: boolean;
++  getUser: () => Promise<{ id?: string; email?: string } | null>;
++  redis: RedisCommand;
++  findMembers: (q: { organization_id: string; google_sub: string; active: true }) => Promise<any[]>;
++  updateMember: (id: string, data: { base44_user_id: string }) => Promise<unknown>;
++  assertProvenance: (redis: RedisCommand, member: any) => Promise<void>;
++  reserveBinding: (redis: RedisCommand, googleSub: string, nativeId: string) => Promise<void>;
++  sha256Hex: (text: string) => Promise<string>;
++}
++
++export interface RedeemResult { status: number; code: string }
++const r = (code: string, status = 200): RedeemResult => ({ code, status });
++
++export const HANDOFF_PREFIX = 'trucky:billing:handoff:v1:';
++
++export async function redeemBillingLinkCore(body: any, deps: RedeemDeps): Promise<RedeemResult> {
++  if (!deps.enabled) return r('LINK_NOT_ENABLED', 503);
++  try {
++    const user = await deps.getUser();
++    if (!user?.id || !user?.email) return r('NATIVE_SESSION_REQUIRED', 401);
++    if (body?.confirm !== true || typeof body?.code !== 'string' || !/^[a-f0-9]{64}$/.test(body.code)) return r('INVALID_REQUEST', 400);
++
++    const key = HANDOFF_PREFIX + await deps.sha256Hex(body.code);
++    // Se verifica la cuenta ANTES de consumir el ticket; luego GETDEL evita la reutilización.
++    const raw = await deps.redis(['GET', key]);
++    if (!raw) return r('LINK_EXPIRED', 409);
++    const identity = JSON.parse(String(raw));
++    if (identity.email !== user.email.toLowerCase()) return r('IDENTITY_MISMATCH', 403);
++    const consumed = await deps.redis(['GETDEL', key]);
++    if (consumed !== raw) return r('LINK_ALREADY_USED', 409);
++
++    const members = await deps.findMembers({ organization_id: identity.orgId, google_sub: identity.sub, active: true });
++    if (members.length !== 1) return r('VERIFIED_MEMBERSHIP_REQUIRED', 403);
++    const member = members[0];
++    await deps.assertProvenance(deps.redis, member);
++    if (member.base44_user_id && member.base44_user_id !== user.id) return r('IDENTITY_ALREADY_BOUND', 409);
++    await deps.reserveBinding(deps.redis, identity.sub, user.id);
++    if (!member.base44_user_id) await deps.updateMember(member.id, { base44_user_id: user.id });
++    return r('IDENTITY_LINKED');
++  } catch {
++    return r('LINK_REQUIRES_REVIEW', 503);
++  }
++}
+diff --git a/src/App.jsx b/src/App.jsx
+index f965353..8f9314d 100644
+--- a/src/App.jsx
++++ b/src/App.jsx
+@@ -11,6 +11,9 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
+ import Layout from '@/components/Layout';
+ import { DemoProvider, useDemo } from '@/lib/DemoContext';
+ import DemoExpiredScreen from '@/components/DemoExpiredScreen';
++// Fase 1 de facturación: solo la confirmación de vinculación de identidad.
++// LiveBillingGate queda fuera hasta habilitar el control de acceso.
++import BillingLinkConfirmation from '@/components/BillingLinkConfirmation';
+ 
+ // Page imports
+ import Welcome         from '@/pages/Welcome';
+@@ -128,6 +131,7 @@ function App() {
+           <DemoProvider>
+             <LanguageProvider>
+               <ProfileProvider>
++                <BillingLinkConfirmation />
+                 <AppContent />
+               </ProfileProvider>
+             </LanguageProvider>
+diff --git a/src/components/BillingLinkConfirmation.jsx b/src/components/BillingLinkConfirmation.jsx
+new file mode 100644
+index 0000000..efb5e61
+--- /dev/null
++++ b/src/components/BillingLinkConfirmation.jsx
+@@ -0,0 +1,72 @@
++import { useEffect, useState } from 'react';
++import { base44 } from '@/api/base44Client';
++import { peekBillingLinkCode, clearBillingLinkCode } from '@/lib/billingLinkCapture';
++
++const MESSAGES = {
++  LINK_EXPIRED: 'El enlace venció o ya se usó. Solicita uno nuevo desde la web.',
++  LINK_ALREADY_USED: 'Este enlace ya se usó. Solicita uno nuevo desde la web.',
++  IDENTITY_MISMATCH: 'La sesión de Trucky no corresponde a la cuenta de la web. Entra con la misma cuenta y solicita un enlace nuevo.',
++  IDENTITY_ALREADY_BOUND: 'Esta cuenta ya está vinculada a otro usuario. Contacta a soporte.',
++  VERIFIED_MEMBERSHIP_REQUIRED: 'No encontramos una membresía verificada para esta empresa. Contacta a soporte.',
++  NATIVE_SESSION_REQUIRED: 'Inicia sesión en Trucky y solicita de nuevo la vinculación.',
++  LINK_NOT_ENABLED: 'La vinculación no está habilitada en este momento.',
++};
++const GENERIC = 'No se pudo vincular. Solicita un enlace nuevo desde la web; no se ha concedido acceso.';
++
++export default function BillingLinkConfirmation() {
++  const [code, setCode] = useState(peekBillingLinkCode);
++  const [email, setEmail] = useState('');
++  const [message, setMessage] = useState('');
++  const [busy, setBusy] = useState(false);
++
++  useEffect(() => {
++    if (!code) return;
++    base44.auth.me()
++      .then((user) => setEmail(user?.email || ''))
++      .catch(() => setMessage(MESSAGES.NATIVE_SESSION_REQUIRED));
++  }, [code]);
++
++  const close = () => { clearBillingLinkCode(); setCode(null); };
++
++  async function confirm() {
++    setBusy(true);
++    setMessage('');
++    try {
++      const response = await base44.functions.invoke('redeemBillingLink', { code, confirm: true });
++      const result = response?.data?.code;
++      if (result !== 'IDENTITY_LINKED') throw Object.assign(new Error('LINK_FAILED'), { result });
++      clearBillingLinkCode();
++      setCode(null);
++      window.location.reload();
++    } catch (err) {
++      const result = err?.result || err?.response?.data?.code;
++      setMessage(MESSAGES[result] || GENERIC);
++      setBusy(false);
++    }
++  }
++
++  if (!code) return null;
++  return (
++    <div role="dialog" aria-modal="true" aria-labelledby="billing-link-title"
++      className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4">
++      <section className="bg-card text-foreground border border-border rounded-2xl p-6 w-full max-w-md space-y-4 shadow-xl">
++        <h2 id="billing-link-title" className="text-lg font-semibold">Vincular cuenta de facturación</h2>
++        <p className="text-sm text-muted-foreground">
++          Confirma que deseas vincular la cuenta de la web con tu sesión actual de Trucky:{' '}
++          <span className="font-medium text-foreground">{email || 'sin sesión verificada'}</span>.
++        </p>
++        <div className="flex gap-2">
++          <button type="button" onClick={close} disabled={busy}
++            className="px-4 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:bg-muted disabled:opacity-50">
++            Cancelar
++          </button>
++          <button type="button" onClick={confirm} disabled={busy || !email}
++            className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
++            {busy ? 'Vinculando…' : 'Confirmar vinculación'}
++          </button>
++        </div>
++        {message && <p role="alert" className="text-xs text-destructive">{message}</p>}
++      </section>
++    </div>
++  );
++}
+diff --git a/src/lib/billingLinkCapture.js b/src/lib/billingLinkCapture.js
+new file mode 100644
+index 0000000..f0b63f6
+--- /dev/null
++++ b/src/lib/billingLinkCapture.js
+@@ -0,0 +1,25 @@
++// Captura el código de vinculación de facturación (#billing_link=<64 hex>)
++// ANTES que cualquier otro módulo: main.jsx lo importa primero, así ni el SDK
++// de Base44, ni la autenticación, ni el router pueden redirigir o reescribir
++// la URL y perderlo. El código se borra de la barra de direcciones de
++// inmediato y solo vive en memoria (nunca en localStorage/sessionStorage ni
++// en logs).
++let code = null;
++
++if (typeof window !== 'undefined') {
++  try {
++    const value = new URLSearchParams(window.location.hash.slice(1)).get('billing_link');
++    if (value) {
++      window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
++      if (/^[a-f0-9]{64}$/.test(value)) code = value;
++    }
++  } catch { /* sin enlace */ }
++}
++
++export function peekBillingLinkCode() {
++  return code;
++}
++
++export function clearBillingLinkCode() {
++  code = null;
++}
+diff --git a/src/main.jsx b/src/main.jsx
+index eec6036..4e7298a 100644
+--- a/src/main.jsx
++++ b/src/main.jsx
+@@ -1,3 +1,5 @@
++// Primero: capturar el enlace de facturación antes de que otro módulo toque la URL.
++import '@/lib/billingLinkCapture'
+ import React from 'react'
+ import ReactDOM from 'react-dom/client'
+ import { MotionConfig } from 'framer-motion'
+diff --git a/tests/billing/membership-provenance.test.mjs b/tests/billing/membership-provenance.test.mjs
+new file mode 100644
+index 0000000..782380f
+--- /dev/null
++++ b/tests/billing/membership-provenance.test.mjs
+@@ -0,0 +1,14 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {assertMembershipProvenance,provenanceKey} from '../../base44/functions/linkBillingIdentity/provenance.mjs';
++const member={id:'member_a',organization_id:'org',google_sub:'google',role:'owner'};
++const proof={memberId:'member_a',orgId:'org',googleSub:'google',role:'owner'};
++test('client row without server proof is rejected',async()=>{await assert.rejects(assertMembershipProvenance(async()=>null,member),/REQUIRED/);});
++test('proof is bound to exact membership identity and role',async()=>{
++ const read=async()=>JSON.stringify(proof);await assertMembershipProvenance(read,member);
++ for(const changed of [{id:'forged'},{role:'admin'},{organization_id:'other'},{google_sub:'other'}])await assert.rejects(assertMembershipProvenance(read,{...member,...changed}),/MISMATCH/);
++});
++test('malformed IDs and Redis failures fail closed',async()=>{
++ assert.throws(()=>provenanceKey('org:injected','google'),/INVALID/);
++ await assert.rejects(assertMembershipProvenance(async()=>{throw Error('Redis unavailable');},member));
++});
+diff --git a/tests/billing/native-binding.test.mjs b/tests/billing/native-binding.test.mjs
+new file mode 100644
+index 0000000..81445ed
+--- /dev/null
++++ b/tests/billing/native-binding.test.mjs
+@@ -0,0 +1,29 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++import {reserveNativeBinding} from '../../base44/functions/linkBillingIdentity/binding.mjs';
++function command(){const data=new Map();return async([op,script,count,forward,reverse,native,google])=>{
++ assert.equal(op,'EVAL');assert.equal(count,'2');
++ if((data.has(forward)&&data.get(forward)!==native)||(data.has(reverse)&&data.get(reverse)!==google))return 0;
++ data.set(forward,native);data.set(reverse,google);return 1;
++};}
++test('concurrent different native users cannot bind the same Google subject',async()=>{
++ const redis=command();const results=await Promise.allSettled([reserveNativeBinding(redis,'google','native_a'),reserveNativeBinding(redis,'google','native_b')]);
++ assert.equal(results.filter(x=>x.status==='fulfilled').length,1);
++ assert.equal(results.filter(x=>x.status==='rejected').length,1);
++});
++test('same identity retries retain the original binding',async()=>{
++ const redis=command();await reserveNativeBinding(redis,'google','native_a');await reserveNativeBinding(redis,'google','native_a');
++ await assert.rejects(reserveNativeBinding(redis,'google','native_b'),/ALREADY_BOUND/);
++});
++test('Redis failures never authorize a binding',async()=>{
++ await assert.rejects(reserveNativeBinding(async()=>{throw Error('redis failed');},'google','native'));
++});
++
++test('one native user cannot be rebound to another Google identity',async()=>{
++ const redis=command();await reserveNativeBinding(redis,'google_a','native');
++ await assert.rejects(reserveNativeBinding(redis,'google_b','native'),/ALREADY_BOUND/);
++ await reserveNativeBinding(redis,'google_a','native');
++});
++test('reject malformed identities before Redis',async()=>{
++ await assert.rejects(reserveNativeBinding(async()=>{throw Error('called');},'google:injected','native'),/INVALID_IDENTITY/);
++});
+diff --git a/tests/billing/redeem-billing-link.test.ts b/tests/billing/redeem-billing-link.test.ts
+new file mode 100644
+index 0000000..5f62a53
+--- /dev/null
++++ b/tests/billing/redeem-billing-link.test.ts
+@@ -0,0 +1,138 @@
++// Pruebas de redeemBillingLink (fase 1: solo vinculación de identidades).
++// Cubren identidad incorrecta, expiración, reutilización y vinculación
++// idempotente con Redis y Base44 simulados. Usa los validadores reales de
++// procedencia y del vínculo atómico (copias .mjs idénticas a las .ts).
++import { assertEquals } from 'jsr:@std/assert@1';
++import { redeemBillingLinkCore, HANDOFF_PREFIX, type RedeemDeps } from '../../base44/functions/redeemBillingLink/redeem.ts';
++import { assertMembershipProvenance, provenanceKey } from '../../base44/functions/redeemBillingLink/provenance.mjs';
++import { reserveNativeBinding } from '../../base44/functions/redeemBillingLink/binding.mjs';
++
++const CODE = 'a'.repeat(64);
++const HASH = 'h'.repeat(8);
++const ORG = 'org_1';
++const SUB = 'google_1';
++const USER = { id: 'native_1', email: 'Owner@Testing.pro' };
++const ticket = JSON.stringify({ sub: SUB, email: 'owner@testing.pro', orgId: ORG });
++const baseMember = { id: 'member_1', organization_id: ORG, google_sub: SUB, role: 'owner', active: true };
++const proof = JSON.stringify({ memberId: 'member_1', orgId: ORG, googleSub: SUB, role: 'owner' });
++
++function memRedis(initial: Record<string, string>) {
++  const store = new Map<string, string>(Object.entries(initial));
++  const cmd = async (c: unknown[]) => {
++    const [op, a] = c as [string, string];
++    if (op === 'GET') return store.get(a) ?? null;
++    if (op === 'GETDEL') { const v = store.get(a) ?? null; store.delete(a); return v; }
++    if (op === 'EVAL') {
++      const [, , , fwd, rev, native, google] = c as string[];
++      if ((store.has(fwd) && store.get(fwd) !== native) || (store.has(rev) && store.get(rev) !== google)) return 0;
++      store.set(fwd, native); store.set(rev, google); return 1;
++    }
++    throw new Error('unexpected ' + op);
++  };
++  return { cmd, store };
++}
++
++function setup(over: Partial<RedeemDeps> = {}, member: any = { ...baseMember }, extra: Record<string, string> = {}) {
++  const redis = memRedis({ [HANDOFF_PREFIX + HASH]: ticket, [provenanceKey(ORG, SUB)]: proof, ...extra });
++  const updates: unknown[] = [];
++  const deps: RedeemDeps = {
++    enabled: true,
++    getUser: async () => USER,
++    redis: redis.cmd,
++    findMembers: async () => [member],
++    updateMember: async (id, data) => { updates.push([id, data]); Object.assign(member, data); return member; },
++    assertProvenance: assertMembershipProvenance,
++    reserveBinding: reserveNativeBinding,
++    sha256Hex: async () => HASH,
++    ...over,
++  };
++  return { deps, redis, updates, member };
++}
++const body = { code: CODE, confirm: true };
++
++Deno.test('vinculación correcta: IDENTITY_LINKED, consume el ticket y guarda el usuario nativo', async () => {
++  const s = setup();
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'IDENTITY_LINKED');
++  assertEquals(s.redis.store.has(HANDOFF_PREFIX + HASH), false);
++  assertEquals(s.updates, [['member_1', { base44_user_id: 'native_1' }]]);
++  assertEquals(s.redis.store.get(`trucky:billing:identity:v1:${SUB}`), 'native_1');
++});
++
++Deno.test('identidad incorrecta: otra cuenta nativa → IDENTITY_MISMATCH y el ticket NO se consume', async () => {
++  const s = setup({ getUser: async () => ({ id: 'native_x', email: 'otra@persona.com' }) });
++  const res = await redeemBillingLinkCore(body, s.deps);
++  assertEquals([res.status, res.code], [403, 'IDENTITY_MISMATCH']);
++  assertEquals(s.redis.store.has(HANDOFF_PREFIX + HASH), true);
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('expiración: ticket inexistente o vencido → LINK_EXPIRED, sin cambios', async () => {
++  const s = setup();
++  s.redis.store.delete(HANDOFF_PREFIX + HASH);
++  const res = await redeemBillingLinkCore(body, s.deps);
++  assertEquals([res.status, res.code], [409, 'LINK_EXPIRED']);
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('reutilización: el mismo enlace por segunda vez no vuelve a vincular', async () => {
++  const s = setup();
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'IDENTITY_LINKED');
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'LINK_EXPIRED');
++  assertEquals(s.updates.length, 1);
++});
++
++Deno.test('reutilización simultánea: si otro consumió el ticket entre GET y GETDEL → LINK_ALREADY_USED', async () => {
++  const s = setup();
++  const racing = async (c: unknown[]) => {
++    if (c[0] === 'GETDEL') { s.redis.store.delete(c[1] as string); return null; }
++    return s.redis.cmd(c);
++  };
++  const res = await redeemBillingLinkCore(body, { ...s.deps, redis: racing });
++  assertEquals([res.status, res.code], [409, 'LINK_ALREADY_USED']);
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('idempotente: un enlace nuevo para la misma cuenta ya vinculada vuelve a dar IDENTITY_LINKED sin reescribir', async () => {
++  const member = { ...baseMember, base44_user_id: 'native_1' };
++  const s = setup({}, member, {
++    [`trucky:billing:identity:v1:${SUB}`]: 'native_1',
++    [`trucky:billing:native:v1:native_1`]: SUB,
++  });
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'IDENTITY_LINKED');
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('membresía ya vinculada a OTRO usuario nativo → IDENTITY_ALREADY_BOUND', async () => {
++  const s = setup({}, { ...baseMember, base44_user_id: 'native_otro' });
++  const res = await redeemBillingLinkCore(body, s.deps);
++  assertEquals([res.status, res.code], [409, 'IDENTITY_ALREADY_BOUND']);
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('Google ya vinculado a otro usuario nativo en el registro atómico → no vincula', async () => {
++  const s = setup({}, { ...baseMember }, { [`trucky:billing:identity:v1:${SUB}`]: 'native_otro' });
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'LINK_REQUIRES_REVIEW');
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('sin prueba de procedencia → no vincula', async () => {
++  const s = setup();
++  s.redis.store.delete(provenanceKey(ORG, SUB));
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'LINK_REQUIRES_REVIEW');
++  assertEquals(s.updates.length, 0);
++});
++
++Deno.test('sin sesión, sin confirmación, código malformado o apagado → rechazado sin tocar Redis', async () => {
++  let touched = false;
++  const spy = async () => { touched = true; return null; };
++  assertEquals((await redeemBillingLinkCore(body, { ...setup().deps, redis: spy, getUser: async () => null })).code, 'NATIVE_SESSION_REQUIRED');
++  assertEquals((await redeemBillingLinkCore({ code: CODE }, { ...setup().deps, redis: spy })).code, 'INVALID_REQUEST');
++  assertEquals((await redeemBillingLinkCore({ code: 'xyz', confirm: true }, { ...setup().deps, redis: spy })).code, 'INVALID_REQUEST');
++  assertEquals((await redeemBillingLinkCore(body, { ...setup().deps, redis: spy, enabled: false })).code, 'LINK_NOT_ENABLED');
++  assertEquals(touched, false);
++});
++
++Deno.test('varias membresías activas para el mismo Google → VERIFIED_MEMBERSHIP_REQUIRED', async () => {
++  const s = setup({ findMembers: async () => [baseMember, { ...baseMember, id: 'member_2' }] });
++  assertEquals((await redeemBillingLinkCore(body, s.deps)).code, 'VERIFIED_MEMBERSHIP_REQUIRED');
++});

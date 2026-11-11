@@ -1,0 +1,110 @@
+{
+  "name": "RateRoute",
+  "type": "object",
+  "properties": {
+    "route_id": {
+      "type": "string",
+      "description": "Clave única estable = id de la tabla estática (ej. fl-local-miami-grupo-100-2)"
+    },
+    "orden": {
+      "type": "number",
+      "description": "Posición original en la tabla (el motor recorre en este orden)"
+    },
+    "estado": {
+      "type": "string",
+      "description": "FL | TX"
+    },
+    "mercado": {
+      "type": "string",
+      "description": "Puerto/mercado (MIA, PEV, Ambos, Houston Port...)"
+    },
+    "ciudad": {
+      "type": "string",
+      "description": "Ciudad destino"
+    },
+    "zona": {
+      "type": "string",
+      "description": "LOCAL, OTR-100, ..."
+    },
+    "grupo": {
+      "type": "string",
+      "description": "Grupo tarifario (FL) o null (TX)"
+    },
+    "millas_ida": {
+      "type": "number",
+      "description": "Millas de ida"
+    },
+    "precios": {
+      "type": "array",
+      "description": "Precios por tamaño",
+      "items": {
+        "type": "object",
+        "properties": {
+          "tamano": {
+            "type": "string",
+            "description": "20|40|45|20_heavy"
+          },
+          "objetivo": {
+            "type": "number",
+            "description": "Tarifa objetivo"
+          },
+          "piso_tabla": {
+            "type": "number",
+            "description": "Tarifa piso (null si no hay)"
+          },
+          "derivado": {
+            "type": "boolean",
+            "description": "Precio derivado de otro tamaño"
+          }
+        }
+      }
+    },
+    "fuente": {
+      "type": "object",
+      "description": "Trazabilidad: archivo, sha, fila, nota_original"
+    },
+    "semantica_millas": {
+      "type": "object",
+      "description": "tipo_millas, precio_incluye_regreso, nota"
+    },
+    "activo": {
+      "type": "boolean",
+      "description": "false = apagada temporalmente (el chat la ignora). Para quitarla del todo se elimina."
+    },
+    "notas": {
+      "type": "string",
+      "description": "Nota libre del administrador"
+    },
+    "actualizado_por": {
+      "type": "string",
+      "description": "Correo de quien hizo el último cambio"
+    },
+    "origen": {
+      "type": "string",
+      "description": "migracion | manual | excel"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

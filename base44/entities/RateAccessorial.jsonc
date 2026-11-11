@@ -1,0 +1,77 @@
+{
+  "name": "RateAccessorial",
+  "type": "object",
+  "properties": {
+    "accessorial_key": {
+      "type": "string",
+      "description": "Clave única: <estado>-<fila origen> (ej. fl-3)"
+    },
+    "orden": {
+      "type": "number",
+      "description": "Posición original"
+    },
+    "estado": {
+      "type": "string",
+      "description": "FL | TX"
+    },
+    "concepto": {
+      "type": "string",
+      "description": "Nombre del cargo"
+    },
+    "gatillo": {
+      "type": "string",
+      "description": "Cuándo aplica"
+    },
+    "monto": {
+      "type": "string",
+      "description": "Monto como texto (ej. $100 · por contenedor)"
+    },
+    "nota": {
+      "type": "string",
+      "description": "Nota"
+    },
+    "fuente": {
+      "type": "object",
+      "description": "archivo, fila"
+    },
+    "activo": {
+      "type": "boolean",
+      "description": "false = apagada temporalmente (el chat la ignora). Para quitarla del todo se elimina."
+    },
+    "notas": {
+      "type": "string",
+      "description": "Nota libre del administrador"
+    },
+    "actualizado_por": {
+      "type": "string",
+      "description": "Correo de quien hizo el último cambio"
+    },
+    "origen": {
+      "type": "string",
+      "description": "migracion | manual | excel"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

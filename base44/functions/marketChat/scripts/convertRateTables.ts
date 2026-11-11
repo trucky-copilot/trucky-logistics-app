@@ -78,6 +78,13 @@ function slugify(...partes: Array<string | number | null | undefined>): string {
     .replace(/^-+|-+$/g, '');
 }
 
+// F6-01 Fase E: también se usa desde adminSaveRates (Excel subido desde la
+// pantalla Tarifas), por eso convertFlorida/convertTexas/sha256Bytes se exportan.
+export async function sha256Bytes(bytes: Uint8Array): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', bytes as BufferSource);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 async function sha256File(path: string): Promise<string> {
   const bytes = await Deno.readFile(path);
   const digest = await crypto.subtle.digest('SHA-256', bytes);
@@ -102,7 +109,7 @@ function str(value: unknown): string {
 // FLORIDA
 // ─────────────────────────────────────────────────────────────────────────────
 
-function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: string): {
+export function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: string): {
   routes: RouteRecord[];
   accessorials: AccessorialRecord[];
 } {
@@ -176,7 +183,7 @@ function convertFlorida(workbook: XLSX.WorkBook, archivo: string, sha: string): 
 // TEXAS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: string): {
+export function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: string): {
   routes: RouteRecord[];
   accessorials: AccessorialRecord[];
 } {
@@ -201,7 +208,7 @@ function convertTexas(workbook: XLSX.WorkBook, archivo: string, sha: string): {
       throw new Error(`TX fila ${i + 1} (${ciudad}): faltan millas o todas las tarifas — no se carga con un dato inventado`);
     }
 
-    const precios = [];
+    const precios: RoutePriceEntry[] = [];
     if (obj20 !== null && isFinite(obj20)) {
       precios.push({ tamano: '20', objetivo: obj20, piso_tabla: piso20 !== null ? piso20 : null, derivado: false });
     }

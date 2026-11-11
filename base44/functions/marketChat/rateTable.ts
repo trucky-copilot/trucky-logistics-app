@@ -80,10 +80,19 @@ import routesTxRaw from './data/routes.tx.json' with { type: 'json' };
 import accessorialsFlRaw from './data/accessorials.fl.json' with { type: 'json' };
 import accessorialsTxRaw from './data/accessorials.tx.json' with { type: 'json' };
 
-const ROUTES_FL = routesFlRaw as unknown as RouteRecord[];
-const ROUTES_TX = routesTxRaw as unknown as RouteRecord[];
-const ACCESSORIALS_FL = accessorialsFlRaw as unknown as AccessorialRecord[];
-const ACCESSORIALS_TX = accessorialsTxRaw as unknown as AccessorialRecord[];
+const BUNDLED_ROUTES_FL = routesFlRaw as unknown as RouteRecord[];
+const BUNDLED_ROUTES_TX = routesTxRaw as unknown as RouteRecord[];
+const BUNDLED_ACCESSORIALS_FL = accessorialsFlRaw as unknown as AccessorialRecord[];
+const BUNDLED_ACCESSORIALS_TX = accessorialsTxRaw as unknown as AccessorialRecord[];
+
+// F6-01 Fase C: los datos activos son variables. Arrancan con los JSON del repo
+// (respaldo) y rateSource.ts los reemplaza por lo que hay en la base. Las
+// funciones de búsqueda de abajo NO cambian: solo cambia de dónde vienen los datos.
+let ROUTES_FL = BUNDLED_ROUTES_FL;
+let ROUTES_TX = BUNDLED_ROUTES_TX;
+let ACCESSORIALS_FL = BUNDLED_ACCESSORIALS_FL;
+let ACCESSORIALS_TX = BUNDLED_ACCESSORIALS_TX;
+let RATE_SOURCE: 'json' | 'db' = 'json';
 
 // Guardarraíl de integridad (criterio de éxito 1): si el JSON versionado se
 // edita a mano y el conteo se corrompe, el módulo falla al cargar en vez de
@@ -91,11 +100,68 @@ const ACCESSORIALS_TX = accessorialsTxRaw as unknown as AccessorialRecord[];
 const EXPECTED_FL_COUNT = 209;
 const EXPECTED_TX_COUNT = 63;
 
-if (ROUTES_FL.length !== EXPECTED_FL_COUNT) {
-  throw new Error(`rateTable: se esperaban ${EXPECTED_FL_COUNT} rutas FL, el JSON versionado trae ${ROUTES_FL.length}`);
+if (BUNDLED_ROUTES_FL.length !== EXPECTED_FL_COUNT) {
+  throw new Error(`rateTable: se esperaban ${EXPECTED_FL_COUNT} rutas FL, el JSON versionado trae ${BUNDLED_ROUTES_FL.length}`);
 }
-if (ROUTES_TX.length !== EXPECTED_TX_COUNT) {
-  throw new Error(`rateTable: se esperaban ${EXPECTED_TX_COUNT} rutas TX, el JSON versionado trae ${ROUTES_TX.length}`);
+if (BUNDLED_ROUTES_TX.length !== EXPECTED_TX_COUNT) {
+  throw new Error(`rateTable: se esperaban ${EXPECTED_TX_COUNT} rutas TX, el JSON versionado trae ${BUNDLED_ROUTES_TX.length}`);
+}
+
+export interface RateTablesInput {
+  routesFl: RouteRecord[];
+  routesTx: RouteRecord[];
+  accessorialsFl: AccessorialRecord[];
+  accessorialsTx: AccessorialRecord[];
+}
+
+const TAMANOS = new Set(['20', '40', '45', '20_heavy']);
+
+// Valida la forma mínima que el motor necesita. Si algo no cuadra, se lanza
+// error y quien llama se queda con los datos anteriores (nunca a medias).
+export function validateRateTables(d: RateTablesInput): string[] {
+  const errs: string[] = [];
+  const checkRoutes = (list: RouteRecord[], estado: Estado) => {
+    if (!Array.isArray(list) || list.length === 0) { errs.push(`sin rutas ${estado}`); return; }
+    for (const r of list) {
+      if (!r?.id || r.estado !== estado || !r.ciudad) { errs.push(`ruta inválida ${r?.id ?? '?'}`); continue; }
+      if (typeof r.millas_ida !== 'number' || !isFinite(r.millas_ida) || r.millas_ida < 0) errs.push(`millas inválidas ${r.id}`);
+      if (!Array.isArray(r.precios) || r.precios.length === 0) { errs.push(`sin precios ${r.id}`); continue; }
+      for (const p of r.precios) {
+        if (!TAMANOS.has(p?.tamano) || typeof p.objetivo !== 'number' || !(p.objetivo > 0)) errs.push(`precio inválido ${r.id}`);
+        if (p.piso_tabla != null && (typeof p.piso_tabla !== 'number' || !(p.piso_tabla > 0))) errs.push(`piso inválido ${r.id}`);
+      }
+      if (!r.semantica_millas || typeof r.semantica_millas.precio_incluye_regreso !== 'boolean') errs.push(`semantica_millas inválida ${r.id}`);
+    }
+  };
+  checkRoutes(d.routesFl, 'FL');
+  checkRoutes(d.routesTx, 'TX');
+  for (const [k, list] of [['FL', d.accessorialsFl], ['TX', d.accessorialsTx]] as const) {
+    if (!Array.isArray(list)) { errs.push(`accesoriales ${k} no es lista`); continue; }
+    for (const a of list) if (!a?.concepto || typeof a.monto !== 'string') errs.push(`accesorial inválido ${k}`);
+  }
+  return errs;
+}
+
+export function setRateTables(d: RateTablesInput): void {
+  const errs = validateRateTables(d);
+  if (errs.length) throw new Error(`rateTable: datos de la base rechazados: ${errs.slice(0, 5).join('; ')}`);
+  ROUTES_FL = d.routesFl;
+  ROUTES_TX = d.routesTx;
+  ACCESSORIALS_FL = d.accessorialsFl;
+  ACCESSORIALS_TX = d.accessorialsTx;
+  RATE_SOURCE = 'db';
+}
+
+export function resetRateTablesToBundled(): void {
+  ROUTES_FL = BUNDLED_ROUTES_FL;
+  ROUTES_TX = BUNDLED_ROUTES_TX;
+  ACCESSORIALS_FL = BUNDLED_ACCESSORIALS_FL;
+  ACCESSORIALS_TX = BUNDLED_ACCESSORIALS_TX;
+  RATE_SOURCE = 'json';
+}
+
+export function getRateSource(): 'json' | 'db' {
+  return RATE_SOURCE;
 }
 
 export function loadRoutes(estado: Estado): RouteRecord[] {

@@ -1,0 +1,65 @@
+{
+  "name": "RateZone",
+  "type": "object",
+  "properties": {
+    "zone_key": {
+      "type": "string",
+      "description": "Clave única: <estado>-<zona>"
+    },
+    "estado": {
+      "type": "string",
+      "description": "FL | TX"
+    },
+    "zona": {
+      "type": "string",
+      "description": "Nombre de la zona"
+    },
+    "orden": {
+      "type": "number",
+      "description": "Orden de aparición"
+    },
+    "descripcion": {
+      "type": "string",
+      "description": "Descripción libre"
+    },
+    "activo": {
+      "type": "boolean",
+      "description": "false = apagada temporalmente (el chat la ignora). Para quitarla del todo se elimina."
+    },
+    "notas": {
+      "type": "string",
+      "description": "Nota libre del administrador"
+    },
+    "actualizado_por": {
+      "type": "string",
+      "description": "Correo de quien hizo el último cambio"
+    },
+    "origen": {
+      "type": "string",
+      "description": "migracion | manual | excel"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

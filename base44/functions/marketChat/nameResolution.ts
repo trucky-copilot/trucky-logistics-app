@@ -26,12 +26,25 @@
 import aliasesRaw from './data/aliases.json' with { type: 'json' };
 import { loadRoutes, findRouteById, type Estado } from './rateTable.ts';
 
-interface AliasesFile {
+export interface AliasesFile {
   fl: { terminales: Record<string, 'MIA' | 'PEV'> };
   tx: { zip_a_ruta: Record<string, string> };
 }
 
-const ALIASES = aliasesRaw as unknown as AliasesFile;
+const BUNDLED_ALIASES = aliasesRaw as unknown as AliasesFile;
+// F6-01 Fase C: variable para que rateSource.ts la reemplace con la base.
+let ALIASES: AliasesFile = BUNDLED_ALIASES;
+
+export function setAliases(file: AliasesFile): void {
+  if (!file?.fl?.terminales || typeof file.fl.terminales !== 'object' || !file?.tx?.zip_a_ruta || typeof file.tx.zip_a_ruta !== 'object') {
+    throw new Error('nameResolution: alias de la base rechazados (forma inválida)');
+  }
+  ALIASES = file;
+}
+
+export function resetAliasesToBundled(): void {
+  ALIASES = BUNDLED_ALIASES;
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // NORMALIZACIÓN — acentos, mayúsculas y abreviaturas comunes de nombre de

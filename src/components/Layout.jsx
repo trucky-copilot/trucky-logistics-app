@@ -3,10 +3,11 @@ import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, MessageSquare, Mail, FileSearch, Calculator,
   Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
-  LogOut, ChevronUp, ShieldAlert
+  LogOut, ChevronUp, ShieldAlert, Tags
 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
+import { isAppAdmin } from '@/lib/adminAccess';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -43,12 +44,10 @@ export default function Layout() {
   const { t, locale, setLocale } = useLanguage();
   const { isDemoUser } = useDemo();
 
-  const nonAdminOperationalEmails = new Set([
-    'luisbermudezacero@gmail.com',
-    'ianruizmora@gmail.com',
-  ]);
-  const userEmail = (user?.email || '').toLowerCase().trim();
-  const showAdminPanel = user?.role === 'admin' && !nonAdminOperationalEmails.has(userEmail);
+  // Solo los administradores de src/lib/adminAccess.js ven el panel; las
+  // cuentas de pruebas (luisbermudezacero@gmail.com, ianruizmora@gmail.com)
+  // quedan como usuarios normales.
+  const showAdminPanel = isAppAdmin(user);
 
   const visibleNavItems = NAV_ITEMS;
 
@@ -179,6 +178,24 @@ export default function Layout() {
               <ShieldAlert className={`w-4 h-4 flex-shrink-0 ${isActive('/admin') ? 'text-amber-500' : ''}`} />
               <span className="flex-1">Panel Admin</span>
               {isActive('/admin') && <ChevronRight className="w-3 h-3 text-amber-500 opacity-60" />}
+            </Link>
+          )}
+          {showAdminPanel && (
+            <Link
+              to="/tarifas"
+              onClick={() => setSidebarOpen(false)}
+              className={`
+                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
+                transition-all duration-150 group
+                ${isActive('/tarifas')
+                  ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20'
+                  : 'text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10'
+                }
+              `}
+            >
+              <Tags className={`w-4 h-4 flex-shrink-0 ${isActive('/tarifas') ? 'text-amber-500' : ''}`} />
+              <span className="flex-1">Tarifas</span>
+              {isActive('/tarifas') && <ChevronRight className="w-3 h-3 text-amber-500 opacity-60" />}
             </Link>
           )}
         </nav>

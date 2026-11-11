@@ -1,0 +1,68 @@
+{
+  "name": "RateChangeLog",
+  "type": "object",
+  "properties": {
+    "entidad": {
+      "type": "string",
+      "description": "RateRoute | RateAccessorial | RateAlias | RateZone"
+    },
+    "registro_key": {
+      "type": "string",
+      "description": "route_id / accessorial_key / ..."
+    },
+    "accion": {
+      "type": "string",
+      "description": "crear | actualizar | eliminar"
+    },
+    "antes": {
+      "type": "object",
+      "description": "Valores previos (null si es nuevo). En eliminar guarda el registro completo."
+    },
+    "despues": {
+      "type": "object",
+      "description": "Valores nuevos"
+    },
+    "campos": {
+      "type": "array",
+      "description": "Campos que cambiaron",
+      "items": {
+        "type": "string"
+      }
+    },
+    "usuario_email": {
+      "type": "string",
+      "description": "Quién hizo el cambio"
+    },
+    "origen": {
+      "type": "string",
+      "description": "migracion | manual | excel"
+    },
+    "lote_id": {
+      "type": "string",
+      "description": "Agrupa los cambios de una misma carga"
+    }
+  },
+  "required": [],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}
