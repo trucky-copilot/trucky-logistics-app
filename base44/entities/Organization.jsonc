@@ -6,6 +6,24 @@
       "type": "string",
       "description": "Nombre de la empresa u organizaci\u00f3n"
     },
+    "tipos_camion": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["dry_van", "flatbed", "reefer", "drayage"] },
+      "description": "F3-15: tipos de camión que maneja la empresa (Dry Van, Flatbed, Reefer, Drayage). Solo lo cambia el servidor (updateCompanySettings)."
+    },
+    "historial_nombre": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "anterior": { "type": "string" },
+          "nuevo": { "type": "string" },
+          "fecha": { "type": "string", "description": "Fecha ISO del cambio" },
+          "usuario": { "type": "string", "description": "Correo de quien hizo el cambio" }
+        }
+      },
+      "description": "F3-15 / F4-07: registro de cambios del nombre de la empresa (confirmados por el usuario)."
+    },
     "account_type": {
       "type": "string",
       "enum": [

@@ -32,7 +32,7 @@
     "is_demo": {
       "type": "boolean",
       "default": false,
-      "description": "Marca este workspace como demo interno. Solo para uso expl\u00edcito del equipo \u2014 nunca se activa autom\u00e1ticamente en cuentas reales."
+      "description": "Marca este workspace como demo interno. Solo para uso explícito del equipo — nunca se activa automáticamente en cuentas reales."
     },
     "idioma_chat": {
       "type": "string",
@@ -42,6 +42,22 @@
       ],
       "default": "es",
       "description": "Idioma de las respuestas del Chat de Mercado. Aditivo: no forma parte del flujo de onboarding."
+    },
+    "nombre_completo": {
+      "type": "string",
+      "description": "F3-15: nombre completo del usuario (Configuración → Perfil personal)."
+    },
+    "telefono": {
+      "type": "string",
+      "description": "F3-15: teléfono de contacto."
+    },
+    "mc_number": {
+      "type": "string",
+      "description": "F3-15: número MC (solo dígitos)."
+    },
+    "dot_number": {
+      "type": "string",
+      "description": "F3-15: número DOT (solo dígitos)."
     }
   },
   "required": [
