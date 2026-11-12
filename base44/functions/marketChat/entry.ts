@@ -65,7 +65,7 @@ import {
 } from './llmDataBoundary.ts';
 import { resolveLocation } from './nameResolution.ts';
 import emailTemplates from './plantillas_correo.json' with { type: 'json' };
-import { mergeTemplates, templateUsageNote } from '../../shared/emailTemplates.ts';
+import { mergeTemplates } from '../../shared/emailTemplates.ts';
 import { fillSenderFields, missingSenderFields, senderData } from './senderSignature.ts';
 
 // chat-idioma-toggle Fase 2 (re-aplicado en la reconciliación con
@@ -1206,15 +1206,13 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
       if (esCorreo) {
         // Red de seguridad: firma con los datos reales (o sin el dato si falta).
         respuesta = fillSenderFields(respuesta.replace(/^\`\`\`(?:text)?\n?|\n?\`\`\`$/g, ''), sender).trim();
-        const asunto = String((draftResult as any)?.asunto || '').trim();
-        if (asunto && !/^(Subject|Asunto)\s*:/im.test(respuesta)) {
+        // Sin campos de relleno sin llenar en el asunto (ej. "Contraoferta - [lane]").
+        const asunto = String((draftResult as any)?.asunto || '').replace(/\[[^\]]*\]/g, '').replace(/(?:\s*(?:->|[-–—|:])\s*){2,}/g, ' - ').replace(/^\s*(?:->|[-–—|:])\s*|\s*(?:->|[-–—|:])\s*$/g, '').replace(/\s{2,}/g, ' ').trim();
+        if (asunto.length >= 4 && !/^(Subject|Asunto)\s*:/im.test(respuesta)) {
           respuesta = `${locale === 'en' ? 'Subject' : 'Asunto'}: ${asunto}\n\n${respuesta}`;
         }
         respuesta = '\`\`\`text\n' + respuesta + '\n\`\`\`';
       }
-      // F3-15 · Fase 5: el chat indica qué plantilla usó (propia o predeterminada).
-      const notaPlantilla = esCorreo ? templateUsageNote(mergedTemplates, (draftResult as any)?.plantilla_id, locale) : '';
-      if (notaPlantilla) respuesta += '\n\n' + notaPlantilla;
       const faltan = esCorreo ? missingSenderFields(sender) : [];
       if (faltan.length) {
         const nombres: Record<string, [string, string]> = { nombre: ['nombre', 'name'], mc: ['MC', 'MC'], dot: ['DOT', 'DOT'], telefono: ['teléfono', 'phone'] };
