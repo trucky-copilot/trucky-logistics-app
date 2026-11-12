@@ -65,6 +65,7 @@ import {
 } from './llmDataBoundary.ts';
 import { resolveLocation } from './nameResolution.ts';
 import emailTemplates from './plantillas_correo.json' with { type: 'json' };
+import { mergeTemplates, templateUsageNote } from '../../shared/emailTemplates.ts';
 
 // chat-idioma-toggle Fase 2 (re-aplicado en la reconciliación con
 // reglas-v3-multiestado): `locale` viaja desde el payload hasta cada builder
@@ -1048,7 +1049,14 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
         });
       }
 
-      const formattedTemplates = emailTemplates.templates.map(t => 
+      // F3-15 · Fase 5: las plantillas propias del usuario reemplazan a la
+      // oficial de ese escenario; en los demás se usa la predeterminada.
+      let customTemplates: any[] = [];
+      try {
+        customTemplates = await perf.time('db.draftTemplates', () => base44.asServiceRole.entities.EmailTemplate.filter({ usuario: String(user.email || '').toLowerCase() })) || [];
+      } catch (_e) { customTemplates = []; }
+      const mergedTemplates = mergeTemplates(emailTemplates.templates, customTemplates);
+      const formattedTemplates = mergedTemplates.map(t => 
         `Plantilla ID: ${t.id}\nNombre: ${t.name}\nCuándo usarla: ${t.description}\nCuerpo exacto a copiar:\n${t.body}\n-----------------------------------\n`
       ).join('');
 
@@ -1183,7 +1191,8 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
         response_json_schema: {
           type: "object",
           properties: {
-            correo: { type: "string" }
+            correo: { type: "string" },
+            plantilla_id: { type: "string", description: "ID de la plantilla usada (Plantilla ID). Vacío si no redactaste correo." }
           },
           required: ["correo"]
         }
@@ -1191,9 +1200,13 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
 
       let respuesta = draftResult?.correo || 'Error redactando el correo. Por favor, intenta de nuevo.';
       
-      if (!respuesta.includes('¿') && !respuesta.startsWith('\`\`\`')) {
+      const esCorreo = !respuesta.includes('¿');
+      if (esCorreo && !respuesta.startsWith('\`\`\`')) {
         respuesta = '\`\`\`text\n' + respuesta + '\n\`\`\`';
       }
+      // F3-15 · Fase 5: el chat indica qué plantilla usó (propia o predeterminada).
+      const notaPlantilla = esCorreo ? templateUsageNote(mergedTemplates, (draftResult as any)?.plantilla_id, locale) : '';
+      if (notaPlantilla) respuesta += '\n\n' + notaPlantilla;
       
       return Response.json({ content: respuesta });
     }

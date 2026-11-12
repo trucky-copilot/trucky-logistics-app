@@ -1,0 +1,30 @@
+{
+  "name": "EmailTemplate",
+  "type": "object",
+  "properties": {
+    "usuario": {
+      "type": "string",
+      "description": "F3-15: correo del usuario dueño de la plantilla."
+    },
+    "escenario": {
+      "type": "string",
+      "enum": ["cotizar_tarifa", "aceptar", "negociar", "renegociar_timing", "rechazar", "pedir_informacion", "observaciones_rc", "seguimiento"],
+      "description": "Escenario de la plantilla oficial que reemplaza (ver marketChat/plantillas_correo.json)."
+    },
+    "asunto": {
+      "type": "string",
+      "description": "Asunto propio (opcional; si está vacío se usa el oficial)."
+    },
+    "cuerpo": {
+      "type": "string",
+      "description": "Cuerpo propio del correo. Los campos entre corchetes [..] los rellena el chat."
+    }
+  },
+  "required": ["usuario", "escenario", "cuerpo"],
+  "rls": {
+    "create": { "$or": [ { "data.usuario": "{{user.email}}" }, { "user_condition": { "role": "admin" } } ] },
+    "read": { "$or": [ { "data.usuario": "{{user.email}}" }, { "user_condition": { "role": "admin" } } ] },
+    "update": { "$or": [ { "data.usuario": "{{user.email}}" }, { "user_condition": { "role": "admin" } } ] },
+    "delete": { "$or": [ { "data.usuario": "{{user.email}}" }, { "user_condition": { "role": "admin" } } ] }
+  }
+}

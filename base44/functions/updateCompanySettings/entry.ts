@@ -1,8 +1,8 @@
 // F3-15 · Fase 3 — Guarda el nombre de la empresa y sus tipos de camión.
 // Organization solo la puede editar el servidor (RLS de admin), así que esta
 // función valida que quien pide el cambio sea owner/admin activo de ESA
-// organización. El cambio de nombre exige confirmar_nombre=true y queda en
-// Organization.historial_nombre; también se copia al CarrierProfile de la
+// organización. El cambio de nombre exige confirmar_nombre=true (sin historial);
+// también se copia al CarrierProfile de la
 // organización (es el nombre contra el que compara el verificador, F4-07).
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { logAndSanitizeError } from '../../shared/safeError.ts';
@@ -11,7 +11,7 @@ import { EDIT_ROLES, planCompanyChange } from '../../shared/companySettings.ts';
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 
-const view = (o: any) => ({ id: o.id, name: o.name, tipos_camion: o.tipos_camion || [], historial_nombre: o.historial_nombre || [] });
+const view = (o: any) => ({ id: o.id, name: o.name, tipos_camion: o.tipos_camion || [] });
 
 Deno.serve(async (req: Request) => {
   try {
@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
 
     if (!EDIT_ROLES.includes(member.role)) return json({ error: 'Solo el dueño o un administrador de la empresa puede cambiar estos datos' }, 403);
 
-    const plan = planCompanyChange(org, body, email);
+    const plan = planCompanyChange(org, body);
     if (!plan.ok) return json({ error: plan.error, requiere_confirmacion: plan.requiere_confirmacion || undefined }, plan.status);
 
     await db.Organization.update(org.id, plan.orgPatch);

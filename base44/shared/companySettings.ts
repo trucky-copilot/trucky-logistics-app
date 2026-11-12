@@ -1,24 +1,21 @@
 // F3-15 · Fase 3 — Empresa y equipos. Reglas puras (sin base de datos) para
 // cambiar el nombre de la empresa y el tipo de camión (uno solo). El nombre lo usa el
 // verificador de documentos (F4-07), por eso su cambio pide confirmación
-// explícita y queda en un historial con fecha y usuario.
+// explícita. (No se guarda historial de cambios del nombre.)
 export const TRUCK_TYPES = ['dry_van', 'flatbed', 'reefer', 'drayage'] as const;
 export const EDIT_ROLES = ['owner', 'admin'];
-export const MAX_HISTORY = 50;
-
-export type NameChange = { anterior: string; nuevo: string; fecha: string; usuario: string };
 
 export const cleanName = (v: unknown) => String(v ?? '').replace(/\s+/g, ' ').trim();
 
 export type CompanyInput = { nombre?: unknown; tipos_camion?: unknown; confirmar_nombre?: unknown };
 export type CompanyPlan =
   | { ok: false; status: number; error: string; requiere_confirmacion?: boolean }
-  | { ok: true; orgPatch: Record<string, unknown>; carrierPatch: Record<string, unknown> | null; cambioNombre: NameChange | null };
+  | { ok: true; orgPatch: Record<string, unknown>; carrierPatch: Record<string, unknown> | null; cambioNombre: { anterior: string; nuevo: string } | null };
 
-export function planCompanyChange(org: any, input: CompanyInput, usuario: string, now = new Date()): CompanyPlan {
+export function planCompanyChange(org: any, input: CompanyInput): CompanyPlan {
   const orgPatch: Record<string, unknown> = {};
   let carrierPatch: Record<string, unknown> | null = null;
-  let cambioNombre: NameChange | null = null;
+  let cambioNombre: { anterior: string; nuevo: string } | null = null;
 
   if (input.tipos_camion !== undefined) {
     if (!Array.isArray(input.tipos_camion)) return { ok: false, status: 400, error: 'Tipos de camión inválidos' };
@@ -36,10 +33,8 @@ export function planCompanyChange(org: any, input: CompanyInput, usuario: string
       if (input.confirmar_nombre !== true) {
         return { ok: false, status: 409, error: 'El cambio de nombre requiere confirmación', requiere_confirmacion: true };
       }
-      cambioNombre = { anterior: cleanName(org?.name), nuevo, fecha: now.toISOString(), usuario };
-      const prev = Array.isArray(org?.historial_nombre) ? org.historial_nombre : [];
+      cambioNombre = { anterior: cleanName(org?.name), nuevo };
       orgPatch.name = nuevo;
-      orgPatch.historial_nombre = [...prev, cambioNombre].slice(-MAX_HISTORY);
       carrierPatch = { company_name: nuevo };
     }
   }
