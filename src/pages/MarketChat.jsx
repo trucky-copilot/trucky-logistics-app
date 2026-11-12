@@ -97,12 +97,17 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
   const [content, setContent] = useState('');
 
   const handleOpenSend = () => {
-    const subjectMatch = textToCopy.match(/^Subject:\s*(.*)$/im);
-    const emailMatch = textToCopy.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    // El asunto viene en la primera línea ("Subject:" o "Asunto:", según el idioma).
+    const subjectMatch = textToCopy.match(/^(?:Subject|Asunto):\s*(.*)$/im);
+    // Destinatario: un correo del texto que NO sea el del propio usuario (el de la firma).
+    const own = String(currentUser?.email || '').toLowerCase();
+    const emails = textToCopy.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
+    const destino = emails.find((e) => e.toLowerCase() !== own);
+    const emailMatch = destino ? [destino, destino] : null;
     
     let cleanContent = textToCopy;
     if (subjectMatch) {
-      cleanContent = cleanContent.replace(/^Subject:\s*.*\n*/im, '').trim();
+      cleanContent = cleanContent.replace(/^(?:Subject|Asunto):\s*.*\n*/im, '').trim();
     }
 
     setSubject(subjectMatch ? subjectMatch[1].trim() : (locale === 'en' ? 'Rate Quote - Trucky' : 'Cotización de Tarifa - Trucky'));

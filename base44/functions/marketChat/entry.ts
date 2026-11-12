@@ -66,6 +66,7 @@ import {
 import { resolveLocation } from './nameResolution.ts';
 import emailTemplates from './plantillas_correo.json' with { type: 'json' };
 import { mergeTemplates, templateUsageNote } from '../../shared/emailTemplates.ts';
+import { fillSenderFields, missingSenderFields, senderData } from './senderSignature.ts';
 
 // chat-idioma-toggle Fase 2 (re-aplicado en la reconciliación con
 // reglas-v3-multiestado): `locale` viaja desde el payload hasta cada builder
@@ -731,6 +732,10 @@ async function handleMarketChat(req: Request, perf: PerfTracker, capture:(r:Chat
     if (organizationName) {
       systemContext += `\n\nEMPRESA DEL USUARIO: ${organizationName}`;
     }
+    // F3-15 / QA: datos del Perfil personal, para responder "¿cuál es mi MC / DOT / teléfono?".
+    const perfilPersonal = senderData({ userProfile: userProfileRecords?.[0], organizationName, user });
+    const perfilPersonalTexto = `Nombre: ${perfilPersonal.nombre || 'no configurado'} | Teléfono: ${perfilPersonal.telefono || 'no configurado'} | MC: ${perfilPersonal.mc || 'no configurado'} | DOT: ${perfilPersonal.dot || 'no configurado'}`;
+    systemContext += `\n\nPERFIL PERSONAL DEL USUARIO (Configuración → Perfil personal): ${perfilPersonalTexto}. Si pregunta por su MC, DOT, teléfono o nombre, respóndele con estos datos; si dice "no configurado", indícale que lo complete en Configuración → Perfil personal.`;
 
     // reglas-v3-multiestado Fase 6: costo_por_milla YA existía en CostConfig
     // (Calculadora) como contexto de rentabilidad; ahora ADEMÁS alimenta la
@@ -1039,6 +1044,8 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
 
     if (intent === 'general') {
       const permitidasGeneral = buildGeneralIntentAllowedNumbers(costConfigValuesShown);
+      // Los datos del Perfil personal son reales: el chat puede repetirlos.
+      for (const n of extractNumericTokens(perfilPersonalTexto)) permitidasGeneral.add(n);
       return Response.json({ content: conFronteraVerificada(buildGeneralMarkdown(raw.respuesta_general, locale), permitidasGeneral) });
     }
 
@@ -1130,19 +1137,10 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
          driverInfoText = 'No se proporcionó conductor explícitamente. Deja el espacio en blanco o pon [Phone]. NUNCA inventes números.';
       }
 
-      let myCompany = carrierProfile?.company_name || organizationName || 'Desconocido';
-      let myMC = carrierProfile?.mc_number;
-      let myDOT = carrierProfile?.dot_number;
-      
-      // Si el usuario puso su MC en el campo de "Nombre de la empresa" durante el registro
-      if (!myMC && myCompany.toUpperCase().startsWith('MC')) {
-         myMC = myCompany;
-      }
-      
-      if (myMC) {
-         // Mantener solo los números para que no se duplique el prefijo "MC"
-         myMC = myMC.replace(/\D/g, '');
-      }
+      // QA 3-nov: firma con el Perfil personal (nombre, teléfono, MC, DOT) y la
+      // empresa de la cuenta. Lo que falte se quita de la firma (no se deja relleno).
+      const sender = senderData({ userProfile: userProfileRecords?.[0], carrierProfile, organizationName, user });
+      const emailLang = locale === 'en' ? 'inglés' : 'español';
 
       const ultimoCalculoMsg = cappedMessages.slice().reverse().find(m => m.structuredData && m.structuredData.calculo);
       const ultimoPiso = ultimoCalculoMsg?.structuredData?.calculo?.piso;
@@ -1154,10 +1152,12 @@ Usa EXACTAMENTE alguna de las siguientes plantillas para generar tu respuesta:
 ${formattedTemplates}
 
 Información específica del contexto extraída de la base de datos para este correo:
-- Tu nombre de Dispatcher y correo: ${user.email} (Úsalo para la firma donde dice [email]).
-- Nombre de tu empresa (Carrier): ${myCompany}
-- MC de tu empresa: ${myMC || '(Configura tu Carrier Profile)'}
-- DOT de tu empresa: ${myDOT || 'NO_DISPONIBLE'}
+- FIRMA [Your name]: ${sender.nombre || 'NO_DISPONIBLE'}
+- FIRMA [Company]: ${sender.empresa || 'NO_DISPONIBLE'}
+- FIRMA MC# (tu MC): ${sender.mc || 'NO_DISPONIBLE'}
+- FIRMA DOT# (tu DOT): ${sender.dot || 'NO_DISPONIBLE'}
+- FIRMA Phone (tu teléfono): ${sender.telefono || 'NO_DISPONIBLE'}
+- FIRMA Email: ${sender.email}
 - Broker detectado: ${brokerInfoText}
 - Conductor detectado: ${driverInfoText}
 - Ruta mencionada: ${raw.origen || 'No detectado'} a ${raw.destino || 'No detectado'}
@@ -1166,9 +1166,9 @@ Información específica del contexto extraída de la base de datos para este co
 - Piso o tarifa mínima requerida (calculado previamente): ${pisoStr}
 
 Instrucciones:
-1. Elige la plantilla que mejor se adapte a la intención del usuario.
-2. Los correos SIEMPRE tienen que ser en inglés.
-3. Rellena los campos de la firma ([Your name], [Company], [MC], [DOT], [phone], [email]) con los datos de tu empresa y usuario provistos arriba. Si dice "NO_DISPONIBLE", "(Configura tu Carrier Profile)" o "[DOT]", DEJA LOS CORCHETES tal cual en el correo. NUNCA inventes números.
+1. Elige la plantilla que mejor se adapte a la intención del usuario. Si pide CONFIRMAR o ACEPTAR una carga, usa la plantilla "aceptar".
+2. IDIOMA: escribe el correo y el asunto en ${emailLang} (el idioma de la aplicación del usuario). Si la plantilla está en otro idioma, tradúcela fielmente sin agregar ni quitar ideas, conservando la estructura de párrafos y la firma.
+3. Rellena la firma ([Your name], [Company], MC#, DOT#, Phone, [email]) con los valores "FIRMA ..." de arriba. Si un valor dice "NO_DISPONIBLE", QUITA ese dato de la firma (si es la línea del teléfono, quita la línea; en "MC# | DOT#" deja solo el que exista). NUNCA inventes números.
 4. Rellena [Broker name] con el nombre del broker. ¡REGLA CRÍTICA!: Si el campo "Broker detectado" empieza con "MULTIPLE_BROKERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí (en español) para que el usuario elija. Si el broker es "Team", pon "Team" y elimina la línea del MC del broker en el correo si la plantilla la tiene.
 5. ¡REGLA CRÍTICA PARA CONDUCTOR!: Si el campo "Conductor detectado" empieza con "MULTIPLE_DRIVERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí.
 6. ¡REGLA CRÍTICA PARA TARIFA!: Si el usuario te pide cotizar pero NO especifica un número exacto en su mensaje, simplemente mantén el espacio de la tarifa entre corchetes (ej. $[offered] o $[rate]) en el correo para que el usuario lo llene manualmente después. NO interrumpas el flujo para preguntarle.
@@ -1178,8 +1178,9 @@ Instrucciones:
    - [Empty Return: ...]: Si el equipo es OTR (dry van, reefer, flatbed), ELIMINA COMPLETAMENTE ESTA LÍNEA DEL CORREO (no dejes espacios en blanco ni pongas N/A). Solo aplica y se llena si es drayage (puerto).
    - [Includes]: Si es dry van, pon "LH + FSC". Si es reefer, pon "LH + FSC + genset". Si es flatbed, pon "LH + FSC + tarps". Si es drayage (puerto/contenedor), pon "LH + FSC + Chassis".
    - MC#: [MC] (el que está en la mitad del correo): Llena este con el MC del BROKER (sácalo del JSON "Broker detectado").
-   - [phone]: Reemplázalo EXACTAMENTE con el valor de "telefono" del JSON "Conductor detectado". Si no hay datos, está vacío, o dice "No se proporcionó...", déjalo simplemente como "[Phone]". NUNCA INVENTES UN NÚMERO.
-   - MC# [MC] | DOT# [DOT] (el que está en tu firma al final): Llena este con TU MC y DOT de Carrier. Si tu DOT dice "NO_DISPONIBLE", escribe exactamente "[DOT]". NUNCA INVENTES UN NÚMERO (ej. nunca pongas DOT-654321 o similares).
+   - Phone: [phone] (en la firma): es TU teléfono ("FIRMA Phone"), no el del conductor. NUNCA INVENTES UN NÚMERO.
+   - MC# [MC] | DOT# [DOT] (el que está en tu firma al final): Llena este con "FIRMA MC#" y "FIRMA DOT#". NUNCA INVENTES UN NÚMERO (ej. nunca pongas DOT-654321 o similares).
+   - asunto: usa el asunto (Subject) de la plantilla elegida, rellenando [Origin], [Delivery], [Equipment] y [load ref] con los datos de la conversación; si un dato no se conoce, quítalo del asunto.
 9. ¡REGLA CRÍTICA DE FORMATO!: El correo debe mantener su estructura de párrafos. Utiliza saltos de línea estándar (el carácter "\\n") para separar los párrafos y las líneas de la firma. NO uses entidades HTML como "&#10;" ni "<br>".
 
 Conversación reciente:
@@ -1192,6 +1193,7 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           type: "object",
           properties: {
             correo: { type: "string" },
+            asunto: { type: "string", description: "Asunto del correo (de la plantilla elegida, rellenado y en el idioma indicado). Vacío si no redactaste correo." },
             plantilla_id: { type: "string", description: "ID de la plantilla usada (Plantilla ID). Vacío si no redactaste correo." }
           },
           required: ["correo"]
@@ -1201,12 +1203,26 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
       let respuesta = draftResult?.correo || 'Error redactando el correo. Por favor, intenta de nuevo.';
       
       const esCorreo = !respuesta.includes('¿');
-      if (esCorreo && !respuesta.startsWith('\`\`\`')) {
+      if (esCorreo) {
+        // Red de seguridad: firma con los datos reales (o sin el dato si falta).
+        respuesta = fillSenderFields(respuesta.replace(/^\`\`\`(?:text)?\n?|\n?\`\`\`$/g, ''), sender).trim();
+        const asunto = String((draftResult as any)?.asunto || '').trim();
+        if (asunto && !/^(Subject|Asunto)\s*:/im.test(respuesta)) {
+          respuesta = `${locale === 'en' ? 'Subject' : 'Asunto'}: ${asunto}\n\n${respuesta}`;
+        }
         respuesta = '\`\`\`text\n' + respuesta + '\n\`\`\`';
       }
       // F3-15 · Fase 5: el chat indica qué plantilla usó (propia o predeterminada).
       const notaPlantilla = esCorreo ? templateUsageNote(mergedTemplates, (draftResult as any)?.plantilla_id, locale) : '';
       if (notaPlantilla) respuesta += '\n\n' + notaPlantilla;
+      const faltan = esCorreo ? missingSenderFields(sender) : [];
+      if (faltan.length) {
+        const nombres: Record<string, [string, string]> = { nombre: ['nombre', 'name'], mc: ['MC', 'MC'], dot: ['DOT', 'DOT'], telefono: ['teléfono', 'phone'] };
+        const lista = faltan.map((k) => nombres[k][locale === 'en' ? 1 : 0]).join(', ');
+        respuesta += '\n\n' + (locale === 'en'
+          ? `_Your signature is missing: ${lista}. Add it in Settings → Personal profile._`
+          : `_A tu firma le falta: ${lista}. Complétalo en Configuración → Perfil personal._`);
+      }
       
       return Response.json({ content: respuesta });
     }

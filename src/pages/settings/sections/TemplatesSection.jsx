@@ -108,7 +108,7 @@ export default function TemplatesSection({ locale }) {
         </div>
         <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground flex gap-2">
           <Info className="w-4 h-4 flex-shrink-0 mt-0.5" />
-          <span>{tx(locale, 'Escríbela en inglés. Los campos entre corchetes, como [Broker name], [rate], [MC] o [Your name], los rellena el chat con tus datos.', 'Write it in English. Fields in brackets, like [Broker name], [rate], [MC] or [Your name], are filled in by the chat with your data.')}</span>
+          <span>{tx(locale, 'El chat redacta el correo en el idioma de la aplicación. Los campos entre corchetes, como [Broker name], [rate], [MC] o [Your name], los rellena con tus datos de Perfil personal y de la conversación.', 'The chat writes the email in the app language. Fields in brackets, like [Broker name], [rate], [MC] or [Your name], are filled in with your Personal profile and conversation data.')}</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block space-y-1">
