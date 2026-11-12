@@ -1,9 +1,10 @@
 // F3-15 · Fase 2 — Perfil personal: nombre, teléfono, MC y DOT (se guardan en
 // el UserProfile propio; Base44 solo deja leer/editar el registro del mismo
-// usuario). Cambiar correo queda inhabilitado (limitación de Base44) y la
-// contraseña solo aplica a cuentas con correo y contraseña (no Google).
+// usuario). Cambiar correo queda inhabilitado (limitación de Base44). El cambio
+// de contraseña no se muestra: Base44 no deja distinguir las cuentas de Google
+// (que no tienen contraseña en Trucky) hasta resolver esa limitación.
 import React, { useEffect, useState } from 'react';
-import { Loader2, Lock, Save, CheckCircle2, ExternalLink, KeyRound, Mail } from 'lucide-react';
+import { Loader2, Lock, Save, CheckCircle2, Mail } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAuth } from '@/lib/AuthContext';
 import { useAppState } from '@/lib/AppStateContext';
@@ -134,61 +135,6 @@ export default function PersonalSection({ locale }) {
         </div>
       </Block>
 
-      <PasswordBlock locale={locale} userId={user?.id} />
     </div>
-  );
-}
-
-function PasswordBlock({ locale, userId }) {
-  const [f, setF] = useState({ actual: '', nueva: '', repetir: '' });
-  const [busy, setBusy] = useState(false);
-  const [status, setStatus] = useState(null);
-  const set = (k, v) => { setStatus(null); setF((s) => ({ ...s, [k]: v })); };
-
-  const cambiar = async (ev) => {
-    ev.preventDefault();
-    if (f.nueva.length < 8) return setStatus({ ok: false, msg: tx(locale, 'La nueva contraseña debe tener al menos 8 caracteres.', 'The new password must have at least 8 characters.') });
-    if (f.nueva !== f.repetir) return setStatus({ ok: false, msg: tx(locale, 'Las contraseñas nuevas no coinciden.', 'The new passwords do not match.') });
-    setBusy(true); setStatus(null);
-    try {
-      await base44.auth.changePassword({ userId, currentPassword: f.actual, newPassword: f.nueva });
-      setF({ actual: '', nueva: '', repetir: '' });
-      setStatus({ ok: true, msg: tx(locale, 'Contraseña actualizada.', 'Password updated.') });
-    } catch {
-      setStatus({ ok: false, msg: tx(locale, 'No se pudo cambiar. Revisa tu contraseña actual. Si entras con Google, tu contraseña se cambia en tu cuenta de Google.', 'Could not change it. Check your current password. If you sign in with Google, change your password in your Google account.') });
-    } finally { setBusy(false); }
-  };
-
-  return (
-    <Block title={tx(locale, 'Contraseña', 'Password')} desc={tx(locale, 'Solo para cuentas que entran con correo y contraseña.', 'Only for accounts that sign in with email and password.')}>
-      <div className="rounded-lg border border-border bg-background/60 p-3 text-xs text-muted-foreground flex items-start gap-2">
-        <KeyRound className="w-4 h-4 mt-0.5 flex-shrink-0" />
-        <span>
-          {tx(locale, 'Si entras con Google, no tienes contraseña en Trucky: se cambia en tu cuenta de Google.', 'If you sign in with Google, you have no Trucky password: change it in your Google account.')}{' '}
-          <a href="https://myaccount.google.com/security" target="_blank" rel="noopener noreferrer" className="text-primary inline-flex items-center gap-1 hover:underline">
-            {tx(locale, 'Abrir cuenta de Google', 'Open Google account')} <ExternalLink className="w-3 h-3" />
-          </a>
-        </span>
-      </div>
-      <form onSubmit={cambiar} className="space-y-4" noValidate>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Field label={tx(locale, 'Contraseña actual', 'Current password')}>
-            <input type="password" className={inputCls} value={f.actual} onChange={(e) => set('actual', e.target.value)} autoComplete="current-password" />
-          </Field>
-          <Field label={tx(locale, 'Nueva contraseña', 'New password')} hint={tx(locale, 'Mínimo 8 caracteres.', 'At least 8 characters.')}>
-            <input type="password" className={inputCls} value={f.nueva} onChange={(e) => set('nueva', e.target.value)} autoComplete="new-password" />
-          </Field>
-          <Field label={tx(locale, 'Repetir nueva contraseña', 'Repeat new password')}>
-            <input type="password" className={inputCls} value={f.repetir} onChange={(e) => set('repetir', e.target.value)} autoComplete="new-password" />
-          </Field>
-        </div>
-        <div className="flex items-center justify-end gap-3">
-          {status && <span className={`text-sm ${status.ok ? 'text-emerald-400' : 'text-red-400'}`}>{status.msg}</span>}
-          <button type="submit" disabled={busy || !f.actual || !f.nueva} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50">
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />} {tx(locale, 'Cambiar contraseña', 'Change password')}
-          </button>
-        </div>
-      </form>
-    </Block>
   );
 }
