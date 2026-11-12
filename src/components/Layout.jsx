@@ -1,9 +1,9 @@
-import { Outlet, Link, useLocation } from 'react-router-dom';
+import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, MessageSquare, Mail, FileSearch, Calculator,
   Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
-  LogOut, ChevronUp, ShieldAlert
+  LogOut, ChevronUp, ShieldAlert, Settings
 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
@@ -42,6 +42,7 @@ export default function Layout() {
   const location = useLocation();
   const { user, logout } = useAuth();
   const { t, locale, setLocale } = useLanguage();
+  const navigate = useNavigate();
   const { isDemoUser } = useDemo();
 
   // Solo los administradores de src/lib/adminAccess.js ven el panel; las
@@ -226,6 +227,15 @@ export default function Layout() {
                   {correo || t.nav.noEmail}
                 </div>
               </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {/* F3-15: una sola opción "Configuración" que abre la página con todas las secciones. */}
+              <DropdownMenuItem
+                onSelect={() => { setSidebarOpen(false); navigate('/configuracion'); }}
+                className="text-sm"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                {locale === 'en' ? 'Settings' : 'Configuración'}
+              </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem onSelect={() => logout()} className="text-sm">
                 <LogOut className="w-4 h-4 mr-2" />

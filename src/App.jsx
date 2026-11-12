@@ -32,6 +32,7 @@ import Notifications   from '@/pages/Notifications';
 import Onboarding      from '@/pages/Onboarding';
 import AdminDashboard  from '@/pages/admin/AdminDashboard';
 import AdminOnly from '@/components/AdminOnly';
+import Settings from '@/pages/settings/Settings';
 
 if (typeof document !== 'undefined' && !window.__gads_loaded) {
   window.__gads_loaded = true;
@@ -120,6 +121,9 @@ function AppContent() {
         <Route path="/notificaciones" element={<Notifications />} />
         <Route path="/admin"        element={<AdminOnly><AdminDashboard /></AdminOnly>} />
       </Route>
+      {/* F3-15: Configuración ocupa toda la pantalla, fuera del menú de la app. */}
+      <Route path="/configuracion" element={<Settings />} />
+      <Route path="/configuracion/:seccion" element={<Settings />} />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
   );

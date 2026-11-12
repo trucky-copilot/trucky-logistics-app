@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
 import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2, CheckCircle2 } from 'lucide-react';
@@ -10,6 +11,9 @@ const QUICKLOAD_RATE = 2.20;
 const TARGET_RATE = 3.00;
 
 export default function CostCalculator() {
+  // F3-15: el acceso directo "Mis cargos adicionales" llega con #cargos y baja hasta esa sección.
+  const { hash } = useLocation();
+
   const { t, locale } = useLanguage();
   const { activeProfileId, setUnsavedChanges } = useProfile();
   const [config, setConfig] = useState({
@@ -291,6 +295,13 @@ export default function CostCalculator() {
   ];
   const maxRate = Math.max(...barSegments.map(s => s.rate), 4);
 
+  // (se espera a que termine de cargar para que la sección exista en pantalla)
+  useEffect(() => {
+    if (hash !== '#cargos' || loading) return;
+    const timer = setTimeout(() => document.getElementById('cargos')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    return () => clearTimeout(timer);
+  }, [hash, loading]);
+
   if (loading) return <div className="flex justify-center items-center h-full"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
@@ -426,8 +437,8 @@ export default function CostCalculator() {
         </div>
       </div>
 
-      {/* Cargos Adicionales (Accessorials) */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-4">
+      {/* Cargos Adicionales (Accessorials) — F3-15: destino del acceso directo /calculadora#cargos */}
+      <div id="cargos" className="bg-card border border-border rounded-xl p-4 space-y-4 scroll-mt-4">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">{t.calculator.accessorialsTitle || 'Cargos Adicionales / Accesoriales'}</h2>
           <label className="flex items-center gap-2 cursor-pointer">

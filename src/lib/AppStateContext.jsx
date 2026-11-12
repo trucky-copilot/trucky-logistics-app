@@ -88,6 +88,9 @@ export function AppStateProvider({ children }) {
       setupDetails:   null,   // ya no se usa — se eliminó GoLiveChecklistPanel del onboarding
       operationalReadiness,
       resolveState,
+      // F3-15: refleja en toda la app un cambio ya guardado en el servidor
+      // (p. ej. el nombre de la empresa) sin recargar.
+      patchOrganization: (fields) => setOrganization((o) => (o ? { ...o, ...fields } : o)),
     }}>
       {children}
     </AppStateContext.Provider>
