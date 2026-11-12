@@ -26,9 +26,12 @@ Deno.test('empresa: el mismo nombre no pide confirmación ni deja registro', () 
   if (r.ok) { assertEquals(r.orgPatch, { tipos_camion: ['reefer'] }); assertEquals(r.cambioNombre, null); }
 });
 
-Deno.test('empresa: tipos de camión válidos, sin repetidos y en orden fijo; los desconocidos se rechazan', () => {
-  const r = planCompanyChange(org, { tipos_camion: ['drayage', 'dry_van', 'drayage'] }, 'a@x.com', now);
-  if (r.ok) assertEquals(r.orgPatch.tipos_camion, ['dry_van', 'drayage']); else throw new Error('debía aceptar');
+Deno.test('empresa: un solo tipo de camión; más de uno o desconocidos se rechazan', () => {
+  const r = planCompanyChange(org, { tipos_camion: ['drayage', 'drayage'] }, 'a@x.com', now);
+  if (r.ok) assertEquals(r.orgPatch.tipos_camion, ['drayage']); else throw new Error('debía aceptar');
+  assertEquals(planCompanyChange(org, { tipos_camion: ['drayage', 'dry_van'] }, 'a@x.com', now).ok, false);
+  const vacio = planCompanyChange(org, { tipos_camion: [] }, 'a@x.com', now);
+  if (vacio.ok) assertEquals(vacio.orgPatch.tipos_camion, []); else throw new Error('vacío debía aceptarse');
   const m = planCompanyChange(org, { tipos_camion: ['tanker'] }, 'a@x.com', now);
   assertEquals(m.ok, false);
 });

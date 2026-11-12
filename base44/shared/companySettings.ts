@@ -1,5 +1,5 @@
 // F3-15 · Fase 3 — Empresa y equipos. Reglas puras (sin base de datos) para
-// cambiar el nombre de la empresa y los tipos de camión. El nombre lo usa el
+// cambiar el nombre de la empresa y el tipo de camión (uno solo). El nombre lo usa el
 // verificador de documentos (F4-07), por eso su cambio pide confirmación
 // explícita y queda en un historial con fecha y usuario.
 export const TRUCK_TYPES = ['dry_van', 'flatbed', 'reefer', 'drayage'] as const;
@@ -25,6 +25,7 @@ export function planCompanyChange(org: any, input: CompanyInput, usuario: string
     const tipos = [...new Set(input.tipos_camion.map(String))];
     const malos = tipos.filter((t) => !(TRUCK_TYPES as readonly string[]).includes(t));
     if (malos.length) return { ok: false, status: 400, error: `Tipo de camión no válido: ${malos.join(', ')}` };
+    if (tipos.length > 1) return { ok: false, status: 400, error: 'Solo se puede elegir un tipo de camión' };
     orgPatch.tipos_camion = TRUCK_TYPES.filter((t) => tipos.includes(t));
   }
 
