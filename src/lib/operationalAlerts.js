@@ -130,33 +130,54 @@ export function getOperationalAlerts({
       { key: 'hazmat_vencimiento', label: 'HazMat' },
     ];
 
-    // 2. ROJO: Al menos un documento vencido
+    // 2. Documentos: UNA alerta por cada documento (QA 3-nov-2026). Antes se
+    //    cortaba en el primer vencido, así que con licencia y TWIC vencidos solo
+    //    salía la licencia, y los "por vencer" nunca se revisaban si había uno
+    //    vencido. Ahora cada documento se evalúa por separado:
+    //      ROJO     → vencido
+    //      AMARILLO → vence en 60 días o menos
+    //    El id incluye el documento, así que no se duplica al recargar y al
+    //    actualizar un documento solo desaparece su propia alerta.
     for (const { key, label } of docFields) {
       const dateStr = driver[key];
-      if (dateStr) {
-        const exp = new Date(dateStr);
-        exp.setHours(0, 0, 0, 0);
-        const diff = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff < 0) {
-          alerts.push({
-            id: `driver-doc-exp-${driver.id}-${key}`,
-            modulo: 'conductores',
-            moduloLabel: isEn ? 'Drivers' : 'Conductores',
-            nivel: 'rojo',
-            titulo: driverName,
-            mensaje: isEn
-              ? `${label}: EXPIRED ${Math.abs(diff)}d ago (${dateStr})`
-              : `${label}: VENCIDO hace ${Math.abs(diff)}d (${dateStr})`,
-            icon: 'FileWarning',
-            link: '/conductores',
-            urgent: true,
-          });
-          return;
-        }
+      if (!dateStr) continue;
+      // Fecha local (igual que la tarjeta del conductor): "2026-11-10" no se corre un día por zona horaria.
+      const exp = new Date(`${String(dateStr).slice(0, 10)}T00:00:00`);
+      if (Number.isNaN(exp.getTime())) continue;
+      exp.setHours(0, 0, 0, 0);
+      const diff = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      if (diff < 0) {
+        alerts.push({
+          id: `driver-doc-exp-${driver.id}-${key}`,
+          modulo: 'conductores',
+          moduloLabel: isEn ? 'Drivers' : 'Conductores',
+          nivel: 'rojo',
+          titulo: driverName,
+          mensaje: isEn
+            ? `${label}: EXPIRED ${Math.abs(diff)}d ago (${dateStr})`
+            : `${label}: VENCIDO hace ${Math.abs(diff)}d (${dateStr})`,
+          icon: 'FileWarning',
+          link: '/conductores',
+          urgent: true,
+        });
+      } else if (diff <= 60) {
+        alerts.push({
+          id: `driver-doc-soon-${driver.id}-${key}`,
+          modulo: 'conductores',
+          moduloLabel: isEn ? 'Drivers' : 'Conductores',
+          nivel: 'amarillo',
+          titulo: driverName,
+          mensaje: isEn
+            ? `${label}: expires in ${diff}d (${dateStr})`
+            : `${label}: vence en ${diff}d (${dateStr})`,
+          icon: 'FileWarning',
+          link: '/conductores',
+          urgent: false,
+        });
       }
     }
 
-    // 3. AMARILLO: Conductor de vacaciones
+    // 3. AMARILLO: Conductor de vacaciones (ya no oculta los avisos de documentos)
     if (driver.estado === 'vacaciones') {
       alerts.push({
         id: `driver-vac-${driver.id}`,
@@ -169,33 +190,6 @@ export function getOperationalAlerts({
         link: '/conductores',
         urgent: false,
       });
-      return;
-    }
-
-    // 4. AMARILLO: Al menos un documento por vencer en <= 60 días
-    for (const { key, label } of docFields) {
-      const dateStr = driver[key];
-      if (dateStr) {
-        const exp = new Date(dateStr);
-        exp.setHours(0, 0, 0, 0);
-        const diff = Math.round((exp.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        if (diff >= 0 && diff <= 60) {
-          alerts.push({
-            id: `driver-doc-soon-${driver.id}-${key}`,
-            modulo: 'conductores',
-            moduloLabel: isEn ? 'Drivers' : 'Conductores',
-            nivel: 'amarillo',
-            titulo: driverName,
-            mensaje: isEn
-              ? `${label}: expires in ${diff}d (${dateStr})`
-              : `${label}: vence en ${diff}d (${dateStr})`,
-            icon: 'FileWarning',
-            link: '/conductores',
-            urgent: false,
-          });
-          return;
-        }
-      }
     }
 
     // VERDES: estado activo y documentos al día -> Excluidas
