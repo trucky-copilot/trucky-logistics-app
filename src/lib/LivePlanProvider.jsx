@@ -31,7 +31,9 @@ export function useEffectivePlan(){
 }
 export function LivePlanBoundary({children}){
  const live=useLivePlan();
- if(live.loading)return <div role="status" className="p-6">Verificando cuenta…</div>;
+ // Sin pantalla "Verificando cuenta…": la app abre de una vez. Si luego la cuenta
+ // resulta bloqueada se muestra el aviso; el servidor igual valida cada operación.
+ if(live.loading)return <>{children}</>;
  // A transient error is a notice, not a fake subscription denial. Server gates
  // remain authoritative and reject unverified protected operations.
  if(live.managed&&live.blocked)return <main className="min-h-screen flex items-center justify-center p-6"><section className="max-w-md space-y-4 border rounded-xl p-6"><h1 className="text-xl font-semibold">Verifica tu suscripción</h1><p>No pudimos confirmar una suscripción vigente para esta cuenta y empresa. No crees otra si ya pagaste.</p><p role="status">{live.code}</p><a className="block underline" href="https://www.trucky-ai.com">Volver a Trucky web</a></section></main>;

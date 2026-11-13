@@ -17,12 +17,12 @@ export default function DemoExpiredScreen({ reason }) {
         </div>
 
         <h2 className="text-xl font-bold text-foreground mb-2">
-          {reason === 'no_trial' ? 'Acceso Requiere Periodo Demo Activo' : 'Tu Periodo Demo Ha Finalizado'}
+          {reason === 'no_trial' ? 'Acceso Bloqueado' : 'Tu Periodo Demo Ha Finalizado'}
         </h2>
 
         <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
           {reason === 'no_trial'
-            ? 'Tu cuenta no cuenta con un registro de demo trial activo para ingresar a la plataforma.'
+            ? 'Tu cuenta no tiene una Demo activa.'
             : 'Los días de tu prueba gratuita han concluido. Para continuar disfrutando de todas las herramientas de Trucky, suscríbete al plan completo.'}
         </p>
 
@@ -33,7 +33,7 @@ export default function DemoExpiredScreen({ reason }) {
             rel="noopener noreferrer"
             className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 transition-all"
           >
-            <span>Activar versión completa en trucky-ai.com</span>
+            <span>{reason === 'no_trial' ? 'Activar Demo' : 'Activar plan pro'}</span>
             <ExternalLink className="w-4 h-4" />
           </a>
 
