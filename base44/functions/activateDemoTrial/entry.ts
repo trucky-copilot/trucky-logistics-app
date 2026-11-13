@@ -1,3 +1,4 @@
+import {markOrganizationsDemo} from './markDemo.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { demoRedis } from './demoRegistry.ts';
 import { resolveTrial } from './trialPolicy.ts';
@@ -74,6 +75,8 @@ export default async function activateDemoTrial(req: Request, _ctx: unknown) {
    await db.DemoTrial.create({google_sub:identity.sub,user_email:identity.email,
      trial_started_at:trial.started_at,trial_ends_at:trial.ends_at});
   }
+  // Etiqueta 'demo' en las empresas del usuario que no tienen plan pagado.
+  await markOrganizationsDemo(db,identity.email).catch(()=>{});
   return json({code:'DEMO_TRIAL_ACTIVATED',trial_kind:trial.kind||'demo',trial_started_at:trial.started_at,
     trial_ends_at:trial.ends_at,expired:Date.parse(trial.ends_at)<=Date.now()});
  } catch {return json({code:'ACTIVATION_REQUIRES_REVIEW'},503);}

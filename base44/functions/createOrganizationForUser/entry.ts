@@ -175,7 +175,6 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
     const newOrg = await db.Organization.create({
       name: companyName,
       account_type: accountType,
-      workspace_status: 'setup',
       onboarding_completed: false,
       production_ready: false,
       active: true,

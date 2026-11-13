@@ -84,12 +84,14 @@ export async function ensureUserOrganization(req:Request,deps?:{user:any;db:any;
 
     if (!org) {
       const name = cleanCompanyName(body.company_name) || cleanCompanyName(user.full_name) || email;
+      // Demo solo si lo activó desde la página web (DemoTrial); si no, queda 'none' y la app lo bloquea.
+      const trials = db.DemoTrial ? await db.DemoTrial.filter({ user_email: String(email).toLowerCase() }).catch(() => []) : [];
       // Solo campos permitidos. Los de facturación quedan en su default del esquema.
       org = await db.Organization.create({
         name,
         account_type: cleanAccountType(body.account_type),
         created_by_user: email,
-        workspace_status: 'production',
+        subscription_status: trials?.length ? 'demo' : 'none',
         onboarding_completed: true,
         production_ready: true,
         active: true,

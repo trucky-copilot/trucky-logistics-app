@@ -247,6 +247,8 @@ export function DemoProvider({ children }) {
     isSubscribed,
     canAnalyzeInChat,
     trialData,
+    // Sin esto App.jsx recibía undefined y nunca bloqueaba demos vencidas o sin demo.
+    isTrialExpired,
     loadingTrial: loadingTrial || loadingTestAccount,
     limits: currentLimits,
     planLimits,
@@ -259,6 +261,7 @@ export function DemoProvider({ children }) {
     isSubscribed,
     canAnalyzeInChat,
     trialData,
+    isTrialExpired,
     loadingTrial,
     loadingTestAccount,
     currentLimits,

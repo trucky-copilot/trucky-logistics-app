@@ -884,8 +884,11 @@ export default function MarketChat() {
       const status = err?.response?.status ?? err?.status;
       const serverMsg = err?.response?.data?.message || err?.response?.data?.error || (typeof err?.response?.data === 'string' ? err.response.data : '') || err?.message || '';
       console.error('MarketChat: error al enviar mensaje:', err, serverMsg);
-      if (status === 401 || status === 403) {
+      if (status === 401) {
         setError(t.errorSessionExpired);
+      } else if (status === 403 && serverMsg) {
+        // Plan o demo: se muestra el motivo real (ej. "Tu periodo de prueba terminó").
+        setError(serverMsg);
       } else if (status) {
         setError(serverMsg ? `${t.errorStatus(status)} — ${serverMsg}` : t.errorStatus(status));
       } else {

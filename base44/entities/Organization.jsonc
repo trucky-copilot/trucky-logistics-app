@@ -20,17 +20,6 @@
       ],
       "description": "Tipo de cuenta de la organizaci\u00f3n"
     },
-    "workspace_status": {
-      "type": "string",
-      "enum": [
-        "setup",
-        "production",
-        "demo",
-        "suspended"
-      ],
-      "default": "setup",
-      "description": "Estado actual del workspace"
-    },
     "onboarding_completed": {
       "type": "boolean",
       "default": false,
@@ -61,6 +50,7 @@
     "subscription_status": {
       "type": "string",
       "enum": [
+        "demo",
         "trialing",
         "active",
         "past_due",
@@ -70,7 +60,7 @@
         "none"
       ],
       "default": "none",
-      "description": "Estado de la suscripción sincronizado con Stripe"
+      "description": "Estado de la suscripción sincronizado con Stripe. demo = activó la prueba gratis desde la página web (DemoTrial); none = sin plan ni demo (la app lo bloquea)."
     },
     "trial_ends_at": {
       "type": "string",
