@@ -2213,7 +2213,7 @@ export default function Emails() {
 
                     <div className="pt-1">
                       <a
-                        href="https://trucky.site"
+                        href="https://www.trucky-ai.com"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center justify-center gap-2 w-full max-w-sm py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/25 transition-all hover:scale-[1.01]"

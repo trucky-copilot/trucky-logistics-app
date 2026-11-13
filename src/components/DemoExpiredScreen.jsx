@@ -28,12 +28,12 @@ export default function DemoExpiredScreen({ reason }) {
 
         <div className="space-y-3">
           <a
-            href="https://trucky.site"
+            href="https://www.trucky-ai.com"
             target="_blank"
             rel="noopener noreferrer"
             className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 transition-all"
           >
-            <span>Activar versión completa en trucky.site</span>
+            <span>Activar versión completa en trucky-ai.com</span>
             <ExternalLink className="w-4 h-4" />
           </a>
 

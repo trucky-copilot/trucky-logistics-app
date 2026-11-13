@@ -1140,11 +1140,11 @@ export default function MarketChat() {
               <p className="text-xs text-zinc-300">
                 {locale === 'en'
                   ? 'Upgrade your plan to get more AI market queries for this profile.'
-                  : 'Has alcanzado el límite de mensajes para este perfil. Actualiza tu plan en trucky.site para continuar.'}
+                  : 'Has alcanzado el límite de mensajes para este perfil. Actualiza tu plan en trucky-ai.com para continuar.'}
               </p>
             </div>
             <a
-              href="https://trucky.site"
+              href="https://www.trucky-ai.com"
               target="_blank"
               rel="noopener noreferrer"
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs whitespace-nowrap shadow-md transition-all flex items-center gap-1.5"
@@ -1160,7 +1160,7 @@ export default function MarketChat() {
                   {limits?.name || 'Plan'} · {userMessagesCount} de {maxMessages} mensajes en este perfil
                 </span>
                 <a
-                  href="https://trucky.site"
+                  href="https://www.trucky-ai.com"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="hover:text-violet-300 underline transition-colors"

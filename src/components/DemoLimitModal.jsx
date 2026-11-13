@@ -50,13 +50,13 @@ export default function DemoLimitModal({
 
         <div className="pt-2 space-y-2">
           <a
-            href="https://trucky.site"
+            href="https://www.trucky-ai.com"
             target="_blank"
             rel="noopener noreferrer"
             className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
           >
             <Sparkles className="w-4 h-4" />
-            <span>Actualizar plan en trucky.site →</span>
+            <span>Actualizar plan en trucky-ai.com →</span>
           </a>
 
           <button

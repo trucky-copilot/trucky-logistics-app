@@ -689,7 +689,7 @@ Equipment: 20ft Dry...`}
 
                   <div className="pt-2">
                     <a
-                      href="https://trucky.site"
+                      href="https://www.trucky-ai.com"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-violet-600/30 transition-all hover:scale-[1.02]"
