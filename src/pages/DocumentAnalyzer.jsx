@@ -74,7 +74,10 @@ export default function DocumentAnalyzer() {
 
       if (dispProfile) {
         setDispatchMode(dispProfile.dispatch_mode);
-        setSelectedCarrierId(dispProfile.default_carrier || null);
+        // Solo un carrier de la organización actual: uno ajeno o inactivo hace que
+        // el servidor rechace toda verificación (400 "no pertenece a tu organización").
+        const valido = (carrierProfiles || []).some((c) => c.id === dispProfile.default_carrier);
+        setSelectedCarrierId(valido ? dispProfile.default_carrier : null);
       } else {
         setSelectedCarrierId(null);
       }
@@ -368,7 +371,11 @@ export default function DocumentAnalyzer() {
       // H4: nunca mostrar "Request failed with status code 400" al usuario.
       console.error('[DocumentAnalyzer] Error analyzeDocument:', err?.response?.status, err?.response?.data || err);
       const status = err?.response?.status;
-      setError(status === 400
+      // Si el servidor explica el motivo, se muestra tal cual (no se tapa con el genérico).
+      const motivo = err?.response?.data?.error;
+      setError(status === 400 && motivo
+        ? motivo
+        : status === 400
         ? (isEsLocal
             ? 'No pudimos leer el documento o no es un Rate Confirmation. Prueba con otro archivo o pega el texto.'
             : 'We could not read the document or it is not a Rate Confirmation. Try another file or paste the text.')
