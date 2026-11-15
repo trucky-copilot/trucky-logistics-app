@@ -1,0 +1,150 @@
+/*
+ * Trucky · Tema del Design System (Figma "Trucky — Design System")
+ * TRUCKY-106 · Etapa 1: tokens de color, tipografía, espaciado y radios.
+ *
+ * Un solo lugar para el tema: cambiar un valor aquí lo cambia en toda la app.
+ * Modo oscuro = predeterminado. Modo claro = <html data-theme="light">.
+ * Solo apariencia: no toca flujos, datos ni lógica.
+ *
+ * Las variables shadcn (--background, --primary, ...) van en HSL sin hsl()
+ * porque tailwind.config.js las usa como hsl(var(--x)).
+ * Las variables --t-* son los roles del Figma, para pantallas nuevas.
+ */
+
+@layer base {
+  :root {
+    /* Roles del Figma · Oscuro */
+    --t-bg-deep: #0e0a19;
+    --t-bg-canvas: #261945;
+    --t-bg-surface: #2c1f54;
+    --t-bg-surface-raised: #3b3558;
+    --t-bg-sidebar: #130e24;
+    --t-bg-input: #201533;
+    --t-text-primary: #ffffff;
+    --t-text-secondary: #d1d0e0;
+    --t-text-muted: #a9a8c7;
+    --t-text-accent: #bca7ff;
+    --t-text-on-accent: #ffffff;
+    --t-action-primary: #5433d8;
+    --t-action-secondary: #2e284d;
+    --t-border-subtle: #2e284d;
+    --t-border-default: #3b3558;
+    --t-border-strong: #6e6c9b;
+    --t-border-focus: #8c5bf8;
+    --t-accent-cyan: #85efff;
+    --t-status-success: #2ecc71;
+    --t-status-success-soft: #173d2c;
+    --t-status-warning: #f9cc18;
+    --t-status-warning-soft: #3a3020;
+    --t-status-danger: #f77172;
+    --t-status-danger-soft: #3a1f2e;
+    --t-status-info-soft: #1e3a4a;
+    --t-chart-1: #8c5bf8;
+    --t-chart-2: #1aa0b9;
+    --t-chart-3: #659815;
+    --t-chart-4: #db5b94;
+    --t-chart-5: #c15d11;
+    --t-chart-grid: #3b3558;
+    --t-effect-glow: #5433d88c;
+    --t-logo-fill: #ffffff;
+
+    /* Escala base (igual en ambos modos) */
+    --bk-font-sans: 'Inter', sans-serif;
+    --bk-font-mono: 'JetBrains Mono', monospace;
+    --bk-space-50: 2px;  --bk-space-100: 4px;  --bk-space-200: 8px;
+    --bk-space-300: 12px; --bk-space-400: 16px; --bk-space-500: 20px;
+    --bk-space-600: 24px; --bk-space-800: 32px; --bk-space-1000: 40px;
+    --bk-space-1200: 48px;
+    --bk-radius-xs: 4px; --bk-radius-md: 12px; --bk-radius-lg: 16px;
+    --bk-radius-xl: 24px; --bk-radius-full: 999px;
+
+    /* Variables shadcn mapeadas a los roles · Oscuro */
+    --background: 258 47% 18%;
+    --foreground: 0 0% 100%;
+    --card: 255 46% 23%;
+    --card-foreground: 0 0% 100%;
+    --popover: 255 46% 23%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 252 68% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 32% 23%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 250 25% 28%;
+    --muted-foreground: 242 22% 72%;
+    --accent: 254 100% 83%;
+    --accent-foreground: 254 44% 10%;
+    --destructive: 360 89% 71%;
+    --destructive-foreground: 254 44% 10%;
+    --border: 250 25% 28%;
+    --input: 262 42% 14%;
+    --ring: 259 92% 66%;
+    --radius: 12px;
+    --success: 145 63% 49%;
+    --warning: 48 95% 54%;
+    --chart-1: 259 92% 66%;
+    --chart-2: 189 75% 41%;
+    --chart-3: 83 76% 34%;
+    --chart-4: 333 64% 61%;
+    --chart-5: 26 84% 41%;
+    --sidebar-bg: 254 44% 10%;
+  }
+
+  [data-theme="light"] {
+    --t-bg-deep: #e6e4f2;
+    --t-bg-canvas: #f6f5fa;
+    --t-bg-surface: #ffffff;
+    --t-bg-surface-raised: #e6e4f2;
+    --t-bg-sidebar: #ffffff;
+    --t-bg-input: #ffffff;
+    --t-text-primary: #130e24;
+    --t-text-secondary: #47437e;
+    --t-text-muted: #5a578e;
+    --t-text-accent: #4d13c3;
+    --t-action-secondary: #e6e4f2;
+    --t-border-subtle: #e6e4f2;
+    --t-border-default: #d1d0e0;
+    --t-border-strong: #817ea9;
+    --t-border-focus: #5433d8;
+    --t-accent-cyan: #06606f;
+    --t-status-success: #16753f;
+    --t-status-success-soft: #e3f8ec;
+    --t-status-warning: #835a00;
+    --t-status-warning-soft: #fff6d6;
+    --t-status-danger: #be2236;
+    --t-status-danger-soft: #fde8e8;
+    --t-status-info-soft: #ece8fd;
+    --t-chart-1: #5433d8;
+    --t-chart-2: #0b8faa;
+    --t-chart-3: #4d8500;
+    --t-chart-4: #c8327a;
+    --t-chart-5: #c45a0c;
+    --t-chart-grid: #e6e4f2;
+    --t-logo-fill: #3b0670;
+
+    --background: 252 33% 97%;
+    --foreground: 254 44% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 254 44% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 254 44% 10%;
+    --secondary: 249 35% 92%;
+    --secondary-foreground: 254 44% 10%;
+    --muted: 249 35% 92%;
+    --muted-foreground: 243 24% 45%;
+    --accent: 260 82% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 352 70% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 244 21% 85%;
+    --input: 0 0% 100%;
+    --ring: 252 68% 52%;
+    --success: 146 68% 27%;
+    --warning: 41 100% 26%;
+    --chart-1: 252 68% 52%;
+    --chart-2: 190 88% 35%;
+    --chart-3: 85 100% 26%;
+    --chart-4: 331 60% 49%;
+    --chart-5: 25 88% 41%;
+    --sidebar-bg: 0 0% 100%;
+  }
+}
