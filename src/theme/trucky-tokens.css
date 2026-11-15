@@ -9,10 +9,10 @@
  * Las variables shadcn (--background, --primary, ...) van en HSL sin hsl()
  * porque tailwind.config.js las usa como hsl(var(--x)).
  * Las variables --t-* son los roles del Figma, para pantallas nuevas.
+ * Se importa en src/main.jsx después de index.css, así manda sobre él.
  */
 
-@layer base {
-  :root {
+:root {
     /* Roles del Figma · Oscuro */
     --t-bg-deep: #0e0a19;
     --t-bg-canvas: #261945;
@@ -87,9 +87,9 @@
     --chart-4: 333 64% 61%;
     --chart-5: 26 84% 41%;
     --sidebar-bg: 254 44% 10%;
-  }
+}
 
-  [data-theme="light"] {
+[data-theme="light"] {
     --t-bg-deep: #e6e4f2;
     --t-bg-canvas: #f6f5fa;
     --t-bg-surface: #ffffff;
@@ -146,5 +146,4 @@
     --chart-4: 331 60% 49%;
     --chart-5: 25 88% 41%;
     --sidebar-bg: 0 0% 100%;
-  }
 }
