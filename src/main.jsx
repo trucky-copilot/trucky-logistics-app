@@ -5,6 +5,8 @@ import ReactDOM from 'react-dom/client'
 import { MotionConfig } from 'framer-motion'
 import App from '@/App.jsx'
 import '@/index.css'
+// TRUCKY-106 · Tema del Design System de Figma (va después de index.css para mandar).
+import '@/theme/trucky-tokens.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   // reducedMotion="user": si el SO pide reducir movimiento, framer-motion
