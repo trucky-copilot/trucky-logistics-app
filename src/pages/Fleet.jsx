@@ -313,13 +313,12 @@ export default function Fleet() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Abre la ventana: 1) elegir carga, 2) elegir conductor */}
-          <button
+          {/* Abre la ventana: 1) elegir carga, 2) elegir conductor. No se muestra en el demo. */}
+          {!isDemoUser && (<button
             type="button"
             onClick={() => setDriverMenuOpen(true)}
             // Demo: "Elegir conductor" es de los planes de pago.
-            disabled={assigningDriver || isDemoUser}
-            title={isDemoUser ? (isEs ? 'Disponible al activar un plan' : 'Available when you activate a plan') : undefined}
+            disabled={assigningDriver}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
             {assigningDriver ? (
@@ -328,7 +327,7 @@ export default function Fleet() {
               <UserCheck className="w-3.5 h-3.5 text-primary-foreground" />
             )}
             <span>{isEs ? 'Elegir conductor' : 'Choose driver'}</span>
-          </button>
+          </button>)}
           {driverMenuOpen && (
             <AssignLoadModal
               loads={profileLoads}
