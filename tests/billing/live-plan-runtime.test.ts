@@ -31,8 +31,8 @@ async function isolated(run:(db:any,state:{status:string;invoice:string})=>Promi
 }
 Deno.test('actual shared server entitlement uses verified live plan, not dispatcher/test upgrade',()=>isolated(async db=>{
  const r=await authorizePlanFeature(db,user,'chat');eq(r.allowed,true);eq(r.plan,'plan_29');eq(r.organizationId,'org');
- // Ticket 101: el plan de $29 ya no incluye el módulo de correo (solo Pro).
- const mail=await authorizePlanFeature(db,user,'email_module');eq(mail.allowed,false);eq(mail.code,'PLAN_UPGRADE_REQUIRED');
+ // PO 13-nov-2026: el plan de $29 incluye el módulo de correo.
+ const mail=await authorizePlanFeature(db,user,'email_module');eq(mail.allowed,true);
 }));
 Deno.test('actual server rejects canceled subscription or unpaid invoice despite old test fields',()=>isolated(async(db,state)=>{
  state.status='canceled';eq((await authorizePlanFeature(db,user,'chat')).allowed,false);

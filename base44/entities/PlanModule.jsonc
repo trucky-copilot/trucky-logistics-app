@@ -8,7 +8,7 @@
     },
     "module": {
       "type": "string",
-      "description": "chat | document_analysis | analyze_in_chat | email_module"
+      "description": "chat | document_analysis | email_module"
     },
     "enabled": {
       "type": "boolean",

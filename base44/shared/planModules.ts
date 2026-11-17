@@ -6,11 +6,12 @@
 // por defecto de abajo. Cambiar qué ve cada plan = editar la tabla (Panel Admin
 // → Planes), sin reprogramar.
 //
-// Por defecto el plan de $29 YA NO incluye el módulo de correo (solo Pro/$99).
+// Decisión del PO (13-nov-2026): los planes de $29 y $99 incluyen los mismos
+// módulos (correo y automatización); solo cambian los límites. El demo no tiene correo.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type PlanId = 'demo' | 'plan_29' | 'plan_99';
-export type ModuleId = 'chat' | 'document_analysis' | 'analyze_in_chat' | 'email_module';
+export type ModuleId = 'chat' | 'document_analysis' | 'email_module';
 export type PlanMatrix = Record<PlanId, Record<ModuleId, boolean>>;
 
 export const PLANS: { id: PlanId; label: string }[] = [
@@ -22,14 +23,13 @@ export const PLANS: { id: PlanId; label: string }[] = [
 export const MODULES: { id: ModuleId; label: string }[] = [
   { id: 'chat', label: 'Chat de mercado' },
   { id: 'document_analysis', label: 'Análisis de documentos' },
-  { id: 'analyze_in_chat', label: 'Analizar documentos dentro del chat' },
   { id: 'email_module', label: 'Módulo de correo' },
 ];
 
 export const DEFAULT_MATRIX: PlanMatrix = {
-  demo: { chat: true, document_analysis: true, analyze_in_chat: false, email_module: false },
-  plan_29: { chat: true, document_analysis: true, analyze_in_chat: false, email_module: false },
-  plan_99: { chat: true, document_analysis: true, analyze_in_chat: true, email_module: true },
+  demo: { chat: true, document_analysis: true, email_module: false },
+  plan_29: { chat: true, document_analysis: true, email_module: true },
+  plan_99: { chat: true, document_analysis: true, email_module: true },
 };
 
 const isPlan = (p: unknown): p is PlanId => PLANS.some((x) => x.id === p);

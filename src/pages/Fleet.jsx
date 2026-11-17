@@ -171,7 +171,7 @@ export default function Fleet() {
   const orgId = useOrganizationId();
   const { currentUser } = useAppState();
   const { activeProfileId, profiles } = useProfile();
-  const { limits } = useDemo();
+  const { limits, isDemoUser } = useDemo();
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -317,7 +317,9 @@ export default function Fleet() {
           <button
             type="button"
             onClick={() => setDriverMenuOpen(true)}
-            disabled={assigningDriver}
+            // Demo: "Elegir conductor" es de los planes de pago.
+            disabled={assigningDriver || isDemoUser}
+            title={isDemoUser ? (isEs ? 'Disponible al activar un plan' : 'Available when you activate a plan') : undefined}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground shadow-sm transition-all cursor-pointer disabled:opacity-50"
           >
             {assigningDriver ? (

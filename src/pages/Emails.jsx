@@ -1572,11 +1572,12 @@ export default function Emails() {
 
   // Ticket 101: si el plan no incluye el módulo de correo (tabla PlanModule),
   // se muestra el aviso en lugar de la bandeja. El servidor también lo bloquea.
-  if (!isDemoUser && planLimits?.EMAIL_MODULE === false) {
+  // Incluye al demo: ya no ve la bandeja de ejemplo ni los botones de automatización.
+  if (planLimits?.EMAIL_MODULE === false) {
     return (
       <div className="max-w-xl mx-auto p-6 mt-10 bg-card border border-border rounded-xl space-y-2 text-center">
         <h1 className="text-lg font-semibold text-foreground">{locale === 'en' ? 'Email is not included in your plan' : 'El módulo de correo no está incluido en tu plan'}</h1>
-        <p className="text-sm text-muted-foreground">{locale === 'en' ? 'Upgrade to the Pro plan to connect your email and manage loads from your inbox.' : 'Cámbiate al plan Pro para conectar tu correo y gestionar cargas desde tu bandeja.'}</p>
+        <p className="text-sm text-muted-foreground">{locale === 'en' ? 'Activate a plan to connect your email and manage loads from your inbox.' : 'Activa un plan para conectar tu correo y gestionar cargas desde tu bandeja.'}</p>
       </div>
     );
   }

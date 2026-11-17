@@ -19,7 +19,6 @@ export const PLAN_LIMITS = {
     DRIVERS: 3,
     PROFILES: 3,
     DOCUMENTS_PER_MONTH: 3,
-    ANALYZE_IN_CHAT: false,
     EMAIL_MODULE: false,
     name: 'Demo',
   },
@@ -29,10 +28,9 @@ export const PLAN_LIMITS = {
     BROKERS: 5,
     LOADS: 5,
     DRIVERS: 5,
-    PROFILES: 5,
+    PROFILES: 4, // PO: de 1 a 4 perfiles
     DOCUMENTS_PER_MONTH: 50,
-    ANALYZE_IN_CHAT: false,
-    EMAIL_MODULE: false, // ticket 101: el correo es solo del plan Pro
+    EMAIL_MODULE: true, // PO 13-nov-2026: el plan de $29 también incluye correo y automatización
     name: 'Plan Carrier',
   },
   plan_99: {
@@ -43,7 +41,6 @@ export const PLAN_LIMITS = {
     DRIVERS: 15,
     PROFILES: 10,
     DOCUMENTS_PER_MONTH: Infinity,
-    ANALYZE_IN_CHAT: true,
     EMAIL_MODULE: true,
     name: 'Plan Pro (Flota / Dispatcher)',
   },
@@ -55,7 +52,6 @@ export const PLAN_LIMITS = {
     DRIVERS: Infinity,
     PROFILES: 5, // cuentas exentas (prueba/admin): tope de 5 perfiles; el resto sigue ilimitado
     DOCUMENTS_PER_MONTH: Infinity,
-    ANALYZE_IN_CHAT: true,
     EMAIL_MODULE: true,
     name: 'Admin',
   },
@@ -69,7 +65,7 @@ export function withPlanModules(matrix) {
   const out = {};
   for (const [plan, limits] of Object.entries(PLAN_LIMITS)) {
     const m = matrix?.[plan];
-    out[plan] = m ? { ...limits, EMAIL_MODULE: m.email_module === true, ANALYZE_IN_CHAT: m.analyze_in_chat === true } : limits;
+    out[plan] = m ? { ...limits, EMAIL_MODULE: m.email_module === true } : limits;
   }
   return out;
 }
@@ -168,7 +164,6 @@ export function DemoProvider({ children }) {
   const isPlan99 = planType === 'plan_99';
   const isSubscribed = isPlan29 || isPlan99 || isWhitelisted;
   const currentLimits = planLimits[planType] || planLimits.demo;
-  const canAnalyzeInChat = Boolean(currentLimits.ANALYZE_IN_CHAT);
 
   useEffect(() => {
     let isMounted = true;
@@ -245,7 +240,6 @@ export function DemoProvider({ children }) {
     isPlan99,
     isWhitelisted,
     isSubscribed,
-    canAnalyzeInChat,
     trialData,
     // Sin esto App.jsx recibía undefined y nunca bloqueaba demos vencidas o sin demo.
     isTrialExpired,
@@ -259,7 +253,6 @@ export function DemoProvider({ children }) {
     isPlan99,
     isWhitelisted,
     isSubscribed,
-    canAnalyzeInChat,
     trialData,
     isTrialExpired,
     loadingTrial,
@@ -285,7 +278,6 @@ export function useDemo() {
       isPlan99: false,
       isWhitelisted: false,
       isSubscribed: false,
-      canAnalyzeInChat: false,
       trialData: null,
       loadingTrial: false,
       limits: PLAN_LIMITS.demo,

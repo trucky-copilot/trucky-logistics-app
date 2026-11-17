@@ -27,7 +27,7 @@ export function useEffectivePlan(){
  const demo=useDemo(),live=useLivePlan();
  if(!live.managed)return demo;
  const plan=live.allowed?live.plan:'demo';
- return {...demo,planType:plan,isDemoUser:plan==='demo',isPlan29:plan==='plan_29',isPlan99:plan==='plan_99',isWhitelisted:false,isSubscribed:live.allowed,limits:demo.planLimits?.[plan]||demo.limits,canAnalyzeInChat:Boolean(demo.planLimits?.[plan]?.ANALYZE_IN_CHAT)};
+ return {...demo,planType:plan,isDemoUser:plan==='demo',isPlan29:plan==='plan_29',isPlan99:plan==='plan_99',isWhitelisted:false,isSubscribed:live.allowed,limits:demo.planLimits?.[plan]||demo.limits};
 }
 export function LivePlanBoundary({children}){
  const live=useLivePlan();

@@ -43,14 +43,15 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { t, locale, setLocale } = useLanguage();
   const navigate = useNavigate();
-  const { isDemoUser } = useDemo();
+  const { isDemoUser, limits } = useDemo();
 
   // Solo los administradores de src/lib/adminAccess.js ven el panel; las
   // cuentas de pruebas (luisbermudezacero@gmail.com, ianruizmora@gmail.com)
   // quedan como usuarios normales.
   const showAdminPanel = isAppAdmin(user);
 
-  const visibleNavItems = NAV_ITEMS;
+  // Sin módulo de correo en el plan (demo): Emails se quita del menú.
+  const visibleNavItems = NAV_ITEMS.filter((item) => item.path !== '/emails' || limits?.EMAIL_MODULE !== false);
 
   useEffect(() => {
     if (typeof window === 'undefined' || !user || !user.id) return;
