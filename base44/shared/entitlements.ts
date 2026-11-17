@@ -68,10 +68,9 @@ async function resolvePlan(
     ).filter(Boolean);
     const subscribed = orgs.find((o: any) => SUBSCRIBED_STATUSES.has(o.subscription_status));
     if (subscribed) {
-      const plan: PlanType =
-        subscribed.plan_type === 'plan_99' || subscribed.account_type === 'dispatcher'
-          ? 'plan_99'
-          : 'plan_29';
+      // El plan sale solo de lo que se pagó (plan_type). Antes un dispatcher que
+      // pagaba el plan de $29 recibía en el servidor los permisos del de $99.
+      const plan: PlanType = subscribed.plan_type === 'plan_99' ? 'plan_99' : 'plan_29';
       return { plan, trialEndsAt: null };
     }
   }
