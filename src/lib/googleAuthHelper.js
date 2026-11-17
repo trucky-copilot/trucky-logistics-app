@@ -71,8 +71,17 @@ export function clearStoredGoogleAuth(profileId = '1') {
  * Si ya se otorgaron permisos previos, Google renueva sin interrupciones.
  */
 // loginHint: sugiere a Google la cuenta del perfil para no cambiarla por error.
+export const GMAIL_NOT_CONNECTED = 'GMAIL_NOT_CONNECTED';
+export const GOOGLE_POPUP_TIMEOUT_MS = 60000;
+
 export function requestGoogleToken(promptMode = '', loginHint = '') {
-  return new Promise((resolve, reject) => {
+  return new Promise((_resolve, _reject) => {
+    // QA 13-nov: si la ventana de Google se cerraba o se bloqueaba, la promesa no
+    // terminaba nunca y el envío quedaba en "Enviando…". Ahora se corta siempre.
+    let done = false;
+    const timer = setTimeout(() => reject(new Error(GMAIL_NOT_CONNECTED)), GOOGLE_POPUP_TIMEOUT_MS);
+    const resolve = (v) => { if (!done) { done = true; clearTimeout(timer); _resolve(v); } };
+    const reject = (e) => { if (!done) { done = true; clearTimeout(timer); _reject(e); } };
     if (typeof window === 'undefined' || !window.google?.accounts?.oauth2) {
       return reject(new Error('El servicio de autenticación de Google se está inicializando. Por favor intenta en unos segundos.'));
     }
@@ -100,6 +109,8 @@ export function requestGoogleToken(promptMode = '', loginHint = '') {
             reject(new Error('No se recibió token de acceso de Google.'));
           }
         },
+        // Ventana cerrada o bloqueada por el navegador.
+        error_callback: () => reject(new Error(GMAIL_NOT_CONNECTED)),
       });
 
       const hint = loginHint && String(loginHint).includes('@') ? String(loginHint) : '';
@@ -161,6 +172,14 @@ function keepProfileAccount(fresh, profileEmail, profileId) {
   return fresh.email || profileEmail;
 }
 
+/** Conecta Gmail desde la ventana de envío (clic del usuario). Devuelve la cuenta conectada. */
+export async function connectGmail(profileId = '1', loginHint = '') {
+  const result = await obtainGoogleToken(loginHint);
+  if (!result?.token) throw new Error(GMAIL_NOT_CONNECTED);
+  saveStoredGoogleAuth(result.token, result.email, profileId);
+  return result.email || '';
+}
+
 export async function sendEmailWithAutoAuth({
   to,
   subject,
@@ -175,11 +194,15 @@ export async function sendEmailWithAutoAuth({
   references = null,
   etiquetas = null,
   es_importante = false,
+  autoConnect = true,
 }) {
   let { token, email } = getStoredGoogleAuth(profile_id);
 
-  // Si no hay token guardado en el navegador, solicitarlo antes del envío
   if (!token) {
+    // Chat (opción 3, QA 13-nov): la conexión se hace antes, desde la ventana de
+    // envío ("Conectar Gmail"), para que el usuario vea desde qué cuenta sale.
+    if (!autoConnect) throw new Error(GMAIL_NOT_CONNECTED);
+    // Bandeja de Emails: se conecta al enviar (ahora con corte si la ventana se cierra).
     const authResult = await obtainGoogleToken(email);
     token = authResult.token;
     email = keepProfileAccount(authResult, email, profile_id);

@@ -8,7 +8,7 @@ import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
 import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
-import { sendEmailWithAutoAuth } from '@/lib/googleAuthHelper';
+import { sendEmailWithAutoAuth, connectGmail, getStoredGoogleAuth, GMAIL_NOT_CONNECTED } from '@/lib/googleAuthHelper';
 
 const SESSION_KEY = 'trucky_chat_session';
 
@@ -95,22 +95,45 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [content, setContent] = useState('');
+  // Cuenta de Gmail desde la que sale el correo (vacío = sin conectar en esta sesión).
+  const [sender, setSender] = useState('');
+  const [connecting, setConnecting] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const notConnectedMsg = locale === 'en'
+    ? 'Gmail is not connected. Click "Connect Gmail" and choose the account you want to send from.'
+    : 'No tienes Gmail conectado. Haz clic en "Conectar Gmail" y elige la cuenta desde la que quieres enviar.';
+
+  const handleConnect = async () => {
+    setConnecting(true); setSendError('');
+    try {
+      const hint = getStoredGoogleAuth(activeProfileId).email || currentUser?.email || '';
+      setSender(await connectGmail(activeProfileId, hint));
+    } catch {
+      setSendError(locale === 'en' ? 'Gmail could not be connected (the Google window was closed or blocked). Try again.' : 'No se pudo conectar Gmail (la ventana de Google se cerró o fue bloqueada). Intenta de nuevo.');
+    } finally { setConnecting(false); }
+  };
 
   const handleOpenSend = () => {
     // El asunto viene en la primera línea ("Subject:" o "Asunto:", según el idioma).
     const subjectMatch = textToCopy.match(/^(?:Subject|Asunto):\s*(.*)$/im);
-    // Destinatario: un correo del texto que NO sea el del propio usuario (el de la firma).
+    // Destinatario: la línea "To:" que pone el chat con el correo del broker
+    // identificado; si no hay, un correo del texto que NO sea el del propio usuario.
+    const toLine = textToCopy.match(/^To:\s*([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\s*$/im);
     const own = String(currentUser?.email || '').toLowerCase();
     const emails = textToCopy.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g) || [];
-    const destino = emails.find((e) => e.toLowerCase() !== own);
+    const destino = toLine?.[1] || emails.find((e) => e.toLowerCase() !== own);
     const emailMatch = destino ? [destino, destino] : null;
     
-    let cleanContent = textToCopy;
+    let cleanContent = textToCopy.replace(/^To:\s*\S+\s*\n*/im, '');
     if (subjectMatch) {
       cleanContent = cleanContent.replace(/^(?:Subject|Asunto):\s*.*\n*/im, '').trim();
     }
+    const stored = getStoredGoogleAuth(activeProfileId);
+    setSender(stored.token ? (stored.email || '') || 'Gmail' : '');
+    setSendError('');
 
-    setSubject(subjectMatch ? subjectMatch[1].trim() : (locale === 'en' ? 'Rate Quote - Trucky' : 'Cotización de Tarifa - Trucky'));
+    // Los correos siempre van en inglés (decisión 13-nov), también el asunto por defecto.
+    setSubject(subjectMatch ? subjectMatch[1].trim() : 'Rate Quote - Trucky');
     setTo(emailMatch ? emailMatch[1].trim() : '');
     setContent(cleanContent);
     setSendModalOpen(true);
@@ -119,7 +142,8 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
   const handleConfirmSend = async (e) => {
     e.preventDefault();
     if (!to || !subject || !content) return;
-    setSending(true);
+    if (!sender) { setSendError(notConnectedMsg); return; }
+    setSending(true); setSendError('');
     try {
       const res = await sendEmailWithAutoAuth({
         to,
@@ -129,6 +153,7 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
         profile_id: activeProfileId,
         remitente_nombre: currentUser?.full_name || 'Trucky User',
         categoria: 'brokers',
+        autoConnect: false,
       });
 
       if (res?.data?.error) {
@@ -146,7 +171,8 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
         });
       }
     } catch (err) {
-      toast?.({
+      if (err?.message === GMAIL_NOT_CONNECTED) { setSender(''); setSendError(notConnectedMsg); }
+      else toast?.({
         title: locale === 'en' ? 'Failed to send' : 'Fallo en el despacho',
         description: err.message,
         variant: 'destructive',
@@ -217,6 +243,17 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
             </div>
 
             <form onSubmit={handleConfirmSend} className="p-5 space-y-3.5 flex-1 overflow-y-auto">
+              {/* Desde qué cuenta sale el correo (opción 3, QA 13-nov) */}
+              <div className={`rounded-xl border px-3 py-2 text-xs ${sender ? 'border-border bg-muted/30 text-foreground' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+                {sender ? (
+                  <>
+                    <span className="text-muted-foreground">{locale === 'en' ? 'Sending from: ' : 'Se enviará desde: '}</span><b>{sender}</b>
+                    {currentUser?.email && sender.includes('@') && sender.toLowerCase() !== String(currentUser.email).toLowerCase() && (
+                      <span className="block text-amber-300 mt-1">{locale === 'en' ? 'This is not the account you use for Trucky.' : 'No es la cuenta con la que entraste a Trucky.'}</span>
+                    )}
+                  </>
+                ) : notConnectedMsg}
+              </div>
               <div>
                 <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
                   {locale === 'en' ? 'Recipient (Broker / Customer)' : 'Destinatario (Broker / Cliente)'}
@@ -265,7 +302,18 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
                 >
                   {locale === 'en' ? 'Cancel' : 'Cancelar'}
                 </button>
-                <button
+                {!sender && (
+                  <button
+                    type="button"
+                    onClick={handleConnect}
+                    disabled={connecting}
+                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all disabled:opacity-50"
+                  >
+                    {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                    <span>{locale === 'en' ? 'Connect Gmail' : 'Conectar Gmail'}</span>
+                  </button>
+                )}
+                {sender && <button
                   type="submit"
                   disabled={sending}
                   className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all disabled:opacity-50"
@@ -281,8 +329,9 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
                       <span>{locale === 'en' ? 'Send via Gmail' : 'Enviar por Gmail'}</span>
                     </>
                   )}
-                </button>
+                </button>}
               </div>
+              {sendError && <p className="text-xs text-red-400">{sendError}</p>}
             </form>
           </div>
         </div>

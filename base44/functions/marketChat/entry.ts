@@ -67,6 +67,7 @@ import { resolveLocation } from './nameResolution.ts';
 import emailTemplates from './plantillas_correo.json' with { type: 'json' };
 import { mergeTemplates } from '../../shared/emailTemplates.ts';
 import { fillSenderFields, missingSenderFields, senderData } from './senderSignature.ts';
+import { findBrokerEmail } from './brokerEmail.ts';
 
 // chat-idioma-toggle Fase 2 (re-aplicado en la reconciliación con
 // reglas-v3-multiestado): `locale` viaja desde el payload hasta cada builder
@@ -1110,9 +1111,11 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
       }
 
       let brokerInfoText = '';
+      let brokerEmail = '';
       let rawBroker = (raw.broker_name && raw.broker_name !== 'unknown') ? raw.broker_name : null;
       if (rawBroker) {
          const found = brokers.find(b => b.nombre.toLowerCase().includes(rawBroker.toLowerCase()));
+         brokerEmail = await findBrokerEmail(base44, debugOrgId, found, rawBroker).catch(() => '');
          if (found) {
              brokerInfoText = JSON.stringify({ nombre: found.nombre, mc: found.mc_number });
          } else {
@@ -1140,7 +1143,8 @@ REGLA CRÍTICA: Si el usuario pregunta cuál es el costo por milla, CPM o costo 
       // QA 3-nov: firma con el Perfil personal (nombre, teléfono, MC, DOT) y la
       // empresa de la cuenta. Lo que falte se quita de la firma (no se deja relleno).
       const sender = senderData({ userProfile: userProfileRecords?.[0], carrierProfile, organizationName, user });
-      const emailLang = locale === 'en' ? 'inglés' : 'español';
+      // Decisión 13-nov-2026 (QA): los correos a brokers van SIEMPRE en inglés.
+      const emailLang = 'inglés';
 
       const ultimoCalculoMsg = cappedMessages.slice().reverse().find(m => m.structuredData && m.structuredData.calculo);
       const ultimoPiso = ultimoCalculoMsg?.structuredData?.calculo?.piso;
@@ -1167,7 +1171,7 @@ Información específica del contexto extraída de la base de datos para este co
 
 Instrucciones:
 1. Elige la plantilla que mejor se adapte a la intención del usuario. Si pide CONFIRMAR o ACEPTAR una carga, usa la plantilla "aceptar".
-2. IDIOMA: escribe el correo y el asunto en ${emailLang} (el idioma de la aplicación del usuario). Si la plantilla está en otro idioma, tradúcela fielmente sin agregar ni quitar ideas, conservando la estructura de párrafos y la firma.
+2. IDIOMA: escribe el correo y el asunto SIEMPRE en ${emailLang}, aunque el usuario escriba en español. Si la plantilla está en otro idioma, tradúcela fielmente sin agregar ni quitar ideas, conservando la estructura de párrafos y la firma.
 3. Rellena la firma ([Your name], [Company], MC#, DOT#, Phone, [email]) con los valores "FIRMA ..." de arriba. Si un valor dice "NO_DISPONIBLE", QUITA ese dato de la firma (si es la línea del teléfono, quita la línea; en "MC# | DOT#" deja solo el que exista). NUNCA inventes números.
 4. Rellena [Broker name] con el nombre del broker. ¡REGLA CRÍTICA!: Si el campo "Broker detectado" empieza con "MULTIPLE_BROKERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí (en español) para que el usuario elija. Si el broker es "Team", pon "Team" y elimina la línea del MC del broker en el correo si la plantilla la tiene.
 5. ¡REGLA CRÍTICA PARA CONDUCTOR!: Si el campo "Conductor detectado" empieza con "MULTIPLE_DRIVERS:", ENTONCES NO REDACTES NINGÚN CORREO. Devuelve ÚNICAMENTE la pregunta que se te indica allí.
@@ -1209,7 +1213,11 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
         // Sin campos de relleno sin llenar en el asunto (ej. "Contraoferta - [lane]").
         const asunto = String((draftResult as any)?.asunto || '').replace(/\[[^\]]*\]/g, '').replace(/(?:\s*(?:->|[-–—|:])\s*){2,}/g, ' - ').replace(/^\s*(?:->|[-–—|:])\s*|\s*(?:->|[-–—|:])\s*$/g, '').replace(/\s{2,}/g, ' ').trim();
         if (asunto.length >= 4 && !/^(Subject|Asunto)\s*:/im.test(respuesta)) {
-          respuesta = `${locale === 'en' ? 'Subject' : 'Asunto'}: ${asunto}\n\n${respuesta}`;
+          respuesta = `Subject: ${asunto}\n\n${respuesta}`;
+        }
+        // Destinatario: correo del broker identificado (tabla Broker o, si no, su último correo en la bandeja).
+        if (brokerEmail && !/^To\s*:/im.test(respuesta)) {
+          respuesta = `To: ${brokerEmail}\n${respuesta}`;
         }
         respuesta = '\`\`\`text\n' + respuesta + '\n\`\`\`';
       }

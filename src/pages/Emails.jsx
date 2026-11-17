@@ -1437,8 +1437,9 @@ export default function Emails() {
         await fetchEmails();
       }
     } catch (err) {
-      const errMsg =
-        err?.response?.data?.error ||
+      const errMsg = err?.message === 'GMAIL_NOT_CONNECTED'
+        ? (isEs ? 'No se pudo conectar Gmail (la ventana de Google se cerró o fue bloqueada). Usa Sincronizar e intenta de nuevo.' : 'Gmail could not be connected (the Google window was closed or blocked). Use Sync and try again.')
+        : err?.response?.data?.error ||
         err?.message ||
         (isEs ? 'Error al conectar con el servicio de correo.' : 'Error connecting to mail service.');
       toast({
