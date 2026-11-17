@@ -1,4 +1,6 @@
-import Stripe from 'npm:stripe@23.0.0';
+// Consulta Stripe directo (sin la librería npm:stripe, que fallaba dentro de
+// Base44 y devolvía siempre LIVE_CONFIGURATION_UNAVAILABLE). Mismo patrón que
+// shared/livePlanRuntime.ts. Nunca devuelve llaves ni detalles de Stripe.
 export default async function checkLiveBillingConfiguration(req:Request,_ctx:unknown){
  const reply=(code:string,status=200)=>new Response(JSON.stringify({code}),{status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
  if(req.method!=='POST')return reply('METHOD_NOT_ALLOWED',405);
@@ -13,12 +15,20 @@ export default async function checkLiveBillingConfiguration(req:Request,_ctx:unk
  try{
   const body=await req.json();
   if(!Array.isArray(body.prices)||body.prices.length!==2||body.prices[0]===body.prices[1])return reply('PRICES_REQUIRED',400);
-  const stripe=new Stripe(key);
+
   // El monto lo decide Stripe (tickets 91/100): aquí solo se valida que sea un precio
   // real, activo, en dólares y mensual.
   for(const id of body.prices){
    if(typeof id!=='string'||!/^price_[a-zA-Z0-9]+$/.test(id))return reply('INVALID_PRICE',400);
-   const price=await stripe.prices.retrieve(id);
+   let r:Response;
+   try{
+    r=await fetch(`https://api.stripe.com/v1/prices/${id}`,{redirect:'manual',headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(12000)});
+   }catch{return reply('STRIPE_UNREACHABLE',503);}
+   if(r.status===404)return reply('LIVE_PRICE_NOT_FOUND',400);   // no existe en la cuenta de esta llave (o es de modo prueba)
+   if(r.status===401)return reply('LIVE_KEY_INVALID',503);       // llave inválida o revocada
+   if(r.status===403)return reply('LIVE_KEY_PERMISSION',503);    // la llave no puede leer precios
+   if(!r.ok)return reply('STRIPE_UNREACHABLE',503);
+   const price=await r.json();
    if(!price.livemode||!price.active||price.currency!=='usd'||!(Number.isSafeInteger(price.unit_amount)&&(price.unit_amount??0)>0)||price.type!=='recurring'||price.recurring?.interval!=='month'||price.recurring.interval_count!==1||price.billing_scheme!=='per_unit')return reply('LIVE_PRICE_MISMATCH',409);
   }
   return reply('LIVE_CONFIGURATION_VALID');
