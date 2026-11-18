@@ -1,6 +1,7 @@
 import {takeCreation,RELEASE_CREATION,FINISH_CREATION} from './creation.ts';
 import {registerNewEnrollment} from './enrollment.ts';
 import {repairHalfCreatedLanding} from './repairLanding.ts';
+import {demoSelfUpgrade} from '../../shared/demoSelfUpgrade.ts';
 import { isDemoOrganization, demoRedis as cloudRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 
@@ -148,6 +149,18 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
         return json({ status: 'already_exists', org_id: fix.org.id, name: fix.org.name, role: 'owner', subscription_status: fix.org.subscription_status ?? 'none' }, 200);
       }
       console.warn('[createOrganizationForUser]', JSON.stringify({ code: 'LANDING_REPAIR_SKIPPED', reason: fix.reason }));
+    }
+
+    // Demo → pago directo: el dueño único de su propia empresa (creada en la app)
+    // puede pagar sin vinculación previa ni administrador.
+    if (Deno.env.get('BILLING_PUBLIC_ENROLLMENT_ENABLED') === 'true') {
+      stage = 'demo_self_upgrade';
+      const up = await demoSelfUpgrade(demoRedis, db, identity);
+      if (up.ok) {
+        console.warn('[createOrganizationForUser]', JSON.stringify({ status: 200, code: 'DEMO_SELF_UPGRADE' }));
+        return json({ status: 'already_exists', org_id: up.org.id, name: up.org.name, role: 'owner', subscription_status: up.org.subscription_status ?? 'none' }, 200);
+      }
+      if (up.reason !== 'NO_COMPANY') console.warn('[createOrganizationForUser]', JSON.stringify({ code: 'DEMO_SELF_UPGRADE_SKIPPED', reason: up.reason }));
     }
 
     for (const m of existingMemberships ?? []) {

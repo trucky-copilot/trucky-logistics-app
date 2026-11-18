@@ -1,7 +1,8 @@
 export type Redis=(c:unknown[])=>Promise<unknown>;
 export const safeId=(s:unknown):s is string=>typeof s==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(s);
 export async function landingOriginEvidence(redis:Redis,org:any,member:any,entry:any){
- if(entry.origin==='landing_public_new')return {key:`trucky:billing:enrollment:v1:org:${org.id}`,value:JSON.stringify(entry)};
+ // 'demo_self_upgrade': dueño de su empresa demo que paga directo (shared/demoSelfUpgrade.ts).
+ if(entry.origin==='landing_public_new'||entry.origin==='demo_self_upgrade')return {key:`trucky:billing:enrollment:v1:org:${org.id}`,value:JSON.stringify(entry)};
  if(entry.origin!==undefined||typeof org.name!=='string'||!safeId(member.google_sub))return null;
  // Historical public-new registrations had no origin field. A finalized creation
  // receipt is separate server-owned evidence; never infer origin from email.
