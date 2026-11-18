@@ -89,6 +89,54 @@ function str(value: unknown): string {
   return value === null || value === undefined ? '' : String(value).trim();
 }
 
+// QA 12-nov: validación estricta del formato. Antes las columnas se leían por
+// POSICIÓN sin mirar los encabezados, y un archivo en formato viejo (v6, con
+// columnas "NO EN USO" y "Margen %") cargaba precios equivocados sin avisar.
+function norm(value: unknown): string {
+  return str(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+    .replace(/['’"`´]/g, '').replace(/\s+/g, ' ').trim();
+}
+type HeaderRule = { label: string; ok: (h: string) => boolean };
+const PROHIBIDOS = ['no en uso', 'margen'];
+function checkHeaders(rows: unknown[][], estado: 'FL' | 'TX', rules: HeaderRule[]): void {
+  const found = (rows[1] || []).slice(0, rules.length).map(norm);
+  const malas = rules
+    .map((rule, i) => ({ rule, i, h: found[i] ?? '' }))
+    .filter(({ rule, h }) => !rule.ok(h) || PROHIBIDOS.some((p) => h.includes(p)));
+  if (malas.length) {
+    const col = (i: number) => String.fromCharCode(65 + i);
+    const detalle = malas.map(({ rule, i, h }) => `${col(i)}: se esperaba "${rule.label}" y dice "${h || '(vacío)'}"`).join('; ');
+    throw new Error(`${estado}: el archivo no tiene el formato esperado (encabezados de la fila 2). ${detalle}. Usa la plantilla actual de tarifas; no se carga para no guardar precios en columnas equivocadas.`);
+  }
+}
+const has = (...parts: string[]) => (h: string) => parts.every((p) => h.includes(p));
+const FL_HEADERS: HeaderRule[] = [
+  { label: 'Zona', ok: has('zona') },
+  { label: 'Puerto', ok: (h) => h.includes('puerto') || h.includes('mercado') },
+  { label: 'Ciudad', ok: has('ciudad') },
+  { label: 'Millas', ok: has('milla') },
+  { label: 'Grupo', ok: has('grupo') },
+  { label: "20'", ok: (h) => h.startsWith('20') && !h.includes('heavy') },
+  { label: "40'", ok: (h) => h.startsWith('40') },
+  { label: "45'", ok: (h) => h.startsWith('45') },
+  { label: "20' Heavy", ok: has('20', 'heavy') },
+];
+const TX_HEADERS: HeaderRule[] = [
+  { label: 'Mercado', ok: has('mercado') },
+  { label: 'Zona', ok: has('zona') },
+  { label: 'Ciudad', ok: has('ciudad') },
+  { label: 'Millas (ida)', ok: has('milla') },
+  { label: "Piso 20'", ok: has('20') },
+  { label: "Objetivo 20'", ok: has('20') },
+  { label: "Piso 40'", ok: has('40') },
+  { label: "Objetivo 40'", ok: has('40') },
+];
+// Fila sin ciudad: si trae millas o algún precio es una ruta incompleta (error);
+// si no trae nada es una fila vacía o una nota al pie (se salta).
+function rutaSinCiudad(r: unknown[] | undefined, cols: number[]): boolean {
+  return cols.some((c) => { const v = r?.[c]; return v !== null && v !== undefined && str(v) !== ''; });
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // FLORIDA
 // ─────────────────────────────────────────────────────────────────────────────
@@ -98,13 +146,17 @@ export function convertFlorida(sheets: SheetRows, archivo: string, sha: string):
   accessorials: AccessorialRecord[];
 } {
   const rows = readSheetRows(sheets, 'Rates_Drayage');
+  checkHeaders(rows, 'FL', FL_HEADERS);
   const routes: RouteRecord[] = [];
 
   // fila 0 = título de la hoja, fila 1 = encabezados, datos desde fila 2.
   for (let i = 2; i < rows.length; i++) {
     const r = rows[i];
     const ciudad = str(r?.[2]);
-    if (!ciudad) continue; // filas vacías / notas al pie de la tabla — no son rutas.
+    if (!ciudad) {
+      if (rutaSinCiudad(r, [3, 5, 6, 7, 8])) throw new Error(`FL fila ${i + 1}: la ciudad está vacía y la fila tiene millas o precios — no se carga una ruta incompleta`);
+      continue; // fila vacía o nota al pie — no es una ruta.
+    }
 
     const zona = str(r[0]);
     const mercado = str(r[1]); // "Puerto": MIA | PEV | Ambos
@@ -172,12 +224,16 @@ export function convertTexas(sheets: SheetRows, archivo: string, sha: string): {
   accessorials: AccessorialRecord[];
 } {
   const rows = readSheetRows(sheets, 'Rates_Drayage_TX');
+  checkHeaders(rows, 'TX', TX_HEADERS);
   const routes: RouteRecord[] = [];
 
   for (let i = 2; i < rows.length; i++) {
     const r = rows[i];
     const ciudad = str(r?.[2]);
-    if (!ciudad) continue;
+    if (!ciudad) {
+      if (rutaSinCiudad(r, [3, 4, 5, 6, 7])) throw new Error(`TX fila ${i + 1}: la ciudad está vacía y la fila tiene millas o precios — no se carga una ruta incompleta`);
+      continue;
+    }
 
     const mercado = str(r[0]);
     const zona = str(r[1]);

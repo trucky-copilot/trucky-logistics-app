@@ -64,7 +64,7 @@ Deno.test('excel FL real: con una fila insertada arriba tampoco duplica', () => 
 Deno.test('excel TX real: mismo contenido → 0 nuevas, 0 cambios, 0 eliminadas', () => {
   const rows = (routesTx as any[]).map((r) => [r.mercado, r.zona, r.ciudad, r.millas_ida, price(r, '20', 'piso_tabla'), price(r, '20'), price(r, '40', 'piso_tabla'), price(r, '40'), null, r.fuente.nota_original ?? null]);
   const acc = (accTx as any[]).map((a) => [a.concepto, a.monto, a.nota]);
-  const wb = roundTrip({ Rates_Drayage_TX: [['Tarifas TX'], ['Mercado', 'Zona', 'Ciudad', 'Millas'], ...rows], Accesoriales_TX: [['Acc'], ['Concepto', 'Monto', 'Nota'], ...acc] });
+  const wb = roundTrip({ Rates_Drayage_TX: [['Tarifas TX'], ['Mercado', 'Zona', 'Ciudad', 'Millas (ida)', "Piso 20'", "Objetivo 20'", "Piso 40'", "Objetivo 40'"], ...rows], Accesoriales_TX: [['Acc'], ['Concepto', 'Monto', 'Nota'], ...acc] });
   const inc = convertTexas(wb, 'Trucky_Rates_Drayage_TX_v4.xlsx', 'sha-tx');
   assertEquals(inc.routes.length, 63);
   const p = planExcel('TX', inc as any, db(), true);
@@ -77,4 +77,29 @@ Deno.test('excel: hoja equivocada → error claro del conversor', () => {
   let msg = '';
   try { convertFlorida(wb, 'x.xlsx', 's'); } catch (e) { msg = (e as Error).message; }
   assert(msg.includes('No existe la hoja "Rates_Drayage"'));
+});
+
+// QA 12-nov: validación estricta del formato.
+Deno.test('excel FL: fila con ciudad vacía pero con datos → error (no se descarta en silencio)', () => {
+  const wb = roundTrip({
+    Rates_Drayage: [['Tarifas FL'], ['Zona', 'Puerto', 'Ciudad', 'Millas', 'Grupo', "20'", "40'", "45'", "20' Heavy"],
+      ['LOCAL', 'MIA', 'Doral', 10, 100, 429, 441, 460, 500],
+      ['LOCAL', 'MIA', '', 12, 100, 429, 441, 460, 500],
+      [null, null, null, null], ['Nota: precios en USD']],
+    Accesoriales: [['Acc'], ['Concepto', 'Gatillo', 'Monto', 'Nota'], ['Pre-Pull', null, '$100', null]],
+  });
+  let msg = '';
+  try { convertFlorida(wb, 'x.xlsx', 's'); } catch (e) { msg = (e as Error).message; }
+  assert(msg.includes('fila 4') && msg.includes('ciudad está vacía'), msg);
+});
+
+Deno.test('excel FL: formato viejo (encabezados distintos) → se rechaza el archivo', () => {
+  const wb = roundTrip({
+    Rates_Drayage: [['Tarifas FL v6'], ['Zona', 'Puerto', 'Ciudad', 'Millas', 'Grupo', "20' OO (NO EN USO)", 'Margen %', "20'", "40'"],
+      ['LOCAL', 'MIA', 'Doral', 10, 100, 390, 0.48, 429, 441]],
+    Accesoriales: [['Acc'], ['Concepto', 'Gatillo', 'Monto', 'Nota']],
+  });
+  let msg = '';
+  try { convertFlorida(wb, 'x.xlsx', 's'); } catch (e) { msg = (e as Error).message; }
+  assert(msg.includes('no tiene el formato esperado'), msg);
 });
