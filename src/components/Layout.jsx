@@ -262,7 +262,8 @@ export default function Layout() {
           </div>
           {!isChat && <MarketTicker />}
           <div className="ml-auto flex items-center gap-3">
-            <ProfileSelector />
+            {/* Las cuentas de administrador no manejan perfiles de empresa. */}
+            {!showAdminPanel && <ProfileSelector />}
             <NotificationBell />
           </div>
         </header>

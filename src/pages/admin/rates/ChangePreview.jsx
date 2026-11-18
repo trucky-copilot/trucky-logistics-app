@@ -71,7 +71,12 @@ export default function ChangePreview({ preview, onConfirm, onClose, extra }) {
   };
 
   return (
-    <Modal title="Revisar cambios antes de guardar" onClose={onClose} wide>
+    <Modal title="Revisar cambios antes de guardar" onClose={onClose} wide footer={
+      <div className="flex justify-end gap-2">
+        <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
+        <Btn onClick={confirm} busy={busy} disabled={total === 0 || errores.length > 0}>Confirmar y guardar</Btn>
+      </div>
+    }>
       <div className="flex flex-wrap gap-2 text-xs">
         <Badge tone="green">Nuevas: {p.crear?.length || 0}</Badge>
         <Badge tone="amber">Modificadas: {p.actualizar?.length || 0}</Badge>
@@ -83,7 +88,7 @@ export default function ChangePreview({ preview, onConfirm, onClose, extra }) {
       {errores.length > 0 && (
         <ErrorBox error={<>No se puede guardar, corrige esto:<ul className="list-disc ml-5 mt-1">{errores.map((e, i) => <li key={i}>{e.key ? `${e.key}: ` : ''}{e.mensaje}</li>)}</ul></>} />
       )}
-      <div className="space-y-2 max-h-[55vh] overflow-y-auto pr-1">
+      <div className="space-y-2">
         {(p.actualizar || []).map((u) => (
           <Row key={`${u.entidad}-${u.key}`} tone="amber" label={`Modificar${ENT[u.entidad] ? ` ${ENT[u.entidad]}` : ''}`} k={u.key}>
             {(u.campos || []).map((c) => c === 'precios' ? <PreciosDiff key={c} antes={u.antes?.precios} despues={u.despues?.precios} /> : (
@@ -108,10 +113,6 @@ export default function ChangePreview({ preview, onConfirm, onClose, extra }) {
       </div>
       {extra}
       <ErrorBox error={error} />
-      <div className="flex justify-end gap-2">
-        <Btn variant="ghost" onClick={onClose}>Cancelar</Btn>
-        <Btn onClick={confirm} busy={busy} disabled={total === 0 || errores.length > 0}>Confirmar y guardar</Btn>
-      </div>
     </Modal>
   );
 }

@@ -50,18 +50,22 @@ export const Badge = ({ children, tone = 'gray' }) => {
   return <span className={`inline-block px-2 py-0.5 rounded-md text-[11px] font-medium ${tones[tone]}`}>{children}</span>;
 };
 
-export function Modal({ title, onClose, children, wide = false }) {
+// Ventana con alto máximo de la pantalla: el título y los botones (footer) quedan
+// siempre visibles y solo el contenido hace scroll. Antes, con contenido largo, se
+// centraba y se cortaba arriba y abajo.
+export function Modal({ title, onClose, children, footer = null, wide = false }) {
   return (
-    <div className="fixed inset-0 z-50 bg-black/70 flex items-start md:items-center justify-center p-3 overflow-y-auto" onClick={onClose}>
+    <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-3 sm:p-6" onClick={onClose}>
       <div
-        className={`bg-[#1C1C1E] border border-white/10 rounded-2xl w-full ${wide ? 'max-w-4xl' : 'max-w-xl'} p-5 space-y-4 my-6`}
+        className={`bg-[#1C1C1E] border border-white/10 rounded-2xl w-full ${wide ? 'max-w-4xl' : 'max-w-xl'} max-h-full flex flex-col overflow-hidden`}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between px-5 pt-5 pb-3 border-b border-white/10 flex-shrink-0">
           <h3 className="text-base font-semibold text-white">{title}</h3>
           <button onClick={onClose} className="text-white/50 hover:text-white"><X className="w-5 h-5" /></button>
         </div>
-        {children}
+        <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">{children}</div>
+        {footer && <div className="flex-shrink-0 border-t border-white/10 px-5 py-3">{footer}</div>}
       </div>
     </div>
   );
