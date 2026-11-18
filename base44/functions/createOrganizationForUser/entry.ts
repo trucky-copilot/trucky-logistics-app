@@ -1,6 +1,6 @@
 import {takeCreation,RELEASE_CREATION,FINISH_CREATION} from './creation.ts';
 import {registerNewEnrollment} from './enrollment.ts';
-import {repairHalfCreatedLanding} from './repairLanding.ts';
+import {repairLandingProvenance} from '../../shared/landingRepair.ts';
 import {demoSelfUpgrade} from '../../shared/demoSelfUpgrade.ts';
 import { isDemoOrganization, demoRedis as cloudRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
@@ -140,15 +140,16 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       role: 'owner'
     });
 
-    // Empresa creada a medias por la landing (sin procedencia): se completa y sigue al pago.
-    if (Deno.env.get('BILLING_PUBLIC_ENROLLMENT_ENABLED') === 'true' && existingMemberships?.length) {
+    // Empresa creada por la landing sin procedencia: se completa (evidencia del
+    // servidor, nunca por correo) y la cuenta sigue directo al pago.
+    if (existingMemberships?.length) {
       stage = 'landing_repair';
-      const fix = await repairHalfCreatedLanding(demoRedis, db, identity);
+      const fix = await repairLandingProvenance(demoRedis, db, identity.sub);
       if (fix.repaired) {
         console.warn('[createOrganizationForUser]', JSON.stringify({ status: 200, code: 'LANDING_ORGANIZATION_REPAIRED' }));
         return json({ status: 'already_exists', org_id: fix.org.id, name: fix.org.name, role: 'owner', subscription_status: fix.org.subscription_status ?? 'none' }, 200);
       }
-      console.warn('[createOrganizationForUser]', JSON.stringify({ code: 'LANDING_REPAIR_SKIPPED', reason: fix.reason }));
+      if (fix.reason !== 'ALREADY_COMPLETE') console.warn('[createOrganizationForUser]', JSON.stringify({ code: 'LANDING_REPAIR_SKIPPED', reason: fix.reason }));
     }
 
     // Demo → pago directo: el dueño único de su propia empresa (creada en la app)
@@ -223,10 +224,11 @@ export default async function createOrganizationForUser(req: Request, _ctx: unkn
       active: true
     });
 
-    if(publicBilling){
-      stage='billing_enrollment_register';
-      await registerNewEnrollment(demoRedis,newOrg,newMember);
-    }
+    // Toda empresa creada aquí viene de la landing: SIEMPRE se registra su
+    // procedencia (antes solo con BILLING_PUBLIC_ENROLLMENT_ENABLED, y sin ese
+    // secreto las altas quedaban pidiendo "confirmar titularidad").
+    stage='billing_enrollment_register';
+    await registerNewEnrollment(demoRedis,newOrg,newMember);
     if (publicDemo) {
     stage = 'registry_register';
       await registerDemoOrganization(newOrg.id);
