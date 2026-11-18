@@ -1248,33 +1248,21 @@ export function resolveDrayageQuote(params: {
 
     const limiteMillasTabla = estadoResuelto === 'FL' ? 450 : 800;
 
-    // 1. Prioridad: Buscar coincidencia EXACTA por ciudad en rutas dinámicas (Excel) o en la tabla nativa
+    // 1. Prioridad (F6-06, QA 19-nov): la tabla del Panel Admin (RateRoute, cargada
+    //    desde la base). La tabla vieja de Excel (ContainerRoute) solo si la ciudad
+    //    no está en la del admin. Antes iba primero la vieja y tapaba los cambios del admin.
     if (ciudadResuelta) {
-      if (Array.isArray(dynamicContainerRoutes) && dynamicContainerRoutes.length > 0) {
+      match = buscarEnTabla(estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
+      if (!match && Array.isArray(dynamicContainerRoutes) && dynamicContainerRoutes.length > 0) {
         match = buscarEnRutasDinamicas(dynamicContainerRoutes, estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
-      }
-      if (!match) {
-        match = buscarEnTabla(estadoResuelto as Estado, ciudadResuelta, tamano, mercadoFinal);
       }
     }
 
-    // Si hubo coincidencia de ciudad pero tenemos millas reales de ruta (Google Maps)
-    // y la diferencia es significativa (> 10 millas), en drayage (especialmente Florida OTR),
-    // la tarifa está estructurada por bandas de millas (ej. Grupo 315 para ~208 mi -> $1,150 vs Grupo 400 para 227 mi -> $1,200).
-    // Por ende, ajustamos el precio al grupo correspondiente a las millas reales de la ruta.
-    if (match && hasGoogleMiles && (millasIdaDeclaradas as number) <= limiteMillasTabla) {
-      const diffMillas = Math.abs(match.millasIda - (millasIdaDeclaradas as number));
-      if (diffMillas > 10) {
-        let closest = findClosestRouteByMiles(estadoResuelto as Estado, tamano, millasIdaDeclaradas as number);
-        if (closest) {
-          match.objetivo = closest.precio.objetivo;
-          match.piso = closest.precio.piso_tabla;
-          match.millasIda = millasIdaDeclaradas as number;
-        }
-      } else {
-        match.millasIda = millasIdaDeclaradas as number;
-      }
-    }
+    // Si la ciudad está en la tabla, el precio Y las millas son los de la tabla: el
+    // administrador es quien los mantiene. Antes las millas de Google Maps
+    // reemplazaban a las de la tabla y, si diferían más de 10 mi, también el precio
+    // (se tomaba el de OTRA ruta con millas parecidas), así que editar la tarifa en
+    // el panel no se reflejaba. Google Maps se usa solo cuando la ciudad NO está (paso 2).
 
     // 2. Si la ciudad no está en la tabla, buscar la ruta más cercana por millas dentro de la tabla (hasta limiteMillasTabla).
     if (!match && hasGoogleMiles && (millasIdaDeclaradas as number) <= limiteMillasTabla) {

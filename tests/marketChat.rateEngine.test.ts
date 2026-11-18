@@ -1728,3 +1728,15 @@ Deno.test('invarianza numérica: la misma consulta en ES y EN devuelve exactamen
     );
   }
 });
+
+// F6-06 · QA 19-nov: si la ciudad está en la tabla del admin, el precio y las
+// millas son los de la tabla aunque Google Maps diga otra distancia.
+Deno.test('F6-06: ciudad en la tabla → precio y millas de la tabla, sin reemplazo por Google Maps', () => {
+  const base = { destinoRaw: 'Hialeah Gardens', tamano: '20' as const, pagoCamionRpm: null, tarifaOfrecida: null };
+  const sinGoogle = resolveDrayageQuote({ ...base, millasIdaDeclaradas: null });
+  const conGoogle = resolveDrayageQuote({ ...base, millasIdaDeclaradas: 27 });
+  if (sinGoogle.kind !== 'quote' || conGoogle.kind !== 'quote') throw new Error('debía cotizar');
+  assertEquals(conGoogle.calculo.millasIda, sinGoogle.calculo.millasIda);
+  assertEquals(conGoogle.calculo.objetivo, sinGoogle.calculo.objetivo);
+  assertEquals(conGoogle.calculo.millasIda === 27, false);
+});
