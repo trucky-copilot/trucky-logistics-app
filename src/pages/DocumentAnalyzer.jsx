@@ -5,6 +5,7 @@ import {
   Truck, Users, FileText, X, ChevronRight, Lock, Sparkles, CheckCircle2, AlertTriangle, Calendar, Building, HelpCircle, Package, ArrowRight
 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
+import { glosarioEn } from '@/lib/translationGlossary';
 import ResultHeader from '@/components/doc-analyzer/ResultHeader';
 import CategoryGrid from '@/components/doc-analyzer/CategoryGrid';
 import KeyFindings from '@/components/doc-analyzer/KeyFindings';
@@ -148,7 +149,8 @@ export default function DocumentAnalyzer() {
       throw new Error(res.data?.error || 'Traducción fallida');
     }
 
-    const translated = res.data.messages.map(m => m.content);
+    // Glosario de transporte: Google traduce "tarifa" como "fee" y "cargas" como "charges".
+    const translated = res.data.messages.map(m => (targetLang === 'en' ? glosarioEn(m.content) : m.content));
 
     return {
       ...sourceAnalysis,

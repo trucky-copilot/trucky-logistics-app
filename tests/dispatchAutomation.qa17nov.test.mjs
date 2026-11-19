@@ -52,3 +52,18 @@ test('F3: la penalidad no se repite si el servidor ya la puso', () => {
   assert.equal(r.alertas_criticas.filter(h => h.startsWith('❌ Penalidad')).length, 1);
   assert.equal(r.categorias[0].semaforo, 'rojo');
 });
+
+test('QA: la penalidad se corta en el monto, sin la frase siguiente', async () => {
+  const { findRiskClauses } = await import('../src/lib/dispatchAutomation.js');
+  const r = findRiskClauses('Notes: Genset included. Penalties: Late delivery penalty: $150 Carrier agrees to transport the load described above at the agreed rate.');
+  assert.equal(r[0].text, '❌ Penalidad: "Late delivery penalty: $150"');
+  const r2 = findRiskClauses('Late delivery penalty: $250 per hour of delay. Thanks');
+  assert.equal(r2[0].text, '❌ Penalidad: "Late delivery penalty: $250 per hour"');
+});
+
+test('QA: glosario de traducción (fee → rate, charges → loads)', async () => {
+  const { glosarioEn } = await import('../src/lib/translationGlossary.js');
+  assert.equal(glosarioEn('Total fee: $1,600 — Profitable rate'), 'Total rate: $1,600 — Profitable rate');
+  assert.equal(glosarioEn('Known broker: QA Test Brokerage LLC — 0 charges'), 'Known broker: QA Test Brokerage LLC — 0 loads');
+  assert.equal(glosarioEn('Fee deductions detected'), 'Fee deductions detected');
+});

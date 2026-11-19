@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { detectEquipment } from '@/lib/emailEquipment';
+import { splitQuoted } from '@/lib/emailThread';
 import { useNavigate } from 'react-router-dom';
 import {
   Mail, RotateCw, Plus, Search, Star, MessageSquare,
@@ -54,6 +55,30 @@ export function normalizeSubjectForThread(subject = '') {
     .replace(/^(\s*(re|fwd|rv|fw)\s*:\s*)+/gi, '')
     .trim()
     .toLowerCase();
+}
+
+/** Cuerpo de un mensaje del hilo: lo nuevo visible y el texto citado detrás de "•••" (como Gmail). */
+function MessageBody({ body, isEs }) {
+  const [verCitado, setVerCitado] = useState(false);
+  const { nuevo, citado } = splitQuoted(body);
+  return (
+    <>
+      {nuevo || (isEs ? '(Sin contenido)' : '(No content)')}
+      {citado && (
+        <div className="mt-2 not-prose">
+          <button
+            type="button"
+            onClick={() => setVerCitado((v) => !v)}
+            title={verCitado ? (isEs ? 'Ocultar texto citado' : 'Hide quoted text') : (isEs ? 'Mostrar texto citado' : 'Show quoted text')}
+            className="px-2 py-0.5 rounded-md text-xs leading-none bg-muted hover:bg-muted/70 text-muted-foreground"
+          >
+            •••
+          </button>
+          {verCitado && <div className="mt-2 pl-3 border-l-2 border-border text-muted-foreground">{citado}</div>}
+        </div>
+      )}
+    </>
+  );
 }
 
 /**
@@ -778,10 +803,11 @@ export default function Emails() {
       const normSubj = normalizeSubjectForThread(email.asunto);
       const tId = email.thread_id ? String(email.thread_id).trim() : null;
 
-      // Resolver si ya existe un hilo tanto por thread_id como por asunto normalizado (Re:/Fwd:)
+      // El hilo lo define el thread_id de Gmail. El asunto (Re:/Fwd:) solo agrupa correos
+      // que NO tienen thread_id: antes dos envíos distintos con el mismo asunto se mezclaban.
       let key =
         (tId && threadIdToKey.get(tId)) ||
-        (normSubj && subjToKey.get(normSubj)) ||
+        (!tId && normSubj && subjToKey.get(normSubj)) ||
         null;
 
       if (!key) {
@@ -794,12 +820,17 @@ export default function Emails() {
       }
 
       if (tId) threadIdToKey.set(tId, key);
-      if (normSubj) subjToKey.set(normSubj, key);
+      // Un correo SIN thread_id (p. ej. enviado desde Trucky antes de sincronizar) sí se une por asunto.
+      if (normSubj && !subjToKey.has(normSubj)) subjToKey.set(normSubj, key);
 
       const g = groups.get(key);
       if (tId && !g.threadId) {
         g.threadId = tId;
       }
+      // Un correo que te envías a ti mismo llega como "enviado" y "recibido" con el
+      // mismo gmail_message_id: se muestra una sola vez.
+      const gmailId = email.gmail_message_id ? String(email.gmail_message_id) : null;
+      if (gmailId && g.messages.some(m => String(m.gmail_message_id || '') === gmailId)) continue;
       g.messages.push(email);
     }
 
@@ -2057,7 +2088,7 @@ export default function Emails() {
 
                       {/* Cuerpo del correo */}
                       <div className="prose t-prose max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-t-text-secondary">
-                        {msg.cuerpo || msg.snippet || '(Sin contenido)'}
+                        <MessageBody body={msg.cuerpo || msg.snippet || ''} isEs={isEs} />
                       </div>
 
                       {/* Sección de Documentos Adjuntos (Estilo Gmail + Visor y Descarga en Trucky) */}

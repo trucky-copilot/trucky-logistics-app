@@ -6,6 +6,8 @@
  * 4) Redirección a Emails (/emails) con borrador prellenado para Broker y Carrier.
  */
 
+import { splitQuoted } from './emailThread.js';
+
 export const AUTOMATION_EMAIL_TO_CHECKER_KEY = 'trucky_auto_email_to_checker_v1';
 export const AUTOMATION_CHECKER_TO_LOAD_KEY = 'trucky_auto_checker_to_load_v1';
 export const AUTOMATION_PENDING_DISPATCH_LOAD_KEY = 'trucky_auto_pending_dispatch_load_v1';
@@ -313,17 +315,8 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
  * anteriores ("> ...", "On ... wrote:", "De: ... Enviado:"). Encabezados en inglés.
  */
 export function summarizeThreadForChecker(msgs = [], { perMessage = 420, total = 1800 } = {}) {
-  const cortarCita = (body = '') => {
-    const lines = String(body || '').replace(/\r/g, '').split('\n');
-    const out = [];
-    for (const l of lines) {
-      const t = l.trim();
-      if (/^>/.test(t)) continue;
-      if (/^(on\s.+wrote:|el\s.+escribi[oó]:|-{2,}\s*original message|from:\s.+|de:\s.+|sent:\s|enviado:\s)/i.test(t)) break;
-      if (t) out.push(t);
-    }
-    return out.join(' ').replace(/\s+/g, ' ').trim();
-  };
+  // Mismo criterio que la vista del hilo en Emails (lib/emailThread.js).
+  const cortarCita = (body = '') => splitQuoted(body).nuevo.replace(/\s+/g, ' ').trim();
   const parts = msgs.map((m) => {
     const body = cortarCita(m.cuerpo || m.snippet || '');
     const corto = body.length > perMessage ? body.slice(0, perMessage).replace(/\s\S*$/, '') + '…' : body;
@@ -486,7 +479,12 @@ export function findRiskClauses(text = '') {
   const pen = t.match(PENALTY_RE);
   if (pen) {
     // la línea completa donde aparece ("Late delivery penalty: $250 per hour of delay.")
-    const line = (t.split(/\n|(?<=\.)\s+/).find(l => PENALTY_RE.test(l)) || pen[0]).trim().slice(0, 160);
+    let line = (t.split(/\n|(?<=\.)\s+/).find(l => PENALTY_RE.test(l)) || pen[0]).trim();
+    // QA: cortar en el monto ("…penalty: $150"); el PDF llega en una sola línea y antes
+    // se colaba la frase siguiente ("Carrier agrees to transport…").
+    const conMonto = line.match(/^.*?(?:penalt|penalidad|multa|late\s*fee|liquidated|charge\s*-?\s*back)[^$\d]*?\$\s*[\d,]+(?:\.\d{2})?(?:\s*(?:usd|per\s+(?:hour|hr|day|hora|d[ií]a)|\/\s*(?:hour|hr|day|h)))?/i);
+    if (conMonto) line = conMonto[0];
+    line = line.replace(/^(?:penalt(?:y|ies)|penalidad(?:es)?)\s*:\s*(?=.*(?:penalt|penalidad))/i, '').trim().slice(0, 160);
     risks.push({ key: 'clause', text: `❌ Penalidad: "${line}"` });
   }
   const tonu = t.match(TONU_NOT_PAID_RE);
