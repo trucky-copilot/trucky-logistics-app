@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { deriveCosts, CAMPO_LABEL } from '@/lib/freight/costMath';
 import { Calculator, Save, TrendingUp, TrendingDown, Fuel, Loader2, CheckCircle2 } from 'lucide-react';
+import PageHeader from '@/components/PageHeader';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useProfile } from '@/lib/ProfileContext';
 import { useAppState } from '@/lib/AppStateContext';
@@ -288,9 +289,9 @@ export default function CostCalculator() {
   const missingAccessorials = availableAccessorials.filter(a => !configuredKeys.includes(a.id));
 
   const barSegments = [
-    { label: t.calculator.breakEvenLabel, rate: breakEvenRate, color: '#facc15' },
-    { label: t.calculator.targetLabel, rate: Number(String(config.tarifa_objetivo || 0).replace(',', '.')), color: '#8b5cf6' },
-    { label: t.calculator.marketLabel, rate: 3.10, color: '#a78bfa' },
+    { label: t.calculator.breakEvenLabel, rate: breakEvenRate, color: 'rgb(var(--t-warning))' },
+    { label: t.calculator.targetLabel, rate: Number(String(config.tarifa_objetivo || 0).replace(',', '.')), color: 'rgb(var(--t-chart-1))' },
+    { label: t.calculator.marketLabel, rate: 3.10, color: 'rgb(var(--t-chart-2))' },
 
   ];
   const maxRate = Math.max(...barSegments.map(s => s.rate), 4);
@@ -305,25 +306,22 @@ export default function CostCalculator() {
   if (loading) return <div className="flex justify-center items-center h-full"><div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" /></div>;
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-5">
-      <div>
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <Calculator className="w-5 h-5 text-primary" />
-          {t.calculator.title}
-        </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">{t.calculator.subtitle}</p>
-      </div>
+    <div className="t-page max-w-6xl space-y-6">
+      <PageHeader icon={Calculator} title={t.calculator.title} subtitle={t.calculator.subtitle} />
 
+      {/* Figma 40:993: variables a la izquierda, resultados a la derecha */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+      <div className="space-y-6 min-w-0">
       {/* Inputs */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">{t.calculator.variables}</h2>
+      <div className="bg-t-bg-input border border-border rounded-3xl p-5 md:p-6 space-y-4">
+        <h2 className="text-lg font-medium text-t-text-primary">{t.calculator.variables}</h2>
         
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-muted-foreground mb-1 flex items-center gap-1 block">
               <Fuel className="w-3 h-3" />
               {t.calculator.diesel}
-              <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
+              <span className="text-t-danger font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
             </label>
             <input 
               type="text" 
@@ -333,13 +331,13 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('diesel_precio', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
               {t.calculator.mpg}
-              <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
+              <span className="text-t-danger font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
             </label>
             <input 
               type="text" 
@@ -349,7 +347,7 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('mpg', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
@@ -362,7 +360,7 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('seguro_semanal', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
@@ -375,7 +373,7 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('lease_semanal', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
@@ -389,7 +387,7 @@ export default function CostCalculator() {
                 // Máximo 2 enteros: el % del conductor va de 0 a 99.
                 if (/^[0-9]{0,2}([.,][0-9]*)?$/.test(val)) set('pago_conductor_porcentaje', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
@@ -402,13 +400,13 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('otros_gastos_semanales', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
             <label className="text-xs text-muted-foreground mb-1 block">
               {t.calculator.weeklyMiles}
-              <span className="text-red-500 font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
+              <span className="text-t-danger font-bold text-sm ml-1">* <span className="font-normal text-[10px]">{locale === 'en' ? 'required' : 'obligatorio'}</span></span>
             </label>
             <input 
               type="text" 
@@ -418,7 +416,7 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('millas_semana_promedio', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
           <div>
@@ -431,21 +429,21 @@ export default function CostCalculator() {
                 const val = e.target.value;
                 if (/^[0-9]*[.,]?[0-9]*$/.test(val)) set('tarifa_objetivo', val);
               }}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+              className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
             />
           </div>
         </div>
       </div>
 
       {/* Cargos Adicionales (Accessorials) — F3-15: destino del acceso directo /calculadora#cargos */}
-      <div id="cargos" className="bg-card border border-border rounded-xl p-4 space-y-4 scroll-mt-4">
+      <div id="cargos" className="bg-t-bg-input border border-border rounded-3xl p-5 md:p-6 space-y-4 scroll-mt-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-foreground">{t.calculator.accessorialsTitle || 'Cargos Adicionales / Accesoriales'}</h2>
+          <h2 className="text-lg font-medium text-t-text-primary">{t.calculator.accessorialsTitle || 'Cargos Adicionales / Accesoriales'}</h2>
           <label className="flex items-center gap-2 cursor-pointer">
             <span className="text-xs text-muted-foreground">{t.calculator.enableCustom || 'Activar personalizados'}</span>
             <div className="relative inline-flex items-center">
               <input type="checkbox" className="sr-only peer" checked={config.custom_accessorials_active} onChange={e => set('custom_accessorials_active', e.target.checked)} />
-              <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-primary"></div>
+              <div className="w-9 h-5 bg-muted peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-t-action-primary"></div>
             </div>
           </label>
         </div>
@@ -469,7 +467,7 @@ export default function CostCalculator() {
                         placeholder="$..." 
                         value={parsedFields[key] || ''} 
                         onChange={e => handleCustomFieldChange(key, e.target.value)} 
-                        className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+                        className="w-full h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
                       />
                     </div>
                   );
@@ -481,7 +479,7 @@ export default function CostCalculator() {
                 <label className="text-xs text-muted-foreground mb-2 block">{t.calculator.otherAccessorials || 'Otros cargos adicionales...'}</label>
                 <div className="flex items-center gap-3">
                   <select 
-                    className="w-2/3 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                    className="w-2/3 h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary focus:outline-none focus:border-t-border-focus focus:shadow-focus"
                     value={selectedAcc}
                     onChange={e => setSelectedAcc(e.target.value)}
                   >
@@ -496,7 +494,7 @@ export default function CostCalculator() {
                     placeholder="$..." 
                     value={parsedFields[selectedAcc] || ''} 
                     onChange={e => handleCustomFieldChange(selectedAcc, e.target.value)} 
-                    className="w-1/3 bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 focus:ring-primary/50" 
+                    className="w-1/3 h-11 bg-t-bg-input border border-border rounded-xl px-3 text-sm text-t-text-primary font-mono focus:outline-none focus:border-t-border-focus focus:shadow-focus" 
                   />
                 </div>
               </div>
@@ -504,13 +502,15 @@ export default function CostCalculator() {
         )}
       </div>
 
+      </div>
+
       {/* Results */}
-      <div className="bg-card border border-border rounded-xl p-4 space-y-4">
-        <h2 className="text-sm font-semibold text-foreground">{t.calculator.results}</h2>
+      <div className="bg-t-bg-input border border-border rounded-3xl p-5 md:p-6 space-y-5 lg:sticky lg:top-6 min-w-0">
+        <h2 className="text-lg font-medium text-t-text-primary">{t.calculator.results}</h2>
 
         {/* L4 (QA): explicar por qué no se puede calcular en vez de solo mostrar "—" */}
         {!costos.valido && (
-          <div className="p-2.5 rounded-lg border border-amber-500/30 bg-amber-500/10 text-xs text-amber-200">
+          <div className="px-4 py-3 rounded-2xl border border-t-warning bg-t-warning-soft text-xs text-t-warning">
             {(() => {
               const campo = {
                 diesel_precio: locale === 'en' ? 'Diesel price' : 'Precio del diésel',
@@ -531,19 +531,19 @@ export default function CostCalculator() {
         )}
         
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div className="bg-muted rounded-xl p-3 text-center">
-            <p className="text-xs text-muted-foreground">{t.calculator.costPerMile}</p>
-            <p className="text-xl font-bold font-mono text-foreground mt-1">{costos.valido ? `$${costPerMile.toFixed(2)}` : '—'}</p>
+          <div className="bg-t-bg-surface border border-border rounded-2xl p-4 space-y-1">
+            <p className="text-xs text-t-text-secondary">{t.calculator.costPerMile}</p>
+            <p className="text-2xl font-bold font-mono text-t-text-primary">{costos.valido ? `$${costPerMile.toFixed(2)}` : '—'}</p>
             <p className="text-xs text-muted-foreground">{t.calculator.dieselFixed}</p>
           </div>
-          <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-xl p-3 text-center">
-            <p className="text-xs text-yellow-400">{t.calculator.breakEven}</p>
-            <p className="text-xl font-bold font-mono text-yellow-400 mt-1">{costos.valido ? `$${breakEvenRate.toFixed(2)}` : '—'}</p>
+          <div className="bg-t-warning-soft border border-t-warning rounded-2xl p-4 space-y-1">
+            <p className="text-xs text-t-warning">{t.calculator.breakEven}</p>
+            <p className="text-2xl font-bold font-mono text-t-warning">{costos.valido ? `$${breakEvenRate.toFixed(2)}` : '—'}</p>
             <p className="text-xs text-muted-foreground">{t.calculator.minimumRate}</p>
           </div>
-          <div className="bg-violet-400/10 border border-violet-400/20 rounded-xl p-3 text-center col-span-2 sm:col-span-1">
-            <p className="text-xs text-violet-400">{t.calculator.target}</p>
-            <p className="text-xl font-bold font-mono text-violet-400 mt-1">${Number(config.tarifa_objetivo).toFixed(2)}</p>
+          <div className="bg-t-bg-surface border border-t-border-focus rounded-2xl p-4 space-y-1 col-span-2 sm:col-span-1">
+            <p className="text-xs text-t-text-accent">{t.calculator.target}</p>
+            <p className="text-2xl font-bold font-mono text-t-text-accent">${Number(config.tarifa_objetivo).toFixed(2)}</p>
             <p className="text-xs text-muted-foreground">+${targetProfit.toFixed(2)}/mi {t.calculator.profit}</p>
           </div>
         </div>
@@ -556,7 +556,7 @@ export default function CostCalculator() {
                 <span className="text-muted-foreground">{seg.label.replace('\n', ' ')}</span>
                 <span className="font-mono font-medium text-foreground">${seg.rate.toFixed(2)}/mi</span>
               </div>
-              <div className="h-2 bg-muted rounded-full overflow-hidden">
+              <div className="h-2 bg-t-chart-grid rounded-full overflow-hidden">
                 <div 
                   className="h-full rounded-full transition-all duration-500"
                   style={{ width: `${(seg.rate / maxRate) * 100}%`, backgroundColor: seg.color }}
@@ -567,10 +567,11 @@ export default function CostCalculator() {
         </div>
 
       </div>
+      </div>
 
-      <div className="space-y-3">
+      <div className="flex justify-end">
         <button onClick={saveConfig} disabled={saving || hasZeroOrNegative}
-          className="w-full py-3 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all">
+          className="w-full sm:w-auto h-11 px-6 rounded-full bg-primary disabled:bg-t-action-disabled disabled:text-t-text-disabled disabled:cursor-not-allowed text-sm font-medium text-t-text-on-accent flex items-center justify-center gap-2 transition-colors">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           {saved ? `✓ ${t.calculator.saved}` : t.calculator.save}
         </button>
@@ -578,9 +579,9 @@ export default function CostCalculator() {
 
       {/* Modal de confirmación estilizado con diseño de Trucky */}
       {showSavedModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
-            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 mx-auto flex items-center justify-center">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-t-bg-surface border border-border rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-popover">
+            <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-t-success mx-auto flex items-center justify-center">
               <CheckCircle2 className="w-6 h-6" />
             </div>
             <div>
@@ -597,7 +598,7 @@ export default function CostCalculator() {
               <button
                 type="button"
                 onClick={() => setShowSavedModal(false)}
-                className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-semibold transition-all shadow-lg shadow-primary/20"
+                className="w-full h-11 rounded-full bg-primary text-t-text-on-accent text-sm font-medium transition-colors"
               >
                 {locale === 'en' ? 'OK' : 'Aceptar'}
               </button>

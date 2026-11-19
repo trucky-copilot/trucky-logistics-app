@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { base44 } from '@/api/base44Client';
 import {
   DollarSign, Truck, Package, TrendingUp, TrendingDown, AlertTriangle,
   CheckCircle2, Bell, Info, Zap, FileWarning, Building2, Users,
-  Sparkles, ArrowUpRight, Layers, Activity
+  ArrowUpRight, Layers, Activity, LayoutDashboard
 } from 'lucide-react';
 import { getOperationalAlerts } from '@/lib/operationalAlerts';
 import KpiCard from '@/components/KpiCard';
+import PageHeader from '@/components/PageHeader';
 import StatusBadge from '@/components/StatusBadge';
 import OperationalStatusCard from '@/components/OperationalStatusCard';
 import DashboardGoogleMap from '@/components/DashboardGoogleMap';
@@ -52,7 +53,6 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [activeSection, setActiveSection] = useState('overview');
-  const reduceMotion = useReducedMotion(); // true si el usuario pidio reducir movimiento
 
   const isEs = locale !== 'en';
 
@@ -194,23 +194,22 @@ export default function Dashboard() {
   // Skeleton con la misma forma que el dashboard real: el usuario ve que algo
   // está cargando, sin números falsos y sin "salto" de layout al llegar los datos.
   if (loading) return (
-    <div className="p-4 md:p-6 space-y-6" aria-busy="true" aria-live="polite">
-      <div className="glass-panel rounded-2xl p-4 md:p-5 flex items-center gap-3.5">
-        <Skeleton className="w-11 h-11 rounded-2xl bg-white/10" />
+    <div className="t-page space-y-6" aria-busy="true" aria-live="polite">
+      <div className="flex items-center gap-3.5">
         <div className="space-y-2">
-          <Skeleton className="h-6 w-56 bg-white/10" />
-          <Skeleton className="h-3.5 w-32 bg-white/10" />
+          <Skeleton className="h-6 w-56 bg-foreground/10" />
+          <Skeleton className="h-3.5 w-32 bg-foreground/10" />
         </div>
       </div>
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[0, 1, 2, 3].map(i => (
           <div key={i} className="glass-card p-5 rounded-2xl space-y-3">
             <div className="flex items-start justify-between">
-              <Skeleton className="h-3 w-24 bg-white/10" />
-              <Skeleton className="w-9 h-9 rounded-xl bg-white/10" />
+              <Skeleton className="h-3 w-24 bg-foreground/10" />
+              <Skeleton className="w-9 h-9 rounded-xl bg-foreground/10" />
             </div>
-            <Skeleton className="h-7 w-20 bg-white/10" />
-            <Skeleton className="h-3 w-28 bg-white/10" />
+            <Skeleton className="h-7 w-20 bg-foreground/10" />
+            <Skeleton className="h-3 w-28 bg-foreground/10" />
           </div>
         ))}
       </div>
@@ -220,7 +219,7 @@ export default function Dashboard() {
 
   if (error) return (
     <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center">
-      <AlertTriangle className="w-8 h-8 text-red-400" />
+      <AlertTriangle className="w-8 h-8 text-t-danger" />
       <p className="text-sm text-foreground font-medium">{error}</p>
     </div>
   );
@@ -229,35 +228,32 @@ export default function Dashboard() {
     <div className="grid lg:grid-cols-3 gap-4">
       {/* Fleet Status */}
       <motion.div
-        whileHover={reduceMotion ? undefined : { y: -4 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-        className="glass-panel rounded-2xl p-5 relative overflow-hidden"
+        className="glass-panel rounded-2xl p-5"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#5B2BA0]/45 border border-white/15 flex items-center justify-center">
-              <Truck className="w-3.5 h-3.5 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-t-bg-surface-raised flex items-center justify-center">
+              <Truck className="w-5 h-5 text-t-text-accent" />
             </div>
-            <h2 className="text-sm font-semibold text-white">{t.dashboard.fleetStatus}</h2>
+            <h2 className="text-base font-semibold text-t-text-primary">{t.dashboard.fleetStatus}</h2>
           </div>
-          <Link to="/flota" className="text-xs text-violet-300 hover:text-white flex items-center gap-0.5 transition-colors">
+          <Link to="/flota" className="text-xs text-t-text-accent hover:text-foreground flex items-center gap-0.5 transition-colors">
             {t.dashboard.viewAll}
             <ArrowUpRight className="w-3 h-3" />
           </Link>
         </div>
         {trucks.length === 0 ? (
-          <div className="text-center py-8 text-white/55 text-sm">{t.dashboard.noTrucks}</div>
+          <div className="text-center py-8 text-foreground/55 text-sm">{t.dashboard.noTrucks}</div>
         ) : (
           <div className="space-y-2">
             {trucks.slice(0, 6).map(truck => (
               <div
                 key={truck.id}
-                className="flex items-center justify-between py-2 px-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] transition-colors"
+                className="flex items-center justify-between py-2 px-2.5 rounded-xl bg-foreground/[0.03] hover:bg-foreground/[0.07] border border-t-border-subtle transition-colors"
               >
                 <div>
-                  <div className="text-sm font-medium text-white">{truck.placa}</div>
-                  <div className="text-xs text-white/60">{truck.conductor_nombre || t.dashboard.noDriver}</div>
+                  <div className="text-sm font-medium text-foreground">{truck.placa}</div>
+                  <div className="text-xs text-foreground/60">{truck.conductor_nombre || t.dashboard.noDriver}</div>
                 </div>
                 <StatusBadge status={truck.estado} />
               </div>
@@ -268,8 +264,6 @@ export default function Dashboard() {
 
       {/* Document Alerts and Notifications */}
       <motion.div
-        whileHover={reduceMotion ? undefined : { y: -4 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
         className={`glass-panel rounded-2xl p-5 relative overflow-hidden ${
           hasCriticalAlerts
             ? 'border-red-400/35 shadow-red-950/30'
@@ -278,16 +272,15 @@ export default function Dashboard() {
             : ''
         }`}
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
         <div className="flex items-center justify-between mb-4">
-          <h2 className={`text-sm font-semibold ${hasCriticalAlerts ? 'text-red-300' : hasWarningAlerts ? 'text-amber-300' : 'text-white'}`}>
+          <h2 className={`text-sm font-semibold ${hasCriticalAlerts ? 'text-t-danger' : hasWarningAlerts ? 'text-t-warning' : 'text-foreground'}`}>
             {hasCriticalAlerts
               ? `🔴 ${t.dashboard.alertsAndNotifications}`
               : hasWarningAlerts
               ? `🟡 ${t.dashboard.alertsAndNotifications}`
               : t.dashboard.alertsAndNotifications}
           </h2>
-          <Link to="/notificaciones" className="text-xs text-violet-300 hover:text-white flex items-center gap-0.5 transition-colors">
+          <Link to="/notificaciones" className="text-xs text-t-text-accent hover:text-foreground flex items-center gap-0.5 transition-colors">
             {t.dashboard.viewAll}
             <ArrowUpRight className="w-3 h-3" />
           </Link>
@@ -295,9 +288,9 @@ export default function Dashboard() {
         {operationalAlerts.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <div className="w-11 h-11 rounded-2xl bg-emerald-500/15 border border-emerald-400/25 flex items-center justify-center mb-2.5">
-              <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+              <CheckCircle2 className="w-6 h-6 text-t-success" />
             </div>
-            <p className="text-sm text-white/70">{t.dashboard.allInOrder}</p>
+            <p className="text-sm text-foreground/70">{t.dashboard.allInOrder}</p>
           </div>
         ) : (
           <div className="space-y-2 max-h-[230px] overflow-y-auto pr-1 custom-scrollbar">
@@ -318,25 +311,25 @@ export default function Dashboard() {
                   to={alert.link || '/notificaciones'}
                   className={`flex items-start gap-3 p-3 rounded-xl border-l-4 border backdrop-blur-md transition-all hover:translate-x-0.5 ${
                     isRed
-                      ? 'border-l-red-400 bg-red-500/10 border-white/10 hover:bg-red-500/15'
-                      : 'border-l-amber-400 bg-amber-500/10 border-white/10 hover:bg-amber-500/15'
+                      ? 'border-l-red-400 bg-red-500/10 border-border hover:bg-red-500/15'
+                      : 'border-l-amber-400 bg-amber-500/10 border-border hover:bg-amber-500/15'
                   }`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     isRed ? 'bg-red-400/20' : 'bg-amber-400/20'
                   }`}>
-                    <IconComponent className={`w-4 h-4 ${isRed ? 'text-red-300' : 'text-amber-300'}`} />
+                    <IconComponent className={`w-4 h-4 ${isRed ? 'text-t-danger' : 'text-t-warning'}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1.5">
-                      <p className="text-xs font-semibold text-white truncate">{alert.titulo}</p>
+                      <p className="text-xs font-semibold text-foreground truncate">{alert.titulo}</p>
                       <span className={`text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded flex-shrink-0 ${
-                        isRed ? 'text-red-300 bg-red-400/15' : 'text-amber-300 bg-amber-400/15'
+                        isRed ? 'text-t-danger bg-red-400/15' : 'text-t-warning bg-amber-400/15'
                       }`}>
                         {alert.moduloLabel || alert.modulo}
                       </span>
                     </div>
-                    <p className={`text-xs mt-0.5 ${isRed ? 'text-red-300' : 'text-amber-200/90'}`}>
+                    <p className={`text-xs mt-0.5 ${isRed ? 'text-t-danger' : 'text-t-warning/90'}`}>
                       {isRed ? '🔴' : '🟡'} {alert.mensaje}
                     </p>
                   </div>
@@ -349,42 +342,39 @@ export default function Dashboard() {
 
       {/* Broker Scoreboard */}
       <motion.div
-        whileHover={reduceMotion ? undefined : { y: -4 }}
-        transition={{ type: 'spring', stiffness: 300, damping: 24 }}
-        className="glass-panel rounded-2xl p-5 relative overflow-hidden"
+        className="glass-panel rounded-2xl p-5"
       >
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#5B2BA0]/45 border border-white/15 flex items-center justify-center">
-              <Building2 className="w-3.5 h-3.5 text-white" />
+            <div className="w-9 h-9 rounded-xl bg-t-bg-surface-raised flex items-center justify-center">
+              <Building2 className="w-5 h-5 text-t-text-accent" />
             </div>
-            <h2 className="text-sm font-semibold text-white">{t.dashboard.topBrokers}</h2>
+            <h2 className="text-base font-semibold text-t-text-primary">{t.dashboard.topBrokers}</h2>
           </div>
-          <Link to="/brokers" className="text-xs text-violet-300 hover:text-white flex items-center gap-0.5 transition-colors">
+          <Link to="/brokers" className="text-xs text-t-text-accent hover:text-foreground flex items-center gap-0.5 transition-colors">
             {t.dashboard.viewAll}
             <ArrowUpRight className="w-3 h-3" />
           </Link>
         </div>
         {brokers.length === 0 ? (
-          <div className="text-center py-8 text-white/55 text-sm">{t.dashboard.noBrokers}</div>
+          <div className="text-center py-8 text-foreground/55 text-sm">{t.dashboard.noBrokers}</div>
         ) : (
           <div className="space-y-2">
             {brokers.slice(0, 5).map((b, i) => (
               <div
                 key={b.id}
-                className="flex items-center gap-2.5 py-2 px-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.07] border border-white/[0.06] transition-colors"
+                className="flex items-center gap-2.5 py-2 px-2.5 rounded-xl bg-foreground/[0.03] hover:bg-foreground/[0.07] border border-t-border-subtle transition-colors"
               >
-                <span className="text-xs font-bold text-violet-300 w-5 h-5 rounded-md bg-[#5B2BA0]/40 border border-white/10 flex items-center justify-center">
+                <span className="text-xs font-bold text-t-text-accent w-5 h-5 rounded-md bg-t-action-primary/40 border border-border flex items-center justify-center">
                   {i + 1}
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-sm font-medium text-white truncate" title={b.nombre}>{b.nombre}</div>
-                  <div className="text-xs text-white/60">{b.cargas_realizadas || 0} {t.dashboard.loads}</div>
+                  <div className="text-sm font-medium text-foreground truncate" title={b.nombre}>{b.nombre}</div>
+                  <div className="text-xs text-foreground/60">{b.cargas_realizadas || 0} {t.dashboard.loads}</div>
                 </div>
                 <div className="text-right">
-                  <div className="text-xs font-mono font-medium text-white">${b.tarifa_promedio?.toFixed(2) || '--'}/mi</div>
-                  <div className={`text-xs font-medium ${(b.puntaje_confiabilidad || 0) >= 7 ? 'text-emerald-400' : (b.puntaje_confiabilidad || 0) >= 5 ? 'text-amber-400' : 'text-red-400'}`}>
+                  <div className="text-xs font-mono font-medium text-foreground">${b.tarifa_promedio?.toFixed(2) || '--'}/mi</div>
+                  <div className={`text-xs font-medium ${(b.puntaje_confiabilidad || 0) >= 7 ? 'text-t-success' : (b.puntaje_confiabilidad || 0) >= 5 ? 'text-t-warning' : 'text-t-danger'}`}>
                     ★ {b.puntaje_confiabilidad || '--'}/10
                   </div>
                 </div>
@@ -398,30 +388,27 @@ export default function Dashboard() {
 
   const renderRecentLoadsPanel = () => (
     <motion.div
-      whileHover={reduceMotion ? undefined : { y: -3 }}
-      transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-      className="glass-panel rounded-2xl p-5 relative overflow-hidden"
+      className="glass-panel rounded-2xl p-5"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-[#5B2BA0]/45 border border-white/15 flex items-center justify-center">
-            <Package className="w-3.5 h-3.5 text-white" />
+          <div className="w-9 h-9 rounded-xl bg-t-bg-surface-raised flex items-center justify-center">
+            <Package className="w-5 h-5 text-t-text-accent" />
           </div>
-          <h2 className="text-sm font-semibold text-white">{t.dashboard.recentLoads}</h2>
+          <h2 className="text-base font-semibold text-t-text-primary">{t.dashboard.recentLoads}</h2>
         </div>
-        <Link to="/cargas" className="text-xs text-violet-300 hover:text-white flex items-center gap-0.5 transition-colors">
+        <Link to="/cargas" className="text-xs text-t-text-accent hover:text-foreground flex items-center gap-0.5 transition-colors">
           {t.dashboard.viewAllLoads}
           <ArrowUpRight className="w-3 h-3" />
         </Link>
       </div>
       {recentLoads.length === 0 ? (
-        <div className="text-center py-8 text-white/55 text-sm">{t.dashboard.noLoads}</div>
+        <div className="text-center py-8 text-foreground/55 text-sm">{t.dashboard.noLoads}</div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-xs text-white/60 border-b border-white/10 bg-white/[0.03]">
+              <tr className="t-overline border-b border-border">
                 <th className="text-left py-2.5 px-3 font-medium rounded-tl-lg">{t.dashboard.route}</th>
                 <th className="text-left py-2.5 px-3 font-medium hidden sm:table-cell">{t.dashboard.broker}</th>
                 <th className="text-right py-2.5 px-3 font-medium hidden md:table-cell">{t.dashboard.miles}</th>
@@ -429,20 +416,20 @@ export default function Dashboard() {
                 <th className="text-right py-2.5 px-3 font-medium rounded-tr-lg">{t.dashboard.total}</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-white/[0.06]">
+            <tbody className="divide-y divide-t-border-subtle">
               {recentLoads.map(load => (
-                <tr key={load.id} className="hover:bg-white/[0.06] transition-colors">
-                  <td className="py-2.5 px-3 text-white">
+                <tr key={load.id} className="hover:bg-foreground/[0.06] transition-colors">
+                  <td className="py-2.5 px-3 text-foreground">
                     <div className="font-medium text-xs">{load.origen}</div>
-                    <div className="text-white/60 text-xs">→ {load.destino}</div>
+                    <div className="text-foreground/60 text-xs">→ {load.destino}</div>
                   </td>
-                  <td className="py-2.5 px-3 text-white/70 hidden sm:table-cell text-xs max-w-[10rem] truncate" title={load.broker_nombre || ''}>{load.broker_nombre || '--'}</td>
-                  <td className="py-2.5 px-3 text-right text-white/70 hidden md:table-cell text-xs font-mono">{load.millas || '--'}</td>
+                  <td className="py-2.5 px-3 text-foreground/70 hidden sm:table-cell text-xs max-w-[10rem] truncate" title={load.broker_nombre || ''}>{load.broker_nombre || '--'}</td>
+                  <td className="py-2.5 px-3 text-right text-foreground/70 hidden md:table-cell text-xs font-mono">{load.millas || '--'}</td>
                   <td className={`py-2.5 px-3 text-right font-mono text-xs font-medium ${
-                    effectiveRpm(load) >= 3 ? 'text-emerald-400' :
-                    effectiveRpm(load) >= 2.6 ? 'text-amber-400' : 'text-red-400'
+                    effectiveRpm(load) >= 3 ? 'text-t-success' :
+                    effectiveRpm(load) >= 2.6 ? 'text-t-warning' : 'text-t-danger'
                   }`}>{effectiveRpm(load) > 0 ? `$${effectiveRpm(load).toFixed(2)}` : '--'}</td>
-                  <td className="py-2.5 px-3 text-right font-mono text-xs font-semibold text-white">${effectiveRate(load).toLocaleString('en-US')}</td>
+                  <td className="py-2.5 px-3 text-right font-mono text-xs font-semibold text-foreground">${effectiveRate(load).toLocaleString('en-US')}</td>
                 </tr>
               ))}
             </tbody>
@@ -453,25 +440,10 @@ export default function Dashboard() {
   );
 
   return (
-    <div className="relative p-4 md:p-6 space-y-6 w-full max-w-full min-w-0 overflow-x-hidden">
-      {/* Resplandores ambientales morados (#5B2BA0) detrás del vidrio esmerilado */}
-      <div className="pointer-events-none fixed top-20 left-1/3 w-96 h-96 rounded-full bg-[#5B2BA0]/25 blur-[120px] -z-10" />
-      <div className="pointer-events-none fixed bottom-12 right-16 w-80 h-80 rounded-full bg-[#5B2BA0]/20 blur-[110px] -z-10" />
-
-      {/* Encabezado Estilo Glassy Dashboard + Selector de Sección con Desenfoque Suave */}
-      <div className="glass-panel rounded-2xl p-4 md:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-2xl bg-[#5B2BA0] border border-white/20 shadow-lg shadow-[#5B2BA0]/40 flex items-center justify-center flex-shrink-0">
-            <Sparkles className="w-5 h-5 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl md:text-2xl font-bold text-white tracking-tight">{t.dashboard.title}</h1>
-            <p className="text-xs md:text-sm text-white/65 mt-0.5">{organization?.name || t.dashboard.organization}</p>
-          </div>
-        </div>
-
+    <div className="t-page space-y-6 w-full max-w-full min-w-0 overflow-x-hidden">
+      <PageHeader icon={LayoutDashboard} title={t.dashboard.title} subtitle={organization?.name || t.dashboard.organization}>
         {/* Píldoras de cambio de sección con desenfoque suave (estilo Glassy Dashboard) */}
-        <div className="glass-pill-bar p-1 rounded-full flex items-center gap-1 self-start sm:self-auto">
+        <div className="bg-t-action-secondary p-1 rounded-full flex items-center gap-1 self-start overflow-x-auto max-w-full">
           {SECTIONS.map(sec => {
             const Icon = sec.icon;
             const active = activeSection === sec.id;
@@ -479,15 +451,15 @@ export default function Dashboard() {
               <button
                 key={sec.id}
                 onClick={() => setActiveSection(sec.id)}
-                className={`relative px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer ${
-                  active ? 'text-[#5B2BA0]' : 'text-white/70 hover:text-white'
+                className={`relative h-9 px-4 rounded-full text-sm font-medium transition-colors flex items-center gap-1.5 cursor-pointer whitespace-nowrap ${
+                  active ? 'text-t-text-accent' : 'text-t-text-secondary hover:text-t-text-primary'
                 }`}
               >
                 {active && (
                   <motion.div
                     layoutId="dashboardGlassTab"
                     transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                    className="absolute inset-0 rounded-full bg-white shadow-md"
+                    className="absolute inset-0 rounded-full bg-t-bg-canvas"
                   />
                 )}
                 <Icon className="w-3.5 h-3.5 relative z-10" />
@@ -496,13 +468,13 @@ export default function Dashboard() {
             );
           })}
         </div>
-      </div>
+      </PageHeader>
 
       {/* Estado operativo (solo visible si la config está incompleta) */}
       <OperationalStatusCard />
 
       {/* KPI Grid — Tarjetas de vidrio esmerilado que se elevan al pasar el cursor */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
           titulo={t.dashboard.weeklyRevenue}
           valor={fmtUSD(totalRevenue)}

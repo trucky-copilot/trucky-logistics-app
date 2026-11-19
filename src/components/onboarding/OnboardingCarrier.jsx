@@ -18,7 +18,7 @@ function MultiSelect({ options, selected, onChange, placeholder }) {
             onClick={() => onChange(active ? selected.filter(s => s !== opt) : [...selected, opt])}
             className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
               active
-                ? 'bg-primary/20 border-primary/50 text-primary'
+                ? 'bg-primary/20 border-primary/50 text-t-text-accent'
                 : 'bg-muted border-border text-muted-foreground hover:border-primary/30 hover:text-foreground'
             }`}
           >
@@ -36,7 +36,7 @@ function Toggle({ label, desc, value, onChange }) {
       type="button"
       onClick={() => onChange(!value)}
       className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all ${
-        value ? 'bg-primary/10 border-primary/40 text-primary' : 'bg-muted border-border text-muted-foreground'
+        value ? 'bg-primary/10 border-primary/40 text-t-text-accent' : 'bg-muted border-border text-muted-foreground'
       }`}
     >
       <div className="text-left">
@@ -101,7 +101,7 @@ export default function OnboardingCarrier({ onComplete, onBack }) {
       </div>
 
       <div>
-        <p className="text-xs text-primary font-semibold uppercase tracking-wider">{current.subtitle}</p>
+        <p className="text-xs text-t-text-accent font-semibold uppercase tracking-wider">{current.subtitle}</p>
         <h2 className="text-lg font-bold text-foreground mt-0.5">{current.title}</h2>
       </div>
 
@@ -200,26 +200,26 @@ export default function OnboardingCarrier({ onComplete, onBack }) {
             className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
           >
             <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10">
-              <Check className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+              <Check className="w-4 h-4 text-muted-foreground group-hover:text-t-text-accent" />
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">Configurar costos ahora</div>
               <div className="text-xs text-muted-foreground">Ir a la calculadora después de guardar</div>
             </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary ml-auto" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-t-text-accent ml-auto" />
           </button>
           <button
             onClick={() => onComplete({ ...data, configurar_costos: false })}
             className="w-full flex items-center gap-3 p-3.5 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
           >
             <div className="w-9 h-9 rounded-lg bg-muted flex items-center justify-center group-hover:bg-primary/10">
-              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary" />
+              <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-t-text-accent" />
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">Lo hago después</div>
               <div className="text-xs text-muted-foreground">Entrar al dashboard primero</div>
             </div>
-            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary ml-auto" />
+            <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-t-text-accent ml-auto" />
           </button>
         </div>
       )}
@@ -237,7 +237,7 @@ export default function OnboardingCarrier({ onComplete, onBack }) {
           <button
             onClick={next}
             disabled={!canContinue()}
-            className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+            className="flex-1 py-2.5 rounded-full bg-primary hover:bg-t-action-primary-hover disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
           >
             {step === STEPS.length - 2 ? 'Finalizar' : 'Continuar'}
             <ChevronRight className="w-4 h-4" />

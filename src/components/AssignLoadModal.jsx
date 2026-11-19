@@ -19,7 +19,7 @@ export default function AssignLoadModal({ loads, drivers, trucks, isEs, busy, on
   const ready = Boolean(load && option && canAssign(option, ack));
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">{isEs ? 'Asignar conductor a una carga' : 'Assign a driver to a load'}</h2>
@@ -59,7 +59,7 @@ export default function AssignLoadModal({ loads, drivers, trucks, isEs, busy, on
         <div className="flex gap-2 px-5 pb-5">
           <button onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm text-muted-foreground">{isEs ? 'Cancelar' : 'Cancel'}</button>
           <button disabled={!ready || busy} onClick={() => onAssign(load, option)}
-            className="flex-1 py-2.5 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+            className="flex-1 py-2.5 rounded-full bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
             {busy && <Loader2 className="w-4 h-4 animate-spin" />}{isEs ? 'Asignar' : 'Assign'}
           </button>
         </div>

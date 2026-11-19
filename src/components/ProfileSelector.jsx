@@ -149,7 +149,7 @@ export default function ProfileSelector() {
                 }
               }}
             >
-              <span className={`flex-1 text-sm truncate ${p.id === activeProfileId ? 'font-bold text-primary' : 'text-foreground'}`}>
+              <span className={`flex-1 text-sm truncate ${p.id === activeProfileId ? 'font-bold text-t-text-accent' : 'text-foreground'}`}>
                 {p.id === activeProfileId && <span className="mr-1">✓</span>}
                 {displayName(p.name)}
               </span>
@@ -164,7 +164,7 @@ export default function ProfileSelector() {
                 {profiles.length > 1 && (
                   <button 
                     onClick={(e) => { e.stopPropagation(); openDeleteConfirm(p.id, p.name); }}
-                    className="p-1 text-red-400 hover:text-red-500 focus:outline-none"
+                    className="p-1 text-t-danger hover:text-red-500 focus:outline-none"
                     title={t?.profiles?.delete || (isEn ? 'Delete' : 'Eliminar')}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
@@ -213,7 +213,7 @@ export default function ProfileSelector() {
               autoFocus
             />
             {nameError && (
-              <span className="text-xs text-red-400 block mt-1.5 font-medium">
+              <span className="text-xs text-t-danger block mt-1.5 font-medium">
                 * {nameError}
               </span>
             )}
@@ -236,7 +236,7 @@ export default function ProfileSelector() {
       {/* Limit Reached Dialog */}
       <Dialog open={limitOpen} onOpenChange={setLimitOpen}>
         <DialogContent className="sm:max-w-md bg-card border border-border text-center p-6 rounded-2xl shadow-2xl">
-          <div className="w-12 h-12 rounded-full bg-yellow-500/10 text-yellow-400 mx-auto flex items-center justify-center mb-2">
+          <div className="w-12 h-12 rounded-full bg-yellow-500/10 text-t-warning mx-auto flex items-center justify-center mb-2">
             <AlertCircle className="w-6 h-6" />
           </div>
           <DialogHeader>
@@ -254,7 +254,7 @@ export default function ProfileSelector() {
           <DialogFooter className="sm:justify-center mt-4">
             <Button 
               onClick={() => setLimitOpen(false)} 
-              className="px-6 py-2 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground"
+              className="px-6 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-sm font-semibold text-primary-foreground"
             >
               {t?.profiles?.accept || (isEn ? 'Got it' : 'Aceptar')}
             </Button>

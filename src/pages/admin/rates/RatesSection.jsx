@@ -65,12 +65,12 @@ export default function RatesSection() {
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-white/50">
+      <p className="text-xs text-foreground/50">
         Rutas, zonas y cargos adicionales que usa el chat para cotizar drayage. Cada cambio se revisa antes de guardar y el chat lo usa en máximo 1 minuto.
       </p>
 
       {init?.estado === 'cargando' && (
-        <div className="text-sm text-sky-200 bg-sky-500/10 border border-sky-500/20 rounded-xl p-3">
+        <div className="text-sm text-t-accent-cyan bg-sky-500/10 border border-sky-500/20 rounded-xl p-3">
           Preparando las tarifas por primera vez: copiando las tarifas actuales del sistema…
         </div>
       )}
@@ -78,7 +78,7 @@ export default function RatesSection() {
         <ErrorBox error={`La carga inicial terminó con diferencias (${init.diffs.length}). Avisa a soporte antes de editar. ${init.diffs.slice(0, 3).join(' · ')}`} />
       )}
       {legacy > 0 && (
-        <div className="text-sm text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex gap-2">
+        <div className="text-sm text-t-warning bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 flex gap-2">
           <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
           <span>Hay {legacy} tarifas de contenedor cargadas con el método anterior (ContainerRoute). Para esas ciudades el chat las usa antes que estas. Consulta con soporte antes de cambiarlas.</span>
         </div>
@@ -87,7 +87,7 @@ export default function RatesSection() {
       <div className="flex gap-1 overflow-x-auto pb-1">
         {TABS.map((t) => (
           <button key={t.id} type="button" onClick={() => setTab(t.id)}
-            className={`px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-colors ${tab === t.id ? 'bg-white/15 text-white font-medium border border-white/20' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}>
+            className={`px-3 py-2 rounded-xl text-sm whitespace-nowrap transition-colors ${tab === t.id ? 'bg-foreground/15 text-foreground font-medium border border-t-border-strong' : 'bg-foreground/5 text-foreground/60 hover:bg-foreground/10'}`}>
             {t.label}
           </button>
         ))}

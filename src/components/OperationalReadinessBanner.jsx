@@ -17,14 +17,14 @@ import { useNavigate } from 'react-router-dom';
 const LEVEL_CONFIG = {
   basic: {
     icon:    AlertTriangle,
-    color:   'text-yellow-400',
+    color:   'text-t-warning',
     bg:      'bg-yellow-400/8',
     border:  'border-yellow-400/25',
     headline: 'Tu cuenta ya está activa, pero aún no está completamente lista para operar con máxima precisión.',
   },
   partial: {
     icon:    Info,
-    color:   'text-violet-400',
+    color:   'text-t-text-accent',
     bg:      'bg-violet-400/8',
     border:  'border-violet-400/25',
     headline: 'Casi listo — completa la configuración pendiente para resultados más confiables.',

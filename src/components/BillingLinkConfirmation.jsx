@@ -64,7 +64,7 @@ export default function BillingLinkConfirmation() {
   if (!code) return null;
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="billing-link-title"
-      className="fixed inset-0 z-[1000] bg-black/70 flex items-center justify-center p-4">
+      className="fixed inset-0 z-[1000] bg-[var(--t-overlay)] flex items-center justify-center p-4">
       <section className="bg-card text-foreground border border-border rounded-2xl p-6 w-full max-w-md space-y-4 shadow-xl">
         <h2 id="billing-link-title" className="text-lg font-semibold">Vincular cuenta de facturación</h2>
         <p className="text-sm text-muted-foreground">
@@ -77,11 +77,11 @@ export default function BillingLinkConfirmation() {
             Cancelar
           </button>
           <button type="button" onClick={confirm} disabled={busy || !email}
-            className="flex-1 px-4 py-2 rounded-xl bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50">
+            className="flex-1 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold hover:bg-t-action-primary-hover disabled:opacity-50">
             {busy ? 'Vinculando…' : pending ? 'Reintentar' : 'Confirmar vinculación'}
           </button>
         </div>
-        {message && <p role="alert" className={`text-xs ${pending ? 'text-amber-400' : 'text-destructive'}`}>{message}</p>}
+        {message && <p role="alert" className={`text-xs ${pending ? 'text-t-warning' : 'text-destructive'}`}>{message}</p>}
       </section>
     </div>
   );

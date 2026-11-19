@@ -22,8 +22,8 @@ function PreciosDiff({ antes = [], despues = [] }) {
   const one = (p) => (p ? `${money(p.objetivo)}${p.piso_tabla != null ? ` (piso ${money(p.piso_tabla)})` : ''}` : 'sin precio');
   return tams.filter((t) => fmt('precios', [a[t]].filter(Boolean)) !== fmt('precios', [d[t]].filter(Boolean))).map((t) => (
     <div key={t} className="text-xs grid md:grid-cols-[110px_1fr] gap-1">
-      <span className="text-white/50">precio {t}</span>
-      <span><span className="text-red-300 line-through">{one(a[t])}</span>{' → '}<span className="text-emerald-300">{one(d[t])}</span></span>
+      <span className="text-foreground/50">precio {t}</span>
+      <span><span className="text-t-danger line-through">{one(a[t])}</span>{' → '}<span className="text-t-success">{one(d[t])}</span></span>
     </div>
   ));
 }
@@ -32,16 +32,16 @@ function PreciosDiff({ antes = [], despues = [] }) {
 //   ✓ verde = bien · ✕ rojo = bloquea el guardado · ⚠ ámbar = aviso (se puede guardar).
 function Quality({ checks }) {
   return (
-    <div className="border border-white/10 rounded-xl p-3 space-y-1.5">
-      <p className="text-xs font-semibold text-white">Control de calidad del archivo</p>
+    <div className="border border-border rounded-xl p-3 space-y-1.5">
+      <p className="text-xs font-semibold text-foreground">Control de calidad del archivo</p>
       {checks.map((c) => (
         <details key={c.id} className="text-xs" open={!c.ok && c.detalle.length > 0 && c.detalle.length <= 5}>
-          <summary className={`list-none ${c.detalle.length ? 'cursor-pointer' : ''} ${c.ok ? 'text-emerald-300' : c.bloquea ? 'text-red-300' : 'text-amber-300'}`}>
+          <summary className={`list-none ${c.detalle.length ? 'cursor-pointer' : ''} ${c.ok ? 'text-t-success' : c.bloquea ? 'text-t-danger' : 'text-t-warning'}`}>
             {c.ok ? '✓' : c.bloquea ? '✕' : '⚠'} {c.titulo}
-            {!c.ok && <span className="text-white/40">{c.bloquea ? ' · no deja guardar' : ' · aviso'}{c.detalle.length > 0 ? ' · ver filas' : ''}</span>}
+            {!c.ok && <span className="text-foreground/40">{c.bloquea ? ' · no deja guardar' : ' · aviso'}{c.detalle.length > 0 ? ' · ver filas' : ''}</span>}
           </summary>
           {c.detalle.length > 0 && (
-            <ul className="mt-1 ml-5 list-disc text-white/70 space-y-0.5">{c.detalle.map((d) => <li key={d}>{d}</li>)}</ul>
+            <ul className="mt-1 ml-5 list-disc text-foreground/70 space-y-0.5">{c.detalle.map((d) => <li key={d}>{d}</li>)}</ul>
           )}
         </details>
       ))}
@@ -52,8 +52,8 @@ function Quality({ checks }) {
 const ENT = { RateRoute: 'ruta', RateZone: 'zona', RateAccessorial: 'accesorial', RateAlias: 'alias' };
 
 const Row = ({ tone, label, k, children }) => (
-  <div className="border border-white/5 rounded-xl p-3 space-y-1">
-    <div className="flex items-center gap-2"><Badge tone={tone}>{label}</Badge><span className="text-xs text-white/60 break-all">{k}</span></div>
+  <div className="border border-t-border-subtle rounded-xl p-3 space-y-1">
+    <div className="flex items-center gap-2"><Badge tone={tone}>{label}</Badge><span className="text-xs text-foreground/60 break-all">{k}</span></div>
     {children}
   </div>
 );
@@ -84,7 +84,7 @@ export default function ChangePreview({ preview, onConfirm, onClose, extra }) {
         <Badge>Sin cambio: {p.iguales || 0}</Badge>
       </div>
       {p.calidad && <Quality checks={p.calidad} />}
-      {(p.avisos || []).map((a) => <p key={a} className="text-xs text-amber-300">⚠ {a}</p>)}
+      {(p.avisos || []).map((a) => <p key={a} className="text-xs text-t-warning">⚠ {a}</p>)}
       {errores.length > 0 && (
         <ErrorBox error={<>No se puede guardar, corrige esto:<ul className="list-disc ml-5 mt-1">{errores.map((e, i) => <li key={i}>{e.key ? `${e.key}: ` : ''}{e.mensaje}</li>)}</ul></>} />
       )}
@@ -93,23 +93,23 @@ export default function ChangePreview({ preview, onConfirm, onClose, extra }) {
           <Row key={`${u.entidad}-${u.key}`} tone="amber" label={`Modificar${ENT[u.entidad] ? ` ${ENT[u.entidad]}` : ''}`} k={u.key}>
             {(u.campos || []).map((c) => c === 'precios' ? <PreciosDiff key={c} antes={u.antes?.precios} despues={u.despues?.precios} /> : (
               <div key={c} className="text-xs grid md:grid-cols-[110px_1fr] gap-1">
-                <span className="text-white/50">{c}</span>
-                <span><span className="text-red-300 line-through">{fmt(c, u.antes?.[c])}</span>{' → '}<span className="text-emerald-300">{fmt(c, u.despues?.[c])}</span></span>
+                <span className="text-foreground/50">{c}</span>
+                <span><span className="text-t-danger line-through">{fmt(c, u.antes?.[c])}</span>{' → '}<span className="text-t-success">{fmt(c, u.despues?.[c])}</span></span>
               </div>
             ))}
           </Row>
         ))}
         {(p.crear || []).map((c) => (
           <Row key={`${c.entidad}-${c.key}`} tone="green" label={`Nueva${ENT[c.entidad] ? ` ${ENT[c.entidad]}` : ''}`} k={c.key}>
-            <p className="text-xs text-white/70">{c.resumen || fmt('', c.despues)}</p>
+            <p className="text-xs text-foreground/70">{c.resumen || fmt('', c.despues)}</p>
           </Row>
         ))}
         {(p.eliminar || []).map((d) => (
           <Row key={`${d.entidad}-${d.key}`} tone="red" label={`Eliminar${ENT[d.entidad] ? ` ${ENT[d.entidad]}` : ''}`} k={d.key}>
-            <p className="text-xs text-white/70">{d.resumen || 'Se borra de la base y el chat deja de usarla.'}</p>
+            <p className="text-xs text-foreground/70">{d.resumen || 'Se borra de la base y el chat deja de usarla.'}</p>
           </Row>
         ))}
-        {total === 0 && errores.length === 0 && <p className="text-sm text-white/50">No hay diferencias: no hay nada que guardar.</p>}
+        {total === 0 && errores.length === 0 && <p className="text-sm text-foreground/50">No hay diferencias: no hay nada que guardar.</p>}
       </div>
       {extra}
       <ErrorBox error={error} />

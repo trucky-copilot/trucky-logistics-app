@@ -8,7 +8,7 @@ import { base44 } from '@/api/base44Client';
 import { useAppState } from '@/lib/AppStateContext';
 
 const tx = (locale, es, en) => (locale === 'en' ? en : es);
-const inputCls = 'w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/60 disabled:opacity-60';
+const inputCls = 'w-full bg-t-bg-input border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-t-border-focus focus:shadow-focus disabled:opacity-60';
 const TRUCKS = [
   { id: 'dry_van', label: 'Dry Van' },
   { id: 'flatbed', label: 'Flatbed' },
@@ -32,10 +32,10 @@ function Block({ title, desc, children }) {
 
 function ConfirmName({ locale, anterior, nuevo, busy, onCancel, onConfirm }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--t-overlay)] p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 space-y-4">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+          <AlertTriangle className="w-5 h-5 text-t-warning mt-0.5 flex-shrink-0" />
           <div className="space-y-2">
             <h3 className="text-base font-semibold text-foreground">{tx(locale, '¿Cambiar el nombre de la empresa?', 'Change the company name?')}</h3>
             <p className="text-sm text-muted-foreground">
@@ -50,7 +50,7 @@ function ConfirmName({ locale, anterior, nuevo, busy, onCancel, onConfirm }) {
         </div>
         <div className="flex justify-end gap-2">
           <button type="button" onClick={onCancel} disabled={busy} className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted">{tx(locale, 'Cancelar', 'Cancel')}</button>
-          <button type="button" onClick={onConfirm} disabled={busy} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+          <button type="button" onClick={onConfirm} disabled={busy} className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-t-action-primary-hover disabled:opacity-60">
             {busy && <Loader2 className="w-4 h-4 animate-spin" />} {tx(locale, 'Aceptar', 'Accept')}
           </button>
         </div>
@@ -94,7 +94,7 @@ export default function CompanySection({ locale }) {
         : tx(locale, `Error del servidor (${loadError.status}).`, `Server error (${loadError.status}).`);
     return (
       <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm space-y-1">
-        <p className="text-red-400 font-medium">{tx(locale, 'No se pudieron cargar los datos de la empresa.', 'Company details could not be loaded.')}</p>
+        <p className="text-t-danger font-medium">{tx(locale, 'No se pudieron cargar los datos de la empresa.', 'Company details could not be loaded.')}</p>
         <p className="text-muted-foreground">{why}</p>
       </div>
     );
@@ -149,7 +149,7 @@ export default function CompanySection({ locale }) {
               return (
                 <button key={t.id} type="button" disabled={!canEdit} onClick={() => toggle(t.id)} role="radio" aria-checked={on}
                   className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${on ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-card hover:bg-muted text-muted-foreground'}`}>
-                  {t.label}{on && <Check className="w-4 h-4 text-primary" />}
+                  {t.label}{on && <Check className="w-4 h-4 text-t-text-accent" />}
                 </button>
               );
             })}
@@ -158,8 +158,8 @@ export default function CompanySection({ locale }) {
 
         {canEdit && (
           <div className="flex items-center justify-end gap-3">
-            {status && <span className={`text-sm flex items-center gap-1 ${status.ok ? 'text-emerald-400' : 'text-red-400'}`}>{status.ok && <CheckCircle2 className="w-4 h-4" />}{status.msg}</span>}
-            <button type="submit" disabled={busy || !hayCambios} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            {status && <span className={`text-sm flex items-center gap-1 ${status.ok ? 'text-t-success' : 'text-t-danger'}`}>{status.ok && <CheckCircle2 className="w-4 h-4" />}{status.msg}</span>}
+            <button type="submit" disabled={busy || !hayCambios} className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-t-action-primary-hover disabled:opacity-50">
               {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {tx(locale, 'Guardar', 'Save')}
             </button>
           </div>

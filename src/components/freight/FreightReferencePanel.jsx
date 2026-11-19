@@ -33,18 +33,18 @@ function RpmTable() {
         <thead>
           <tr className="text-muted-foreground border-b border-border">
             <th className="text-left py-1.5 font-medium">Equipo</th>
-            <th className="text-right py-1.5 font-medium text-yellow-400">Mínimo</th>
-            <th className="text-right py-1.5 font-medium text-green-400">Bueno</th>
-            <th className="text-right py-1.5 font-medium text-primary">Excelente</th>
+            <th className="text-right py-1.5 font-medium text-t-warning">Mínimo</th>
+            <th className="text-right py-1.5 font-medium text-t-success">Bueno</th>
+            <th className="text-right py-1.5 font-medium text-t-text-accent">Excelente</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border/40">
           {benchmarks.map((b, i) => (
             <tr key={i} className="hover:bg-muted/30 transition-colors">
               <td className="py-1.5 text-foreground font-medium">{b.equipment}</td>
-              <td className="py-1.5 text-right font-mono text-yellow-400">${b.min.toFixed(2)}</td>
-              <td className="py-1.5 text-right font-mono text-green-400">${b.good.toFixed(2)}</td>
-              <td className="py-1.5 text-right font-mono text-primary">${b.excellent.toFixed(2)}+</td>
+              <td className="py-1.5 text-right font-mono text-t-warning">${b.min.toFixed(2)}</td>
+              <td className="py-1.5 text-right font-mono text-t-success">${b.good.toFixed(2)}</td>
+              <td className="py-1.5 text-right font-mono text-t-text-accent">${b.excellent.toFixed(2)}+</td>
             </tr>
           ))}
         </tbody>
@@ -72,7 +72,7 @@ function FlatRateTable() {
             {ranges.map((r, i) => (
               <tr key={i} className="hover:bg-muted/30 transition-colors">
                 <td className="py-1.5 text-foreground">{r.range}</td>
-                <td className="py-1.5 text-right font-mono text-green-400">${r.min.toLocaleString()}</td>
+                <td className="py-1.5 text-right font-mono text-t-success">${r.min.toLocaleString()}</td>
                 <td className="py-1.5 text-right font-mono text-muted-foreground">
                   {r.max ? `$${r.max.toLocaleString()}` : r.min > 0 ? '$'+r.min.toLocaleString()+'+' : '—'}
                 </td>
@@ -101,7 +101,7 @@ function LoadTypesPanel() {
             onClick={() => setSelected(t.id)}
             className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
               selected === t.id
-                ? 'bg-primary/20 border-primary text-primary'
+                ? 'bg-primary/20 border-primary text-t-text-accent'
                 : 'border-border text-muted-foreground hover:border-primary/50'
             }`}
           >
@@ -117,8 +117,8 @@ function LoadTypesPanel() {
           {current.rpm_min && (
             <div className="flex gap-2 text-xs">
               <span className="text-muted-foreground">RPM:</span>
-              <span className="text-yellow-400 font-mono">${current.rpm_min.toFixed(2)}</span>
-              {current.rpm_max && <><span className="text-muted-foreground">→</span><span className="text-green-400 font-mono">${current.rpm_max.toFixed(2)}/mi</span></>}
+              <span className="text-t-warning font-mono">${current.rpm_min.toFixed(2)}</span>
+              {current.rpm_max && <><span className="text-muted-foreground">→</span><span className="text-t-success font-mono">${current.rpm_max.toFixed(2)}/mi</span></>}
             </div>
           )}
 
@@ -168,7 +168,7 @@ function AccessorialsPanel() {
           </div>
           <div className="text-right flex-shrink-0">
             {a.min !== null && (
-              <span className="text-xs font-mono text-green-400">
+              <span className="text-xs font-mono text-t-success">
                 {typeof a.min === 'number' && a.min < 10
                   ? `$${a.min.toFixed(2)}${a.max && a.max !== a.min ? `–$${a.max.toFixed(2)}` : ''}`
                   : `$${a.min}${a.max && a.max !== a.min ? `–$${a.max}` : ''}`
@@ -200,7 +200,7 @@ function HosPanel() {
             {hos.rules.map((r, i) => (
               <tr key={i} className="hover:bg-muted/30 transition-colors">
                 <td className="py-1.5 text-foreground">{r.rule}</td>
-                <td className="py-1.5 text-right text-primary font-medium">{r.limit}</td>
+                <td className="py-1.5 text-right text-t-text-accent font-medium">{r.limit}</td>
               </tr>
             ))}
           </tbody>
@@ -222,11 +222,11 @@ function RedFlagsPanel() {
     <div className="space-y-4">
       {flags.auto_decline?.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-red-400 mb-2">🚫 Rechazo Automático</p>
+          <p className="text-xs font-semibold text-t-danger mb-2">🚫 Rechazo Automático</p>
           <ul className="space-y-1">
             {flags.auto_decline.map((f, i) => (
               <li key={i} className="text-xs text-foreground flex gap-1.5">
-                <span className="text-red-400 flex-shrink-0">•</span>{f}
+                <span className="text-t-danger flex-shrink-0">•</span>{f}
               </li>
             ))}
           </ul>
@@ -234,11 +234,11 @@ function RedFlagsPanel() {
       )}
       {flags.proceed_with_caution?.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-yellow-400 mb-2">⚠️ Proceder con Cautela</p>
+          <p className="text-xs font-semibold text-t-warning mb-2">⚠️ Proceder con Cautela</p>
           <ul className="space-y-1">
             {flags.proceed_with_caution.map((f, i) => (
               <li key={i} className="text-xs text-foreground flex gap-1.5">
-                <span className="text-yellow-400 flex-shrink-0">•</span>{f}
+                <span className="text-t-warning flex-shrink-0">•</span>{f}
               </li>
             ))}
           </ul>
@@ -264,7 +264,7 @@ function ScenariosPanel() {
             onClick={() => setSelected(s.id)}
             className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
               selected === s.id
-                ? 'bg-primary/20 border-primary text-primary'
+                ? 'bg-primary/20 border-primary text-t-text-accent'
                 : 'border-border text-muted-foreground hover:border-primary/50'
             }`}
           >
@@ -283,7 +283,7 @@ function ScenariosPanel() {
               <ol className="space-y-1">
                 {current.steps.map((step, i) => (
                   <li key={i} className="text-xs text-foreground flex gap-2">
-                    <span className="text-primary font-mono flex-shrink-0">{i + 1}.</span>{step}
+                    <span className="text-t-text-accent font-mono flex-shrink-0">{i + 1}.</span>{step}
                   </li>
                 ))}
               </ol>
@@ -335,7 +335,7 @@ export default function FreightReferencePanel({ className = '' }) {
             onClick={() => setActiveTab(tab.id)}
             className={`text-xs whitespace-nowrap px-3 py-2 border-b-2 transition-all ${
               activeTab === tab.id
-                ? 'border-primary text-primary'
+                ? 'border-primary text-t-text-accent'
                 : 'border-transparent text-muted-foreground hover:text-foreground'
             }`}
           >

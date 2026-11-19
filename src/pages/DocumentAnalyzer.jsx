@@ -488,18 +488,18 @@ export default function DocumentAnalyzer() {
 
   // Badge de modo de análisis
   const roleBadge = userRole === 'carrier'
-    ? { label: t.documents.carrierMode, icon: Truck, color: 'text-violet-400 bg-violet-400/10 border-violet-400/20' }
-    : { label: t.documents.dispatcherMode, icon: Users, color: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' };
+    ? { label: t.documents.carrierMode, icon: Truck, color: 'text-t-text-accent bg-violet-400/10 border-violet-400/20' }
+    : { label: t.documents.dispatcherMode, icon: Users, color: 'text-t-warning bg-yellow-400/10 border-yellow-400/20' };
 
   return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto space-y-4">
+    <div className="t-page max-w-2xl mx-auto space-y-4">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-          <FileSearch className="w-5 h-5 text-primary" />
+        <h1 className="t-h1 flex items-center gap-2.5">
+          <FileSearch className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" />
           {t.documents.title}
         </h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
+        <p className="t-subtitle mt-1">
           {t.documents.subtitle}
         </p>
       </div>
@@ -527,7 +527,7 @@ export default function DocumentAnalyzer() {
           <label className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border hover:border-primary/40 text-xs text-muted-foreground hover:text-foreground cursor-pointer transition-colors">
             <Upload className="w-3.5 h-3.5" />
             {fileName
-              ? <span className="text-primary max-w-32 truncate">{fileName}</span>
+              ? <span className="text-t-text-accent max-w-32 truncate">{fileName}</span>
               : <span>{t.documents.upload}</span>
             }
             <input type="file" accept={ACCEPTED_TYPES} className="hidden" onChange={handleFile} />
@@ -565,7 +565,7 @@ Equipment: 20ft Dry...`}
         <button
           onClick={() => analyze()}
           disabled={!documentText.trim() || loading}
-          className="w-full py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+          className="w-full py-2.5 rounded-full bg-primary hover:bg-t-action-primary-hover disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
         >
           {loading ? (
             <>
@@ -584,9 +584,9 @@ Equipment: 20ft Dry...`}
       {/* Error */}
       {error && (
         <div className="flex items-start gap-2.5 p-4 rounded-xl bg-red-400/10 border border-red-400/20">
-          <XCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+          <XCircle className="w-4 h-4 text-t-danger flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-400">{error}</p>
+            <p className="text-sm font-medium text-t-danger">{error}</p>
             {error.includes('Solo proceso') && (
               <p className="text-xs mt-1 text-muted-foreground">{t.documents.sensitive}</p>
             )}
@@ -598,7 +598,7 @@ Equipment: 20ft Dry...`}
       {analysis && (
         <div className="space-y-4 relative">
           {translating && (
-            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary/10 border border-primary/20 text-xs text-primary font-medium animate-pulse shadow-sm">
+            <div className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-primary/10 border border-primary/20 text-xs text-t-text-accent font-medium animate-pulse shadow-sm">
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
               {locale === 'en' ? 'Translating analysis with Google Translate...' : 'Traduciendo análisis con Google Translate...'}
             </div>
@@ -616,11 +616,11 @@ Equipment: 20ft Dry...`}
             const kind = classifyLoadDocument(textForType, analysis?.datos_extraidos?.tipo_documento);
             if (kind === 'rate_request') {
               return (
-                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-200 flex gap-2.5">
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-t-warning flex gap-2.5">
                   <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <div>
                     <p className="font-semibold">{isEsLocal ? 'Es una solicitud de tarifa, no una rate confirmation' : 'This is a rate request, not a rate confirmation'}</p>
-                    <p className="text-xs text-amber-200/80 mt-1">
+                    <p className="text-xs text-t-warning/80 mt-1">
                       {isEsLocal
                         ? 'Todavía no hay carga que crear. Responde al broker con tu cotización; cuando llegue la rate confirmation, pásala por el verificador.'
                         : 'There is no load to create yet. Reply to the broker with your quote; when the rate confirmation arrives, run it through the checker.'}
@@ -639,7 +639,7 @@ Equipment: 20ft Dry...`}
                 <button
                   type="button"
                   onClick={handleProceedToCreateLoad}
-                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground whitespace-nowrap"
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground whitespace-nowrap"
                 >
                   <Package className="w-3.5 h-3.5" />
                   {isEsLocal ? 'Crear carga con estos datos' : 'Create load from this data'}
@@ -659,38 +659,38 @@ Equipment: 20ft Dry...`}
               </div>
 
               <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
-                <div className="w-full max-w-lg p-6 md:p-8 rounded-3xl bg-[#0f0e1c]/95 border border-violet-500/40 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
-                  <div className="w-14 h-14 mx-auto rounded-2xl bg-gradient-to-br from-violet-600/30 to-indigo-600/10 border border-violet-500/40 flex items-center justify-center text-violet-300 shadow-xl shadow-violet-600/20">
+                <div className="w-full max-w-lg p-6 md:p-8 rounded-3xl bg-t-bg-surface/95 border border-violet-500/40 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-t-bg-input border border-t-border-focus flex items-center justify-center text-t-text-accent">
                     <Lock className="w-7 h-7" />
                   </div>
 
                   <div className="space-y-1.5">
-                    <h3 className="text-xl font-bold text-white tracking-tight">
+                    <h3 className="text-xl font-bold text-foreground tracking-tight">
                       Desbloquea el análisis completo
                     </h3>
-                    <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                       Obtén todos los detalles y toma decisiones con confianza.
                     </p>
                   </div>
 
-                  <div className="space-y-2.5 text-left max-w-xs mx-auto text-xs text-zinc-300 pt-1">
+                  <div className="space-y-2.5 text-left max-w-xs mx-auto text-xs text-t-text-secondary pt-1">
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 flex-shrink-0">
+                      <div className="w-7 h-7 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-t-danger flex-shrink-0">
                         <AlertTriangle className="w-4 h-4" />
                       </div>
-                      <span className="font-medium text-zinc-200">Alertas críticas y cláusulas</span>
+                      <span className="font-medium text-t-text-secondary">Alertas críticas y cláusulas</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-purple-400 flex-shrink-0">
+                      <div className="w-7 h-7 rounded-lg bg-purple-500/15 border border-purple-500/30 flex items-center justify-center text-t-text-accent flex-shrink-0">
                         <Sparkles className="w-4 h-4" />
                       </div>
-                      <span className="font-medium text-zinc-200">Evaluación de rentabilidad</span>
+                      <span className="font-medium text-t-text-secondary">Evaluación de rentabilidad</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-blue-400 flex-shrink-0">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/15 border border-blue-500/30 flex items-center justify-center text-t-info flex-shrink-0">
                         <FileText className="w-4 h-4" />
                       </div>
-                      <span className="font-medium text-zinc-200">Historial de brokers y documentos</span>
+                      <span className="font-medium text-t-text-secondary">Historial de brokers y documentos</span>
                     </div>
                   </div>
 
@@ -699,7 +699,7 @@ Equipment: 20ft Dry...`}
                       href="https://www.trucky-ai.com"
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-sm flex items-center justify-center gap-2 shadow-xl shadow-violet-600/30 transition-all hover:scale-[1.02]"
+                      className="w-full py-3.5 px-6 rounded-2xl bg-t-action-primary hover:bg-t-action-primary-hover text-white font-bold text-sm flex items-center justify-center gap-2 transition-all hover:scale-[1.02]"
                     >
                       <Sparkles className="w-4 h-4" />
                       <span>Activar versión completa →</span>

@@ -11,10 +11,10 @@ import { planSummary } from '@/lib/planSummary';
 
 const tx = (locale, es, en) => (locale === 'en' ? en : es);
 const TONES = {
-  green: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30',
-  violet: 'bg-violet-500/20 text-violet-300 border-violet-500/30',
-  amber: 'bg-amber-500/15 text-amber-300 border-amber-500/30',
-  red: 'bg-red-500/15 text-red-300 border-red-500/30',
+  green: 'bg-emerald-500/15 text-t-success border-emerald-500/30',
+  violet: 'bg-violet-500/20 text-t-text-accent border-violet-500/30',
+  amber: 'bg-amber-500/15 text-t-warning border-amber-500/30',
+  red: 'bg-red-500/15 text-t-danger border-red-500/30',
 };
 
 function Row({ label, children }) {
@@ -39,7 +39,7 @@ export default function PlanSection({ locale }) {
     <div className="space-y-5">
       <section className="rounded-xl border border-border bg-card/60 p-5">
         <div className="flex items-center gap-3 pb-3 border-b border-border">
-          <Sparkles className="w-5 h-5 text-primary" />
+          <Sparkles className="w-5 h-5 text-t-text-accent" />
           <h3 className="text-base font-semibold text-foreground flex-1">{s.nombre}</h3>
           <span className={`text-xs font-semibold px-2 py-0.5 rounded border ${TONES[s.tono]}`}>{s.estado}</span>
         </div>
@@ -61,10 +61,10 @@ export default function PlanSection({ locale }) {
 
 const errMsg = (e) => e?.response?.data?.error || '';
 const STATUS = {
-  paid: { es: 'Pagado', en: 'Paid', cls: 'text-emerald-300' },
-  open: { es: 'Pendiente', en: 'Open', cls: 'text-amber-300' },
+  paid: { es: 'Pagado', en: 'Paid', cls: 'text-t-success' },
+  open: { es: 'Pendiente', en: 'Open', cls: 'text-t-warning' },
   void: { es: 'Anulado', en: 'Void', cls: 'text-muted-foreground' },
-  uncollectible: { es: 'No cobrado', en: 'Uncollectible', cls: 'text-red-300' },
+  uncollectible: { es: 'No cobrado', en: 'Uncollectible', cls: 'text-t-danger' },
 };
 const money = (n, cur, locale) => { try { return new Intl.NumberFormat(locale === 'en' ? 'en-US' : 'es-CO', { style: 'currency', currency: cur || 'USD' }).format(n); } catch { return `$${n}`; } };
 
@@ -72,7 +72,7 @@ function Card({ icon: Icon, title, children }) {
   return (
     <section className="rounded-xl border border-border bg-card/60 p-5 space-y-3">
       <div className="flex items-center gap-2">
-        <Icon className="w-4 h-4 text-primary" />
+        <Icon className="w-4 h-4 text-t-text-accent" />
         <h3 className="text-sm font-semibold text-foreground flex-1">{title}</h3>
       </div>
       {children}
@@ -99,7 +99,7 @@ function BillingDetails({ locale, orgId, fmt }) {
   useEffect(() => { load(); }, [load]);
 
   if (!orgId) return null;
-  if (error) return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">{error}</div>;
+  if (error) return <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-t-danger">{error}</div>;
   if (!data) return <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> {tx(locale, 'Consultando pagos…', 'Loading billing…')}</div>;
   if (data.modo === 'none') {
     return <p className="text-sm text-muted-foreground rounded-xl border border-dashed border-border p-4">{tx(locale, 'Esta cuenta no tiene una suscripción de pago, así que no hay método de pago ni cobros para mostrar.', 'This account has no paid subscription, so there is no payment method or charges to show.')}</p>;
@@ -122,7 +122,7 @@ function BillingDetails({ locale, orgId, fmt }) {
 
   return (
     <div className="space-y-5">
-      {data.modo === 'test' && <p className="text-xs text-amber-300">{tx(locale, 'Modo pruebas: estos datos vienen de Stripe en modo de pruebas.', 'Test mode: this data comes from Stripe test mode.')}</p>}
+      {data.modo === 'test' && <p className="text-xs text-t-warning">{tx(locale, 'Modo pruebas: estos datos vienen de Stripe en modo de pruebas.', 'Test mode: this data comes from Stripe test mode.')}</p>}
 
       <Card icon={CreditCard} title={tx(locale, 'Método de pago', 'Payment method')}>
         {pm ? (
@@ -150,8 +150,8 @@ function BillingDetails({ locale, orgId, fmt }) {
                       <td className="py-2 pr-3 whitespace-nowrap">{c.monto != null ? money(c.monto, c.moneda, locale) : '—'}</td>
                       <td className={`py-2 pr-3 ${st.cls}`}>{locale === 'en' ? st.en : st.es}</td>
                       <td className="py-2 text-right whitespace-nowrap space-x-3">
-                        {c.ver_url && <a href={c.ver_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">{tx(locale, 'Ver', 'View')} <ExternalLink className="w-3 h-3" /></a>}
-                        {c.pdf_url && <a href={c.pdf_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline inline-flex items-center gap-1">PDF <FileDown className="w-3 h-3" /></a>}
+                        {c.ver_url && <a href={c.ver_url} target="_blank" rel="noopener noreferrer" className="text-t-text-accent hover:underline inline-flex items-center gap-1">{tx(locale, 'Ver', 'View')} <ExternalLink className="w-3 h-3" /></a>}
+                        {c.pdf_url && <a href={c.pdf_url} target="_blank" rel="noopener noreferrer" className="text-t-text-accent hover:underline inline-flex items-center gap-1">PDF <FileDown className="w-3 h-3" /></a>}
                       </td>
                     </tr>
                   );
@@ -165,25 +165,25 @@ function BillingDetails({ locale, orgId, fmt }) {
       <Card icon={XCircle} title={tx(locale, 'Cancelar suscripción', 'Cancel subscription')}>
         {sub.cancela_al_final ? (
           <div className="space-y-3">
-            <p className="text-sm text-amber-300">{tx(locale, `Tu suscripción se cancelará el ${fmt(sub.cancela_el || sub.fin_periodo)}. Hasta esa fecha sigues teniendo acceso.`, `Your subscription will cancel on ${fmt(sub.cancela_el || sub.fin_periodo)}. You keep access until then.`)}</p>
+            <p className="text-sm text-t-warning">{tx(locale, `Tu suscripción se cancelará el ${fmt(sub.cancela_el || sub.fin_periodo)}. Hasta esa fecha sigues teniendo acceso.`, `Your subscription will cancel on ${fmt(sub.cancela_el || sub.fin_periodo)}. You keep access until then.`)}</p>
             {data.puede_cancelar && <button type="button" onClick={() => setConfirm('reanudar')} className="inline-flex items-center gap-2 rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted"><RotateCcw className="w-4 h-4" /> {tx(locale, 'Mantener mi suscripción', 'Keep my subscription')}</button>}
           </div>
         ) : activa ? (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">{tx(locale, 'Si cancelas, no se te vuelve a cobrar y conservas el acceso hasta el final del período que ya pagaste.', 'If you cancel, you will not be charged again and you keep access until the end of the period you already paid.')}</p>
             {data.puede_cancelar
-              ? <button type="button" onClick={() => setConfirm('cancelar')} className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-4 py-2 text-sm text-red-300 hover:bg-red-500/10"><XCircle className="w-4 h-4" /> {tx(locale, 'Cancelar suscripción', 'Cancel subscription')}</button>
+              ? <button type="button" onClick={() => setConfirm('cancelar')} className="inline-flex items-center gap-2 rounded-lg border border-red-500/40 px-4 py-2 text-sm text-t-danger hover:bg-red-500/10"><XCircle className="w-4 h-4" /> {tx(locale, 'Cancelar suscripción', 'Cancel subscription')}</button>
               : <p className="text-xs text-muted-foreground">{tx(locale, 'Solo el dueño o un administrador de la empresa puede cancelar.', 'Only the company owner or an admin can cancel.')}</p>}
           </div>
         ) : <p className="text-sm text-muted-foreground">{tx(locale, 'La suscripción no está activa.', 'The subscription is not active.')}</p>}
-        {aviso && <p className={`text-sm ${aviso.ok ? 'text-emerald-400' : 'text-red-400'}`}>{aviso.msg}</p>}
+        {aviso && <p className={`text-sm ${aviso.ok ? 'text-t-success' : 'text-t-danger'}`}>{aviso.msg}</p>}
       </Card>
 
       {confirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" role="dialog" aria-modal="true">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--t-overlay)] p-4" role="dialog" aria-modal="true">
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-5 space-y-4">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+              <AlertTriangle className="w-5 h-5 text-t-warning mt-0.5 flex-shrink-0" />
               <div className="space-y-2">
                 <h3 className="text-base font-semibold text-foreground">{confirm === 'cancelar' ? tx(locale, '¿Cancelar tu suscripción?', 'Cancel your subscription?') : tx(locale, '¿Mantener tu suscripción?', 'Keep your subscription?')}</h3>
                 <p className="text-sm text-muted-foreground">{confirm === 'cancelar'
@@ -193,7 +193,7 @@ function BillingDetails({ locale, orgId, fmt }) {
             </div>
             <div className="flex justify-end gap-2">
               <button type="button" onClick={() => setConfirm(null)} disabled={busy} className="rounded-lg border border-border px-4 py-2 text-sm text-foreground hover:bg-muted">{tx(locale, 'Volver', 'Back')}</button>
-              <button type="button" onClick={ejecutar} disabled={busy} className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-60 ${confirm === 'cancelar' ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-primary text-primary-foreground hover:bg-primary/90'}`}>
+              <button type="button" onClick={ejecutar} disabled={busy} className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium disabled:opacity-60 ${confirm === 'cancelar' ? 'bg-red-600 text-white hover:bg-red-500' : 'bg-primary text-primary-foreground hover:bg-t-action-primary-hover'}`}>
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />} {confirm === 'cancelar' ? tx(locale, 'Sí, cancelar', 'Yes, cancel') : tx(locale, 'Sí, mantener', 'Yes, keep it')}
               </button>
             </div>

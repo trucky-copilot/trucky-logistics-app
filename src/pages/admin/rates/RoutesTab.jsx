@@ -68,11 +68,11 @@ function RouteEditor({ route, zones, onClose, onReview, onDelete, busy, error })
         </Field>
       </div>
       <div>
-        <p className="text-xs font-medium text-white/60 mb-2">Precios (vacío = la ruta no tiene ese tamaño)</p>
+        <p className="text-xs font-medium text-foreground/60 mb-2">Precios (vacío = la ruta no tiene ese tamaño)</p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {TAMANOS.map(({ id, label }) => (
-            <div key={id} className="bg-white/5 rounded-xl p-2 space-y-2">
-              <p className="text-xs text-white font-medium">{label}{f.precios[id].derivado && <Badge tone="blue"> derivado</Badge>}</p>
+            <div key={id} className="bg-foreground/5 rounded-xl p-2 space-y-2">
+              <p className="text-xs text-foreground font-medium">{label}{f.precios[id].derivado && <Badge tone="blue"> derivado</Badge>}</p>
               <Input type="number" min="0" placeholder="Objetivo $" value={f.precios[id].objetivo} onChange={(e) => setPrice(id, 'objetivo', e.target.value)} />
               <Input type="number" min="0" placeholder="Piso $" value={f.precios[id].piso} onChange={(e) => setPrice(id, 'piso', e.target.value)} />
             </div>
@@ -80,7 +80,7 @@ function RouteEditor({ route, zones, onClose, onReview, onDelete, busy, error })
         </div>
       </div>
       <Field label="Nota interna"><TextArea value={f.notas} onChange={(e) => set('notas', e.target.value)} /></Field>
-      {route?.fuente?.archivo && <p className="text-[11px] text-white/40">Origen: {route.fuente.archivo}, fila {route.fuente.fila} · clave {route.route_id}</p>}
+      {route?.fuente?.archivo && <p className="text-[11px] text-foreground/40">Origen: {route.fuente.archivo}, fila {route.fuente.fila} · clave {route.route_id}</p>}
       <ErrorBox error={error} />
       <div className="flex flex-wrap justify-end gap-2">
         {!isNew && <Btn variant="danger" className="mr-auto" onClick={onDelete} disabled={busy}><Trash2 className="w-4 h-4" /> Eliminar ruta</Btn>}
@@ -125,17 +125,17 @@ export default function RoutesTab({ data, flow }) {
         </Field>
         <Field label="Buscar">
           <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40" />
             <Input className="pl-9" placeholder="Ciudad, mercado o grupo" value={q} onChange={(e) => setQ(e.target.value)} />
           </div>
         </Field>
-        <label className="flex items-center gap-2 text-xs text-white/60 pb-2">
+        <label className="flex items-center gap-2 text-xs text-foreground/60 pb-2">
           <input type="checkbox" checked={verInactivas} onChange={(e) => setVerInactivas(e.target.checked)} /> Ver desactivadas
         </label>
         <div className="flex-1" />
         <Btn onClick={() => setEditing(null)}><Plus className="w-4 h-4" /> Nueva ruta</Btn>
       </div>
-      <p className="text-xs text-white/40">
+      <p className="text-xs text-foreground/40">
         {rows.length} rutas · Cada ruta trae sus <b>millas de ida</b> desde el puerto y el <b>precio por contenedor</b> según el tamaño (objetivo y, si existe, piso).
         Si la ciudad no está en la tabla, el chat usa la ruta con las millas más parecidas.
       </p>
@@ -143,7 +143,7 @@ export default function RoutesTab({ data, flow }) {
         <Table head={['Ciudad', 'Mercado', 'Zona', 'Grupo', 'Millas', ...TAMANOS.map((t) => t.label), '']}>
           {rows.map((r) => (
             <tr key={r.id} className={r.activo === false ? 'opacity-40' : ''}>
-              <Td className="text-white">{r.ciudad}{r.activo === false && <> <Badge tone="red">inactiva</Badge></>}</Td>
+              <Td className="text-foreground">{r.ciudad}{r.activo === false && <> <Badge tone="red">inactiva</Badge></>}</Td>
               <Td>{r.mercado}</Td>
               <Td>{r.zona}</Td>
               <Td>{r.grupo ?? '—'}</Td>
@@ -152,11 +152,11 @@ export default function RoutesTab({ data, flow }) {
                 const p = priceOf(r, id);
                 return (
                   <Td key={id} className="whitespace-nowrap">
-                    {p ? <>{money(p.objetivo)}{p.piso_tabla != null && <span className="block text-[11px] text-white/40">piso {money(p.piso_tabla)}</span>}</> : <span className="text-white/30">—</span>}
+                    {p ? <>{money(p.objetivo)}{p.piso_tabla != null && <span className="block text-[11px] text-foreground/40">piso {money(p.piso_tabla)}</span>}</> : <span className="text-foreground/30">—</span>}
                   </Td>
                 );
               })}
-              <Td><button onClick={() => setEditing(r)} className="text-amber-400 hover:text-amber-300" title="Editar"><Pencil className="w-4 h-4" /></button></Td>
+              <Td><button onClick={() => setEditing(r)} className="text-t-warning hover:text-t-warning" title="Editar"><Pencil className="w-4 h-4" /></button></Td>
             </tr>
           ))}
         </Table>

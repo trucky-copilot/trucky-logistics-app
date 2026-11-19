@@ -1,30 +1,30 @@
 const STATUS_CONFIG = {
   // Trucks
-  disponible: { label: 'Disponible', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
-  en_ruta: { label: 'En Ruta', class: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
-  en_yarda: { label: 'En Yarda', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
-  mantenimiento: { label: 'Mantenimiento', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
+  disponible: { label: 'Disponible', class: 'text-t-success bg-t-success-soft border-transparent' },
+  en_ruta: { label: 'En Ruta', class: 'text-t-text-accent bg-t-bg-surface-raised border-transparent' },
+  en_yarda: { label: 'En Yarda', class: 'text-t-warning bg-t-warning-soft border-transparent' },
+  mantenimiento: { label: 'Mantenimiento', class: 'text-t-danger bg-t-danger-soft border-transparent' },
   // Loads
-  pendiente: { label: 'Pendiente', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
-  en_transito: { label: 'En Tránsito', class: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
-  entregado: { label: 'Entregado', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
-  cancelado: { label: 'Cancelado', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
+  pendiente: { label: 'Pendiente', class: 'text-t-warning bg-t-warning-soft border-transparent' },
+  en_transito: { label: 'En Tránsito', class: 'text-t-text-accent bg-t-bg-surface-raised border-transparent' },
+  entregado: { label: 'Entregado', class: 'text-t-success bg-t-success-soft border-transparent' },
+  cancelado: { label: 'Cancelado', class: 'text-t-danger bg-t-danger-soft border-transparent' },
   // Results
-  ganancia: { label: 'Ganancia', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
-  break_even: { label: 'Break-Even', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
-  perdida: { label: 'Pérdida', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
+  ganancia: { label: 'Ganancia', class: 'text-t-success bg-t-success-soft border-transparent' },
+  break_even: { label: 'Break-Even', class: 'text-t-warning bg-t-warning-soft border-transparent' },
+  perdida: { label: 'Pérdida', class: 'text-t-danger bg-t-danger-soft border-transparent' },
   // Drivers
-  activo: { label: 'Activo', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
-  inactivo: { label: 'Inactivo', class: 'text-muted-foreground bg-muted/50 border-border' },
-  vacaciones: { label: 'Vacaciones', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
-  suspension: { label: 'Suspendido', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
+  activo: { label: 'Activo', class: 'text-t-success bg-t-success-soft border-transparent' },
+  inactivo: { label: 'Inactivo', class: 'text-t-text-secondary bg-t-action-secondary border-transparent' },
+  vacaciones: { label: 'Vacaciones', class: 'text-t-warning bg-t-warning-soft border-transparent' },
+  suspension: { label: 'Suspendido', class: 'text-t-danger bg-t-danger-soft border-transparent' },
   // Brokers
-  precaucion: { label: 'Precaución', class: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20' },
-  bloqueado: { label: 'Bloqueado', class: 'text-red-400 bg-red-400/10 border-red-400/20' },
+  precaucion: { label: 'Precaución', class: 'text-t-warning bg-t-warning-soft border-transparent' },
+  bloqueado: { label: 'Bloqueado', class: 'text-t-danger bg-t-danger-soft border-transparent' },
   // Tipo cliente
-  quickload: { label: '$2.20/mi', class: 'text-muted-foreground bg-muted/50 border-border' },
-  broker_directo: { label: 'Broker Directo', class: 'text-violet-400 bg-violet-400/10 border-violet-400/20' },
-  cliente_directo: { label: 'Cliente Directo', class: 'text-green-400 bg-green-400/10 border-green-400/20' },
+  quickload: { label: '$2.20/mi', class: 'text-t-text-secondary bg-t-action-secondary border-transparent' },
+  broker_directo: { label: 'Broker Directo', class: 'text-t-text-accent bg-t-bg-surface-raised border-transparent' },
+  cliente_directo: { label: 'Cliente Directo', class: 'text-t-success bg-t-success-soft border-transparent' },
 };
 
 const STATUS_LABELS = {
@@ -36,9 +36,9 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 export default function StatusBadge({ status, className = '' }) {
   const { locale } = useLanguage();
-  const config = STATUS_CONFIG[status] || { label: status, class: 'text-muted-foreground bg-muted/50 border-border' };
+  const config = STATUS_CONFIG[status] || { label: status, class: 'text-t-text-secondary bg-t-action-secondary border-transparent' };
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium border ${config.class} ${className}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${config.class} ${className}`}>
       {STATUS_LABELS[locale]?.[status] || config.label}
     </span>
   );

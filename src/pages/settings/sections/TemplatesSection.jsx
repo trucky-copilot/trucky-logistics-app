@@ -16,7 +16,7 @@ const SCENARIOS = officialTemplates.templates.map((t) => ({ id: t.id, name: t.na
 const nameOf = (id) => SCENARIOS.find((s) => s.id === id)?.name || id;
 const MAX_BODY = 5000;
 const MAX_FILE = 50000;
-const selectCls = 'w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/60';
+const selectCls = 'w-full bg-t-bg-input border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-t-border-focus focus:shadow-focus';
 
 async function readTxt(file, locale) {
   if (!file) return { error: '' };
@@ -98,7 +98,7 @@ export default function TemplatesSection({ locale }) {
   return (
     <div className="space-y-5">
       {userProfile?.rol === 'carrier' && (
-        <p className="text-xs text-amber-300">{tx(locale, 'El chat redacta correos solo en cuentas de dispatcher.', 'The chat drafts emails only for dispatcher accounts.')}</p>
+        <p className="text-xs text-t-warning">{tx(locale, 'El chat redacta correos solo en cuentas de dispatcher.', 'The chat drafts emails only for dispatcher accounts.')}</p>
       )}
 
       <section className="rounded-xl border border-border bg-card/60 p-5 space-y-4">
@@ -113,7 +113,7 @@ export default function TemplatesSection({ locale }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <label className="block space-y-1">
             <span className="text-xs font-medium text-muted-foreground">{tx(locale, 'Escenario', 'Scenario')}</span>
-            <select className={selectCls} style={{ colorScheme: 'dark' }} value={escenario} onChange={(e) => { setEscenario(e.target.value); setError(''); setAviso(''); }}>
+            <select className={selectCls} value={escenario} onChange={(e) => { setEscenario(e.target.value); setError(''); setAviso(''); }}>
               <option value="">{tx(locale, 'Elige un escenario…', 'Choose a scenario…')}</option>
               {SCENARIOS.map((s) => <option key={s.id} value={s.id}>{s.name}{propiaDe(s.id) ? ` · ${tx(locale, 'ya tiene la tuya', 'already yours')}` : ''}</option>)}
             </select>
@@ -126,11 +126,11 @@ export default function TemplatesSection({ locale }) {
             </button>
           </div>
         </div>
-        {error && <p className="text-sm text-red-400">{error}</p>}
+        {error && <p className="text-sm text-t-danger">{error}</p>}
         <div className="flex items-center justify-end gap-3">
-          {aviso && <span className="text-sm text-emerald-400 flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> {aviso}</span>}
+          {aviso && <span className="text-sm text-t-success flex items-center gap-1"><CheckCircle2 className="w-4 h-4" /> {aviso}</span>}
           <button type="button" disabled={saving || !escenario || !archivo} onClick={subir}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-t-action-primary-hover disabled:opacity-50">
             {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />} {tx(locale, 'Subir plantilla', 'Upload template')}
           </button>
         </div>
@@ -144,12 +144,12 @@ export default function TemplatesSection({ locale }) {
           <ul className="divide-y divide-border">
             {mias.map((s) => (
               <li key={s.id} className="py-3 flex flex-col sm:flex-row sm:items-center gap-2">
-                <span className="flex-1 text-sm text-foreground flex items-center gap-2"><FileText className="w-4 h-4 text-primary" /> {s.name}</span>
+                <span className="flex-1 text-sm text-foreground flex items-center gap-2"><FileText className="w-4 h-4 text-t-text-accent" /> {s.name}</span>
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => reemplazar(s.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted">
                     <RefreshCw className="w-3.5 h-3.5" /> {tx(locale, 'Reemplazar', 'Replace')}
                   </button>
-                  <button type="button" disabled={deleting === s.id} onClick={() => eliminar(s.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-red-300 hover:bg-red-500/10 disabled:opacity-50">
+                  <button type="button" disabled={deleting === s.id} onClick={() => eliminar(s.id)} className="inline-flex items-center gap-1.5 rounded-lg border border-red-500/40 px-3 py-1.5 text-xs text-t-danger hover:bg-red-500/10 disabled:opacity-50">
                     {deleting === s.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />} {tx(locale, 'Eliminar', 'Remove')}
                   </button>
                 </div>

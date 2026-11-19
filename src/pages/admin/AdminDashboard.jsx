@@ -189,11 +189,11 @@ export default function AdminDashboard() {
 
   return (
     <div className={`${section === 'tarifas' ? 'max-w-6xl' : 'max-w-4xl'} mx-auto p-4 md:p-6 space-y-6 animate-in fade-in`}>
-      <div className="flex items-center gap-3 border-b border-white/10 pb-4">
+      <div className="flex items-center gap-3 border-b border-border pb-4">
         <ShieldAlert className="w-8 h-8 text-amber-500" />
         <div>
-          <h1 className="text-2xl font-bold text-white">Panel de Administración</h1>
-          <p className="text-white/60 text-sm">Control global del mercado y la IA</p>
+          <h1 className="t-h1">Panel de Administración</h1>
+          <p className="text-foreground/60 text-sm">Control global del mercado y la IA</p>
         </div>
       </div>
 
@@ -212,21 +212,21 @@ export default function AdminDashboard() {
       {section === 'mercado' && (<>
 
       {/* Ticker Form */}
-      <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-2xl space-y-4">
-        <h2 className="text-lg font-semibold text-white">Cinta Superior (Nacional)</h2>
+      <div className="bg-card border border-t-border-subtle p-6 rounded-2xl space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">Cinta Superior (Nacional)</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Object.keys(ticker).map(key => (
             <div key={key}>
-              <label className="block text-xs font-medium text-white/60 mb-1 capitalize">
+              <label className="block text-xs font-medium text-foreground/60 mb-1 capitalize">
                 {key.replace('_', ' ')}
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40">$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-foreground/40">$</span>
                 <input 
                   type="number" step="0.01"
                   value={ticker[key]}
                   onChange={e => setTicker({...ticker, [key]: e.target.value})}
-                  className="w-full bg-white/5 border border-white/10 rounded-xl py-2 pl-7 pr-3 text-white focus:outline-none focus:border-amber-500/50"
+                  className="w-full bg-foreground/5 border border-border rounded-xl py-2 pl-7 pr-3 text-foreground focus:outline-none focus:border-amber-500/50"
                   placeholder="0.00"
                 />
               </div>
@@ -245,20 +245,20 @@ export default function AdminDashboard() {
       </div>
 
       {/* AI Market Data Parser */}
-      <div className="bg-[#1C1C1E] border border-white/5 p-6 rounded-2xl space-y-4">
-        <h2 className="text-lg font-semibold text-white">Actualizar Tarifas por Estado (RPM)</h2>
-        <p className="text-sm text-white/50">Pega aquí el reporte del mercado o sube un PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). El Excel de tarifas drayage se carga en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-amber-400 underline">Tarifas</button>.</p>
+      <div className="bg-card border border-t-border-subtle p-6 rounded-2xl space-y-4">
+        <h2 className="text-lg font-semibold text-foreground">Actualizar Tarifas por Estado (RPM)</h2>
+        <p className="text-sm text-foreground/50">Pega aquí el reporte del mercado o sube un PDF o imagen con las tarifas por milla de cada estado (Dry Van, Reefer, Flatbed, Contenedor). El Excel de tarifas drayage se carga en la pestaña <button type="button" onClick={() => setSection('tarifas')} className="text-t-warning underline">Tarifas</button>.</p>
         
         <textarea
           value={textData}
           onChange={e => setTextData(e.target.value)}
           placeholder="Pega el texto aquí o sube un PDF o imagen..."
           disabled={loadingOCR}
-          className="w-full h-48 bg-white/5 border border-white/10 rounded-xl p-4 text-white font-mono text-xs focus:outline-none focus:border-amber-500/50 resize-none disabled:opacity-50"
+          className="w-full h-48 bg-foreground/5 border border-border rounded-xl p-4 text-foreground font-mono text-xs focus:outline-none focus:border-amber-500/50 resize-none disabled:opacity-50"
         ></textarea>
 
         {textData && !loadingOCR && (
-          <p className="text-xs text-emerald-400/80 font-medium">✓ Documento listo para procesar. Haz clic en "Analizar con IA".</p>
+          <p className="text-xs text-t-success/80 font-medium">✓ Documento listo para procesar. Haz clic en "Analizar con IA".</p>
         )}
         
         <div className="flex justify-between pt-2">
@@ -272,7 +272,7 @@ export default function AdminDashboard() {
             />
             <button 
               disabled={loadingOCR || uploading}
-              className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 bg-foreground/10 hover:bg-foreground/20 text-foreground px-4 py-2 rounded-xl font-medium transition-colors disabled:opacity-50"
             >
               {loadingOCR ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
               {loadingOCR ? 'Procesando...' : 'Cargar Archivo (PDF, IMG)'}
@@ -299,10 +299,10 @@ export default function AdminDashboard() {
 
       {/* Modal estilizado con diseño de la aplicación */}
       {modal.isOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
-          <div className="bg-[#1C1C1E] border border-white/10 rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
             <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${
-              modal.type === 'error' ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+              modal.type === 'error' ? 'bg-red-500/10 text-t-danger' : 'bg-emerald-500/10 text-t-success'
             }`}>
               {modal.type === 'error' ? (
                 <ShieldAlert className="w-6 h-6" />
@@ -311,11 +311,11 @@ export default function AdminDashboard() {
               )}
             </div>
             <div>
-              <h3 className="text-base font-semibold text-white">
+              <h3 className="text-base font-semibold text-foreground">
                 {modal.title}
               </h3>
               {modal.message && (
-                <p className="text-xs text-white/60 mt-1 leading-relaxed">
+                <p className="text-xs text-foreground/60 mt-1 leading-relaxed">
                   {modal.message}
                 </p>
               )}

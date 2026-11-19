@@ -2,14 +2,14 @@ import { CheckCircle2, AlertTriangle, XCircle, Package } from 'lucide-react';
 
 const VEREDICTO_CONFIG = {
   // Nuevos verbos estructurados
-  'Aceptar':                  { color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/30',   icon: CheckCircle2,  label: 'ACEPTAR',                   sublabel: 'Documento dentro de parámetros' },
-  'Revisar antes de aceptar': { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'REVISAR ANTES DE ACEPTAR',   sublabel: 'Confirmar condiciones con broker' },
-  'Negociar':                 { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR',                   sublabel: 'Varias condiciones requieren ajuste' },
-  'No aceptar hasta corregir':{ color: 'text-red-400',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'NO ACEPTAR HASTA CORREGIR', sublabel: 'Riesgos críticos detectados' },
+  'Aceptar':                  { color: 'text-t-success',  bg: 'bg-green-400/10 border-green-400/30',   icon: CheckCircle2,  label: 'ACEPTAR',                   sublabel: 'Documento dentro de parámetros' },
+  'Revisar antes de aceptar': { color: 'text-t-warning', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'REVISAR ANTES DE ACEPTAR',   sublabel: 'Confirmar condiciones con broker' },
+  'Negociar':                 { color: 'text-t-warning', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR',                   sublabel: 'Varias condiciones requieren ajuste' },
+  'No aceptar hasta corregir':{ color: 'text-t-danger',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'NO ACEPTAR HASTA CORREGIR', sublabel: 'Riesgos críticos detectados' },
   // Legado (por compatibilidad)
-  'FIRMAR':   { color: 'text-green-400',  bg: 'bg-green-400/10 border-green-400/30',   icon: CheckCircle2,  label: 'ACEPTAR',     sublabel: 'Documento dentro de parámetros' },
-  'NEGOCIAR': { color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR',    sublabel: 'Revisar puntos antes de aceptar' },
-  'RECHAZAR': { color: 'text-red-400',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'NO ACEPTAR',  sublabel: 'Riesgos inaceptables detectados' },
+  'FIRMAR':   { color: 'text-t-success',  bg: 'bg-green-400/10 border-green-400/30',   icon: CheckCircle2,  label: 'ACEPTAR',     sublabel: 'Documento dentro de parámetros' },
+  'NEGOCIAR': { color: 'text-t-warning', bg: 'bg-yellow-400/10 border-yellow-400/30', icon: AlertTriangle, label: 'NEGOCIAR',    sublabel: 'Revisar puntos antes de aceptar' },
+  'RECHAZAR': { color: 'text-t-danger',    bg: 'bg-red-400/10 border-red-400/30',       icon: XCircle,       label: 'NO ACEPTAR',  sublabel: 'Riesgos inaceptables detectados' },
 };
 
 const ROL_LABEL = {
@@ -40,8 +40,8 @@ export default function VeredictoCard({ analysis, onLinkToLoad }) {
         {/* Semáforo resumen */}
         <div className="flex flex-col items-end gap-1 flex-shrink-0">
           <div className="flex items-center gap-1.5">
-            {rojos > 0 && <span className="text-xs font-bold text-red-400 bg-red-400/10 px-2 py-0.5 rounded-full">{rojos} crítico{rojos > 1 ? 's' : ''}</span>}
-            {amarillos > 0 && <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 px-2 py-0.5 rounded-full">{amarillos} revisar</span>}
+            {rojos > 0 && <span className="text-xs font-bold text-t-danger bg-red-400/10 px-2 py-0.5 rounded-full">{rojos} crítico{rojos > 1 ? 's' : ''}</span>}
+            {amarillos > 0 && <span className="text-xs font-bold text-t-warning bg-yellow-400/10 px-2 py-0.5 rounded-full">{amarillos} revisar</span>}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             {analysis.confidence_score != null && (
@@ -51,7 +51,7 @@ export default function VeredictoCard({ analysis, onLinkToLoad }) {
             )}
             <button
               onClick={onLinkToLoad}
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-primary hover:bg-primary/20 transition-colors"
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-primary/10 border border-primary/30 text-xs font-semibold text-t-text-accent hover:bg-primary/20 transition-colors"
             >
               <Package className="w-3 h-3" />
               Registrar carga
@@ -63,7 +63,7 @@ export default function VeredictoCard({ analysis, onLinkToLoad }) {
       <p className="text-sm text-foreground leading-relaxed">{analysis.resumen_ejecutivo}</p>
 
       {analysis.foco_analisis && (
-        <p className="text-xs text-muted-foreground mt-2 border-t border-white/10 pt-2">{analysis.foco_analisis}</p>
+        <p className="text-xs text-muted-foreground mt-2 border-t border-border pt-2">{analysis.foco_analisis}</p>
       )}
 
       {analysis.carrier_profile_used && (

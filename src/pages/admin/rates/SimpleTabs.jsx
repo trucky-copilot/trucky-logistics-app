@@ -55,7 +55,7 @@ function ListTab({ rows, estado, setEstado, head, renderRow, newLabel, onNew, in
 }
 
 const EditBtn = ({ onClick }) => (
-  <button onClick={onClick} className="text-amber-400 hover:text-amber-300" title="Editar"><Pencil className="w-4 h-4" /></button>
+  <button onClick={onClick} className="text-t-warning hover:text-t-warning" title="Editar"><Pencil className="w-4 h-4" /></button>
 );
 
 // ── Zonas ────────────────────────────────────────────────────────────────────
@@ -75,11 +75,11 @@ export function ZonesTab({ data, flow }) {
   return (
     <>
       <ListTab rows={rows} estado={estado} setEstado={setEstado} newLabel="Nueva zona" onNew={() => setEditing(null)}
-        info={<p className="text-xs text-white/40">Las zonas agrupan rutas. Para mover una ruta de zona, edítala en la pestaña Rutas.</p>}
+        info={<p className="text-xs text-foreground/40">Las zonas agrupan rutas. Para mover una ruta de zona, edítala en la pestaña Rutas.</p>}
         head={['Zona', 'Rutas activas', 'Descripción', 'Estado']}
         renderRow={(z) => (
           <tr key={z.id} className={z.activo === false ? 'opacity-40' : ''}>
-            <Td className="text-white">{z.zona}</Td>
+            <Td className="text-foreground">{z.zona}</Td>
             <Td>{counts[`${z.estado}|${z.zona}`] || 0}</Td>
             <Td>{z.descripcion || '—'}</Td>
             <Td>{z.activo === false ? <Badge tone="red">inactiva</Badge> : <Badge tone="green">activa</Badge>}</Td>
@@ -137,7 +137,7 @@ const conValor = (monto, v) => {
 };
 const unidadVisible = (monto) => { const u = unidadDe(monto); return /^por contenedor$/i.test(u.trim()) ? '' : u; };
 
-const montoCls = 'w-full bg-white/5 border border-white/10 rounded-xl py-2 px-3 text-sm text-white font-mono focus:outline-none focus:border-amber-500/50';
+const montoCls = 'w-full bg-t-bg-input border border-border rounded-xl py-2 px-3 text-sm text-foreground font-mono focus:outline-none focus:border-amber-500/50';
 
 export function AccessorialsTab({ data, flow }) {
   const [estado, setEstado] = useState('FL');
@@ -193,29 +193,29 @@ export function AccessorialsTab({ data, flow }) {
           <div className="flex-1" />
           <Btn variant="ghost" onClick={() => setEditing(null)}><Plus className="w-4 h-4" /> Nuevo cargo</Btn>
         </div>
-        <p className="text-xs text-white/40">Cargos que se suman a la tarifa de la ruta cuando pasa algo especial. El chat los usa para todos los usuarios; también se actualizan con la hoja de accesoriales del Excel.</p>
+        <p className="text-xs text-foreground/40">Cargos que se suman a la tarifa de la ruta cuando pasa algo especial. El chat los usa para todos los usuarios; también se actualizan con la hoja de accesoriales del Excel.</p>
 
         {principales.length === 0 ? <Empty>Sin cargos principales en {estado}.</Empty> : (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {principales.map((a) => (
               <div key={a.accessorial_key} className={a.activo === false ? 'opacity-50' : ''}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-white/70">
-                    {etiqueta(a)}{unidadVisible(a.monto) && <span className="text-white/40 font-normal"> · {unidadVisible(a.monto)}</span>}
+                  <span className="text-xs font-medium text-foreground/70">
+                    {etiqueta(a)}{unidadVisible(a.monto) && <span className="text-foreground/40 font-normal"> · {unidadVisible(a.monto)}</span>}
                     {a.activo === false && <> <Badge tone="red">apagado</Badge></>}
                   </span>
                   <EditBtn onClick={() => setEditing(a)} />
                 </div>
                 <input className={montoCls} value={valor(a)} placeholder="$..." onChange={(e) => cambiar(a, e.target.value)} />
-                {a.gatillo && <span className="block text-[11px] text-white/40 mt-1">{a.gatillo}</span>}
+                {a.gatillo && <span className="block text-[11px] text-foreground/40 mt-1">{a.gatillo}</span>}
               </div>
             ))}
           </div>
         )}
 
         {otros.length > 0 && (
-          <div className="pt-4 border-t border-white/10 space-y-2">
-            <span className="block text-xs font-medium text-white/60">Otros cargos adicionales</span>
+          <div className="pt-4 border-t border-border space-y-2">
+            <span className="block text-xs font-medium text-foreground/60">Otros cargos adicionales</span>
             {/* Dos columnas iguales y fijas: el ancho no cambia al elegir otro cargo. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Select className="min-w-0 truncate" value={sel?.accessorial_key || ''} onChange={(e) => setOtro(e.target.value)}>
@@ -231,19 +231,19 @@ export function AccessorialsTab({ data, flow }) {
               )}
             </div>
             {sel && (
-              <div className="flex items-start gap-2 text-[11px] text-white/40">
+              <div className="flex items-start gap-2 text-[11px] text-foreground/40">
                 <span className="flex-1">
-                  <span className="text-white/70">Valor actual: {valorDe(sel.monto) || 'cotizar'}{unidadVisible(sel.monto) ? ` ${unidadVisible(sel.monto)}` : ''}</span>
+                  <span className="text-foreground/70">Valor actual: {valorDe(sel.monto) || 'cotizar'}{unidadVisible(sel.monto) ? ` ${unidadVisible(sel.monto)}` : ''}</span>
                   {sel.gatillo ? ` · ${sel.gatillo}` : ''}{sel.nota ? ` · ${sel.nota}` : ''}
                 </span>
-                <button type="button" onClick={() => setEditing(sel)} className="text-amber-400 hover:text-amber-300 whitespace-nowrap">Editar detalles</button>
+                <button type="button" onClick={() => setEditing(sel)} className="text-t-warning hover:text-t-warning whitespace-nowrap">Editar detalles</button>
               </div>
             )}
           </div>
         )}
 
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
-          {cambios.length > 0 && <span className="text-xs text-white/50">{cambios.length} {cambios.length === 1 ? 'monto modificado' : 'montos modificados'}</span>}
+          {cambios.length > 0 && <span className="text-xs text-foreground/50">{cambios.length} {cambios.length === 1 ? 'monto modificado' : 'montos modificados'}</span>}
           {cambios.length > 0 && <Btn variant="ghost" onClick={() => setDraft({})}>Descartar</Btn>}
           <Btn onClick={revisar} busy={flow.busy} disabled={cambios.length === 0}>Revisar cambios</Btn>
         </div>

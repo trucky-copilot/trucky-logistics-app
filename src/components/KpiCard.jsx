@@ -1,5 +1,14 @@
-import { motion, useReducedMotion } from 'framer-motion';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+
+// Figma · KPI Tile / KPI Card: superficie plana, ícono en bg/surface-raised,
+// chip de variación (verde/rojo suave) y valor en estilo Data/KPI.
+const ICON_TONE = {
+  violet: 'text-t-text-accent',
+  cyan: 'text-t-accent-cyan',
+  green: 'text-t-success',
+  red: 'text-t-danger',
+  yellow: 'text-t-warning',
+};
 
 export default function KpiCard({
   titulo,
@@ -10,58 +19,32 @@ export default function KpiCard({
   color = 'violet',
   icon: Icon,
 }) {
-  const colorMap = {
-    violet: 'text-white bg-[#5B2BA0]/45 border-white/20 shadow-inner shadow-white/10',
-    cyan: 'text-violet-200 bg-[#5B2BA0]/40 border-violet-300/25 shadow-inner shadow-white/10',
-    green: 'text-emerald-300 bg-emerald-500/15 border-emerald-400/25 shadow-inner shadow-emerald-400/10',
-    red: 'text-red-300 bg-red-500/15 border-red-400/25 shadow-inner shadow-red-400/10',
-    yellow: 'text-amber-300 bg-amber-500/15 border-amber-400/25 shadow-inner shadow-amber-400/10',
-  };
-
-  const iconColor = {
-    violet: 'text-white',
-    cyan: 'text-violet-200',
-    green: 'text-emerald-300',
-    red: 'text-red-300',
-    yellow: 'text-amber-300',
-  };
-
-  // MotionConfig solo vuelve instantaneo el whileHover (la tarjeta salta).
-  // Para que no se mueva nada, no le pasamos whileHover si se pide reducir movimiento.
-  const reduceMotion = useReducedMotion();
-
-  const badgeStyle = colorMap[color] || colorMap.violet;
-  const iconStyle = iconColor[color] || iconColor.violet;
+  const chip = trend > 0
+    ? 'bg-t-success-soft text-t-success'
+    : trend < 0
+      ? 'bg-t-danger-soft text-t-danger'
+      : 'bg-t-action-secondary text-t-text-secondary';
 
   return (
-    <motion.div
-      whileHover={reduceMotion ? undefined : { y: -5, scale: 1.01 }}
-      transition={{ type: 'spring', stiffness: 320, damping: 22 }}
-      className="glass-card p-5 rounded-2xl relative overflow-hidden group cursor-default"
-    >
-      {/* Reflejo sutil de cristal en la esquina superior */}
-      <div className="pointer-events-none absolute -top-10 -right-10 w-28 h-28 rounded-full bg-[#5B2BA0]/30 blur-2xl group-hover:bg-[#5B2BA0]/50 transition-all duration-300" />
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
-
-      <div className="relative z-10 flex items-start justify-between mb-3">
-        <p className="text-xs font-medium text-white/65 uppercase tracking-wider">{titulo}</p>
+    <div className="rounded-2xl border border-border bg-t-bg-surface p-5 flex flex-col gap-3 min-w-0 shadow-card">
+      <div className="flex items-center gap-3 min-w-0">
         {Icon && (
-          <div className={`w-9 h-9 rounded-xl border backdrop-blur-md flex items-center justify-center transition-transform duration-300 group-hover:scale-105 ${badgeStyle}`}>
-            <Icon className={`w-4 h-4 ${iconStyle}`} />
+          <div className="w-9 h-9 rounded-xl bg-t-bg-surface-raised flex items-center justify-center flex-shrink-0">
+            <Icon className={`w-5 h-5 ${ICON_TONE[color] || ICON_TONE.violet}`} />
           </div>
         )}
+        <p className="text-xs text-t-text-secondary leading-tight">{titulo}</p>
       </div>
-
-      <div className="relative z-10 space-y-1">
-        <div className="text-2xl font-bold text-white tracking-tight">{valor}</div>
-        {subtitulo && <div className="text-xs text-white/60">{subtitulo}</div>}
+      <div className="text-[24px] md:text-[28px] leading-[1.2] font-semibold tracking-[-0.01em] text-t-text-primary truncate">{valor}</div>
+      <div className="flex flex-col items-start gap-1.5 min-w-0">
         {trendLabel && (
-          <div className={`flex items-center gap-1 text-xs font-medium pt-0.5 ${trend > 0 ? 'text-emerald-400' : trend < 0 ? 'text-red-400' : 'text-white/60'}`}>
-            {trend > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : trend < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
-            {trendLabel}
-          </div>
+          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-xs font-medium max-w-full ${chip}`}>
+            {trend > 0 ? <TrendingUp className="w-3.5 h-3.5 flex-shrink-0" /> : trend < 0 ? <TrendingDown className="w-3.5 h-3.5 flex-shrink-0" /> : <Minus className="w-3.5 h-3.5 flex-shrink-0" />}
+            <span className="truncate">{trendLabel}</span>
+          </span>
         )}
+        {subtitulo && <div className="text-xs text-t-text-muted truncate max-w-full">{subtitulo}</div>}
       </div>
-    </motion.div>
+    </div>
   );
 }

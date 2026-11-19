@@ -5,14 +5,14 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
   const { t, locale } = useLanguage();
 
   const VEREDICTO_CONFIG = {
-    'Aceptar': { color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/30', icon: CheckCircle2, label: locale === 'en' ? 'ACCEPT' : 'ACEPTAR', riesgo: locale === 'en' ? 'Low' : 'Bajo' },
-    'Accept': { color: 'text-green-400', bg: 'bg-green-400/10', border: 'border-green-400/30', icon: CheckCircle2, label: locale === 'en' ? 'ACCEPT' : 'ACEPTAR', riesgo: locale === 'en' ? 'Low' : 'Bajo' },
-    'Revisar antes de aceptar': { color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'REVIEW' : 'REVISAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
-    'Review before accepting': { color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'REVIEW' : 'REVISAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
-    'Negociar': { color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'NEGOTIATE' : 'NEGOCIAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
-    'Negotiate': { color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'NEGOTIATE' : 'NEGOCIAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
-    'No aceptar hasta corregir': { color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30', icon: XCircle, label: locale === 'en' ? 'DO NOT ACCEPT' : 'NO ACEPTAR', riesgo: locale === 'en' ? 'High' : 'Alto' },
-    'Do not accept until corrected': { color: 'text-red-400', bg: 'bg-red-400/10', border: 'border-red-400/30', icon: XCircle, label: locale === 'en' ? 'DO NOT ACCEPT' : 'NO ACEPTAR', riesgo: locale === 'en' ? 'High' : 'Alto' },
+    'Aceptar': { color: 'text-t-success', bg: 'bg-green-400/10', border: 'border-green-400/30', icon: CheckCircle2, label: locale === 'en' ? 'ACCEPT' : 'ACEPTAR', riesgo: locale === 'en' ? 'Low' : 'Bajo' },
+    'Accept': { color: 'text-t-success', bg: 'bg-green-400/10', border: 'border-green-400/30', icon: CheckCircle2, label: locale === 'en' ? 'ACCEPT' : 'ACEPTAR', riesgo: locale === 'en' ? 'Low' : 'Bajo' },
+    'Revisar antes de aceptar': { color: 'text-t-warning', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'REVIEW' : 'REVISAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
+    'Review before accepting': { color: 'text-t-warning', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'REVIEW' : 'REVISAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
+    'Negociar': { color: 'text-t-warning', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'NEGOTIATE' : 'NEGOCIAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
+    'Negotiate': { color: 'text-t-warning', bg: 'bg-yellow-400/10', border: 'border-yellow-400/30', icon: AlertTriangle, label: locale === 'en' ? 'NEGOTIATE' : 'NEGOCIAR', riesgo: locale === 'en' ? 'Medium' : 'Medio' },
+    'No aceptar hasta corregir': { color: 'text-t-danger', bg: 'bg-red-400/10', border: 'border-red-400/30', icon: XCircle, label: locale === 'en' ? 'DO NOT ACCEPT' : 'NO ACEPTAR', riesgo: locale === 'en' ? 'High' : 'Alto' },
+    'Do not accept until corrected': { color: 'text-t-danger', bg: 'bg-red-400/10', border: 'border-red-400/30', icon: XCircle, label: locale === 'en' ? 'DO NOT ACCEPT' : 'NO ACEPTAR', riesgo: locale === 'en' ? 'High' : 'Alto' },
   };
 
   const RESUMEN_CORTO = {
@@ -42,16 +42,16 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
   return (
     <div className={`rounded-2xl border ${v.border} ${v.bg} overflow-hidden`}>
       {/* Top bar con tipo de documento */}
-      <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-black/10">
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-t-border-subtle bg-t-bg-deep/50">
         <FileCheck className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
         <span className="text-xs text-muted-foreground font-medium">{docLabel}</span>
         {isNew && (
-          <span className="flex items-center gap-1 text-[10px] font-bold text-green-400 bg-green-400/10 px-1.5 py-0.5 rounded-full border border-green-400/20">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-t-success bg-green-400/10 px-1.5 py-0.5 rounded-full border border-green-400/20">
             <Zap className="w-2.5 h-2.5" /> {t.documents.newAnalysis}
           </span>
         )}
         {isCache && (
-          <span className="flex items-center gap-1 text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded-full border border-primary/20">
+          <span className="flex items-center gap-1 text-[10px] font-bold text-t-text-accent bg-primary/10 px-1.5 py-0.5 rounded-full border border-primary/20">
             <History className="w-2.5 h-2.5" /> {t.documents.fromCache}
           </span>
         )}
@@ -79,7 +79,7 @@ export default function ResultHeader({ analysis, onLinkToLoad, cached }) {
       {/* Veredicto principal */}
       <div className="p-5">
         <div className="flex items-start gap-4">
-          <div className={`w-14 h-14 rounded-2xl border-2 ${v.border} bg-black/20 flex items-center justify-center flex-shrink-0`}>
+          <div className={`w-14 h-14 rounded-2xl border-2 ${v.border} bg-t-bg-deep/50 flex items-center justify-center flex-shrink-0`}>
             <Icon className={`w-7 h-7 ${v.color}`} />
           </div>
           <div className="flex-1 min-w-0">

@@ -52,7 +52,7 @@ function BrokerForm({ broker, onSave, onClose }) {
     }
   };
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold">{broker ? t.brokers.edit : t.brokers.new}</h2>
@@ -126,7 +126,7 @@ function BrokerForm({ broker, onSave, onClose }) {
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} disabled={isSaving} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground disabled:opacity-40">{t.brokers.cancel}</button>
-            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -252,11 +252,11 @@ export default function Brokers() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="t-page space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{t.brokers.title}</h1>
-          <p className="text-sm text-muted-foreground">{brokers.length} {t.brokers.registered}</p>
+          <h1 className="t-h1 flex items-center gap-2.5"><Building2 className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" />{t.brokers.title}</h1>
+          <p className="t-subtitle mt-1">{brokers.length} {t.brokers.registered}</p>
         </div>
         <button onClick={() => {
           if (limits?.BROKERS && brokers.length >= limits.BROKERS) {
@@ -266,7 +266,7 @@ export default function Brokers() {
           setEditBroker(null); 
           setShowForm(true); 
         }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground">
           <Plus className="w-3.5 h-3.5" />{t.brokers.add}
         </button>
       </div>
@@ -311,12 +311,12 @@ export default function Brokers() {
                       <div className="font-medium text-foreground truncate max-w-[16rem] sm:max-w-xs" title={broker.nombre}>{broker.nombre}</div>
                       <div className="text-xs text-muted-foreground">{broker.mc_number || t.brokers.noMc} · {broker.contacto || t.brokers.noContact}</div>
                       {broker.clausulas_frecuentes && (
-                        <div className="text-xs text-yellow-400 mt-0.5 truncate max-w-48">⚠ {broker.clausulas_frecuentes}</div>
+                        <div className="text-xs text-t-warning mt-0.5 truncate max-w-48">⚠ {broker.clausulas_frecuentes}</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-center text-foreground font-mono hidden sm:table-cell">{broker.cargas_realizadas || 0}</td>
                     <td className={`px-4 py-3 text-right font-mono font-semibold hidden sm:table-cell ${
-                      (broker.tarifa_promedio || 0) >= 3 ? 'text-green-400' : (broker.tarifa_promedio || 0) >= 2.6 ? 'text-yellow-400' : 'text-red-400'
+                      (broker.tarifa_promedio || 0) >= 3 ? 'text-t-success' : (broker.tarifa_promedio || 0) >= 2.6 ? 'text-t-warning' : 'text-t-danger'
                     }`}>${broker.tarifa_promedio?.toFixed(2) || '--'}</td>
                     <td className="px-4 py-3 text-right text-muted-foreground hidden md:table-cell">Net {broker.dias_pago || '--'}</td>
                     <td className="px-4 py-3 hidden md:table-cell">
@@ -336,7 +336,7 @@ export default function Brokers() {
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
                         <button onClick={() => setDeleteBroker(broker)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-t-danger transition-colors"
                           title={locale === 'en' ? 'Delete' : 'Eliminar'}>
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>

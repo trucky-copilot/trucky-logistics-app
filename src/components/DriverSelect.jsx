@@ -39,11 +39,11 @@ export default function DriverSelect({ options, value, legacyName, onChange, ack
 
       {expired.length > 0 && (
         <div className="rounded-lg border border-red-500/40 bg-red-500/10 p-2.5 space-y-1.5">
-          <p className="text-xs font-semibold text-red-300 flex items-center gap-1.5">
+          <p className="text-xs font-semibold text-t-danger flex items-center gap-1.5">
             <AlertTriangle className="w-3.5 h-3.5" />
             {expired.map(i => i.text).join(' · ')}
           </p>
-          <label className="flex items-center gap-2 text-[11px] text-red-200 cursor-pointer">
+          <label className="flex items-center gap-2 text-[11px] text-t-danger cursor-pointer">
             <input type="checkbox" checked={Boolean(acknowledged)} onChange={e => onAcknowledge(e.target.checked)} />
             {isEs ? 'Entiendo el riesgo y quiero asignarlo de todos modos' : 'I understand the risk and want to assign anyway'}
           </label>
@@ -51,7 +51,7 @@ export default function DriverSelect({ options, value, legacyName, onChange, ack
       )}
 
       {soon.length > 0 && (
-        <p className="text-[11px] text-amber-300 flex items-center gap-1.5">
+        <p className="text-[11px] text-t-warning flex items-center gap-1.5">
           <AlertTriangle className="w-3 h-3" /> {soon.map(i => i.text).join(' · ')}
         </p>
       )}

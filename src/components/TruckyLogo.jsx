@@ -8,7 +8,7 @@ import React from 'react';
 export function TruckyLogoIcon({ className = 'w-9 h-9', rounded = 'rounded-xl' }) {
   return (
     <div
-      className={`${className} ${rounded} relative overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] border border-white/15 shadow-lg shadow-[#5B2BA0]/35`}
+      className={`${className} ${rounded} relative overflow-hidden flex items-center justify-center flex-shrink-0 bg-t-action-primary border border-border shadow-lg shadow-t-action-primary/35`}
     >
       <img
         src="/trucky-symbol.png?v=2"
@@ -22,7 +22,7 @@ export function TruckyLogoIcon({ className = 'w-9 h-9', rounded = 'rounded-xl' }
 export function TruckyLogoBanner({ className = 'h-9 w-28', rounded = 'rounded-xl' }) {
   return (
     <div
-      className={`${className} ${rounded} relative overflow-hidden flex items-center justify-center flex-shrink-0 bg-[#5B2BA0] border border-white/15 shadow-lg shadow-[#5B2BA0]/35`}
+      className={`${className} ${rounded} relative overflow-hidden flex items-center justify-center flex-shrink-0 bg-t-action-primary border border-border shadow-lg shadow-t-action-primary/35`}
     >
       <img
         src="/trucky-logo.png"
@@ -43,7 +43,7 @@ export function TruckyLogoBanner({ className = 'h-9 w-28', rounded = 'rounded-xl
  */
 export function TruckyWordmark({ imgClass = 'h-6', className = '' }) {
   return (
-    <div className={`rounded-xl bg-[#4F1984] border border-white/15 shadow-lg shadow-[#4F1984]/40 px-3 py-2 inline-flex flex-shrink-0 ${className}`}>
+    <div className={`rounded-xl bg-t-accent-brand border border-border shadow-lg shadow-t-accent-brand/40 px-3 py-2 inline-flex flex-shrink-0 ${className}`}>
       <img src="/trucky-wordmark.png" alt="Trucky" className={`${imgClass} w-auto select-none pointer-events-none`} draggable={false} />
     </div>
   );

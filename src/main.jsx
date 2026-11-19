@@ -4,12 +4,15 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { MotionConfig } from 'framer-motion'
 import App from '@/App.jsx'
+import { ThemeProvider } from '@/lib/ThemeContext'
 import '@/index.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   // reducedMotion="user": si el SO pide reducir movimiento, framer-motion
   // desactiva las animaciones de transform/layout (whileHover, layoutId, y…)
   <MotionConfig reducedMotion="user">
-    <App />
+    <ThemeProvider>
+      <App />
+    </ThemeProvider>
   </MotionConfig>
 )

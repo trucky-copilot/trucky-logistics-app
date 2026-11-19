@@ -225,11 +225,11 @@ export default function Loads() {
   const avgRate = totalMiles > 0 ? totalRevenue / totalMiles : 0;
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="t-page space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{t.loadsPage.title}</h1>
-          <p className="text-sm text-muted-foreground">{allLoads.length} {t.loadsPage.registered}</p>
+          <h1 className="t-h1 flex items-center gap-2.5"><Package className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" />{t.loadsPage.title}</h1>
+          <p className="t-subtitle mt-1">{allLoads.length} {t.loadsPage.registered}</p>
         </div>
         <button
           onClick={() => {
@@ -240,7 +240,7 @@ export default function Loads() {
             setEditLoad(null);
             setShowForm(true);
           }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground transition-all"
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           {t.loadsPage.add}
@@ -278,7 +278,7 @@ export default function Loads() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
               filter === f.key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:text-foreground'
             }`}
           >
@@ -328,7 +328,7 @@ export default function Loads() {
                       <div className="text-xs font-medium text-foreground">{load.origen}</div>
                       <div className="text-xs text-muted-foreground">→ {load.destino}</div>
                       {load.conductor_nombre && (
-                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-violet-300">
+                        <div className="mt-1 inline-flex items-center gap-1 text-[11px] text-t-text-accent">
                           <UserCheck className="w-3 h-3" />
                           {load.conductor_nombre}{load.truck_placa ? ` · ${load.truck_placa}` : ''}
                         </div>
@@ -338,8 +338,8 @@ export default function Loads() {
                     <td className="px-4 py-3 hidden md:table-cell"><StatusBadge status={load.tipo_cliente || 'broker_directo'} /></td>
                     <td className="px-4 py-3 text-right text-xs font-mono text-muted-foreground hidden md:table-cell">{load.millas || '--'}</td>
                     <td className={`px-4 py-3 text-right text-xs font-mono font-semibold ${
-                      effectiveRpm(load) >= 3 ? 'text-green-400' :
-                      effectiveRpm(load) >= 2.6 ? 'text-yellow-400' : 'text-red-400'
+                      effectiveRpm(load) >= 3 ? 'text-t-success' :
+                      effectiveRpm(load) >= 2.6 ? 'text-t-warning' : 'text-t-danger'
                     }`}>{effectiveRpm(load) > 0 ? `$${effectiveRpm(load).toFixed(2)}` : '--'}</td>
                     <td className="px-4 py-3 text-right text-xs font-mono text-foreground">${effectiveRate(load).toLocaleString('en-US')}</td>
                     <td className="px-4 py-3 hidden sm:table-cell"><StatusBadge status={load.estado || 'pendiente'} /></td>
@@ -354,7 +354,7 @@ export default function Loads() {
                         </button>
                         <button
                           onClick={() => setDeleteLoad(load)}
-                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                          className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-t-danger transition-colors"
                           title={locale === 'en' ? 'Delete' : 'Eliminar'}
                         >
                           <Trash2 className="w-3.5 h-3.5" />

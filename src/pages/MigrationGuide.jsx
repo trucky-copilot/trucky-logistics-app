@@ -4,7 +4,7 @@ import { Download, Server, Database, Lock, Code, ArrowRight, CheckCircle, AlertT
 const sections = [
   {
     icon: Code,
-    color: 'text-cyan-400',
+    color: 'text-t-accent-cyan',
     bg: 'bg-cyan-400/10',
     border: 'border-cyan-400/20',
     title: '1. Exportar el Código Frontend',
@@ -20,7 +20,7 @@ const sections = [
   },
   {
     icon: Server,
-    color: 'text-purple-400',
+    color: 'text-t-text-accent',
     bg: 'bg-purple-400/10',
     border: 'border-purple-400/20',
     title: '2. Migrar las Funciones Backend',
@@ -36,7 +36,7 @@ const sections = [
   },
   {
     icon: Database,
-    color: 'text-green-400',
+    color: 'text-t-success',
     bg: 'bg-green-400/10',
     border: 'border-green-400/20',
     title: '3. Migrar la Base de Datos',
@@ -51,7 +51,7 @@ const sections = [
   },
   {
     icon: Lock,
-    color: 'text-yellow-400',
+    color: 'text-t-warning',
     bg: 'bg-yellow-400/10',
     border: 'border-yellow-400/20',
     title: '4. Reemplazar la Autenticación',
@@ -89,12 +89,12 @@ export default function MigrationGuide() {
       {/* Print button — hidden on print */}
       <div className="print:hidden sticky top-0 z-10 bg-background/80 backdrop-blur border-b border-border px-6 py-3 flex justify-between items-center">
         <div className="flex items-center gap-2.5">
-          <Server className="w-5 h-5 text-primary" />
+          <Server className="w-5 h-5 text-t-text-accent" />
           <span className="text-sm font-semibold">Guía de Migración — Trucky</span>
         </div>
         <button
           onClick={handlePrint}
-          className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-all"
+          className="flex items-center gap-2 px-4 py-2 rounded-full bg-primary text-primary-foreground text-sm font-semibold hover:bg-t-action-primary-hover transition-all"
         >
           <Download className="w-4 h-4" /> Descargar / Imprimir
         </button>
@@ -104,10 +104,10 @@ export default function MigrationGuide() {
 
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-primary font-semibold mb-2">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs text-t-text-accent font-semibold mb-2">
             GUÍA TÉCNICA
           </div>
-          <h1 className="text-3xl font-bold text-foreground">Migración a Servidor Privado</h1>
+          <h1 className="t-h1">Migración a Servidor Privado</h1>
           <p className="text-muted-foreground text-sm">Trucky — Larcofer USA · Generado el {new Date().toLocaleDateString('es-CO', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
         </div>
 
@@ -145,8 +145,8 @@ export default function MigrationGuide() {
         {/* Difficult parts */}
         <div className="rounded-xl border border-yellow-400/20 overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-4 bg-yellow-400/10">
-            <AlertTriangle className="w-4 h-4 text-yellow-400" />
-            <h2 className="text-sm font-bold text-yellow-400">Aspectos que requieren más trabajo</h2>
+            <AlertTriangle className="w-4 h-4 text-t-warning" />
+            <h2 className="text-sm font-bold text-t-warning">Aspectos que requieren más trabajo</h2>
           </div>
           <div className="px-5 py-4 space-y-3">
             {difficult.map((d, i) => (
@@ -161,15 +161,15 @@ export default function MigrationGuide() {
         {/* Recommended stack */}
         <div className="rounded-xl border border-primary/20 overflow-hidden">
           <div className="flex items-center gap-3 px-5 py-4 bg-primary/10">
-            <Server className="w-4 h-4 text-primary" />
-            <h2 className="text-sm font-bold text-primary">Stack Recomendado</h2>
+            <Server className="w-4 h-4 text-t-text-accent" />
+            <h2 className="text-sm font-bold text-t-text-accent">Stack Recomendado</h2>
           </div>
           <div className="px-5 py-4">
             <div className="flex flex-col sm:flex-row items-center gap-2">
               {recommended.map((r, i) => (
                 <React.Fragment key={r.step}>
                   <div className="flex-1 bg-muted rounded-xl p-3 text-center">
-                    <div className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center mx-auto mb-1">{r.step}</div>
+                    <div className="w-6 h-6 rounded-full bg-primary/20 text-t-text-accent text-xs font-bold flex items-center justify-center mx-auto mb-1">{r.step}</div>
                     <p className="text-xs font-bold text-foreground">{r.label}</p>
                     <p className="text-xs text-muted-foreground mt-0.5">{r.detail}</p>
                   </div>

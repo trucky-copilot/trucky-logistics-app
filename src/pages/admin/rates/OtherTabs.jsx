@@ -44,8 +44,8 @@ export function ExcelTab({ onSaved }) {
 
   return (
     <Card className="space-y-4">
-      <p className="text-sm text-white/60">
-        Sube el Excel de tarifas drayage (mismo formato que <span className="text-white">Trucky_Rates_Drayage_FL / TX</span>).
+      <p className="text-sm text-foreground/60">
+        Sube el Excel de tarifas drayage (mismo formato que <span className="text-foreground">Trucky_Rates_Drayage_FL / TX</span>).
         Cada ruta se reconoce por estado + ciudad + mercado + zona (no por el número de fila): las nuevas se crean, las que cambian se actualizan en el mismo registro (UPSERT) y las iguales no se tocan.
       </p>
       <div className="flex flex-wrap items-end gap-3">
@@ -60,11 +60,11 @@ export function ExcelTab({ onSaved }) {
             <Btn variant="ghost" type="button" onClick={() => inputRef.current?.click()}>
               <FileSpreadsheet className="w-4 h-4" /> {file ? 'Cambiar archivo' : 'Elegir archivo'}
             </Btn>
-            {file && <span className="text-sm text-white/80 truncate max-w-[260px]">{file.name}</span>}
+            {file && <span className="text-sm text-foreground/80 truncate max-w-[260px]">{file.name}</span>}
           </div>
         </Field>
       </div>
-      <label className="flex items-start gap-2 text-xs text-white/60">
+      <label className="flex items-start gap-2 text-xs text-foreground/60">
         <input type="checkbox" className="mt-0.5" checked={eliminarFaltantes} onChange={(e) => setEliminarFaltantes(e.target.checked)} />
         <span>Eliminar las rutas y accesoriales de {estado} que <b>no</b> vienen en este archivo. Se listan en la revisión antes de confirmar.</span>
       </label>

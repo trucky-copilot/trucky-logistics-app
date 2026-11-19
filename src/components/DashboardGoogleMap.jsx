@@ -4,6 +4,7 @@ import { effectiveRate } from '@/lib/loadRate';
 import { MapPin, Navigation, Compass } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import LoadsMap from '@/components/dashboard/LoadsMap';
+import { useTheme } from '@/lib/ThemeContext';
 
 /**
  * Mapa Operativo del Dashboard usando Google Maps JavaScript API (modo oscuro).
@@ -121,6 +122,11 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
   const reduceMotion = useReducedMotion(); // true si el usuario pidio reducir movimiento
   const [mapError, setMapError] = useState(null);
   const [retryKey, setRetryKey] = useState(0);
+  const { theme } = useTheme();
+  const mapStyle = theme === 'light' ? { styles: [], backgroundColor: '#E6E4F2' } : { styles: DARK_MAP_STYLE, backgroundColor: '#0E0A19' };
+
+  // Al cambiar de tema, el mapa cambia de estilo sin recargarse.
+  useEffect(() => { mapRef.current?.setOptions(mapStyle); }, [theme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const isEs = locale !== 'en';
   const activeLoads = loads.slice(0, 8);
@@ -149,10 +155,9 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           mapRef.current = new maps.Map(containerRef.current, {
             center: DEFAULT_CENTER,
             zoom: 6,
-            styles: DARK_MAP_STYLE,
+            ...mapStyle,
             disableDefaultUI: true,
             zoomControl: true,
-            backgroundColor: '#0d0818',
           });
         }
         const map = mapRef.current;
@@ -260,18 +265,17 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
       className="glass-panel rounded-2xl p-5 relative overflow-hidden w-full min-w-0"
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/25 to-transparent" />
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 min-w-0">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="w-8 h-8 rounded-xl bg-[#5B2BA0] border border-white/20 shadow-md shadow-[#5B2BA0]/35 flex items-center justify-center flex-shrink-0">
+          <div className="w-8 h-8 rounded-xl bg-t-action-primary border border-t-border-strong shadow-md shadow-t-action-primary/35 flex items-center justify-center flex-shrink-0">
             <MapPin className="w-4 h-4 text-white" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-white truncate">
+            <h2 className="text-sm font-semibold text-foreground truncate">
               {isEs ? 'Mapa Operativo de Rutas y Flota' : 'Fleet & Routes Map'}
             </h2>
-            <p className="text-xs text-white/60 truncate">
+            <p className="text-xs text-foreground/60 truncate">
               {isEs
                 ? `${activeLoads.length} rutas activas mapeadas · ${inTransitCount} en tránsito · ${trucks.length} camiones registrados`
                 : `${activeLoads.length} active routes mapped · ${inTransitCount} in transit · ${trucks.length} registered trucks`}
@@ -282,14 +286,14 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         <button
           type="button"
           onClick={handleRecenter}
-          className="self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-semibold bg-white/[0.04] hover:bg-white/[0.08] text-white/80 hover:text-white border border-white/10 transition-all flex items-center gap-1.5 cursor-pointer"
+          className="self-start sm:self-auto px-3 py-1.5 rounded-xl text-xs font-semibold bg-foreground/[0.04] hover:bg-foreground/[0.08] text-foreground/80 hover:text-foreground border border-border transition-all flex items-center gap-1.5 cursor-pointer"
         >
-          <Compass className="w-3.5 h-3.5 text-violet-300" />
+          <Compass className="w-3.5 h-3.5 text-t-text-accent" />
           <span>{isEs ? 'Centrar' : 'Center'}</span>
         </button>
       </div>
 
-      <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-white/15 bg-[#0d0818] shadow-inner">
+      <div className="relative w-full h-[340px] rounded-2xl overflow-hidden border border-border bg-t-bg-deep shadow-inner">
         <div ref={containerRef} className="absolute inset-0 w-full h-full z-0" />
 
         {/* Respaldo: si Google Maps no carga (bloqueador, red, firewall…), se muestra
@@ -298,13 +302,13 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
           <div className="absolute inset-0 z-[300]">
             <LoadsMap loads={loads} bare />
             <div className="absolute top-2 right-2 z-[500] flex items-center gap-2">
-              <span className="px-2 py-1 rounded-lg bg-black/60 text-[10px] text-white/70 border border-white/10">
+              <span className="px-2.5 py-1 rounded-full bg-t-bg-surface/90 text-[10px] text-t-text-secondary border border-border">
                 {isEs ? 'Mapa alternativo (OpenStreetMap)' : 'Fallback map (OpenStreetMap)'}
               </span>
               <button
                 type="button"
                 onClick={() => { setMapError(null); setRetryKey(k => k + 1); }}
-                className="px-2 py-1 rounded-lg bg-black/60 text-[10px] text-violet-200 border border-white/15 hover:bg-black/80"
+                className="px-2.5 py-1 rounded-full bg-t-bg-surface/90 text-[10px] text-t-text-accent border border-border hover:bg-t-bg-surface"
               >
                 {isEs ? 'Reintentar Google Maps' : 'Retry Google Maps'}
               </button>
@@ -313,19 +317,19 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         )}
 
         {selectedRouteInfo && (
-          <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm glass-panel rounded-xl p-3 border border-white/20 text-xs text-white shadow-xl z-[400]">
+          <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm glass-panel rounded-xl p-3 border border-t-border-strong text-xs text-foreground shadow-xl z-[400]">
             <div className="flex items-center justify-between gap-2 mb-1">
-              <span className="font-bold text-violet-300 flex items-center gap-1">
+              <span className="font-bold text-t-text-accent flex items-center gap-1">
                 <Navigation className="w-3.5 h-3.5" />
                 {selectedRouteInfo.origen} → {selectedRouteInfo.destino}
               </span>
-              <button type="button" onClick={() => setSelectedRouteInfo(null)} className="text-white/60 hover:text-white text-[11px] px-1">
+              <button type="button" onClick={() => setSelectedRouteInfo(null)} className="text-foreground/60 hover:text-foreground text-[11px] px-1">
                 ✕
               </button>
             </div>
-            <div className="flex items-center justify-between text-white/75 text-[11px]">
+            <div className="flex items-center justify-between text-foreground/75 text-[11px]">
               <span>{selectedRouteInfo.broker_nombre || 'Broker'}</span>
-              <span className="font-mono font-semibold text-emerald-400">
+              <span className="font-mono font-semibold text-t-success">
                 ${effectiveRate(selectedRouteInfo).toLocaleString('en-US')} ({selectedRouteInfo.millas || '--'} mi)
               </span>
             </div>

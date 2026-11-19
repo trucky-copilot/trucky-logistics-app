@@ -19,7 +19,7 @@ function DocAlert({ label, date }) {
   if (diff > 60) return null;
   const expired = diff < 0;
   return (
-    <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${expired ? 'bg-red-400/10 text-red-400' : 'bg-yellow-400/10 text-yellow-400'}`}>
+    <div className={`flex items-center gap-1.5 text-xs px-2 py-1 rounded-md ${expired ? 'bg-red-400/10 text-t-danger' : 'bg-yellow-400/10 text-t-warning'}`}>
       <AlertTriangle className="w-3 h-3 flex-shrink-0" />
       {label}: {expired ? `${t.drivers.expired} ${Math.abs(diff)}d` : `${t.drivers.expiresIn} ${diff}d`}
     </div>
@@ -83,7 +83,7 @@ function DriverForm({ driver, onSave, onClose, existingDrivers = [] }) {
     }
   };
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold">{driver ? t.drivers.edit : t.drivers.new}</h2>
@@ -91,7 +91,7 @@ function DriverForm({ driver, onSave, onClose, existingDrivers = [] }) {
         </div>
         <form onSubmit={handleSubmit} className="p-5 space-y-3">
           {formError && (
-            <div className="p-2.5 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-red-300">{formError}</div>
+            <div className="p-2.5 rounded-lg border border-red-500/40 bg-red-500/10 text-xs text-t-danger">{formError}</div>
           )}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -160,7 +160,7 @@ function DriverForm({ driver, onSave, onClose, existingDrivers = [] }) {
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} disabled={isSaving} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground disabled:opacity-40">{t.drivers.cancel}</button>
-            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -299,11 +299,11 @@ export default function Drivers() {
   };
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between">
+    <div className="t-page space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{t.drivers.title}</h1>
-          <p className="text-sm text-muted-foreground">{drivers.length} {t.drivers.registered}</p>
+          <h1 className="t-h1 flex items-center gap-2.5"><Users className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" />{t.drivers.title}</h1>
+          <p className="t-subtitle mt-1">{drivers.length} {t.drivers.registered}</p>
         </div>
         <button onClick={() => {
           if (limits?.DRIVERS && drivers.length >= limits.DRIVERS) {
@@ -313,7 +313,7 @@ export default function Drivers() {
           setEditDriver(null); 
           setShowForm(true); 
         }}
-          className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
+          className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground">
           <Plus className="w-3.5 h-3.5" />{t.drivers.add}
         </button>
       </div>
@@ -352,7 +352,7 @@ export default function Drivers() {
                     <Pencil className="w-3 h-3" />
                   </button>
                   <button onClick={() => setDeleteDriver(driver)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-t-danger transition-colors"
                     title={locale === 'en' ? 'Delete' : 'Eliminar'}>
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -367,7 +367,7 @@ export default function Drivers() {
                 <DocAlert label="TWIC" date={driver.twic_vencimiento} />
                 <DocAlert label="HazMat" date={driver.hazmat_vencimiento} />
                 {!driver.licencia_vencimiento && !driver.medico_vencimiento && !driver.twic_vencimiento && (
-                  <div className="flex items-center gap-1 text-xs text-green-400">
+                  <div className="flex items-center gap-1 text-xs text-t-success">
                     <CheckCircle2 className="w-3 h-3" />
                     {t.drivers.documentsOk}
                   </div>

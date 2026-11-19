@@ -11,21 +11,21 @@ import { CHECKLIST_LABELS } from '@/lib/goLiveChecklist';
 const STATUS_CONFIG = {
   not_ready: {
     label: 'No listo',
-    color: 'text-red-400',
+    color: 'text-t-danger',
     bg: 'bg-red-400/10',
     border: 'border-red-400/20',
     icon: AlertCircle,
   },
   partially_ready: {
     label: 'Parcialmente listo',
-    color: 'text-yellow-400',
+    color: 'text-t-warning',
     bg: 'bg-yellow-400/10',
     border: 'border-yellow-400/20',
     icon: Clock,
   },
   ready_for_production: {
     label: 'Listo para producción',
-    color: 'text-green-400',
+    color: 'text-t-success',
     bg: 'bg-green-400/10',
     border: 'border-green-400/20',
     icon: Rocket,
@@ -66,7 +66,7 @@ export default function GoLiveChecklistPanel({ setupDetails }) {
       </div>
 
       {/* Barra de progreso */}
-      <div className="h-1.5 w-full bg-black/20 rounded-full overflow-hidden">
+      <div className="h-1.5 w-full bg-t-bg-deep/50 rounded-full overflow-hidden">
         <div
           className={`h-full rounded-full transition-all duration-500 ${
             overall_status === 'ready_for_production' ? 'bg-green-400' :
@@ -84,7 +84,7 @@ export default function GoLiveChecklistPanel({ setupDetails }) {
           return (
             <li key={key} className="flex items-start gap-2.5">
               {isDone
-                ? <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0 mt-0.5" />
+                ? <CheckCircle2 className="w-4 h-4 text-t-success flex-shrink-0 mt-0.5" />
                 : <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-0.5" />
               }
               <span className={`text-xs leading-snug ${isDone ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
@@ -97,7 +97,7 @@ export default function GoLiveChecklistPanel({ setupDetails }) {
 
       {/* Nota: qué queda */}
       {missing.length > 0 && (
-        <p className="text-xs text-muted-foreground border-t border-white/5 pt-3 leading-relaxed">
+        <p className="text-xs text-muted-foreground border-t border-t-border-subtle pt-3 leading-relaxed">
           Completa los pasos pendientes para desbloquear el acceso completo a Trucky.
         </p>
       )}

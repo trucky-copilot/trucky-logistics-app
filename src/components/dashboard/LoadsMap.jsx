@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css';
 import { useLanguage } from '@/lib/LanguageContext';
 import { geocode } from '@/lib/floridaLocations';
 import { effectiveRate } from '@/lib/loadRate';
+import { useTheme } from '@/lib/ThemeContext';
 
 // Colored pin via divIcon (no external image assets needed)
 function pinIcon(color) {
@@ -48,7 +49,11 @@ const TILE_PROVIDERS = [
 export default function LoadsMap({ loads = [], bare = false }) {
   const { t } = useLanguage();
   const [tileIdx, setTileIdx] = useState(0);
-  const tiles = TILE_PROVIDERS[tileIdx];
+  const { theme } = useTheme();
+  // Modo claro: mapa claro de CARTO; el respaldo (OpenStreetMap) ya es claro.
+  const tiles = tileIdx === 0 && theme === 'light'
+    ? { ...TILE_PROVIDERS[0], url: TILE_PROVIDERS[0].url.replace('dark_all', 'light_all') }
+    : TILE_PROVIDERS[tileIdx];
   const onTileError = () => setTileIdx(i => (i < TILE_PROVIDERS.length - 1 ? i + 1 : i));
   // Build geocoded routes — keep only loads where both ends resolve.
   const routes = loads
@@ -69,7 +74,7 @@ export default function LoadsMap({ loads = [], bare = false }) {
       center={[center.lat, center.lng]}
       zoom={hasRoutes ? 7 : 6}
       scrollWheelZoom={false}
-      style={{ height: '100%', width: '100%', background: 'hsl(268 45% 5%)' }}
+      style={{ height: '100%', width: '100%', background: 'rgb(var(--t-bg-deep))' }}
     >
       <TileLayer
         key={tiles.url}
@@ -109,11 +114,11 @@ export default function LoadsMap({ loads = [], bare = false }) {
           center={[center.lat, center.lng]}
           zoom={hasRoutes ? 7 : 6}
           scrollWheelZoom={false}
-          style={{ height: '100%', width: '100%', background: 'hsl(268 45% 5%)' }}
+          style={{ height: '100%', width: '100%', background: 'rgb(var(--t-bg-deep))' }}
         >
           <TileLayer
             attribution='&copy; <a href="https://carto.com/">CARTO</a> &copy; OpenStreetMap contributors'
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            url={tiles.url.includes('cartocdn') ? tiles.url : TILE_PROVIDERS[0].url}
           />
           {routes.map(({ load, origin, dest, color }, i) => (
             <Fragment key={load.id || i}>

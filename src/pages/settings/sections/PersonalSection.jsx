@@ -11,14 +11,14 @@ import { useAppState } from '@/lib/AppStateContext';
 import { normalizeProfile, validateProfile } from '@/lib/profileValidation';
 
 const tx = (locale, es, en) => (locale === 'en' ? en : es);
-const inputCls = 'w-full bg-background border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/60 disabled:opacity-50';
+const inputCls = 'w-full bg-t-bg-input border border-border rounded-xl px-3 py-2 text-sm text-foreground focus:outline-none focus:border-t-border-focus focus:shadow-focus disabled:opacity-50';
 
 function Field({ label, hint, error, children }) {
   return (
     <label className="block space-y-1">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
-      {error ? <span className="block text-xs text-red-400">{error}</span> : hint ? <span className="block text-[11px] text-muted-foreground/70">{hint}</span> : null}
+      {error ? <span className="block text-xs text-t-danger">{error}</span> : hint ? <span className="block text-[11px] text-muted-foreground/70">{hint}</span> : null}
     </label>
   );
 }
@@ -118,8 +118,8 @@ export default function PersonalSection({ locale }) {
             </Field>
           </div>
           <div className="flex items-center justify-end gap-3">
-            {status && <span className={`text-sm flex items-center gap-1 ${status.ok ? 'text-emerald-400' : 'text-red-400'}`}>{status.ok && <CheckCircle2 className="w-4 h-4" />}{status.msg}</span>}
-            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60">
+            {status && <span className={`text-sm flex items-center gap-1 ${status.ok ? 'text-t-success' : 'text-t-danger'}`}>{status.ok && <CheckCircle2 className="w-4 h-4" />}{status.msg}</span>}
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-t-action-primary-hover disabled:opacity-60">
               {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} {tx(locale, 'Guardar', 'Save')}
             </button>
           </div>

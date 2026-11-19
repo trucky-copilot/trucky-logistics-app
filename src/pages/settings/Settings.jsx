@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Check, Calculator, Receipt, Lock, Hammer, Moon, Sun, ChevronRight, ArrowLeft } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useAuth } from '@/lib/AuthContext';
+import { useTheme } from '@/lib/ThemeContext';
 import PersonalSection from './sections/PersonalSection';
 import CompanySection from './sections/CompanySection';
 import PlanSection from './sections/PlanSection';
@@ -15,7 +16,7 @@ import { SETTINGS_SECTIONS, SETTINGS_GROUPS, findSection, sectionLabel } from '.
 const tx = (locale, es, en) => (locale === 'en' ? en : es);
 
 function Pill({ children, tone = 'muted' }) {
-  const tones = { muted: 'bg-muted text-muted-foreground', amber: 'bg-amber-500/15 text-amber-300' };
+  const tones = { muted: 'bg-muted text-muted-foreground', amber: 'bg-amber-500/15 text-t-warning' };
   return <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${tones[tone]}`}>{children}</span>;
 }
 
@@ -31,7 +32,7 @@ function LanguageSection({ locale, setLocale }) {
           <button key={o.id} type="button" onClick={() => setLocale(o.id)}
             className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-colors ${locale === o.id ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-card hover:bg-muted text-muted-foreground'}`}>
             <span>{o.label} <span className="text-xs opacity-60">({o.id.toUpperCase()})</span></span>
-            {locale === o.id && <Check className="w-4 h-4 text-primary" />}
+            {locale === o.id && <Check className="w-4 h-4 text-t-text-accent" />}
           </button>
         ))}
       </div>
@@ -40,19 +41,23 @@ function LanguageSection({ locale, setLocale }) {
 }
 
 function ThemeSection({ locale }) {
+  const { theme, setTheme } = useTheme();
+  const opts = [
+    { id: 'dark', icon: Moon, label: tx(locale, 'Modo oscuro', 'Dark mode') },
+    { id: 'light', icon: Sun, label: tx(locale, 'Modo claro', 'Light mode') },
+  ];
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
-        <div className="flex items-center justify-between rounded-xl border border-primary bg-primary/10 px-4 py-3 text-sm text-foreground">
-          <span className="flex items-center gap-2"><Moon className="w-4 h-4" /> {tx(locale, 'Modo oscuro', 'Dark mode')}</span>
-          <Check className="w-4 h-4 text-primary" />
-        </div>
-        <div className="flex items-center justify-between rounded-xl border border-border px-4 py-3 text-sm text-muted-foreground opacity-50 cursor-not-allowed" aria-disabled="true">
-          <span className="flex items-center gap-2"><Sun className="w-4 h-4" /> {tx(locale, 'Modo claro', 'Light mode')}</span>
-          <Pill>{tx(locale, 'Próximamente', 'Coming soon')}</Pill>
-        </div>
+      <div role="radiogroup" className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md">
+        {opts.map(({ id, icon: Icon, label }) => (
+          <button key={id} type="button" role="radio" aria-checked={theme === id} onClick={() => setTheme(id)}
+            className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm transition-colors ${theme === id ? 'border-primary bg-primary/10 text-foreground' : 'border-border bg-card hover:bg-muted text-muted-foreground'}`}>
+            <span className="flex items-center gap-2"><Icon className="w-4 h-4" /> {label}</span>
+            {theme === id && <Check className="w-4 h-4 text-t-text-accent" />}
+          </button>
+        ))}
       </div>
-      <p className="text-xs text-muted-foreground">{tx(locale, 'Por ahora la aplicación solo tiene modo oscuro.', 'For now the app only has dark mode.')}</p>
+      <p className="text-xs text-muted-foreground">{tx(locale, 'Se guarda en este navegador.', 'Saved in this browser.')}</p>
     </div>
   );
 }
@@ -66,7 +71,7 @@ function CostsSection({ locale }) {
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
       {items.map(({ to, icon: Icon, title, desc }) => (
         <Link key={to} to={to} className="group rounded-xl border border-border bg-card hover:bg-muted p-4 flex items-start gap-3 transition-colors">
-          <Icon className="w-5 h-5 text-primary mt-0.5" />
+          <Icon className="w-5 h-5 text-t-text-accent mt-0.5" />
           <div className="flex-1 min-w-0">
             <div className="text-sm font-medium text-foreground">{title}</div>
             <div className="text-xs text-muted-foreground">{desc}</div>
@@ -120,8 +125,8 @@ export default function Settings() {
     const Icon = s.icon;
     const active = s.id === current.id;
     const disabled = s.status === 'disabled';
-    const cls = `w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors ${active ? 'bg-primary/15 text-foreground font-medium' : disabled ? 'text-muted-foreground/45 cursor-not-allowed' : 'text-muted-foreground hover:bg-white/5 hover:text-foreground'}`;
-    const inner = (<><Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-primary' : ''}`} /><span className="flex-1 truncate text-left">{sectionLabel(s, locale)}</span>{disabled && <Lock className="w-3 h-3" />}</>);
+    const cls = `w-full flex items-center gap-3 h-10 px-4 rounded-full text-sm transition-colors ${active ? 'bg-t-bg-canvas text-t-text-accent font-medium' : disabled ? 'text-t-text-disabled cursor-not-allowed' : 'text-t-text-secondary hover:bg-t-action-secondary hover:text-t-text-primary'}`;
+    const inner = (<><Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-t-text-accent' : ''}`} /><span className="flex-1 truncate text-left">{sectionLabel(s, locale)}</span>{disabled && <Lock className="w-3 h-3" />}</>);
     return disabled
       ? <div className={cls} aria-disabled="true" title={locale === 'en' ? s.reason?.en : s.reason?.es}>{inner}</div>
       : <Link to={`/configuracion/${s.id}`} className={cls} aria-current={active ? 'page' : undefined}>{inner}</Link>;
@@ -129,15 +134,15 @@ export default function Settings() {
 
   return (
     // Pantalla completa: la configuración tapa el menú y los módulos de la app.
-    <div className="fixed inset-0 z-40 flex bg-background text-foreground">
+    <div className="fixed inset-0 z-40 flex bg-t-bg-deep text-foreground md:p-3 md:gap-3">
       {/* Barra lateral de configuración (escritorio) */}
-      <aside className="hidden md:flex w-72 flex-shrink-0 flex-col border-r border-white/10 bg-card/60">
-        <div className="px-4 pt-4 pb-3 border-b border-white/10 space-y-3">
+      <aside className="hidden md:flex w-72 flex-shrink-0 flex-col rounded-3xl bg-t-bg-sidebar shadow-card">
+        <div className="px-4 pt-4 pb-3 border-b border-border space-y-3">
           <button type="button" onClick={volver} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
             <ArrowLeft className="w-4 h-4" /> {tx(locale, 'Volver', 'Back')}
           </button>
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-[#5B2BA0] border border-white/20 flex items-center justify-center text-sm font-bold text-white">{inicial}</div>
+            <div className="w-9 h-9 rounded-full bg-t-action-primary border border-t-border-strong flex items-center justify-center text-sm font-bold text-white">{inicial}</div>
             <div className="min-w-0">
               <div className="text-sm font-semibold truncate">{tx(locale, 'Configuración', 'Settings')}</div>
               <div className="text-xs text-muted-foreground truncate">{correo}</div>
@@ -155,11 +160,11 @@ export default function Settings() {
       </aside>
 
       {/* Contenido */}
-      <main className="flex-1 min-w-0 flex flex-col">
+      <main className="flex-1 min-w-0 flex flex-col bg-t-bg-canvas md:rounded-3xl overflow-hidden">
         {/* Celular: volver + selector de sección */}
-        <div className="md:hidden flex items-center gap-2 px-4 py-3 border-b border-white/10 bg-card/60">
-          <button type="button" onClick={volver} aria-label={tx(locale, 'Volver', 'Back')} className="p-1.5 rounded-lg hover:bg-white/5"><ArrowLeft className="w-5 h-5" /></button>
-          <select className="flex-1 min-w-0 bg-background border border-border rounded-lg px-3 py-2 text-sm" style={{ colorScheme: 'dark' }}
+        <div className="md:hidden flex items-center gap-2 px-4 py-3 border-b border-border bg-t-bg-sidebar">
+          <button type="button" onClick={volver} aria-label={tx(locale, 'Volver', 'Back')} className="p-1.5 rounded-lg hover:bg-foreground/5"><ArrowLeft className="w-5 h-5" /></button>
+          <select className="flex-1 min-w-0 bg-t-bg-input border border-border rounded-xl px-3 py-2 text-sm"
             value={current.id} onChange={(e) => navigate(`/configuracion/${e.target.value}`)}>
             {SETTINGS_SECTIONS.map((s) => (
               <option key={s.id} value={s.id} disabled={s.status === 'disabled'}>
@@ -169,11 +174,11 @@ export default function Settings() {
           </select>
         </div>
 
-        <header className="px-6 md:px-10 pt-6 md:pt-8 pb-5 border-b border-white/10">
-          <h1 className="text-2xl font-semibold flex items-center gap-3">
-            <current.icon className="w-6 h-6 text-primary" /> {sectionLabel(current, locale)}
+        <header className="px-6 md:px-10 pt-6 md:pt-8 pb-5 border-b border-border">
+          <h1 className="t-h1 flex items-center gap-3">
+            <current.icon className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" /> {sectionLabel(current, locale)}
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">{locale === 'en' ? current.desc?.en : current.desc?.es}</p>
+          <p className="t-subtitle mt-1">{locale === 'en' ? current.desc?.en : current.desc?.es}</p>
         </header>
 
         <div className="flex-1 overflow-y-auto px-6 md:px-10 py-6">

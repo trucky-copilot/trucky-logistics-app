@@ -39,25 +39,16 @@ function useMarketTickerData() {
 
 function TickerItem({ item }) {
   return (
-    <div className="flex items-center gap-1.5 px-3 flex-shrink-0">
-      <span className="text-[10px] font-mono uppercase tracking-wide text-muted-foreground">{item.label}</span>
-      <span className="text-[11px] font-mono font-bold text-cyan-400">{item.value}</span>
-      <span className="text-muted-foreground/40 ml-1">·</span>
+    <div className="flex items-center gap-2 pr-8 flex-shrink-0 font-mono text-xs font-medium tracking-[0.02em]">
+      <span className="uppercase text-t-text-muted">{item.label}</span>
+      <span className="text-t-text-primary">{item.value}</span>
     </div>
   );
 }
 
-function LiveBadge() {
-  return (
-    <div className="flex items-center gap-1.5 px-3 flex-shrink-0">
-      <span className="trucky-blink w-1.5 h-1.5 rounded-full bg-red-500 inline-block shadow-sm shadow-red-500/50" />
-      <span className="text-[10px] font-mono uppercase tracking-wide text-red-500 font-bold">Live</span>
-      <span className="text-muted-foreground/40 ml-1">·</span>
-    </div>
-  );
-}
-
+// Figma 8:248 · Market Ticker: franja bg/deep con la etiqueta fija "MERCADO EN VIVO".
 export default function MarketTicker() {
+  const { locale } = useLanguage();
   const [paused, setPaused] = useState(false);
   const items = useMarketTickerData();
 
@@ -65,26 +56,31 @@ export default function MarketTicker() {
 
   return (
     <div
-      className="flex items-center order-last basis-full lg:order-none lg:basis-auto lg:flex-1 lg:w-0 lg:mx-4 min-w-0 h-8 rounded-lg bg-background/40 border border-border/60 overflow-hidden relative"
+      className="flex items-center h-12 bg-t-bg-deep flex-shrink-0 min-w-0 overflow-hidden"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onTouchStart={() => setPaused(true)}
       onTouchEnd={() => setPaused(false)}
       title={paused ? 'Cinta en pausa' : 'Cinta de mercado en vivo'}
     >
-      <div
-        className="absolute left-0 top-0 bottom-0 flex items-center flex-shrink-0 animate-trucky-ticker"
-        style={{ animationPlayState: paused ? 'paused' : 'running', willChange: 'transform' }}
-      >
-        {/* Dos copias idénticas para un loop continuo y sin saltos */}
-        {[0, 1].map((copy) => (
-          <div key={copy} className="flex items-center flex-shrink-0">
-            <LiveBadge />
-            {items.map((item, i) => (
-              <TickerItem key={i} item={item} />
-            ))}
-          </div>
-        ))}
+      <div className="flex items-center gap-2 pl-4 lg:pl-8 pr-6 flex-shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-t-accent-cyan">
+        <span className="trucky-blink w-2 h-2 rounded-full bg-t-accent-cyan inline-block" />
+        {locale === 'en' ? 'Live market' : 'Mercado en vivo'}
+      </div>
+      <div className="relative flex-1 min-w-0 h-full overflow-hidden">
+        <div
+          className="absolute left-0 top-0 bottom-0 flex items-center flex-shrink-0 animate-trucky-ticker"
+          style={{ animationPlayState: paused ? 'paused' : 'running', willChange: 'transform' }}
+        >
+          {/* Dos copias idénticas para un loop continuo y sin saltos */}
+          {[0, 1].map((copy) => (
+            <div key={copy} className="flex items-center flex-shrink-0">
+              {items.map((item, i) => (
+                <TickerItem key={i} item={item} />
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );

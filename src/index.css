@@ -5,37 +5,174 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
 
 @layer base {
+  /* ── Trucky Design System (Figma) · tokens --t-* en RGB (para opacidad)
+     Oscuro por defecto; html.light activa el modo claro (Configuración → Tema). */
+  :root, html.dark {
+    color-scheme: dark;
+    --t-bg-canvas: 38 25 69;
+    --t-bg-sidebar: 19 14 36;
+    --t-bg-surface: 44 31 84;
+    --t-bg-surface-raised: 59 53 88;
+    --t-bg-input: 32 21 51;
+    --t-bg-deep: 14 10 25;
+    --t-bg-inverse: 255 255 255;
+    --t-text-primary: 255 255 255;
+    --t-text-secondary: 209 208 224;
+    --t-text-muted: 169 168 199;
+    --t-text-accent: 188 167 255;
+    --t-text-on-accent: 255 255 255;
+    --t-text-disabled: 90 87 142;
+    --t-text-inverse: 19 14 36;
+    --t-border-default: 59 53 88;
+    --t-border-strong: 110 108 155;
+    --t-border-subtle: 46 40 77;
+    --t-border-focus: 140 91 248;
+    --t-action-primary: 84 51 216;
+    --t-action-primary-hover: 122 92 230;
+    --t-action-primary-pressed: 77 19 195;
+    --t-action-secondary: 46 40 77;
+    --t-action-secondary-hover: 59 53 88;
+    --t-action-disabled: 46 40 77;
+    --t-accent-brand: 77 19 195;
+    --t-accent-lime: 147 233 0;
+    --t-accent-cyan: 133 239 255;
+    --t-success: 46 204 113;
+    --t-success-soft: 23 61 44;
+    --t-warning: 249 204 24;
+    --t-warning-soft: 58 48 32;
+    --t-danger: 247 113 114;
+    --t-danger-soft: 58 31 46;
+    --t-info: 133 239 255;
+    --t-info-soft: 30 58 74;
+    --t-chart-1: 140 91 248;
+    --t-chart-2: 26 160 185;
+    --t-chart-3: 101 152 21;
+    --t-chart-4: 219 91 148;
+    --t-chart-5: 193 93 17;
+    --t-chart-grid: 59 53 88;
+    --t-chat-bubble-user: 51 180 216;
+    --t-chat-on-bubble-user: 19 14 36;
+    --t-logo-fill: 255 255 255;
+    --background: 258 47% 18%;
+    --foreground: 0 0% 100%;
+    --card: 255 46% 23%;
+    --card-foreground: 0 0% 100%;
+    --popover: 255 46% 23%;
+    --popover-foreground: 0 0% 100%;
+    --primary: 252 68% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 250 32% 23%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 250 32% 23%;
+    --muted-foreground: 242 22% 72%;
+    --accent: 260 82% 42%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 360 89% 71%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 250 25% 28%;
+    --input: 250 25% 28%;
+    --ring: 259 92% 66%;
+    --success: 145 63% 49%;
+    --warning: 48 95% 54%;
+    --chart-1: 259 92% 66%;
+    --chart-2: 189 75% 41%;
+    --chart-3: 83 76% 34%;
+    --chart-4: 333 64% 61%;
+    --chart-5: 26 84% 41%;
+    --t-overlay: rgb(14 10 25 / 0.72);
+    --t-shadow-color: rgb(14 10 25 / 0.45);
+    --t-glow: rgb(84 51 216 / 0.55);
+    --t-focus: rgb(140 91 248 / 0.45);
+    --radius: 0.75rem;
+    --navy: var(--background);
+    --navy-light: var(--card);
+    --cyan: var(--accent);
+    --trucky-brand: #5433D8;
+  }
+
+  html.light {
+    color-scheme: light;
+    --t-bg-canvas: 246 245 250;
+    --t-bg-sidebar: 255 255 255;
+    --t-bg-surface: 255 255 255;
+    --t-bg-surface-raised: 230 228 242;
+    --t-bg-input: 255 255 255;
+    --t-bg-deep: 230 228 242;
+    --t-bg-inverse: 19 14 36;
+    --t-text-primary: 19 14 36;
+    --t-text-secondary: 71 67 126;
+    --t-text-muted: 90 87 142;
+    --t-text-accent: 77 19 195;
+    --t-text-on-accent: 255 255 255;
+    --t-text-disabled: 169 168 199;
+    --t-text-inverse: 255 255 255;
+    --t-border-default: 209 208 224;
+    --t-border-strong: 129 126 169;
+    --t-border-subtle: 230 228 242;
+    --t-border-focus: 84 51 216;
+    --t-action-primary: 84 51 216;
+    --t-action-primary-hover: 77 19 195;
+    --t-action-primary-pressed: 59 6 112;
+    --t-action-secondary: 230 228 242;
+    --t-action-secondary-hover: 209 208 224;
+    --t-action-disabled: 230 228 242;
+    --t-accent-brand: 59 6 112;
+    --t-accent-lime: 74 115 0;
+    --t-accent-cyan: 6 96 111;
+    --t-success: 22 117 63;
+    --t-success-soft: 227 248 236;
+    --t-warning: 131 90 0;
+    --t-warning-soft: 255 246 214;
+    --t-danger: 190 34 54;
+    --t-danger-soft: 253 232 232;
+    --t-info: 84 51 216;
+    --t-info-soft: 236 232 253;
+    --t-chart-1: 84 51 216;
+    --t-chart-2: 11 143 170;
+    --t-chart-3: 77 133 0;
+    --t-chart-4: 200 50 122;
+    --t-chart-5: 196 90 12;
+    --t-chart-grid: 230 228 242;
+    --t-chat-bubble-user: 10 115 136;
+    --t-chat-on-bubble-user: 255 255 255;
+    --t-logo-fill: 59 6 112;
+    --background: 252 33% 97%;
+    --foreground: 254 44% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 254 44% 10%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 254 44% 10%;
+    --primary: 252 68% 52%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 249 35% 92%;
+    --secondary-foreground: 254 44% 10%;
+    --muted: 249 35% 92%;
+    --muted-foreground: 243 24% 45%;
+    --accent: 270 90% 23%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 352 70% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 244 21% 85%;
+    --input: 244 21% 85%;
+    --ring: 252 68% 52%;
+    --success: 146 68% 27%;
+    --warning: 41 100% 26%;
+    --chart-1: 252 68% 52%;
+    --chart-2: 190 88% 35%;
+    --chart-3: 85 100% 26%;
+    --chart-4: 331 60% 49%;
+    --chart-5: 25 88% 41%;
+    --t-overlay: rgb(19 14 36 / 0.40);
+    --t-shadow-color: rgb(48 48 112 / 0.12);
+  }
+
   :root {
-    /* ── Trucky brand: deep violet / purple (#5B2BA0 & white) ──────────── */
-    --background: 268 45% 5%;
-    --foreground: 260 30% 96%;
-    --card: 257 45% 10%;
-    --card-foreground: 260 30% 96%;
-    --popover: 257 45% 10%;
-    --popover-foreground: 260 30% 96%;
-    --primary: 258 90% 66%;
-    --primary-foreground: 268 45% 5%;
-    --secondary: 257 40% 16%;
-    --secondary-foreground: 260 30% 96%;
-    --muted: 257 40% 14%;
-    --muted-foreground: 255 25% 62%;
-    --accent: 270 86% 42%;
-    --accent-foreground: 260 30% 96%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 257 40% 19%;
-    --input: 257 40% 14%;
-    --ring: 258 90% 66%;
-    --radius: 0.625rem;
-    --success: 142 71% 45%;
-    --warning: 38 92% 50%;
-    --navy: 268 45% 5%;
-    --navy-light: 257 45% 10%;
-    --cyan: 270 86% 42%;
-    --trucky-brand: #5B2BA0;
+    --t-shadow-card: 0 4px 16px -4px var(--t-shadow-color);
+    --t-shadow-popover: 0 12px 32px -8px var(--t-shadow-color);
+    --t-shadow-glow: 0 0 32px 0 var(--t-glow);
+    --t-ring-focus: 0 0 0 3px var(--t-focus);
   }
 }
-
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -43,83 +180,86 @@
 
   body {
     @apply bg-background text-foreground font-inter;
-    background-image:
-      radial-gradient(circle at 20% 20%, rgba(91, 43, 160, 0.24) 0%, transparent 45%),
-      radial-gradient(circle at 80% 75%, rgba(91, 43, 160, 0.18) 0%, transparent 50%),
-      radial-gradient(circle at 50% 40%, hsl(257 45% 11%) 0%, hsl(268 45% 5%) 75%);
-    background-attachment: fixed;
+    background-color: rgb(var(--t-bg-deep));
     font-feature-settings: "kern" 1, "liga" 1;
   }
 }
 
 @layer components {
-  /* Subtle elevation for cards & panels */
+  /* Elevación de tarjetas (Effect/Card del Figma) */
   .bg-card {
-    box-shadow: 0 1px 2px hsl(268 45% 2% / 0.35), 0 6px 18px hsl(268 45% 2% / 0.22);
+    box-shadow: var(--t-shadow-card);
   }
 
-  /* ── Glassy Dashboard Classes (Frosted Glass + Purple Brand #5B2BA0) ── */
+  /* Superficies (antes "glass"): ahora planas con tokens, sirven en ambos modos */
   .glass-panel {
-    background: linear-gradient(
-      135deg,
-      rgba(91, 43, 160, 0.16) 0%,
-      rgba(26, 15, 46, 0.62) 55%,
-      rgba(18, 10, 32, 0.72) 100%
-    );
-    backdrop-filter: blur(20px) saturate(160%);
-    -webkit-backdrop-filter: blur(20px) saturate(160%);
-    border: 1px solid rgba(255, 255, 255, 0.11);
-    box-shadow:
-      0 10px 32px -4px rgba(8, 3, 18, 0.55),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+    background: rgb(var(--t-bg-surface));
+    border: 1px solid rgb(var(--t-border-default));
+    box-shadow: var(--t-shadow-card);
   }
 
   .glass-card {
-    background: linear-gradient(
-      145deg,
-      rgba(255, 255, 255, 0.07) 0%,
-      rgba(91, 43, 160, 0.18) 48%,
-      rgba(22, 13, 38, 0.68) 100%
-    );
-    backdrop-filter: blur(18px) saturate(150%);
-    -webkit-backdrop-filter: blur(18px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow:
-      0 8px 26px -4px rgba(7, 2, 16, 0.5),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.16);
-    transition: border-color 0.25s ease, box-shadow 0.25s ease, background 0.25s ease;
+    background: rgb(var(--t-bg-surface));
+    border: 1px solid rgb(var(--t-border-default));
+    box-shadow: var(--t-shadow-card);
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
 
   .glass-card:hover {
-    border-color: rgba(255, 255, 255, 0.24);
-    box-shadow:
-      0 16px 36px -6px rgba(91, 43, 160, 0.38),
-      0 8px 20px -4px rgba(7, 2, 16, 0.6),
-      inset 0 1px 0 0 rgba(255, 255, 255, 0.25);
+    border-color: rgb(var(--t-border-strong));
   }
 
   .glass-pill-bar {
-    background: rgba(24, 14, 42, 0.65);
-    backdrop-filter: blur(24px) saturate(170%);
-    -webkit-backdrop-filter: blur(24px) saturate(170%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    box-shadow:
-      0 12px 32px rgba(5, 2, 12, 0.6),
-      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    background: rgb(var(--t-bg-surface));
+    border: 1px solid rgb(var(--t-border-default));
+    box-shadow: var(--t-shadow-popover);
   }
 
-  /* Primary buttons get a soft glow */
+  /* Botón primario: hover/pressed del Figma */
   button.bg-primary {
-    box-shadow: 0 2px 10px hsl(258 90% 66% / 0.28);
-    transition: box-shadow 0.15s ease, transform 0.15s ease, background-color 0.15s ease;
+    transition: background-color 0.15s ease;
   }
   button.bg-primary:hover:not(:disabled) {
-    transform: translateY(-1px);
+    background-color: rgb(var(--t-action-primary-hover));
+  }
+  button.bg-primary:active:not(:disabled) {
+    background-color: rgb(var(--t-action-primary-pressed));
+  }
+
+  /* Tipografía del Figma (App/H1, Body L, Overline) */
+  .t-h1 {
+    font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.015em;
+    color: rgb(var(--t-text-primary));
+  }
+  @media (min-width: 1024px) { .t-h1 { font-size: 32px; } }
+  .t-subtitle { font-size: 16px; line-height: 1.5; color: rgb(var(--t-text-secondary)); }
+  .t-overline { font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: rgb(var(--t-text-muted)); }
+  /* Contenido de página (Figma: 40 / 32) */
+  .t-page { padding: 24px 16px; }
+  @media (min-width: 1024px) { .t-page { padding: 32px 40px; } }
+
+  /* Markdown (chat/correos) con los colores del tema */
+  .t-prose {
+    --tw-prose-body: rgb(var(--t-text-primary));
+    --tw-prose-headings: rgb(var(--t-text-primary));
+    --tw-prose-bold: rgb(var(--t-text-primary));
+    --tw-prose-links: rgb(var(--t-text-accent));
+    --tw-prose-bullets: rgb(var(--t-text-muted));
+    --tw-prose-counters: rgb(var(--t-text-muted));
+    --tw-prose-quotes: rgb(var(--t-text-secondary));
+    --tw-prose-quote-borders: rgb(var(--t-border-default));
+    --tw-prose-hr: rgb(var(--t-border-default));
+    --tw-prose-code: rgb(var(--t-text-accent));
+    --tw-prose-pre-code: rgb(var(--t-text-primary));
+    --tw-prose-pre-bg: rgb(var(--t-bg-deep));
+    --tw-prose-th-borders: rgb(var(--t-border-default));
+    --tw-prose-td-borders: rgb(var(--t-border-subtle));
+    color: rgb(var(--t-text-primary));
   }
 
   /* Tables: clearer header + smoother row hover */
   table thead {
-    background: hsl(var(--muted) / 0.35);
+    background: rgb(var(--t-bg-surface-raised));
   }
   table thead th {
     letter-spacing: 0.02em;
@@ -134,7 +274,7 @@
     background: hsl(var(--card));
     color: hsl(var(--foreground));
     border: 1px solid hsl(var(--border));
-    box-shadow: 0 8px 24px hsl(268 45% 2% / 0.5);
+    box-shadow: var(--t-shadow-popover);
   }
   .leaflet-popup-content {
     margin: 10px 12px;
@@ -206,3 +346,370 @@
     animation: none !important;
   }
 }
+
+/* ── Modo claro: compatibilidad con colores fijos del código ─────────────
+   Mientras cada módulo se migra a los tokens (fases 2–5), en modo claro los
+   blancos/grises pensados para fondo oscuro pasan a los tokens del Figma.
+   Sobre fondos sólidos (botones, badges, avatares) el blanco se conserva. */
+html.light .text-white { color: rgb(var(--t-text-primary)); }
+html.light .text-white\/30 { color: rgb(var(--t-text-primary) / 0.3); }
+html.light .text-white\/40 { color: rgb(var(--t-text-primary) / 0.4); }
+html.light .text-white\/50 { color: rgb(var(--t-text-primary) / 0.5); }
+html.light .text-white\/55 { color: rgb(var(--t-text-primary) / 0.55); }
+html.light .text-white\/60 { color: rgb(var(--t-text-primary) / 0.6); }
+html.light .text-white\/65 { color: rgb(var(--t-text-primary) / 0.65); }
+html.light .text-white\/70 { color: rgb(var(--t-text-primary) / 0.7); }
+html.light .text-white\/75 { color: rgb(var(--t-text-primary) / 0.75); }
+html.light .text-white\/80 { color: rgb(var(--t-text-primary) / 0.8); }
+html.light .text-white\/90 { color: rgb(var(--t-text-primary) / 0.9); }
+html.light [class~="bg-primary"].text-white, html.light [class~="bg-primary"] .text-white,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white, html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white,
+html.light [class~="bg-red-500"].text-white, html.light [class~="bg-red-500"] .text-white,
+html.light [class~="bg-amber-500"].text-white, html.light [class~="bg-amber-500"] .text-white,
+html.light [class~="bg-emerald-500"].text-white, html.light [class~="bg-emerald-500"] .text-white,
+html.light [class~="bg-green-500"].text-white, html.light [class~="bg-green-500"] .text-white,
+html.light [class~="bg-violet-500"].text-white, html.light [class~="bg-violet-500"] .text-white,
+html.light [class~="bg-violet-600"].text-white, html.light [class~="bg-violet-600"] .text-white,
+html.light [class~="bg-blue-500"].text-white, html.light [class~="bg-blue-500"] .text-white,
+html.light [class~="bg-blue-600"].text-white, html.light [class~="bg-blue-600"] .text-white,
+html.light [class~="bg-sky-500"].text-white, html.light [class~="bg-sky-500"] .text-white,
+html.light [class~="bg-red-600"].text-white, html.light [class~="bg-red-600"] .text-white,
+html.light [class~="bg-purple-500"].text-white, html.light [class~="bg-purple-500"] .text-white,
+html.light [class~="bg-indigo-500"].text-white, html.light [class~="bg-indigo-500"] .text-white,
+html.light [class~="bg-amber-600"].text-white, html.light [class~="bg-amber-600"] .text-white,
+html.light [class~="bg-zinc-800"].text-white, html.light [class~="bg-zinc-800"] .text-white { color: #fff; }
+html.light [class~="bg-primary"] .text-white\/30,
+html.light [class~="bg-primary"].text-white\/30,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/30,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/30,
+html.light [class~="bg-red-500"] .text-white\/30,
+html.light [class~="bg-red-500"].text-white\/30,
+html.light [class~="bg-amber-500"] .text-white\/30,
+html.light [class~="bg-amber-500"].text-white\/30,
+html.light [class~="bg-emerald-500"] .text-white\/30,
+html.light [class~="bg-emerald-500"].text-white\/30,
+html.light [class~="bg-green-500"] .text-white\/30,
+html.light [class~="bg-green-500"].text-white\/30,
+html.light [class~="bg-violet-500"] .text-white\/30,
+html.light [class~="bg-violet-500"].text-white\/30,
+html.light [class~="bg-violet-600"] .text-white\/30,
+html.light [class~="bg-violet-600"].text-white\/30,
+html.light [class~="bg-blue-500"] .text-white\/30,
+html.light [class~="bg-blue-500"].text-white\/30,
+html.light [class~="bg-blue-600"] .text-white\/30,
+html.light [class~="bg-blue-600"].text-white\/30,
+html.light [class~="bg-sky-500"] .text-white\/30,
+html.light [class~="bg-sky-500"].text-white\/30,
+html.light [class~="bg-red-600"] .text-white\/30,
+html.light [class~="bg-red-600"].text-white\/30,
+html.light [class~="bg-purple-500"] .text-white\/30,
+html.light [class~="bg-purple-500"].text-white\/30,
+html.light [class~="bg-indigo-500"] .text-white\/30,
+html.light [class~="bg-indigo-500"].text-white\/30,
+html.light [class~="bg-amber-600"] .text-white\/30,
+html.light [class~="bg-amber-600"].text-white\/30,
+html.light [class~="bg-zinc-800"] .text-white\/30,
+html.light [class~="bg-zinc-800"].text-white\/30 { color: rgb(255 255 255 / 0.3); }
+html.light [class~="bg-primary"] .text-white\/40,
+html.light [class~="bg-primary"].text-white\/40,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/40,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/40,
+html.light [class~="bg-red-500"] .text-white\/40,
+html.light [class~="bg-red-500"].text-white\/40,
+html.light [class~="bg-amber-500"] .text-white\/40,
+html.light [class~="bg-amber-500"].text-white\/40,
+html.light [class~="bg-emerald-500"] .text-white\/40,
+html.light [class~="bg-emerald-500"].text-white\/40,
+html.light [class~="bg-green-500"] .text-white\/40,
+html.light [class~="bg-green-500"].text-white\/40,
+html.light [class~="bg-violet-500"] .text-white\/40,
+html.light [class~="bg-violet-500"].text-white\/40,
+html.light [class~="bg-violet-600"] .text-white\/40,
+html.light [class~="bg-violet-600"].text-white\/40,
+html.light [class~="bg-blue-500"] .text-white\/40,
+html.light [class~="bg-blue-500"].text-white\/40,
+html.light [class~="bg-blue-600"] .text-white\/40,
+html.light [class~="bg-blue-600"].text-white\/40,
+html.light [class~="bg-sky-500"] .text-white\/40,
+html.light [class~="bg-sky-500"].text-white\/40,
+html.light [class~="bg-red-600"] .text-white\/40,
+html.light [class~="bg-red-600"].text-white\/40,
+html.light [class~="bg-purple-500"] .text-white\/40,
+html.light [class~="bg-purple-500"].text-white\/40,
+html.light [class~="bg-indigo-500"] .text-white\/40,
+html.light [class~="bg-indigo-500"].text-white\/40,
+html.light [class~="bg-amber-600"] .text-white\/40,
+html.light [class~="bg-amber-600"].text-white\/40,
+html.light [class~="bg-zinc-800"] .text-white\/40,
+html.light [class~="bg-zinc-800"].text-white\/40 { color: rgb(255 255 255 / 0.4); }
+html.light [class~="bg-primary"] .text-white\/50,
+html.light [class~="bg-primary"].text-white\/50,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/50,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/50,
+html.light [class~="bg-red-500"] .text-white\/50,
+html.light [class~="bg-red-500"].text-white\/50,
+html.light [class~="bg-amber-500"] .text-white\/50,
+html.light [class~="bg-amber-500"].text-white\/50,
+html.light [class~="bg-emerald-500"] .text-white\/50,
+html.light [class~="bg-emerald-500"].text-white\/50,
+html.light [class~="bg-green-500"] .text-white\/50,
+html.light [class~="bg-green-500"].text-white\/50,
+html.light [class~="bg-violet-500"] .text-white\/50,
+html.light [class~="bg-violet-500"].text-white\/50,
+html.light [class~="bg-violet-600"] .text-white\/50,
+html.light [class~="bg-violet-600"].text-white\/50,
+html.light [class~="bg-blue-500"] .text-white\/50,
+html.light [class~="bg-blue-500"].text-white\/50,
+html.light [class~="bg-blue-600"] .text-white\/50,
+html.light [class~="bg-blue-600"].text-white\/50,
+html.light [class~="bg-sky-500"] .text-white\/50,
+html.light [class~="bg-sky-500"].text-white\/50,
+html.light [class~="bg-red-600"] .text-white\/50,
+html.light [class~="bg-red-600"].text-white\/50,
+html.light [class~="bg-purple-500"] .text-white\/50,
+html.light [class~="bg-purple-500"].text-white\/50,
+html.light [class~="bg-indigo-500"] .text-white\/50,
+html.light [class~="bg-indigo-500"].text-white\/50,
+html.light [class~="bg-amber-600"] .text-white\/50,
+html.light [class~="bg-amber-600"].text-white\/50,
+html.light [class~="bg-zinc-800"] .text-white\/50,
+html.light [class~="bg-zinc-800"].text-white\/50 { color: rgb(255 255 255 / 0.5); }
+html.light [class~="bg-primary"] .text-white\/55,
+html.light [class~="bg-primary"].text-white\/55,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/55,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/55,
+html.light [class~="bg-red-500"] .text-white\/55,
+html.light [class~="bg-red-500"].text-white\/55,
+html.light [class~="bg-amber-500"] .text-white\/55,
+html.light [class~="bg-amber-500"].text-white\/55,
+html.light [class~="bg-emerald-500"] .text-white\/55,
+html.light [class~="bg-emerald-500"].text-white\/55,
+html.light [class~="bg-green-500"] .text-white\/55,
+html.light [class~="bg-green-500"].text-white\/55,
+html.light [class~="bg-violet-500"] .text-white\/55,
+html.light [class~="bg-violet-500"].text-white\/55,
+html.light [class~="bg-violet-600"] .text-white\/55,
+html.light [class~="bg-violet-600"].text-white\/55,
+html.light [class~="bg-blue-500"] .text-white\/55,
+html.light [class~="bg-blue-500"].text-white\/55,
+html.light [class~="bg-blue-600"] .text-white\/55,
+html.light [class~="bg-blue-600"].text-white\/55,
+html.light [class~="bg-sky-500"] .text-white\/55,
+html.light [class~="bg-sky-500"].text-white\/55,
+html.light [class~="bg-red-600"] .text-white\/55,
+html.light [class~="bg-red-600"].text-white\/55,
+html.light [class~="bg-purple-500"] .text-white\/55,
+html.light [class~="bg-purple-500"].text-white\/55,
+html.light [class~="bg-indigo-500"] .text-white\/55,
+html.light [class~="bg-indigo-500"].text-white\/55,
+html.light [class~="bg-amber-600"] .text-white\/55,
+html.light [class~="bg-amber-600"].text-white\/55,
+html.light [class~="bg-zinc-800"] .text-white\/55,
+html.light [class~="bg-zinc-800"].text-white\/55 { color: rgb(255 255 255 / 0.55); }
+html.light [class~="bg-primary"] .text-white\/60,
+html.light [class~="bg-primary"].text-white\/60,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/60,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/60,
+html.light [class~="bg-red-500"] .text-white\/60,
+html.light [class~="bg-red-500"].text-white\/60,
+html.light [class~="bg-amber-500"] .text-white\/60,
+html.light [class~="bg-amber-500"].text-white\/60,
+html.light [class~="bg-emerald-500"] .text-white\/60,
+html.light [class~="bg-emerald-500"].text-white\/60,
+html.light [class~="bg-green-500"] .text-white\/60,
+html.light [class~="bg-green-500"].text-white\/60,
+html.light [class~="bg-violet-500"] .text-white\/60,
+html.light [class~="bg-violet-500"].text-white\/60,
+html.light [class~="bg-violet-600"] .text-white\/60,
+html.light [class~="bg-violet-600"].text-white\/60,
+html.light [class~="bg-blue-500"] .text-white\/60,
+html.light [class~="bg-blue-500"].text-white\/60,
+html.light [class~="bg-blue-600"] .text-white\/60,
+html.light [class~="bg-blue-600"].text-white\/60,
+html.light [class~="bg-sky-500"] .text-white\/60,
+html.light [class~="bg-sky-500"].text-white\/60,
+html.light [class~="bg-red-600"] .text-white\/60,
+html.light [class~="bg-red-600"].text-white\/60,
+html.light [class~="bg-purple-500"] .text-white\/60,
+html.light [class~="bg-purple-500"].text-white\/60,
+html.light [class~="bg-indigo-500"] .text-white\/60,
+html.light [class~="bg-indigo-500"].text-white\/60,
+html.light [class~="bg-amber-600"] .text-white\/60,
+html.light [class~="bg-amber-600"].text-white\/60,
+html.light [class~="bg-zinc-800"] .text-white\/60,
+html.light [class~="bg-zinc-800"].text-white\/60 { color: rgb(255 255 255 / 0.6); }
+html.light [class~="bg-primary"] .text-white\/65,
+html.light [class~="bg-primary"].text-white\/65,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/65,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/65,
+html.light [class~="bg-red-500"] .text-white\/65,
+html.light [class~="bg-red-500"].text-white\/65,
+html.light [class~="bg-amber-500"] .text-white\/65,
+html.light [class~="bg-amber-500"].text-white\/65,
+html.light [class~="bg-emerald-500"] .text-white\/65,
+html.light [class~="bg-emerald-500"].text-white\/65,
+html.light [class~="bg-green-500"] .text-white\/65,
+html.light [class~="bg-green-500"].text-white\/65,
+html.light [class~="bg-violet-500"] .text-white\/65,
+html.light [class~="bg-violet-500"].text-white\/65,
+html.light [class~="bg-violet-600"] .text-white\/65,
+html.light [class~="bg-violet-600"].text-white\/65,
+html.light [class~="bg-blue-500"] .text-white\/65,
+html.light [class~="bg-blue-500"].text-white\/65,
+html.light [class~="bg-blue-600"] .text-white\/65,
+html.light [class~="bg-blue-600"].text-white\/65,
+html.light [class~="bg-sky-500"] .text-white\/65,
+html.light [class~="bg-sky-500"].text-white\/65,
+html.light [class~="bg-red-600"] .text-white\/65,
+html.light [class~="bg-red-600"].text-white\/65,
+html.light [class~="bg-purple-500"] .text-white\/65,
+html.light [class~="bg-purple-500"].text-white\/65,
+html.light [class~="bg-indigo-500"] .text-white\/65,
+html.light [class~="bg-indigo-500"].text-white\/65,
+html.light [class~="bg-amber-600"] .text-white\/65,
+html.light [class~="bg-amber-600"].text-white\/65,
+html.light [class~="bg-zinc-800"] .text-white\/65,
+html.light [class~="bg-zinc-800"].text-white\/65 { color: rgb(255 255 255 / 0.65); }
+html.light [class~="bg-primary"] .text-white\/70,
+html.light [class~="bg-primary"].text-white\/70,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/70,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/70,
+html.light [class~="bg-red-500"] .text-white\/70,
+html.light [class~="bg-red-500"].text-white\/70,
+html.light [class~="bg-amber-500"] .text-white\/70,
+html.light [class~="bg-amber-500"].text-white\/70,
+html.light [class~="bg-emerald-500"] .text-white\/70,
+html.light [class~="bg-emerald-500"].text-white\/70,
+html.light [class~="bg-green-500"] .text-white\/70,
+html.light [class~="bg-green-500"].text-white\/70,
+html.light [class~="bg-violet-500"] .text-white\/70,
+html.light [class~="bg-violet-500"].text-white\/70,
+html.light [class~="bg-violet-600"] .text-white\/70,
+html.light [class~="bg-violet-600"].text-white\/70,
+html.light [class~="bg-blue-500"] .text-white\/70,
+html.light [class~="bg-blue-500"].text-white\/70,
+html.light [class~="bg-blue-600"] .text-white\/70,
+html.light [class~="bg-blue-600"].text-white\/70,
+html.light [class~="bg-sky-500"] .text-white\/70,
+html.light [class~="bg-sky-500"].text-white\/70,
+html.light [class~="bg-red-600"] .text-white\/70,
+html.light [class~="bg-red-600"].text-white\/70,
+html.light [class~="bg-purple-500"] .text-white\/70,
+html.light [class~="bg-purple-500"].text-white\/70,
+html.light [class~="bg-indigo-500"] .text-white\/70,
+html.light [class~="bg-indigo-500"].text-white\/70,
+html.light [class~="bg-amber-600"] .text-white\/70,
+html.light [class~="bg-amber-600"].text-white\/70,
+html.light [class~="bg-zinc-800"] .text-white\/70,
+html.light [class~="bg-zinc-800"].text-white\/70 { color: rgb(255 255 255 / 0.7); }
+html.light [class~="bg-primary"] .text-white\/75,
+html.light [class~="bg-primary"].text-white\/75,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/75,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/75,
+html.light [class~="bg-red-500"] .text-white\/75,
+html.light [class~="bg-red-500"].text-white\/75,
+html.light [class~="bg-amber-500"] .text-white\/75,
+html.light [class~="bg-amber-500"].text-white\/75,
+html.light [class~="bg-emerald-500"] .text-white\/75,
+html.light [class~="bg-emerald-500"].text-white\/75,
+html.light [class~="bg-green-500"] .text-white\/75,
+html.light [class~="bg-green-500"].text-white\/75,
+html.light [class~="bg-violet-500"] .text-white\/75,
+html.light [class~="bg-violet-500"].text-white\/75,
+html.light [class~="bg-violet-600"] .text-white\/75,
+html.light [class~="bg-violet-600"].text-white\/75,
+html.light [class~="bg-blue-500"] .text-white\/75,
+html.light [class~="bg-blue-500"].text-white\/75,
+html.light [class~="bg-blue-600"] .text-white\/75,
+html.light [class~="bg-blue-600"].text-white\/75,
+html.light [class~="bg-sky-500"] .text-white\/75,
+html.light [class~="bg-sky-500"].text-white\/75,
+html.light [class~="bg-red-600"] .text-white\/75,
+html.light [class~="bg-red-600"].text-white\/75,
+html.light [class~="bg-purple-500"] .text-white\/75,
+html.light [class~="bg-purple-500"].text-white\/75,
+html.light [class~="bg-indigo-500"] .text-white\/75,
+html.light [class~="bg-indigo-500"].text-white\/75,
+html.light [class~="bg-amber-600"] .text-white\/75,
+html.light [class~="bg-amber-600"].text-white\/75,
+html.light [class~="bg-zinc-800"] .text-white\/75,
+html.light [class~="bg-zinc-800"].text-white\/75 { color: rgb(255 255 255 / 0.75); }
+html.light [class~="bg-primary"] .text-white\/80,
+html.light [class~="bg-primary"].text-white\/80,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/80,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/80,
+html.light [class~="bg-red-500"] .text-white\/80,
+html.light [class~="bg-red-500"].text-white\/80,
+html.light [class~="bg-amber-500"] .text-white\/80,
+html.light [class~="bg-amber-500"].text-white\/80,
+html.light [class~="bg-emerald-500"] .text-white\/80,
+html.light [class~="bg-emerald-500"].text-white\/80,
+html.light [class~="bg-green-500"] .text-white\/80,
+html.light [class~="bg-green-500"].text-white\/80,
+html.light [class~="bg-violet-500"] .text-white\/80,
+html.light [class~="bg-violet-500"].text-white\/80,
+html.light [class~="bg-violet-600"] .text-white\/80,
+html.light [class~="bg-violet-600"].text-white\/80,
+html.light [class~="bg-blue-500"] .text-white\/80,
+html.light [class~="bg-blue-500"].text-white\/80,
+html.light [class~="bg-blue-600"] .text-white\/80,
+html.light [class~="bg-blue-600"].text-white\/80,
+html.light [class~="bg-sky-500"] .text-white\/80,
+html.light [class~="bg-sky-500"].text-white\/80,
+html.light [class~="bg-red-600"] .text-white\/80,
+html.light [class~="bg-red-600"].text-white\/80,
+html.light [class~="bg-purple-500"] .text-white\/80,
+html.light [class~="bg-purple-500"].text-white\/80,
+html.light [class~="bg-indigo-500"] .text-white\/80,
+html.light [class~="bg-indigo-500"].text-white\/80,
+html.light [class~="bg-amber-600"] .text-white\/80,
+html.light [class~="bg-amber-600"].text-white\/80,
+html.light [class~="bg-zinc-800"] .text-white\/80,
+html.light [class~="bg-zinc-800"].text-white\/80 { color: rgb(255 255 255 / 0.8); }
+html.light [class~="bg-primary"] .text-white\/90,
+html.light [class~="bg-primary"].text-white\/90,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]) .text-white\/90,
+html.light [class*="bg-[#"]:not([class*="bg-[#"][class*="]/"]).text-white\/90,
+html.light [class~="bg-red-500"] .text-white\/90,
+html.light [class~="bg-red-500"].text-white\/90,
+html.light [class~="bg-amber-500"] .text-white\/90,
+html.light [class~="bg-amber-500"].text-white\/90,
+html.light [class~="bg-emerald-500"] .text-white\/90,
+html.light [class~="bg-emerald-500"].text-white\/90,
+html.light [class~="bg-green-500"] .text-white\/90,
+html.light [class~="bg-green-500"].text-white\/90,
+html.light [class~="bg-violet-500"] .text-white\/90,
+html.light [class~="bg-violet-500"].text-white\/90,
+html.light [class~="bg-violet-600"] .text-white\/90,
+html.light [class~="bg-violet-600"].text-white\/90,
+html.light [class~="bg-blue-500"] .text-white\/90,
+html.light [class~="bg-blue-500"].text-white\/90,
+html.light [class~="bg-blue-600"] .text-white\/90,
+html.light [class~="bg-blue-600"].text-white\/90,
+html.light [class~="bg-sky-500"] .text-white\/90,
+html.light [class~="bg-sky-500"].text-white\/90,
+html.light [class~="bg-red-600"] .text-white\/90,
+html.light [class~="bg-red-600"].text-white\/90,
+html.light [class~="bg-purple-500"] .text-white\/90,
+html.light [class~="bg-purple-500"].text-white\/90,
+html.light [class~="bg-indigo-500"] .text-white\/90,
+html.light [class~="bg-indigo-500"].text-white\/90,
+html.light [class~="bg-amber-600"] .text-white\/90,
+html.light [class~="bg-amber-600"].text-white\/90,
+html.light [class~="bg-zinc-800"] .text-white\/90,
+html.light [class~="bg-zinc-800"].text-white\/90 { color: rgb(255 255 255 / 0.9); }
+html.light .border-white\/5 { border-color: rgb(var(--t-border-subtle)); }
+html.light .border-white\/10 { border-color: rgb(var(--t-border-default)); }
+html.light .border-white\/15 { border-color: rgb(var(--t-border-default)); }
+html.light .border-white\/20 { border-color: rgb(var(--t-border-strong)); }
+html.light .bg-white\/5 { background-color: rgb(var(--t-text-primary) / 0.025); }
+html.light .bg-white\/10 { background-color: rgb(var(--t-text-primary) / 0.05); }
+html.light .bg-white\/20 { background-color: rgb(var(--t-text-primary) / 0.1); }
+html.light .hover\:bg-white\/5:hover, html.light .hover\:bg-white\/10:hover { background-color: rgb(var(--t-action-secondary)); }
+html.light .text-zinc-200, html.light .text-zinc-300, html.light .text-gray-200, html.light .text-gray-300, html.light .text-slate-300 { color: rgb(var(--t-text-secondary)); }
+html.light .text-zinc-400, html.light .text-gray-400 { color: rgb(var(--t-text-muted)); }
+html.light .text-red-200, html.light .text-red-300, html.light .text-red-400, html.light .text-rose-300, html.light .text-rose-400 { color: rgb(var(--t-danger)); }
+html.light .text-yellow-300, html.light .text-yellow-400, html.light .text-amber-200, html.light .text-amber-300, html.light .text-amber-400, html.light .text-orange-300, html.light .text-orange-400 { color: rgb(var(--t-warning)); }
+html.light .text-green-300, html.light .text-green-400, html.light .text-emerald-300, html.light .text-emerald-400, html.light .text-lime-400 { color: rgb(var(--t-success)); }
+html.light .text-violet-200, html.light .text-violet-300, html.light .text-violet-400, html.light .text-purple-300, html.light .text-purple-400, html.light .text-indigo-300, html.light .text-indigo-400, html.light .text-fuchsia-300 { color: rgb(var(--t-text-accent)); }
+html.light .text-cyan-300, html.light .text-cyan-400, html.light .text-sky-200, html.light .text-sky-300, html.light .text-sky-400, html.light .text-blue-300, html.light .text-blue-400, html.light .text-teal-300, html.light .text-teal-400 { color: rgb(var(--t-accent-cyan)); }

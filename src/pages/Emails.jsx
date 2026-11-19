@@ -1545,11 +1545,11 @@ export default function Emails() {
     const cat = typeof emailOrCat === 'string' ? emailOrCat : displayCategory(emailOrCat);
     switch (cat) {
       case 'brokers':
-        return { label: isEs ? 'Broker' : 'Broker', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
+        return { label: isEs ? 'Broker' : 'Broker', color: 'bg-amber-500/10 text-t-warning border-amber-500/30' };
       case 'cargas':
-        return { label: isEs ? 'Carga' : 'Load', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' };
+        return { label: isEs ? 'Carga' : 'Load', color: 'bg-emerald-500/10 text-t-success border-emerald-500/30' };
       default:
-        return { label: isEs ? 'Broker' : 'Broker', color: 'bg-amber-500/10 text-amber-400 border-amber-500/30' };
+        return { label: isEs ? 'Broker' : 'Broker', color: 'bg-amber-500/10 text-t-warning border-amber-500/30' };
     }
   };
 
@@ -1578,7 +1578,7 @@ export default function Emails() {
     return (
       <div className="max-w-xl mx-auto p-6 mt-10 bg-card border border-border rounded-xl space-y-2 text-center">
         <h1 className="text-lg font-semibold text-foreground">{locale === 'en' ? 'Email is not included in your plan' : 'El módulo de correo no está incluido en tu plan'}</h1>
-        <p className="text-sm text-muted-foreground">{locale === 'en' ? 'Activate a plan to connect your email and manage loads from your inbox.' : 'Activa un plan para conectar tu correo y gestionar cargas desde tu bandeja.'}</p>
+        <p className="t-subtitle mt-1">{locale === 'en' ? 'Activate a plan to connect your email and manage loads from your inbox.' : 'Activa un plan para conectar tu correo y gestionar cargas desde tu bandeja.'}</p>
       </div>
     );
   }
@@ -1588,14 +1588,14 @@ export default function Emails() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
         <div>
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-primary">
+            <div className="p-2 rounded-xl bg-primary/10 border border-primary/20 text-t-text-accent">
               <Mail className="w-5 h-5" />
             </div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="t-h1">
               {isEs ? 'Bandeja de Correos' : 'Logistics Mailbox'}
             </h1>
             {unreadCount > 0 && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/15 text-primary border border-primary/30">
+              <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-primary/15 text-t-text-accent border border-primary/30">
                 {unreadCount} {isEs ? 'nuevos' : 'new'}
               </span>
             )}
@@ -1611,7 +1611,7 @@ export default function Emails() {
                 {googleConnectedEmail}
               </span>
             ) : (
-              <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-[11px] font-medium text-amber-300 border border-amber-500/30">
+              <span className="px-2 py-0.5 rounded-md bg-amber-500/10 text-[11px] font-medium text-t-warning border border-amber-500/30">
                 {isEs ? 'Sin cuenta conectada · usa Sincronizar' : 'No account connected · use Sync'}
               </span>
             )}
@@ -1625,7 +1625,7 @@ export default function Emails() {
             className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
             title={isEs ? 'Actualizar para ver correos recientes de hoy' : 'Refresh to view today’s recent emails'}
           >
-            <RotateCw className={`w-3.5 h-3.5 text-primary ${refreshing ? 'animate-spin' : ''}`} />
+            <RotateCw className={`w-3.5 h-3.5 text-t-text-accent ${refreshing ? 'animate-spin' : ''}`} />
             <span>{refreshing ? (isEs ? 'Actualizando...' : 'Refreshing...') : (isEs ? 'Actualizar' : 'Refresh')}</span>
           </button>
 
@@ -1641,7 +1641,7 @@ export default function Emails() {
                 : (isEs ? 'Sincronizar correos de tu cuenta de Google' : 'Sync emails from your Google account')
             }
           >
-            <RotateCw className={`w-3.5 h-3.5 text-primary ${syncing ? 'animate-spin' : ''}`} />
+            <RotateCw className={`w-3.5 h-3.5 text-t-text-accent ${syncing ? 'animate-spin' : ''}`} />
             <span>{syncing ? (isEs ? 'Sincronizando...' : 'Syncing...') : (isEs ? 'Sincronizar' : 'Sync')}</span>
           </button>
 
@@ -1661,7 +1661,7 @@ export default function Emails() {
               });
               setComposeOpen(true);
             }}
-            className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all whitespace-nowrap"
+            className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             <span>{isEs ? 'Redactar' : 'Compose'}</span>
@@ -1680,9 +1680,9 @@ export default function Emails() {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
                   active
-                    ? 'bg-primary text-primary-foreground font-semibold shadow-sm'
+                    ? 'bg-primary text-primary-foreground font-semibold'
                     : 'bg-card border border-border/80 text-muted-foreground hover:text-foreground hover:bg-muted/60'
                 }`}
               >
@@ -1690,7 +1690,7 @@ export default function Emails() {
                 <span>{tab.label}</span>
                 {tab.badge > 0 && (
                   <span className={`px-1.5 py-0.2 rounded-full text-[10px] ${
-                    active ? 'bg-black/20 text-white' : 'bg-primary/20 text-primary font-bold'
+                    active ? 'bg-t-bg-deep/50 text-foreground' : 'bg-primary/20 text-t-text-accent font-bold'
                   }`}>
                     {tab.badge}
                   </span>
@@ -1737,7 +1737,7 @@ export default function Emails() {
           <div className="flex-1 overflow-y-auto divide-y divide-border/40">
             {loading ? (
               <div className="flex flex-col items-center justify-center h-48 gap-2 text-muted-foreground">
-                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <Loader2 className="w-6 h-6 animate-spin text-t-text-accent" />
                 <span className="text-xs">{isEs ? 'Cargando correos...' : 'Loading emails...'}</span>
               </div>
             ) : filteredThreads.length === 0 ? (
@@ -1756,7 +1756,7 @@ export default function Emails() {
                 {activeTab !== 'all' && (
                   <button
                     onClick={() => setActiveTab('all')}
-                    className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary border border-primary/25 transition-all"
+                    className="mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-t-text-accent border border-primary/25 transition-all"
                   >
                     {isEs ? `Ver todos los correos (${allCount})` : `View all emails (${allCount})`}
                   </button>
@@ -1789,7 +1789,7 @@ export default function Emails() {
                   >
                     <div className="flex items-start gap-3">
                       {/* Avatar */}
-                      <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-zinc-800 to-zinc-900 border border-border flex items-center justify-center font-bold text-xs text-zinc-300 flex-shrink-0">
+                      <div className="w-9 h-9 rounded-xl bg-t-bg-surface-raised border border-border flex items-center justify-center font-bold text-xs text-t-text-secondary flex-shrink-0">
                         {initials}
                       </div>
 
@@ -1797,11 +1797,11 @@ export default function Emails() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1.5 truncate">
-                            <span className={`text-xs truncate ${!item.leido ? 'font-black text-foreground' : 'font-medium text-zinc-300'}`}>
+                            <span className={`text-xs truncate ${!item.leido ? 'font-black text-foreground' : 'font-medium text-t-text-secondary'}`}>
                               {item.threadCount > 1 ? item.participantsLabel : (item.remitente_nombre || item.remitente_email)}
                             </span>
                             {item.threadCount > 1 && (
-                              <span className="px-1.5 py-0.2 rounded-md bg-primary/20 text-primary border border-primary/30 text-[10px] font-bold flex-shrink-0">
+                              <span className="px-1.5 py-0.2 rounded-md bg-primary/20 text-t-text-accent border border-primary/30 text-[10px] font-bold flex-shrink-0">
                                 {item.threadCount}
                               </span>
                             )}
@@ -1814,7 +1814,7 @@ export default function Emails() {
                           </span>
                         </div>
 
-                        <p className={`text-xs mt-0.5 truncate ${!item.leido ? 'font-bold text-foreground' : 'text-zinc-200'}`}>
+                        <p className={`text-xs mt-0.5 truncate ${!item.leido ? 'font-bold text-foreground' : 'text-t-text-secondary'}`}>
                           {item.asunto || '(Sin asunto)'}
                         </p>
 
@@ -1829,24 +1829,24 @@ export default function Emails() {
                               {badge.label}
                             </span>
                             {equipment.map(eq => (
-                              <span key={eq} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-sky-500/10 text-sky-300 border-sky-500/30">
+                              <span key={eq} className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-sky-500/10 text-t-accent-cyan border-sky-500/30">
                                 {eq}
                               </span>
                             ))}
                             {(item.hasImportantThread || hasImportantAndLogisticsTags(item)) && (
-                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1">
-                                <Sparkles className="w-2.5 h-2.5 text-red-400" />
+                              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md border bg-red-500/15 text-t-danger border-red-500/30 flex items-center gap-1">
+                                <Sparkles className="w-2.5 h-2.5 text-t-danger" />
                                 {isEs ? 'Importante' : 'Important'}
                               </span>
                             )}
                             {item.hasSentInThread && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-primary border-primary/30">
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-t-text-accent border-primary/30">
                                 {isEs ? 'Respondido' : 'Replied'}
                               </span>
                             )}
                             {item.hasAttachmentsInThread && (
-                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-violet-500/15 text-violet-300 border-violet-500/30 flex items-center gap-1">
-                                <Paperclip className="w-2.5 h-2.5 text-violet-400" />
+                              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-violet-500/15 text-t-text-accent border-violet-500/30 flex items-center gap-1">
+                                <Paperclip className="w-2.5 h-2.5 text-t-text-accent" />
                                 <span>{item.totalAttachmentsCount || 1}</span>
                               </span>
                             )}
@@ -1854,9 +1854,9 @@ export default function Emails() {
 
                           <button
                             onClick={(e) => handleToggleStar(item, e)}
-                            className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-amber-400 transition-colors"
+                            className="p-1 rounded-md hover:bg-muted/80 text-muted-foreground hover:text-t-warning transition-colors"
                           >
-                            <Star className={`w-3.5 h-3.5 ${item.destacado ? 'fill-amber-400 text-amber-400' : ''}`} />
+                            <Star className={`w-3.5 h-3.5 ${item.destacado ? 'fill-amber-400 text-t-warning' : ''}`} />
                           </button>
                         </div>
                       </div>
@@ -1884,20 +1884,20 @@ export default function Emails() {
                         asunto: selectedThread.asunto,
                         cuerpo: (selectedThread.threadMessages || [selectedThread]).map(m => m.cuerpo || m.snippet || '').join('\n'),
                       }).map(eq => (
-                        <span key={eq} className="text-[10px] font-semibold px-2 py-0.5 rounded-md border bg-sky-500/10 text-sky-300 border-sky-500/30">
+                        <span key={eq} className="text-[10px] font-semibold px-2 py-0.5 rounded-md border bg-sky-500/10 text-t-accent-cyan border-sky-500/30">
                           {eq}
                         </span>
                       ))}
 
                       {(selectedThread.hasImportantThread || hasImportantAndLogisticsTags(selectedThread)) && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-500/15 text-red-400 border-red-500/30 flex items-center gap-1 shadow-sm">
-                          <Sparkles className="w-3 h-3 text-red-400" />
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-red-500/15 text-t-danger border-red-500/30 flex items-center gap-1 shadow-sm">
+                          <Sparkles className="w-3 h-3 text-t-danger" />
                           {isEs ? 'Importante' : 'Important'}
                         </span>
                       )}
 
                       {selectedThread.threadCount > 1 && (
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-primary/15 text-primary border-primary/30 flex items-center gap-1">
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-md border bg-primary/15 text-t-text-accent border-primary/30 flex items-center gap-1">
                           <MessageSquare className="w-3 h-3" />
                           {selectedThread.threadCount} {isEs ? 'mensajes en el hilo' : 'messages in thread'}
                         </span>
@@ -1917,17 +1917,17 @@ export default function Emails() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <button
                       onClick={(e) => handleToggleStar(selectedThread, e)}
-                      className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-amber-400 transition-colors"
+                      className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-t-warning transition-colors"
                       title={isEs ? 'Destacar' : 'Star'}
                     >
-                      <Star className={`w-4 h-4 ${selectedThread.destacado ? 'fill-amber-400 text-amber-400' : ''}`} />
+                      <Star className={`w-4 h-4 ${selectedThread.destacado ? 'fill-amber-400 text-t-warning' : ''}`} />
                     </button>
                     <button
                       onClick={handleCopyBody}
                       className="p-2 rounded-xl hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                       title={isEs ? 'Copiar texto del último correo' : 'Copy latest email text'}
                     >
-                      {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                      {copied ? <Check className="w-4 h-4 text-t-success" /> : <Copy className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
@@ -1935,7 +1935,7 @@ export default function Emails() {
                 {/* Correo dudoso: el usuario decide y la app recuerda al remitente */}
                 {selectedThread.isReviewThread && (
                   <div className="mt-2 p-3 rounded-xl border border-amber-500/30 bg-amber-500/10 flex flex-col sm:flex-row sm:items-center gap-2 justify-between">
-                    <p className="text-xs text-amber-200">
+                    <p className="text-xs text-t-warning">
                       {isEs
                         ? '¿Este correo es de tu operación logística? Tu respuesta se aplicará a todos los correos de este remitente.'
                         : 'Is this email part of your logistics operation? Your answer applies to every email from this sender.'}
@@ -1943,13 +1943,13 @@ export default function Emails() {
                     <div className="flex gap-2 flex-shrink-0">
                       <button
                         onClick={() => handleSenderDecision(selectedThread, true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/25"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/15 text-t-success border border-emerald-500/30 hover:bg-emerald-500/25"
                       >
                         <ThumbsUp className="w-3.5 h-3.5" /> {isEs ? 'Sí, es logístico' : 'Yes, logistics'}
                       </button>
                       <button
                         onClick={() => handleSenderDecision(selectedThread, false)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-red-300 border border-red-500/30 hover:bg-red-500/25"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-red-500/15 text-t-danger border border-red-500/30 hover:bg-red-500/25"
                       >
                         <ThumbsDown className="w-3.5 h-3.5" /> {isEs ? 'No, ocultar' : 'No, hide'}
                       </button>
@@ -1963,7 +1963,7 @@ export default function Emails() {
                   <button
                     onClick={() => handleRunDispatcherAutomation(selectedThread)}
                     disabled={runningAutomation || !isDispatcherRole}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-all shadow-md shadow-primary/25 cursor-pointer disabled:opacity-50"
+                    className="flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all cursor-pointer disabled:opacity-50"
                     title={
                       isEs
                         ? 'Enviar documento al Verificador y, una vez verificado, crear la carga con los datos y el hilo resumido'
@@ -1983,7 +1983,7 @@ export default function Emails() {
                     onClick={() => handleReply(selectedThread)}
                     className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground transition-colors cursor-pointer"
                   >
-                    <Send className="w-3.5 h-3.5 text-primary" />
+                    <Send className="w-3.5 h-3.5 text-t-text-accent" />
                     <span>
                       {isEs
                         ? (selectedThread.threadCount > 1 ? 'Responder al último correo' : 'Responder')
@@ -2014,8 +2014,8 @@ export default function Emails() {
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className={`w-8 h-8 rounded-xl border flex items-center justify-center font-bold text-xs flex-shrink-0 ${
                             isSentByMe
-                              ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
-                              : 'bg-primary/15 border-primary/30 text-primary'
+                              ? 'bg-emerald-500/15 border-emerald-500/30 text-t-success'
+                              : 'bg-primary/15 border-primary/30 text-t-text-accent'
                           }`}>
                             {msgInitials}
                           </div>
@@ -2028,7 +2028,7 @@ export default function Emails() {
                                 &lt;{msg.remitente_email}&gt;
                               </span>
                               {isSentByMe && (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-primary border-primary/30">
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-t-text-accent border-primary/30">
                                   {isEs ? 'Enviado desde Trucky / Gmail' : 'Sent via Trucky / Gmail'}
                                 </span>
                               )}
@@ -2046,7 +2046,7 @@ export default function Emails() {
                           {isLast && (
                             <button
                               onClick={() => handleReply(selectedThread)}
-                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 transition-colors flex items-center gap-1"
+                              className="px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-primary/15 hover:bg-primary/25 text-t-text-accent border border-primary/30 transition-colors flex items-center gap-1"
                               title={isEs ? 'Responder a este último mensaje' : 'Reply to this latest message'}
                             >
                               <Send className="w-3 h-3" />
@@ -2057,7 +2057,7 @@ export default function Emails() {
                       </div>
 
                       {/* Cuerpo del correo */}
-                      <div className="prose prose-invert max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-zinc-200">
+                      <div className="prose t-prose max-w-none text-xs md:text-sm leading-relaxed whitespace-pre-wrap font-sans text-t-text-secondary">
                         {msg.cuerpo || msg.snippet || '(Sin contenido)'}
                       </div>
 
@@ -2066,7 +2066,7 @@ export default function Emails() {
                         <div className="mt-4 pt-3.5 border-t border-border/50 space-y-2.5">
                           <div className="flex items-center justify-between text-xs">
                             <span className="font-semibold text-foreground flex items-center gap-1.5">
-                              <Paperclip className="w-3.5 h-3.5 text-primary" />
+                              <Paperclip className="w-3.5 h-3.5 text-t-text-accent" />
                               {msg.adjuntos.length === 1
                                 ? (isEs ? '1 archivo adjunto' : '1 attachment')
                                 : (isEs ? `${msg.adjuntos.length} archivos adjuntos` : `${msg.adjuntos.length} attachments`)}
@@ -2092,32 +2092,32 @@ export default function Emails() {
                                 <div
                                   key={`${att.attachmentId || att.filename}__${attIdx}`}
                                   onClick={() => handlePreviewAttachment(att, msg)}
-                                  className="group relative flex flex-col justify-between rounded-xl border border-primary/25 bg-[#150d26]/90 hover:bg-[#1d1236] hover:border-primary/50 transition-all p-3 cursor-pointer shadow-sm"
+                                  className="group relative flex flex-col justify-between rounded-xl border border-primary/25 bg-t-bg-input/90 hover:bg-t-bg-surface-raised hover:border-primary/50 transition-all p-3 cursor-pointer shadow-sm"
                                 >
                                   <div className="flex items-start gap-3 min-w-0">
                                     {/* Icono tipo Gmail (PDF en rojo, Imagen en violeta, Documento en azul) */}
                                     <div
                                       className={`w-10 h-10 rounded-xl border flex flex-col items-center justify-center flex-shrink-0 font-extrabold text-[9px] tracking-wider ${
                                         isPdf
-                                          ? 'bg-red-500/15 border-red-500/35 text-red-400'
+                                          ? 'bg-red-500/15 border-red-500/35 text-t-danger'
                                           : isImage
-                                          ? 'bg-violet-500/15 border-violet-500/35 text-violet-300'
-                                          : 'bg-blue-500/15 border-blue-500/35 text-blue-400'
+                                          ? 'bg-violet-500/15 border-violet-500/35 text-t-text-accent'
+                                          : 'bg-blue-500/15 border-blue-500/35 text-t-info'
                                       }`}
                                     >
                                       {isPdf ? (
                                         <>
-                                          <FileText className="w-4 h-4 mb-0.5 text-red-400" />
+                                          <FileText className="w-4 h-4 mb-0.5 text-t-danger" />
                                           <span>PDF</span>
                                         </>
                                       ) : isImage ? (
                                         <>
-                                          <ImageIcon className="w-4 h-4 mb-0.5 text-violet-300" />
+                                          <ImageIcon className="w-4 h-4 mb-0.5 text-t-text-accent" />
                                           <span>IMG</span>
                                         </>
                                       ) : (
                                         <>
-                                          <Paperclip className="w-4 h-4 mb-0.5 text-blue-400" />
+                                          <Paperclip className="w-4 h-4 mb-0.5 text-t-info" />
                                           <span>DOC</span>
                                         </>
                                       )}
@@ -2125,7 +2125,7 @@ export default function Emails() {
 
                                     <div className="min-w-0 flex-1">
                                       <p
-                                        className="text-xs font-semibold text-foreground truncate group-hover:text-white transition-colors"
+                                        className="text-xs font-semibold text-foreground truncate group-hover:text-foreground transition-colors"
                                         title={att.filename}
                                       >
                                         {att.filename || (isEs ? 'Documento adjunto' : 'Attachment')}
@@ -2139,14 +2139,14 @@ export default function Emails() {
 
                                   {/* Botones de Acción: Visualizar y Descargar */}
                                   <div
-                                    className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-white/10"
+                                    className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-border"
                                     onClick={(e) => e.stopPropagation()}
                                   >
                                     <button
                                       type="button"
                                       onClick={() => handlePreviewAttachment(att, msg)}
                                       disabled={isPreviewLoading || isDownloadLoading}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-primary/15 hover:bg-primary/25 text-primary border border-primary/30 transition-colors disabled:opacity-50"
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-primary/15 hover:bg-primary/25 text-t-text-accent border border-primary/30 transition-colors disabled:opacity-50"
                                       title={isEs ? 'Visualizar documento en pantalla' : 'Preview document'}
                                     >
                                       {isPreviewLoading ? (
@@ -2161,7 +2161,7 @@ export default function Emails() {
                                       type="button"
                                       onClick={() => handleDownloadAttachment(att, msg)}
                                       disabled={isPreviewLoading || isDownloadLoading}
-                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition-colors disabled:opacity-50"
+                                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-t-success border border-emerald-500/30 transition-colors disabled:opacity-50"
                                       title={isEs ? 'Descargar archivo a tu dispositivo' : 'Download file'}
                                     >
                                       {isDownloadLoading ? (
@@ -2184,31 +2184,31 @@ export default function Emails() {
 
                 {/* Si es usuario demo, mostramos la tarjeta de desbloqueo al pie del correo */}
                 {isDemoUser && (
-                  <div className="p-5 rounded-2xl bg-gradient-to-b from-[#18152c] to-[#100e1f] border border-violet-500/30 text-center space-y-4 shadow-xl mt-6">
-                    <div className="w-12 h-12 mx-auto rounded-2xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-violet-300 shadow-lg shadow-violet-600/20">
+                  <div className="p-5 rounded-2xl bg-t-bg-surface border border-t-border-focus/40 text-center space-y-4 shadow-xl mt-6">
+                    <div className="w-12 h-12 mx-auto rounded-2xl bg-violet-600/20 border border-violet-500/40 flex items-center justify-center text-t-text-accent">
                       <Lock className="w-6 h-6" />
                     </div>
 
                     <div className="space-y-1">
-                      <h3 className="text-sm md:text-base font-bold text-white">
+                      <h3 className="text-sm md:text-base font-bold text-foreground">
                         Desbloquea el análisis completo
                       </h3>
-                      <p className="text-xs text-zinc-400">
+                      <p className="text-xs text-muted-foreground">
                         Conecta tu email y obtén el análisis completo y respuestas con IA.
                       </p>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left max-w-md mx-auto text-[11px] text-zinc-300">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-left max-w-md mx-auto text-[11px] text-t-text-secondary">
                       <div className="flex items-center gap-2">
-                        <Sparkles className="w-3.5 h-3.5 text-purple-400 flex-shrink-0" />
+                        <Sparkles className="w-3.5 h-3.5 text-t-text-accent flex-shrink-0" />
                         <span>Clasificación inteligente</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <Mail className="w-3.5 h-3.5 text-yellow-400 flex-shrink-0" />
+                        <Mail className="w-3.5 h-3.5 text-t-warning flex-shrink-0" />
                         <span>Respuestas con IA</span>
                       </div>
                       <div className="flex items-center gap-2">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-blue-400 flex-shrink-0" />
+                        <CheckCircle2 className="w-3.5 h-3.5 text-t-info flex-shrink-0" />
                         <span>Automatización de tareas</span>
                       </div>
                     </div>
@@ -2218,7 +2218,7 @@ export default function Emails() {
                         href="https://www.trucky-ai.com"
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center gap-2 w-full max-w-sm py-2.5 px-4 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-bold text-xs shadow-lg shadow-violet-600/25 transition-all hover:scale-[1.01]"
+                        className="inline-flex items-center justify-center gap-2 w-full max-w-sm py-2.5 px-4 rounded-xl bg-t-action-primary hover:bg-t-action-primary-hover text-white font-bold text-xs transition-all hover:scale-[1.01]"
                       >
                         <Sparkles className="w-3.5 h-3.5" />
                         <span>Activar versión completa →</span>
@@ -2231,7 +2231,7 @@ export default function Emails() {
           ) : (
             <div className="flex flex-col items-center justify-center h-full p-8 text-center text-muted-foreground">
               <div className="w-16 h-16 rounded-3xl bg-muted/40 flex items-center justify-center mb-4">
-                <Mail className="w-8 h-8 opacity-30 text-primary" />
+                <Mail className="w-8 h-8 opacity-30 text-t-text-accent" />
               </div>
               <h3 className="text-base font-semibold text-foreground">
                 {isEs ? 'Ningún correo seleccionado' : 'No email selected'}
@@ -2248,11 +2248,11 @@ export default function Emails() {
 
       {/* ─── Modal de Redacción / Respuesta en Hilo ────────────────────────────── */}
       {composeOpen && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-2">
-                <Send className="w-4 h-4 text-primary" />
+                <Send className="w-4 h-4 text-t-text-accent" />
                 <h3 className="text-sm font-bold text-foreground">
                   {composeForm.threadId || (composeForm.threadMessages && composeForm.threadMessages.length > 0)
                     ? (isEs ? 'Responder en el Hilo (Trucky + Gmail)' : 'Reply in Thread (Trucky + Gmail)')
@@ -2271,7 +2271,7 @@ export default function Emails() {
               {/* Vista previa de los mensajes anteriores del hilo cuando se responde */}
               {Array.isArray(composeForm.threadMessages) && composeForm.threadMessages.length > 0 && (
                 <div className="rounded-xl border border-primary/25 bg-muted/20 p-3 space-y-2 max-h-40 overflow-y-auto">
-                  <div className="flex items-center justify-between text-[11px] font-semibold text-primary">
+                  <div className="flex items-center justify-between text-[11px] font-semibold text-t-text-accent">
                     <span className="flex items-center gap-1.5">
                       <MessageSquare className="w-3.5 h-3.5" />
                       {isEs
@@ -2288,7 +2288,7 @@ export default function Emails() {
                           </span>
                           <span>{new Date(m.fecha).toLocaleString(dateLocale)}</span>
                         </div>
-                        <p className="text-zinc-300 whitespace-pre-wrap line-clamp-3">
+                        <p className="text-t-text-secondary whitespace-pre-wrap line-clamp-3">
                           {m.cuerpo || m.snippet}
                         </p>
                       </div>
@@ -2366,7 +2366,7 @@ export default function Emails() {
                 <button
                   type="submit"
                   disabled={sendingCompose}
-                  className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all disabled:opacity-50"
                 >
                   {sendingCompose ? (
                     <>
@@ -2389,7 +2389,7 @@ export default function Emails() {
       {/* ─── Modal Visor de Documentos Adjuntos (PDF / Imágenes / Archivos) ────── */}
       {previewAttachment && (
         <div
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6"
+          className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6"
           onClick={() => setPreviewAttachment(null)}
         >
           <div
@@ -2399,7 +2399,7 @@ export default function Emails() {
             {/* Barra superior del visor */}
             <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-border bg-muted/40">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-red-400 flex-shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-red-500/15 border border-red-500/30 flex items-center justify-center text-t-danger flex-shrink-0">
                   <FileText className="w-4 h-4" />
                 </div>
                 <div className="min-w-0">
@@ -2420,14 +2420,14 @@ export default function Emails() {
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground border border-border transition-colors"
                   title={isEs ? 'Abrir en pestaña nueva' : 'Open in new tab'}
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-primary" />
+                  <ExternalLink className="w-3.5 h-3.5 text-t-text-accent" />
                   <span className="hidden sm:inline">{isEs ? 'Abrir en pestaña' : 'Open in tab'}</span>
                 </a>
 
                 <a
                   href={previewAttachment.blobUrl}
                   download={previewAttachment.filename || 'adjunto'}
-                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all"
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all"
                 >
                   <Download className="w-3.5 h-3.5" />
                   <span>{isEs ? 'Descargar' : 'Download'}</span>
@@ -2463,7 +2463,7 @@ export default function Emails() {
                 </div>
               ) : (
                 <div className="text-center p-8 space-y-4 max-w-md">
-                  <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-primary">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-primary/15 border border-primary/30 flex items-center justify-center text-t-text-accent">
                     <FileText className="w-7 h-7" />
                   </div>
                   <div className="space-y-1">
@@ -2477,7 +2477,7 @@ export default function Emails() {
                   <a
                     href={previewAttachment.blobUrl}
                     download={previewAttachment.filename || 'adjunto'}
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md"
+                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full text-xs font-bold bg-primary hover:bg-t-action-primary-hover text-primary-foreground"
                   >
                     <Download className="w-4 h-4" />
                     <span>{isEs ? 'Descargar archivo ahora' : 'Download file now'}</span>

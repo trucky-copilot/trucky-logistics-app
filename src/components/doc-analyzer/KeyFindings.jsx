@@ -2,9 +2,9 @@ import { AlertTriangle, XCircle, CheckCircle2, Info } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
 
 function getIcon(h) {
-  if (h.startsWith('❌')) return { Icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/10' };
-  if (h.startsWith('⚠')) return { Icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-400/10' };
-  if (h.startsWith('✓')) return { Icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/10' };
+  if (h.startsWith('❌')) return { Icon: XCircle, color: 'text-t-danger', bg: 'bg-red-400/10' };
+  if (h.startsWith('⚠')) return { Icon: AlertTriangle, color: 'text-t-warning', bg: 'bg-yellow-400/10' };
+  if (h.startsWith('✓')) return { Icon: CheckCircle2, color: 'text-t-success', bg: 'bg-green-400/10' };
   return { Icon: Info, color: 'text-muted-foreground', bg: 'bg-muted/30' };
 }
 

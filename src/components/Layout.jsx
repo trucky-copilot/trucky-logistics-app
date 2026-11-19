@@ -2,7 +2,7 @@ import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, MessageSquare, Mail, FileSearch, Calculator,
-  Truck, Users, Package, Building2, Bell, Menu, X, ChevronRight,
+  Truck, Users, Package, Building2, Bell, Menu, X,
   LogOut, ChevronUp, ShieldAlert, Settings
 } from 'lucide-react';
 import { useLanguage } from '@/lib/LanguageContext';
@@ -99,93 +99,82 @@ export default function Layout() {
 
   const isChat = location.pathname.startsWith('/chat');
 
+  // Clases de un ítem del menú (Figma · Sidebar/Nav Item: Default / Hover / Active).
+  const navCls = (active, admin = false) => `
+    flex items-center gap-3 h-12 px-4 rounded-full transition-colors duration-150
+    ${active
+      ? `bg-t-bg-canvas ${admin ? 'text-t-warning' : 'text-t-text-accent'} text-[15px] font-medium`
+      : `${admin ? 'text-t-warning/80' : 'text-t-text-secondary'} text-sm hover:bg-t-action-secondary hover:text-t-text-primary`}
+  `;
+
   return (
-    <div className="flex h-screen bg-background overflow-hidden font-inter">
+    <div className="flex h-screen bg-t-bg-deep overflow-hidden font-inter lg:p-3 lg:gap-3">
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 z-40 lg:hidden"
+          className="fixed inset-0 z-40 lg:hidden"
+          style={{ background: 'var(--t-overlay)' }}
           onClick={() => setSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar (Figma 8:150) */}
       <aside className={`
         fixed lg:static inset-y-0 left-0 z-50 lg:z-auto
-        w-64 flex-shrink-0 flex flex-col
-        bg-card/85 backdrop-blur-xl border-r border-white/10
+        w-[272px] flex-shrink-0 flex flex-col
+        bg-t-bg-sidebar lg:rounded-[24px] shadow-card
         transform transition-transform duration-300 ease-in-out
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
       `}>
         {/* Logo */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <div className="flex items-center gap-2.5">
-            {/* Logotipo completo: recuadro morado (#4F1984, el del logo original) */}
-            <div className="rounded-xl bg-[#4F1984] border border-white/15 shadow-lg shadow-[#4F1984]/40 px-3 py-2 flex-shrink-0">
-              <img
-                src="/trucky-wordmark.png"
-                alt="Trucky"
-                className="h-6 w-auto select-none pointer-events-none"
-                draggable={false}
-              />
-            </div>
+        <div className="flex items-center justify-between px-6 pt-7 pb-4">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div
+              role="img"
+              aria-label="Trucky"
+              className="h-9 w-[140px] bg-t-logo-fill flex-shrink-0"
+              style={{
+                WebkitMaskImage: 'url(/trucky-wordmark.png)', maskImage: 'url(/trucky-wordmark.png)',
+                WebkitMaskSize: 'contain', maskSize: 'contain',
+                WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'left center', maskPosition: 'left center',
+              }}
+            />
             {isDemoUser && (
-              <span className="px-1.5 py-0.5 rounded bg-violet-500/20 text-violet-300 border border-violet-500/30 text-[9px] font-black uppercase tracking-wider">
+              <span className="px-1.5 py-0.5 rounded-full bg-t-info-soft text-t-text-accent text-[10px] font-semibold uppercase tracking-[0.08em]">
                 Demo
               </span>
             )}
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="lg:hidden text-muted-foreground hover:text-foreground"
+            className="lg:hidden text-t-text-muted hover:text-t-text-primary"
           >
-            <X className="w-4 h-4" />
+            <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-3 space-y-0.5 overflow-y-auto">
-          {visibleNavItems.map(({ path, label, icon: Icon }) => (
-            <Link
-              key={path}
-              to={path}
-              onClick={() => setSidebarOpen(false)}
-              className={`
-                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                transition-all duration-150 group
-                ${isActive(path)
-                  ? 'bg-primary/15 text-primary border border-primary/20'
-                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
-                }
-              `}
-            >
-              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive(path) ? 'text-primary' : ''}`} />
-              <span className="flex-1">{t.nav[label]}</span>
-              {isActive(path) && <ChevronRight className="w-3 h-3 text-primary opacity-60" />}
-            </Link>
-          ))}
+        <nav className="flex-1 px-4 py-2 space-y-1 overflow-y-auto">
+          {visibleNavItems.map(({ path, label, icon: Icon }) => {
+            const active = isActive(path);
+            return (
+              <Link key={path} to={path} onClick={() => setSidebarOpen(false)} className={navCls(active)}>
+                <Icon className={`flex-shrink-0 ${active ? 'w-6 h-6' : 'w-5 h-5'}`} />
+                <span className="flex-1 truncate">{t.nav[label]}</span>
+              </Link>
+            );
+          })}
           {showAdminPanel && (
-            <Link
-              to="/admin"
-              onClick={() => setSidebarOpen(false)}
-              className={`
-                flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium
-                transition-all duration-150 group
-                ${isActive('/admin')
-                  ? 'bg-amber-500/15 text-amber-500 border border-amber-500/20'
-                  : 'text-amber-500/70 hover:text-amber-500 hover:bg-amber-500/10'
-                }
-              `}
-            >
-              <ShieldAlert className={`w-4 h-4 flex-shrink-0 ${isActive('/admin') ? 'text-amber-500' : ''}`} />
+            <Link to="/admin" onClick={() => setSidebarOpen(false)} className={navCls(isActive('/admin'), true)}>
+              <ShieldAlert className={`flex-shrink-0 ${isActive('/admin') ? 'w-6 h-6' : 'w-5 h-5'}`} />
               <span className="flex-1">Panel Admin</span>
-              {isActive('/admin') && <ChevronRight className="w-3 h-3 text-amber-500 opacity-60" />}
             </Link>
           )}
         </nav>
 
         {/* Botón de Idioma */}
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-3">
           <ToggleGroup
             type="single"
             value={locale}
@@ -195,30 +184,30 @@ export default function Layout() {
                 persistLocale(val);
               }
             }}
-            className="justify-start bg-muted/20 p-1 rounded-lg w-full"
+            className="justify-start bg-t-action-secondary p-1 rounded-full w-full"
           >
-            <ToggleGroupItem value="es" size="sm" className="text-xs px-3 h-7 flex-1">ES</ToggleGroupItem>
-            <ToggleGroupItem value="en" size="sm" className="text-xs px-3 h-7 flex-1">EN</ToggleGroupItem>
+            <ToggleGroupItem value="es" size="sm" className="text-xs px-3 h-7 flex-1 rounded-full text-t-text-secondary data-[state=on]:bg-t-bg-canvas data-[state=on]:text-t-text-accent">ES</ToggleGroupItem>
+            <ToggleGroupItem value="en" size="sm" className="text-xs px-3 h-7 flex-1 rounded-full text-t-text-secondary data-[state=on]:bg-t-bg-canvas data-[state=on]:text-t-text-accent">EN</ToggleGroupItem>
           </ToggleGroup>
         </div>
 
-        {/* Perfil */}
-        <div className="p-4 border-t border-white/10">
+        {/* Perfil (pie de la barra: Figma "Trucky · Your Road Co-Pilot") */}
+        <div className="px-4 py-3 border-t border-t-border-default">
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label={t.nav.openProfile}
-              className="w-full flex items-center gap-2 rounded-lg p-1.5 -m-1.5 text-left transition-colors hover:bg-muted/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              className="w-full flex items-center gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-t-action-secondary focus:outline-none focus-visible:shadow-focus"
             >
-              <div className="w-7 h-7 rounded-full bg-[#5B2BA0] border border-white/20 flex items-center justify-center flex-shrink-0">
-                <span className="text-xs font-bold text-white">{inicial}</span>
+              <div className="w-[30px] h-[44px] rounded-xl bg-t-action-primary flex items-center justify-center flex-shrink-0">
+                <span className="text-sm font-bold text-white">{inicial}</span>
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-medium text-foreground truncate">{t.nav.profile}</div>
-                <div className="text-[10px] text-muted-foreground truncate">
+                <div className="text-sm font-semibold text-t-text-primary truncate">{t.nav.profile}</div>
+                <div className="text-xs text-t-text-secondary truncate">
                   {correo || t.nav.activeSession}
                 </div>
               </div>
-              <ChevronUp className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+              <ChevronUp className="w-4 h-4 text-t-text-muted flex-shrink-0" />
             </DropdownMenuTrigger>
 
             <DropdownMenuContent align="start" side="top" className="w-56">
@@ -247,26 +236,28 @@ export default function Layout() {
         </div>
       </aside>
 
-      {/* Main content */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+      {/* Main content (Figma: bg/canvas, esquinas superiores de 24) */}
+      <div className="flex-1 flex flex-col min-w-0 overflow-hidden bg-t-bg-canvas lg:rounded-t-[24px]">
         {/* Top bar */}
-        <header className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-white/10 bg-card/55 backdrop-blur-xl flex-shrink-0 min-w-0 max-w-full overflow-hidden">
+        <header className="flex items-center gap-3 px-4 lg:px-8 h-16 flex-shrink-0 min-w-0 max-w-full">
           <button
             onClick={() => setSidebarOpen(true)}
-            className="lg:hidden p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
+            className="lg:hidden p-2 rounded-full text-t-text-muted hover:text-t-text-primary hover:bg-t-action-secondary"
           >
             <Menu className="w-5 h-5" />
           </button>
-          <div className="lg:hidden text-sm font-semibold text-foreground">
+          <div className="lg:hidden text-base font-semibold text-t-text-primary truncate">
             {t.nav[NAV_ITEMS.find(item => isActive(item.path))?.label] || 'Trucky'}
           </div>
-          {!isChat && <MarketTicker />}
           <div className="ml-auto flex items-center gap-3">
             {/* Las cuentas de administrador no manejan perfiles de empresa. */}
             {!showAdminPanel && <ProfileSelector />}
             <NotificationBell />
           </div>
         </header>
+
+        {/* Market Ticker (Figma 8:248): franja bg/deep */}
+        {!isChat && <MarketTicker />}
 
         {/* Operational readiness banner (no bloqueante) */}
         <OperationalReadinessBanner />

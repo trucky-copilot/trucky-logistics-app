@@ -26,7 +26,7 @@ export default function CarrierSelector({ selectedCarrierId, onChange }) {
         className="w-full flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border border-border bg-muted hover:border-primary/40 transition-all text-left"
       >
         <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Truck className="w-3.5 h-3.5 text-primary" />
+          <Truck className="w-3.5 h-3.5 text-t-text-accent" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs text-muted-foreground">{locale === 'en' ? 'Verifying for' : 'Verificando para'}</div>

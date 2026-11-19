@@ -69,7 +69,7 @@ function TruckForm({ truck, onSave, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold">{truck ? t.fleet.edit : t.fleet.new}</h2>
@@ -95,7 +95,7 @@ function TruckForm({ truck, onSave, onClose }) {
                 onChange={e => { set('año', e.target.value === '' ? '' : Number(e.target.value)); setYearError(false); }}
                 className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 ${yearError ? 'border-red-500 focus:ring-red-500/50' : 'border-border focus:ring-primary/50'}`} />
               {yearError && (
-                <span className="text-[10px] text-red-400 block mt-0.5">
+                <span className="text-[10px] text-t-danger block mt-0.5">
                   {locale === 'en' ? `Enter a year between ${MIN_TRUCK_YEAR} and ${MAX_TRUCK_YEAR}` : `Ingresa un año entre ${MIN_TRUCK_YEAR} y ${MAX_TRUCK_YEAR}`}
                 </span>
               )}
@@ -149,7 +149,7 @@ function TruckForm({ truck, onSave, onClose }) {
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} disabled={isSaving} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground disabled:opacity-40">{t.fleet.cancel}</button>
-            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
               {isSaving ? (
                 <>
                   <Loader2 className="w-4 h-4 animate-spin" />
@@ -305,11 +305,11 @@ export default function Fleet() {
   const statusCount = (s) => trucks.filter(t => t.estado === s).length;
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
-      <div className="flex items-center justify-between gap-2 flex-wrap">
+    <div className="t-page space-y-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-foreground">{t.fleet.title}</h1>
-          <p className="text-sm text-muted-foreground">{trucks.length} {t.fleet.trucks}</p>
+          <h1 className="t-h1 flex items-center gap-2.5"><Truck className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" />{t.fleet.title}</h1>
+          <p className="t-subtitle mt-1">{trucks.length} {t.fleet.trucks}</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -319,7 +319,7 @@ export default function Fleet() {
             onClick={() => setDriverMenuOpen(true)}
             // Demo: "Elegir conductor" es de los planes de pago.
             disabled={assigningDriver}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground shadow-sm transition-all cursor-pointer disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground transition-all cursor-pointer disabled:opacity-50"
           >
             {assigningDriver ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-primary-foreground" />
@@ -349,7 +349,7 @@ export default function Fleet() {
               setEditTruck(null);
               setShowForm(true);
             }}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground"
           >
             <Plus className="w-3.5 h-3.5" />{t.fleet.add}
           </button>
@@ -367,10 +367,10 @@ export default function Fleet() {
       {/* Status summary */}
       <div className="grid grid-cols-4 gap-2">
         {[
-          { key: 'disponible', label: t.fleet.available, color: 'text-green-400' },
-          { key: 'en_ruta', label: t.fleet.enRoute, color: 'text-violet-400' },
-          { key: 'en_yarda', label: t.fleet.yard, color: 'text-yellow-400' },
-          { key: 'mantenimiento', label: t.fleet.maintenance, color: 'text-red-400' },
+          { key: 'disponible', label: t.fleet.available, color: 'text-t-success' },
+          { key: 'en_ruta', label: t.fleet.enRoute, color: 'text-t-text-accent' },
+          { key: 'en_yarda', label: t.fleet.yard, color: 'text-t-warning' },
+          { key: 'mantenimiento', label: t.fleet.maintenance, color: 'text-t-danger' },
         ].map(s => (
           <div key={s.key} className="bg-card border border-border rounded-xl p-3 text-center">
             <p className={`text-2xl font-bold ${s.color}`}>{statusCount(s.key)}</p>
@@ -395,7 +395,7 @@ export default function Fleet() {
               <div className="flex items-start justify-between mb-3">
                 <div>
                   <div className="flex items-center gap-2">
-                    <Truck className="w-4 h-4 text-primary" />
+                    <Truck className="w-4 h-4 text-t-text-accent" />
                     <span className="font-bold text-foreground font-mono">{truck.placa}</span>
                   </div>
                   <div className="text-xs text-muted-foreground mt-0.5">{truck.modelo} {truck.año || ''}</div>
@@ -408,7 +408,7 @@ export default function Fleet() {
                     <Pencil className="w-3 h-3" />
                   </button>
                   <button onClick={() => setDeleteTruck(truck)}
-                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-red-400 transition-colors"
+                    className="p-1.5 rounded-lg hover:bg-red-500/10 text-muted-foreground hover:text-t-danger transition-colors"
                     title={locale === 'en' ? 'Delete' : 'Eliminar'}>
                     <Trash2 className="w-3 h-3" />
                   </button>
@@ -421,7 +421,7 @@ export default function Fleet() {
                 </div>
                 <div className="flex justify-between">
                   <span>{t.fleet.chassis}:</span>
-                  <span className={truck.chasis_disponible ? 'text-green-400' : 'text-red-400'}>
+                  <span className={truck.chasis_disponible ? 'text-t-success' : 'text-t-danger'}>
                     {truck.chasis_disponible ? t.fleet.availableText : t.fleet.unavailable}
                     {truck.chasis_numero ? ` (${truck.chasis_numero})` : ''}
                   </span>

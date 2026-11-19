@@ -12,8 +12,8 @@ export default function LoadMatch({ datos_extraidos }) {
   const [checked, setChecked] = useState(false);
 
   const CONFIDENCE_CONFIG = {
-    high:   { label: locale === 'en' ? 'High match' : 'Alta coincidencia',  color: 'text-green-400',  bg: 'bg-green-400/10',  border: 'border-green-400/20' },
-    medium: { label: locale === 'en' ? 'Medium match' : 'Coincidencia media', color: 'text-yellow-400', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' },
+    high:   { label: locale === 'en' ? 'High match' : 'Alta coincidencia',  color: 'text-t-success',  bg: 'bg-green-400/10',  border: 'border-green-400/20' },
+    medium: { label: locale === 'en' ? 'Medium match' : 'Coincidencia media', color: 'text-t-warning', bg: 'bg-yellow-400/10', border: 'border-yellow-400/20' },
     low:    { label: locale === 'en' ? 'Low match' : 'Baja coincidencia',  color: 'text-muted-foreground', bg: 'bg-muted/50', border: 'border-border' },
   };
 
@@ -55,7 +55,7 @@ export default function LoadMatch({ datos_extraidos }) {
   return (
     <div className={`rounded-xl border ${c.border} ${c.bg} p-4`}>
       <div className="flex items-center gap-2 mb-3">
-        <Link2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
+        <Link2 className="w-3.5 h-3.5 text-t-text-accent flex-shrink-0" />
         <p className="text-xs font-bold text-foreground uppercase tracking-wide">
           {locale === 'en' ? 'Related load found' : 'Carga relacionada encontrada'}
         </p>
@@ -80,8 +80,8 @@ export default function LoadMatch({ datos_extraidos }) {
         </div>
       </div>
       <div className="mt-3 flex items-center gap-1.5">
-        <Package className="w-3 h-3 text-primary" />
-        <span className="text-xs text-primary font-medium">
+        <Package className="w-3 h-3 text-t-text-accent" />
+        <span className="text-xs text-t-text-accent font-medium">
           {locale === 'en' ? 'This load is already registered in the system' : 'Esta carga ya está registrada en el sistema'}
         </span>
       </div>

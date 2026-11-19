@@ -104,7 +104,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">
@@ -121,11 +121,11 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
             <div className={`rounded-xl border p-3 flex items-center gap-3 ${
               isGoodRpm ? 'bg-green-400/10 border-green-400/20' : 'bg-yellow-400/10 border-yellow-400/20'
             }`}>
-              {isGoodRpm ? <TrendingUp className="w-5 h-5 text-green-400" /> : <TrendingDown className="w-5 h-5 text-yellow-400" />}
+              {isGoodRpm ? <TrendingUp className="w-5 h-5 text-t-success" /> : <TrendingDown className="w-5 h-5 text-t-warning" />}
               <div className="flex-1 grid grid-cols-2 gap-2 text-center">
                 <div>
                   <p className="text-xs text-muted-foreground">{t.loadForm.rpmPreview}</p>
-                  <p className={`text-sm font-bold font-mono ${rpm >= 3 ? 'text-green-400' : rpm >= 2.6 ? 'text-yellow-400' : 'text-red-400'}`}>${rpm.toFixed(2)}</p>
+                  <p className={`text-sm font-bold font-mono ${rpm >= 3 ? 'text-t-success' : rpm >= 2.6 ? 'text-t-warning' : 'text-t-danger'}`}>${rpm.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">{t.loadForm.dieselCost}</p>
@@ -148,7 +148,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
                 }`}
                 placeholder="Miami, FL"
               />
-              {errors.origen && !form.origen?.trim() && <span className="text-[10px] text-red-400 block mt-0.5">{t.loadForm.required}</span>}
+              {errors.origen && !form.origen?.trim() && <span className="text-[10px] text-t-danger block mt-0.5">{t.loadForm.required}</span>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">
@@ -162,7 +162,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
                 }`}
                 placeholder="Tampa, FL"
               />
-              {errors.destino && !form.destino?.trim() && <span className="text-[10px] text-red-400 block mt-0.5">{t.loadForm.required}</span>}
+              {errors.destino && !form.destino?.trim() && <span className="text-[10px] text-t-danger block mt-0.5">{t.loadForm.required}</span>}
             </div>
           </div>
 
@@ -185,7 +185,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
                 placeholder="275"
               />
               {errors.millas && (
-                <span className="text-[10px] text-red-400 block mt-0.5 font-medium">
+                <span className="text-[10px] text-t-danger block mt-0.5 font-medium">
                   {!form.millas || String(form.millas).trim() === '' ? t.loadForm.required : (isEs ? 'Debe ser mayor que 0' : 'Must be greater than 0')}
                 </span>
               )}
@@ -194,13 +194,13 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
               <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.offeredRate}</label>
               <input type="number" step="0.01" min="0" value={form.tarifa_ofrecida} onChange={e => set('tarifa_ofrecida', e.target.value === '' ? '' : Number(e.target.value))}
                 className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 ${errors.tarifa_ofrecida ? 'border-red-500 focus:ring-red-500/50' : 'border-border focus:ring-primary/50'}`} placeholder="600" />
-              {errors.tarifa_ofrecida && <span className="text-[10px] text-red-400 block mt-0.5">{isEs ? 'No puede ser negativa' : 'Cannot be negative'}</span>}
+              {errors.tarifa_ofrecida && <span className="text-[10px] text-t-danger block mt-0.5">{isEs ? 'No puede ser negativa' : 'Cannot be negative'}</span>}
             </div>
             <div>
               <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.negotiatedRate}</label>
               <input type="number" step="0.01" min="0" value={form.tarifa_negociada} onChange={e => set('tarifa_negociada', e.target.value === '' ? '' : Number(e.target.value))}
                 className={`w-full bg-muted border rounded-lg px-3 py-2 text-sm text-foreground font-mono focus:outline-none focus:ring-1 ${errors.tarifa_negociada ? 'border-red-500 focus:ring-red-500/50' : 'border-border focus:ring-primary/50'}`} placeholder="750" />
-              {errors.tarifa_negociada && <span className="text-[10px] text-red-400 block mt-0.5">{isEs ? 'No puede ser negativa' : 'Cannot be negative'}</span>}
+              {errors.tarifa_negociada && <span className="text-[10px] text-t-danger block mt-0.5">{isEs ? 'No puede ser negativa' : 'Cannot be negative'}</span>}
             </div>
           </div>
 
@@ -262,7 +262,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
                 isEs={isEs}
               />
               {errors.conductor_id && (
-                <p className="text-[11px] text-red-400 mt-1">
+                <p className="text-[11px] text-t-danger mt-1">
                   {isEs ? 'Confirma la advertencia del documento vencido para asignar.' : 'Confirm the expired-document warning to assign.'}
                 </p>
               )}
@@ -271,7 +271,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
               <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.truckPlate}</label>
               {/* La placa sale del camión del conductor elegido */}
               <input value={form.truck_placa || ''} readOnly
-                className="w-full bg-muted/50 border border-border rounded-lg px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
+                className="w-full bg-t-bg-input border border-border rounded-xl px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
                 placeholder={isEs ? 'Se completa al elegir conductor' : 'Filled when a driver is chosen'} />
             </div>
           </div>
@@ -286,7 +286,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
             <button type="button" onClick={onClose} className="flex-1 py-2.5 rounded-xl border border-border text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
               {t.loadForm.cancel}
             </button>
-            <button type="submit" className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground transition-all">
+            <button type="submit" className="flex-1 py-2.5 rounded-full bg-primary hover:bg-t-action-primary-hover text-sm font-semibold text-primary-foreground transition-all">
               {t.loadForm.save}
             </button>
           </div>

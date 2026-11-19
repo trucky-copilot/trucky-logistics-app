@@ -174,7 +174,7 @@ export default function Onboarding({ onComplete }) {
               <div key={n} className="flex items-center flex-1">
                 <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold transition-all ${
                   n < step ? 'bg-primary text-primary-foreground' :
-                  n === step ? 'bg-primary/20 border border-primary text-primary' :
+                  n === step ? 'bg-primary/20 border border-primary text-t-text-accent' :
                   'bg-muted text-muted-foreground'
                 }`}>
                   {n < step ? '✓' : n}
@@ -188,7 +188,7 @@ export default function Onboarding({ onComplete }) {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 1 de 4</p>
+                <p className="text-xs text-t-text-accent font-semibold uppercase tracking-wider">Paso 1 de 4</p>
                 <h2 className="text-lg font-bold text-foreground mt-1">¿Cuál es tu rol?</h2>
                 <p className="text-sm text-muted-foreground mt-1">Esto personaliza el verificador de documentos y las herramientas de análisis.</p>
               </div>
@@ -213,13 +213,13 @@ export default function Onboarding({ onComplete }) {
                     className="w-full flex items-center gap-4 p-4 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 text-left transition-all group"
                   >
                     <div className="w-12 h-12 rounded-xl bg-muted flex items-center justify-center flex-shrink-0 group-hover:bg-primary/10 transition-colors">
-                      <opt.icon className="w-6 h-6 text-muted-foreground group-hover:text-primary transition-colors" />
+                      <opt.icon className="w-6 h-6 text-muted-foreground group-hover:text-t-text-accent transition-colors" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-bold text-foreground">{opt.title}</div>
                       <div className="text-xs text-muted-foreground mt-0.5 leading-relaxed">{opt.desc}</div>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-primary flex-shrink-0" />
+                    <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-t-text-accent flex-shrink-0" />
                   </button>
                 ))}
               </div>
@@ -230,7 +230,7 @@ export default function Onboarding({ onComplete }) {
           {step === 2 && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 2 de 4</p>
+                <p className="text-xs text-t-text-accent font-semibold uppercase tracking-wider">Paso 2 de 4</p>
                 <h2 className="text-lg font-bold text-foreground mt-1">Datos de tu negocio</h2>
                 <p className="text-sm text-muted-foreground mt-1">
                   {rol === 'carrier' ? 'Información de tu empresa carrier.' : 'Información de tu operación como dispatcher.'}
@@ -290,7 +290,7 @@ export default function Onboarding({ onComplete }) {
                 <button
                   onClick={() => setStep(3)}
                   disabled={rol === 'carrier' ? !empresa.trim() : !nombre.trim()}
-                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+                  className="flex-1 py-2.5 rounded-full bg-primary hover:bg-t-action-primary-hover disabled:opacity-40 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
                 >
                   Continuar <ChevronRight className="w-4 h-4" />
                 </button>
@@ -302,7 +302,7 @@ export default function Onboarding({ onComplete }) {
           {step === 3 && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 3 de 4</p>
+                <p className="text-xs text-t-text-accent font-semibold uppercase tracking-wider">Paso 3 de 4</p>
                 <h2 className="text-lg font-bold text-foreground mt-1">Costos operativos</h2>
                 <p className="text-sm text-muted-foreground mt-1">Usados para calcular tu break-even y evaluar rentabilidad de cargas.</p>
               </div>
@@ -349,7 +349,7 @@ export default function Onboarding({ onComplete }) {
                 {/* Break-even en tiempo real */}
                 <div className="bg-primary/5 border border-primary/20 rounded-xl p-3.5">
                   <p className="text-xs text-muted-foreground">Break-even estimado</p>
-                  <p className="text-2xl font-bold text-primary font-mono mt-0.5">
+                  <p className="text-2xl font-bold text-t-text-accent font-mono mt-0.5">
                     {breakEvenDisplay}
                     {costos.valido && <span className="text-sm font-normal text-muted-foreground">/mi</span>}
                   </p>
@@ -365,7 +365,7 @@ export default function Onboarding({ onComplete }) {
                 <button
                   onClick={() => setStep(4)}
                   disabled={pctInvalido}
-                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="flex-1 py-2.5 rounded-full bg-primary hover:bg-t-action-primary-hover text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Continuar <ChevronRight className="w-4 h-4" />
                 </button>
@@ -377,7 +377,7 @@ export default function Onboarding({ onComplete }) {
           {step === 4 && (
             <div className="space-y-4">
               <div>
-                <p className="text-xs text-primary font-semibold uppercase tracking-wider">Paso 4 de 4</p>
+                <p className="text-xs text-t-text-accent font-semibold uppercase tracking-wider">Paso 4 de 4</p>
                 <h2 className="text-lg font-bold text-foreground mt-1">¡Listo para operar!</h2>
                 <p className="text-sm text-muted-foreground mt-1">Revisa tu configuración antes de entrar.</p>
               </div>
@@ -412,14 +412,14 @@ export default function Onboarding({ onComplete }) {
                   <span className="text-xs font-semibold text-foreground">{conductor}%</span>
                 </div>
                 <div className="flex items-center justify-between px-4 py-3 bg-primary/5">
-                  <span className="text-xs text-primary font-medium">Break-even</span>
-                  <span className="text-xs font-bold text-primary font-mono">
+                  <span className="text-xs text-t-text-accent font-medium">Break-even</span>
+                  <span className="text-xs font-bold text-t-text-accent font-mono">
                     {breakEvenDisplay}{costos.valido && '/mi'}
                   </span>
                 </div>
               </div>
 
-              {linkRequired && <div role="alert" className="text-sm rounded-xl border border-primary p-4"><strong>Confirma tu cuenta</strong><p>La empresa ya existe. Vincula tu cuenta de Trucky con Google antes de continuar; no crees otra empresa.</p><a href="https://www.trucky-ai.com/billing-link" target="_blank" rel="noopener noreferrer" className="text-primary underline">Confirmar mi cuenta</a></div>}
+              {linkRequired && <div role="alert" className="text-sm rounded-xl border border-primary p-4"><strong>Confirma tu cuenta</strong><p>La empresa ya existe. Vincula tu cuenta de Trucky con Google antes de continuar; no crees otra empresa.</p><a href="https://www.trucky-ai.com/billing-link" target="_blank" rel="noopener noreferrer" className="text-t-text-accent underline">Confirmar mi cuenta</a></div>}
               {setupError && !linkRequired && (
                 <p role="alert" className="text-xs text-destructive">
                   No pudimos crear tu organización. Revisa tu conexión e inténtalo de nuevo.
@@ -432,7 +432,7 @@ export default function Onboarding({ onComplete }) {
                 </button>
                 <button
                   onClick={handleComplete}
-                  className="flex-1 py-2.5 rounded-xl bg-primary hover:bg-primary/90 text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
+                  className="flex-1 py-2.5 rounded-full bg-primary hover:bg-t-action-primary-hover text-sm font-semibold text-primary-foreground flex items-center justify-center gap-2 transition-all"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Entrar a Trucky
                 </button>

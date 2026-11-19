@@ -6,9 +6,9 @@ import { useLanguage } from '@/lib/LanguageContext';
 
 
 function getHallazgoIcon(h) {
-  if (h.startsWith('❌')) return { Icon: XCircle, color: 'text-red-400' };
-  if (h.startsWith('⚠')) return { Icon: AlertTriangle, color: 'text-yellow-400' };
-  if (h.startsWith('✓')) return { Icon: CheckCircle2, color: 'text-green-400' };
+  if (h.startsWith('❌')) return { Icon: XCircle, color: 'text-t-danger' };
+  if (h.startsWith('⚠')) return { Icon: AlertTriangle, color: 'text-t-warning' };
+  if (h.startsWith('✓')) return { Icon: CheckCircle2, color: 'text-t-success' };
   return { Icon: Info, color: 'text-muted-foreground' };
 }
 
@@ -29,7 +29,7 @@ function DatosExtraidos({ datos }) {
   const entries = Object.entries(datos).filter(([, v]) => v && v !== 'No especificado' && v !== 'No especificada' && v !== 'No encontrado' && v !== 'Ninguna' && v !== 'No mencionado' && v !== 'No requerido');
   if (!entries.length) return null;
   return (
-    <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-white/5">
+    <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-t-border-subtle">
       {entries.map(([k, v]) => (
         <span key={k} className="inline-flex items-center gap-1 text-[10px] bg-muted/60 border border-border rounded-md px-2 py-1 text-muted-foreground">
           <span className="font-medium text-foreground/70">{k.replace(/_/g, ' ')}:</span>
@@ -45,9 +45,9 @@ function CategoryCard({ cat, index }) {
   const [expanded, setExpanded] = useState(false);
   
   const SEMAFORO = {
-    verde: { icon: CheckCircle2, color: 'text-green-400', bg: 'bg-green-400/8 border-green-400/20', dot: 'bg-green-400', label: t.documents.ok, labelBg: 'bg-green-400/10 text-green-400' },
-    amarillo: { icon: AlertTriangle, color: 'text-yellow-400', bg: 'bg-yellow-400/8 border-yellow-400/20', dot: 'bg-yellow-400', label: t.documents.review, labelBg: 'bg-yellow-400/10 text-yellow-400' },
-    rojo: { icon: XCircle, color: 'text-red-400', bg: 'bg-red-400/8 border-red-400/20', dot: 'bg-red-400', label: t.documents.critical, labelBg: 'bg-red-400/10 text-red-400' },
+    verde: { icon: CheckCircle2, color: 'text-t-success', bg: 'bg-green-400/8 border-green-400/20', dot: 'bg-green-400', label: t.documents.ok, labelBg: 'bg-green-400/10 text-t-success' },
+    amarillo: { icon: AlertTriangle, color: 'text-t-warning', bg: 'bg-yellow-400/8 border-yellow-400/20', dot: 'bg-yellow-400', label: t.documents.review, labelBg: 'bg-yellow-400/10 text-t-warning' },
+    rojo: { icon: XCircle, color: 'text-t-danger', bg: 'bg-red-400/8 border-red-400/20', dot: 'bg-red-400', label: t.documents.critical, labelBg: 'bg-red-400/10 text-t-danger' },
   };
 
   const s = SEMAFORO[cat.semaforo] || SEMAFORO.amarillo;
@@ -90,7 +90,7 @@ function CategoryCard({ cat, index }) {
 
       {/* Expandido */}
       {expanded && (
-        <div className="px-4 pb-4 border-t border-white/5 pt-3 space-y-3">
+        <div className="px-4 pb-4 border-t border-t-border-subtle pt-3 space-y-3">
           {/* Hallazgos detallados */}
           {resto.length > 0 && (
             <div className="space-y-2">
@@ -111,7 +111,7 @@ function CategoryCard({ cat, index }) {
 
           {/* Recomendación */}
           {cat.recomendacion && (
-            <div className="flex items-start gap-2 pt-1 border-t border-white/5">
+            <div className="flex items-start gap-2 pt-1 border-t border-t-border-subtle">
               <span className={`text-xs font-black ${s.color} flex-shrink-0`}>→</span>
               <p className="text-xs text-muted-foreground leading-snug">{cat.recomendacion}</p>
             </div>
@@ -136,17 +136,17 @@ export default function CategoryGrid({ categorias }) {
         <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{t.documents.analysisByCategory}</p>
         <div className="flex items-center gap-2">
           {rojos > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-red-400">
+            <span className="flex items-center gap-1 text-[10px] font-bold text-t-danger">
               <span className="w-1.5 h-1.5 rounded-full bg-red-400 inline-block" />{rojos}
             </span>
           )}
           {amarillos > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-yellow-400">
+            <span className="flex items-center gap-1 text-[10px] font-bold text-t-warning">
               <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 inline-block" />{amarillos}
             </span>
           )}
           {verdes > 0 && (
-            <span className="flex items-center gap-1 text-[10px] font-bold text-green-400">
+            <span className="flex items-center gap-1 text-[10px] font-bold text-t-success">
               <span className="w-1.5 h-1.5 rounded-full bg-green-400 inline-block" />{verdes}
             </span>
           )}

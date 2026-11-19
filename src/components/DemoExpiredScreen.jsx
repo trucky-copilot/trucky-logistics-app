@@ -12,7 +12,7 @@ export default function DemoExpiredScreen({ reason }) {
         <div className="absolute -top-12 -left-12 w-32 h-32 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
         <div className="absolute -bottom-12 -right-12 w-32 h-32 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
 
-        <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto mb-5 shadow-inner">
+        <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 text-t-text-accent flex items-center justify-center mx-auto mb-5 shadow-inner">
           <ShieldAlert className="w-7 h-7" />
         </div>
 
@@ -31,7 +31,7 @@ export default function DemoExpiredScreen({ reason }) {
             href="https://www.trucky-ai.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 transition-all"
+            className="w-full py-3 px-4 rounded-xl font-semibold text-sm bg-t-action-primary hover:bg-t-action-primary-hover text-white flex items-center justify-center gap-2 transition-all"
           >
             <span>{reason === 'no_trial' ? 'Activar Demo' : 'Activar plan pro'}</span>
             <ExternalLink className="w-4 h-4" />
@@ -50,9 +50,9 @@ export default function DemoExpiredScreen({ reason }) {
               logout(false);
               window.location.replace('/');
             }}
-            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white bg-zinc-800/60 hover:bg-zinc-800 border border-zinc-700/60 hover:border-zinc-600 transition-all flex items-center justify-center gap-2 shadow-sm"
+            className="w-full py-2.5 px-4 rounded-xl text-xs font-semibold text-t-text-secondary hover:text-foreground bg-t-action-secondary hover:bg-t-action-secondary-hover border border-border hover:border-t-border-strong transition-all flex items-center justify-center gap-2 shadow-sm"
           >
-            <LogOut className="w-3.5 h-3.5 text-zinc-400" />
+            <LogOut className="w-3.5 h-3.5 text-muted-foreground" />
             <span>Cerrar sesión</span>
           </button>
         </div>

@@ -57,7 +57,7 @@ function NotifForm({ onSave, onClose }) {
     }
   };
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold">{t.notifications.formTitle}</h2>
@@ -94,7 +94,7 @@ function NotifForm({ onSave, onClose }) {
           </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} disabled={isSaving} className="flex-1 py-2 rounded-xl border border-border text-sm text-muted-foreground hover:text-foreground disabled:opacity-50">{t.notifications.cancel}</button>
-            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
+            <button type="submit" disabled={isSaving} className="flex-1 py-2 rounded-full bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-50 flex items-center justify-center gap-2">
               {isSaving ? (
                 <>
                   <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
@@ -303,11 +303,11 @@ export default function Notifications() {
   });
 
   return (
-    <div className="p-4 md:p-6 space-y-4 max-w-3xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="t-page space-y-6 max-w-3xl mx-auto">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
-            <Bell className="w-5 h-5 text-primary" />
+          <h1 className="t-h1 flex items-center gap-2.5">
+            <Bell className="w-7 h-7 lg:w-8 lg:h-8 text-t-text-accent" />
             {t.notifications.title}
             {operationalAlerts.filter(a => !a.leido).length > 0 && (
               <span className="px-2 py-0.5 rounded-full bg-primary text-primary-foreground text-xs font-bold">
@@ -320,7 +320,7 @@ export default function Notifications() {
           <button onClick={markAllRead} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground">
             <CheckCheck className="w-3.5 h-3.5" />{t.notifications.markAll}
           </button>
-          <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-primary hover:bg-primary/90 text-xs font-semibold text-primary-foreground">
+          <button onClick={() => setShowForm(true)} className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-primary hover:bg-t-action-primary-hover text-xs font-semibold text-primary-foreground">
             <Plus className="w-3.5 h-3.5" />{t.notifications.new}
           </button>
         </div>
@@ -337,9 +337,9 @@ export default function Notifications() {
           <button
             key={f.key}
             onClick={() => setFilter(f.key)}
-            className={`px-4 py-1.5 rounded-xl text-xs font-medium transition-all ${
+            className={`px-4 py-1.5 rounded-full text-xs font-medium transition-all ${
               filter === f.key
-                ? 'bg-primary text-primary-foreground shadow-sm'
+                ? 'bg-primary text-primary-foreground'
                 : 'bg-muted/60 text-muted-foreground hover:text-foreground hover:bg-muted'
             }`}
           >
@@ -389,7 +389,7 @@ export default function Notifications() {
               >
                 <div className="flex items-start gap-3">
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                    isRed ? 'bg-red-400/20 text-red-400' : 'bg-yellow-400/20 text-yellow-400'
+                    isRed ? 'bg-red-400/20 text-t-danger' : 'bg-yellow-400/20 text-t-warning'
                   }`}>
                     <IconComponent className="w-5 h-5" />
                   </div>
@@ -398,7 +398,7 @@ export default function Notifications() {
                       <div className="flex items-center gap-2 min-w-0">
                         <p className="text-sm font-semibold text-foreground truncate">{alert.titulo}</p>
                         <span className={`text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded flex-shrink-0 ${
-                          isRed ? 'text-red-400 bg-red-400/10' : 'text-yellow-400 bg-yellow-400/10'
+                          isRed ? 'text-t-danger bg-red-400/10' : 'text-t-warning bg-yellow-400/10'
                         }`}>
                           {alert.moduloLabel || alert.modulo}
                         </span>
@@ -424,7 +424,7 @@ export default function Notifications() {
                         {alert.link && alert.link !== '/notificaciones' ? (
                           <Link
                             to={alert.link}
-                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline font-medium"
+                            className="inline-flex items-center gap-1 text-xs text-t-text-accent hover:underline font-medium"
                           >
                             <span>{isEn ? 'View' : 'Ver'}</span>
                             <ExternalLink className="w-3 h-3" />
@@ -435,14 +435,14 @@ export default function Notifications() {
                             type="button"
                             onClick={(e) => deleteNotification(alert.id, e)}
                             title={isEn ? 'Delete notification' : 'Eliminar notificación'}
-                            className="p-1 rounded-md hover:bg-muted text-muted-foreground/60 hover:text-red-400 transition-colors ml-1"
+                            className="p-1 rounded-md hover:bg-muted text-muted-foreground/60 hover:text-t-danger transition-colors ml-1"
                           >
                             <Trash2 className="w-3.5 h-3.5" />
                           </button>
                         ) : null}
                       </div>
                     </div>
-                    <p className={`text-xs mt-1 ${isRed ? 'text-red-400 font-medium' : 'text-yellow-400/90'}`}>
+                    <p className={`text-xs mt-1 ${isRed ? 'text-t-danger font-medium' : 'text-t-warning/90'}`}>
                       {isRed ? '🔴' : '🟡'} {alert.mensaje}
                     </p>
                   </div>
@@ -454,4 +454,4 @@ export default function Notifications() {
       )}
     </div>
   );
-}
+}

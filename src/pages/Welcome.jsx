@@ -43,7 +43,7 @@ const PRIMARY_BUTTON_CLASS =
   'w-full py-3 rounded-xl bg-primary hover:bg-primary/90 text-sm font-bold text-primary-foreground transition-all disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-2';
 
 const LINK_CLASS =
-  'text-[11px] text-violet-300/80 hover:text-violet-200 font-medium transition-colors disabled:opacity-60';
+  'text-[11px] text-t-text-accent/80 hover:text-t-text-accent font-medium transition-colors disabled:opacity-60';
 
 /** Logo de Google — inline para no depender de una red externa ni de un asset. */
 function GoogleMark() {
@@ -184,9 +184,9 @@ export default function Welcome() {
         <div className="text-center mb-8 max-w-sm">
           <h1 className="text-2xl font-bold text-foreground mb-2">
             Operaciones de transporte,{' '}
-            <span className="text-primary">sin complicaciones</span>
+            <span className="text-t-text-accent">sin complicaciones</span>
           </h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="t-subtitle mt-1">
             Plataforma para carriers y dispatchers intermodales. Crea tu cuenta gratuita y comienza hoy.
           </p>
         </div>
@@ -195,7 +195,7 @@ export default function Welcome() {
         <div className="grid grid-cols-2 gap-3 mb-8 w-full max-w-sm">
           {FEATURES.map(({ icon: Icon, label, desc }) => (
             <div key={label} className="bg-card border border-border rounded-xl p-3 flex flex-col gap-1.5">
-              <Icon className="w-4 h-4 text-primary" />
+              <Icon className="w-4 h-4 text-t-text-accent" />
               <div className="text-xs font-semibold text-foreground">{label}</div>
               <div className="text-[11px] text-muted-foreground leading-snug">{desc}</div>
             </div>
@@ -206,14 +206,14 @@ export default function Welcome() {
         <div className="w-full max-w-sm space-y-3">
           {/* Aviso y error: siempre en el mismo lugar, uno por vez. */}
           {notice && (
-            <p className="text-[11px] text-violet-200/90 bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 leading-snug">
+            <p className="text-[11px] text-t-text-accent/90 bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 leading-snug">
               {notice}
             </p>
           )}
           {error && (
             <p
               role="alert"
-              className="text-[11px] text-red-200 bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2 leading-snug"
+              className="text-[11px] text-t-danger bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2 leading-snug"
             >
               {error.message}
             </p>
@@ -231,7 +231,7 @@ export default function Welcome() {
           {step === AUTH_STEP.RESET_SENT && (
             <>
               <div className="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-2 text-center">
-                <MailCheck className="w-6 h-6 text-primary" />
+                <MailCheck className="w-6 h-6 text-t-text-accent" />
                 <p className="text-xs text-muted-foreground leading-snug">
                   Si el correo está registrado, en unos minutos recibirás las instrucciones para
                   crear una contraseña nueva.

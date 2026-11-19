@@ -16,7 +16,7 @@ export default function DemoLimitModal({
   const entityLabel = entityName ? ` ${entityName}` : ' elementos';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--t-overlay)] backdrop-blur-sm animate-in fade-in duration-150">
       <div className="relative w-full max-w-md p-6 overflow-hidden border rounded-3xl bg-card border-border shadow-2xl text-center space-y-4">
         {/* Glow decoration */}
         <div className="absolute -top-12 -left-12 w-32 h-32 bg-primary/20 rounded-full blur-3xl pointer-events-none" />
@@ -28,7 +28,7 @@ export default function DemoLimitModal({
           <X className="w-4 h-4" />
         </button>
 
-        <div className="w-12 h-12 mx-auto rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-inner">
+        <div className="w-12 h-12 mx-auto rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center text-t-text-accent shadow-inner">
           <ShieldAlert className="w-6 h-6" />
         </div>
 
@@ -53,7 +53,7 @@ export default function DemoLimitModal({
             href="https://www.trucky-ai.com"
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white shadow-lg shadow-violet-500/25 flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
+            className="w-full py-3 px-4 rounded-xl font-bold text-xs bg-t-action-primary hover:bg-t-action-primary-hover text-white flex items-center justify-center gap-2 transition-all hover:scale-[1.01]"
           >
             <Sparkles className="w-4 h-4" />
             <span>Actualizar plan en trucky-ai.com →</span>

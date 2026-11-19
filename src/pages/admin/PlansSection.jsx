@@ -38,19 +38,19 @@ export default function PlansSection() {
   if (!matrix) return <Empty>Cargando planes…</Empty>;
   return (
     <Card className="space-y-4">
-      <p className="text-xs text-white/50">Qué módulos incluye cada plan. El servidor bloquea lo que no esté marcado, aunque alguien intente entrar directo.</p>
+      <p className="text-xs text-foreground/50">Qué módulos incluye cada plan. El servidor bloquea lo que no esté marcado, aunque alguien intente entrar directo.</p>
       <div className="overflow-x-auto -mx-4 md:mx-0">
-        <table className="w-full text-sm text-white/80 min-w-[520px]">
+        <table className="w-full text-sm text-foreground/80 min-w-[520px]">
           <thead>
-            <tr className="text-left text-xs text-white/50 border-b border-white/10">
+            <tr className="text-left text-xs text-foreground/50 border-b border-border">
               <th className="py-2 px-2 font-medium">Módulo</th>
               {PLANS.map((p) => <th key={p.id} className="py-2 px-2 font-medium text-center">{p.label}</th>)}
             </tr>
           </thead>
           <tbody>
             {MODULES.map((m) => (
-              <tr key={m.id} className="border-b border-white/5">
-                <td className="py-2 px-2 text-white">{m.label}</td>
+              <tr key={m.id} className="border-b border-t-border-subtle">
+                <td className="py-2 px-2 text-foreground">{m.label}</td>
                 {PLANS.map((p) => (
                   <td key={p.id} className="py-2 px-2 text-center">
                     <input type="checkbox" className="w-4 h-4 accent-amber-500" checked={matrix[p.id][m.id]} onChange={() => toggle(p.id, m.id)} aria-label={`${m.label} en ${p.label}`} />
@@ -62,7 +62,7 @@ export default function PlansSection() {
         </table>
       </div>
       <ErrorBox error={error} />
-      {ok && <p className="text-sm text-emerald-300">{ok}</p>}
+      {ok && <p className="text-sm text-t-success">{ok}</p>}
       <div className="flex justify-end gap-2">
         {dirty && <Btn variant="ghost" onClick={() => setMatrix(saved)}>Descartar</Btn>}
         <Btn onClick={guardar} busy={busy} disabled={!dirty}><Save className="w-4 h-4" /> Guardar</Btn>

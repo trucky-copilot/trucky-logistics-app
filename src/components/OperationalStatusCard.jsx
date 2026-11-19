@@ -16,7 +16,7 @@ const LEVEL_META = {
   ready: {
     label_es: 'Listo para operar',
     label_en: 'Ready to operate',
-    color:  'text-green-400',
+    color:  'text-t-success',
     bg:     'bg-green-400/10',
     border: 'border-green-400/20',
     dot:    'bg-green-400',
@@ -24,7 +24,7 @@ const LEVEL_META = {
   partial: {
     label_es: 'Configuración parcial',
     label_en: 'Partial configuration',
-    color:  'text-yellow-400',
+    color:  'text-t-warning',
     bg:     'bg-yellow-400/10',
     border: 'border-yellow-400/20',
     dot:    'bg-yellow-400',
@@ -32,7 +32,7 @@ const LEVEL_META = {
   basic: {
     label_es: 'Configuración básica',
     label_en: 'Basic configuration',
-    color:  'text-red-400',
+    color:  'text-t-danger',
     bg:     'bg-red-400/10',
     border: 'border-red-400/20',
     dot:    'bg-red-400',
@@ -50,7 +50,7 @@ function CheckItem({ done, label, route, configureText }) {
   return (
     <div className="flex items-center gap-2.5 py-1.5">
       {done
-        ? <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
+        ? <CheckCircle2 className="w-4 h-4 text-t-success flex-shrink-0" />
         : <Circle className="w-4 h-4 text-muted-foreground flex-shrink-0" />
       }
       <span className={`text-xs flex-1 ${done ? 'text-muted-foreground line-through' : 'text-foreground'}`}>
@@ -59,7 +59,7 @@ function CheckItem({ done, label, route, configureText }) {
       {!done && route && (
         <button
           onClick={() => navigate(route)}
-          className="flex items-center gap-0.5 text-xs text-primary hover:underline flex-shrink-0"
+          className="flex items-center gap-0.5 text-xs text-t-text-accent hover:underline flex-shrink-0"
         >
           {configureText} <ChevronRight className="w-3 h-3" />
         </button>
@@ -157,7 +157,7 @@ export default function OperationalStatusCard() {
 
       {/* Mensaje orientativo */}
       {missing.length > 0 && (
-        <p className={`text-xs ${meta.color} border-t border-white/5 pt-2 leading-relaxed`}>
+        <p className={`text-xs ${meta.color} border-t border-t-border-subtle pt-2 leading-relaxed`}>
           {missing.length === 1
             ? (isEn
                 ? (missing[0] === 'cost_config' ? 'Configure your operating costs in the calculator for accurate profitability checks.' : 'Complete the pending setup for maximum accuracy.')

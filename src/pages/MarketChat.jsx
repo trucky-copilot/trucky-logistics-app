@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { Send, Bot, User, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, Check, Mail, CheckCircle2 } from 'lucide-react';
+import { Send, Bot, Plus, Loader2, Zap, History, X, AlertTriangle, Copy, Check, Mail, CheckCircle2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { useAppState, useOrganizationId } from '@/lib/AppStateContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import { useToast } from '@/components/ui/use-toast';
+import PageHeader from '@/components/PageHeader';
 import ReactMarkdown from 'react-markdown';
 import MarketAdvisorCard from '@/components/MarketAdvisorCard';
 import { useProfile } from '@/lib/ProfileContext';
@@ -189,12 +190,12 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
   };
 
   return (
-    <div className="my-4 rounded-xl bg-[#1e1e24] border border-[#2b2b36] overflow-hidden shadow-sm">
-      <div className="flex items-center justify-between px-4 py-2 bg-[#18181b] border-b border-[#2b2b36] flex-wrap gap-2">
-        <span className="text-xs font-semibold text-zinc-400">Trucky Email Draft</span>
+    <div className="my-4 rounded-xl bg-t-bg-deep border border-border overflow-hidden shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2 bg-t-bg-surface-raised border-b border-border flex-wrap gap-2">
+        <span className="text-xs font-semibold text-muted-foreground">Trucky Email Draft</span>
         <div className="flex items-center gap-2">
           {sentSuccess ? (
-            <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+            <span className="text-xs text-t-success font-bold flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
               <CheckCircle2 className="w-3.5 h-3.5" />
               {locale === 'en' ? 'Sent via Gmail' : 'Enviado por Gmail'}
             </span>
@@ -202,7 +203,7 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
             <button
               type="button"
               onClick={handleOpenSend}
-              className="text-xs text-primary bg-primary/10 hover:bg-primary/20 border border-primary/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors font-semibold"
+              className="text-xs text-t-text-accent bg-primary/10 hover:bg-primary/20 border border-primary/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors font-semibold"
             >
               <Mail className="w-3.5 h-3.5" />
               <span>{locale === 'en' ? 'Send via Gmail' : 'Enviar por Gmail'}</span>
@@ -214,21 +215,21 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
             onClick={handleCopy}
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors font-medium px-2 py-1 rounded-lg hover:bg-muted"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? <Check className="w-3.5 h-3.5 text-t-success" /> : <Copy className="w-3.5 h-3.5" />}
             {copied ? (locale === 'en' ? 'Copied!' : 'Copiado!') : (locale === 'en' ? 'Copy' : 'Copiar')}
           </button>
         </div>
       </div>
       <div className="p-4 overflow-x-auto">
-        <pre className="text-[13px] text-zinc-300 font-mono leading-relaxed m-0 whitespace-pre-wrap break-words" {...props} />
+        <pre className="text-[13px] text-t-text-secondary font-mono leading-relaxed m-0 whitespace-pre-wrap break-words" {...props} />
       </div>
 
       {sendModalOpen && (
-        <div className="fixed inset-0 bg-black/75 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-2">
-                <Mail className="w-4 h-4 text-primary" />
+                <Mail className="w-4 h-4 text-t-text-accent" />
                 <h3 className="text-sm font-bold text-foreground">
                   {locale === 'en' ? 'Confirm Email Dispatch (Gmail)' : 'Confirmar Envío de Correo (Gmail)'}
                 </h3>
@@ -244,12 +245,12 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
 
             <form onSubmit={handleConfirmSend} className="p-5 space-y-3.5 flex-1 overflow-y-auto">
               {/* Desde qué cuenta sale el correo (opción 3, QA 13-nov) */}
-              <div className={`rounded-xl border px-3 py-2 text-xs ${sender ? 'border-border bg-muted/30 text-foreground' : 'border-amber-500/40 bg-amber-500/10 text-amber-200'}`}>
+              <div className={`rounded-xl border px-3 py-2 text-xs ${sender ? 'border-border bg-muted/30 text-foreground' : 'border-amber-500/40 bg-amber-500/10 text-t-warning'}`}>
                 {sender ? (
                   <>
                     <span className="text-muted-foreground">{locale === 'en' ? 'Sending from: ' : 'Se enviará desde: '}</span><b>{sender}</b>
                     {currentUser?.email && sender.includes('@') && sender.toLowerCase() !== String(currentUser.email).toLowerCase() && (
-                      <span className="block text-amber-300 mt-1">{locale === 'en' ? 'This is not the account you use for Trucky.' : 'No es la cuenta con la que entraste a Trucky.'}</span>
+                      <span className="block text-t-warning mt-1">{locale === 'en' ? 'This is not the account you use for Trucky.' : 'No es la cuenta con la que entraste a Trucky.'}</span>
                     )}
                   </>
                 ) : notConnectedMsg}
@@ -307,7 +308,7 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
                     type="button"
                     onClick={handleConnect}
                     disabled={connecting}
-                    className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all disabled:opacity-50"
+                    className="flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all disabled:opacity-50"
                   >
                     {connecting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                     <span>{locale === 'en' ? 'Connect Gmail' : 'Conectar Gmail'}</span>
@@ -316,7 +317,7 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
                 {sender && <button
                   type="submit"
                   disabled={sending}
-                  className="flex items-center gap-2 px-5 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm transition-all disabled:opacity-50"
+                  className="flex items-center gap-2 px-5 py-2 rounded-full text-xs font-bold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all disabled:opacity-50"
                 >
                   {sending ? (
                     <>
@@ -331,7 +332,7 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
                   )}
                 </button>}
               </div>
-              {sendError && <p className="text-xs text-red-400">{sendError}</p>}
+              {sendError && <p className="text-xs text-t-danger">{sendError}</p>}
             </form>
           </div>
         </div>
@@ -1000,7 +1001,7 @@ export default function MarketChat() {
         <div className="absolute inset-0 z-20 bg-background flex flex-col">
           <div className="flex items-center justify-between px-4 py-4 border-b border-border">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <History className="w-4 h-4 text-primary" />
+              <History className="w-4 h-4 text-t-text-accent" />
               {t.historyPanelTitle}
             </h2>
             <button onClick={() => setShowHistory(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
@@ -1029,30 +1030,23 @@ export default function MarketChat() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-border flex-shrink-0">
-        <div>
-          <h1 className="text-lg font-bold text-foreground flex items-center gap-2">
-            <Zap className="w-5 h-5 text-primary" />
-            {t.headerTitle}
-          </h1>
-          <p className="text-xs text-muted-foreground mt-0.5">{t.headerSubtitle}</p>
-        </div>
-        <div className="flex items-center gap-2">
+      <div className="px-4 lg:px-8 pt-5 lg:pt-6 pb-4 flex-shrink-0">
+      <PageHeader icon={Zap} title={t.headerTitle} subtitle={t.headerSubtitle}>
           <button
             onClick={openHistory}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-2 h-10 lg:h-11 px-4 lg:px-6 rounded-full bg-t-action-secondary hover:bg-t-action-secondary-hover text-sm font-medium text-t-text-primary transition-colors"
           >
-            <History className="w-3.5 h-3.5" />
+            <History className="w-4 h-4" />
             <span className="hidden sm:inline">{t.historyButton}</span>
           </button>
           <button
             onClick={startNew}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            className="flex items-center gap-2 h-10 lg:h-11 px-4 lg:px-6 rounded-full bg-t-action-primary hover:bg-t-action-primary-hover text-sm font-medium text-t-text-on-accent transition-colors"
           >
-            <Plus className="w-3.5 h-3.5" />
+            <Plus className="w-4 h-4" />
             <span className="hidden sm:inline">{t.newQueryButton}</span>
           </button>
-        </div>
+      </PageHeader>
       </div>
 
       {/* Cost config banner — oculto salvo que costo_por_milla sea un número
@@ -1060,28 +1054,28 @@ export default function MarketChat() {
           registro sin configurar (null) o con valores no finitos no cuenta
           como "personalizado". */}
       {costConfig && Number.isFinite(costConfig.costo_por_milla) && (
-        <div className="mx-4 md:mx-6 mt-3 flex-shrink-0 flex items-center gap-2 px-3 py-2 rounded-lg bg-primary/10 border border-primary/20 text-xs text-primary">
+        <div className="mx-4 lg:mx-8 mb-3 flex-shrink-0 self-start inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-t-bg-surface-raised text-xs text-t-text-accent">
           <Zap className="w-3.5 h-3.5 flex-shrink-0" />
           {t.costBannerCustom(costConfig.costo_por_milla.toFixed(2), costConfig.tarifa_objetivo)}
         </div>
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto mx-4 lg:mx-8 rounded-3xl bg-t-bg-surface border border-border p-4 md:p-6 space-y-5">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-8">
-            <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center mb-4">
-              <Bot className="w-7 h-7 text-primary" />
+            <div className="w-16 h-16 rounded-2xl bg-t-bg-input border border-t-border-focus flex items-center justify-center mb-4">
+              <Bot className="w-8 h-8 text-t-text-accent" />
             </div>
-            <h2 className="text-base font-semibold text-foreground mb-1">{t.emptyStateTitle}</h2>
-            <p className="text-sm text-muted-foreground mb-6 max-w-sm">{t.emptyStateSubtitle}</p>
-            <div className="grid gap-2 w-full max-w-md">
+            <h2 className="text-xl font-semibold text-t-text-primary mb-1">{t.emptyStateTitle}</h2>
+            <p className="text-sm text-t-text-secondary mb-6 max-w-md">{t.emptyStateSubtitle}</p>
+            <div className="grid gap-2.5 w-full max-w-[520px]">
               {t.quickPrompts.map((prompt, i) => (
                 <button
                   key={i}
                   disabled={loading || translatingHistory}
                   onClick={() => sendMessage(prompt)}
-                  className="text-left px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 text-sm text-muted-foreground hover:text-foreground transition-all disabled:opacity-50"
+                  className="text-left min-h-12 px-6 py-3 rounded-full border border-transparent bg-t-bg-input hover:bg-t-bg-surface-raised hover:border-t-border-focus text-sm text-t-text-secondary hover:text-t-text-primary transition-colors disabled:opacity-50"
                 >
                   {prompt}
                 </button>
@@ -1091,20 +1085,20 @@ export default function MarketChat() {
         )}
 
         {messages.map((msg, i) => (
-          <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-            <div className={`w-7 h-7 rounded-lg flex-shrink-0 flex items-center justify-center ${msg.role === 'user' ? 'bg-primary/20' : 'bg-muted'
-              }`}>
-              {msg.role === 'user'
-                ? <User className="w-4 h-4 text-primary" />
-                : <Bot className="w-4 h-4 text-muted-foreground" />
-              }
-            </div>
-            <div className={`max-w-[85%] rounded-xl px-4 py-3 text-sm ${msg.role === 'user'
-                ? 'bg-primary text-primary-foreground ml-auto'
-                : 'bg-card border border-border text-foreground'
+          <div key={i} className={`flex gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+            {/* Figma · Chat Bubble: usuario = burbuja a la derecha; TruckyAI = ícono del bot + superficie */}
+            {msg.role !== 'user' && (
+              <div className="w-9 h-9 rounded-[10px] flex-shrink-0 flex items-center justify-center bg-t-bg-input border border-t-border-focus">
+                <Bot className="w-5 h-5 text-t-text-accent" />
+              </div>
+            )}
+            <div className={`min-w-0 px-5 py-3 text-sm ${msg.role === 'user'
+                ? 'max-w-[85%] md:max-w-[70%] bg-t-chat-bubble-user text-t-chat-on-bubble-user rounded-[20px] rounded-br-[6px]'
+                : 'max-w-[90%] bg-t-bg-surface-raised text-t-text-primary rounded-[20px] rounded-tl-[6px]'
               }`}>
               {msg.role === 'assistant' ? (
                 <>
+                  <div className="text-xs font-medium text-t-text-accent mb-1">TruckyAI</div>
                   {msg.structuredData?.intent === 'rate_check' && 
                    !msg.content?.startsWith('```') &&
                    msg.structuredData?.origen && !msg.structuredData.origen.toLowerCase().includes('unknown') && 
@@ -1114,7 +1108,7 @@ export default function MarketChat() {
                   {(!msg.structuredData || msg.structuredData.intent !== 'rate_check' || msg.content?.startsWith('```') ||
                     !msg.structuredData.origen || msg.structuredData.origen.toLowerCase().includes('unknown') || 
                     !msg.structuredData.destino || msg.structuredData.destino.toLowerCase().includes('unknown')) && (
-                    <div className="prose prose-invert prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground [&>pre]:whitespace-pre-wrap [&>pre]:break-words">
+                    <div className="prose t-prose prose-sm max-w-none [&>p]:mb-2 [&>p:last-child]:mb-0 [&>ul]:mb-2 [&>ol]:mb-2 [&>h1]:text-sm [&>h2]:text-sm [&>h3]:text-sm [&>strong]:text-foreground [&>pre]:whitespace-pre-wrap [&>pre]:break-words">
                       <ReactMarkdown
                         components={{
                           pre: (preProps) => (
@@ -1128,7 +1122,7 @@ export default function MarketChat() {
                           ),
                           code: ({ node, inline, ...props }) =>
                             inline
-                              ? <code className="bg-primary/10 text-primary px-1.5 py-0.5 rounded text-xs" {...props} />
+                              ? <code className="bg-t-bg-input text-t-text-accent px-1.5 py-0.5 rounded text-xs" {...props} />
                               : <code {...props} />
                         }}
                       >
@@ -1146,11 +1140,11 @@ export default function MarketChat() {
 
         {loading && (
           <div className="flex gap-3">
-            <div className="w-7 h-7 rounded-lg bg-muted flex items-center justify-center">
-              <Bot className="w-4 h-4 text-muted-foreground" />
+            <div className="w-9 h-9 rounded-[10px] bg-t-bg-input border border-t-border-focus flex items-center justify-center">
+              <Bot className="w-5 h-5 text-t-text-accent" />
             </div>
-            <div className="bg-card border border-border rounded-xl px-4 py-3 flex items-center gap-2">
-              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+            <div className="bg-t-bg-surface-raised rounded-[20px] rounded-tl-[6px] px-5 py-3 flex items-center gap-2">
+              <Loader2 className="w-4 h-4 text-t-text-accent animate-spin" />
               <span className="text-sm text-muted-foreground">{t.loadingLabel}</span>
             </div>
           </div>
@@ -1159,7 +1153,7 @@ export default function MarketChat() {
         {translatingHistory && (
           <div className="flex gap-3 justify-center my-4">
             <div className="bg-card border border-border rounded-xl px-4 py-2 flex items-center gap-2 shadow-sm">
-              <Loader2 className="w-4 h-4 text-primary animate-spin" />
+              <Loader2 className="w-4 h-4 text-t-text-accent animate-spin" />
               <span className="text-sm text-muted-foreground">{locale === 'es' ? 'Traduciendo historial...' : 'Translating history...'}</span>
             </div>
           </div>
@@ -1168,9 +1162,9 @@ export default function MarketChat() {
         {error && (
           <div className="flex gap-3">
             <div className="w-7 h-7 rounded-lg bg-red-400/10 flex items-center justify-center flex-shrink-0">
-              <AlertTriangle className="w-4 h-4 text-red-400" />
+              <AlertTriangle className="w-4 h-4 text-t-danger" />
             </div>
-            <div className="bg-red-400/5 border border-red-400/30 rounded-xl px-4 py-3 text-sm text-red-400 max-w-[85%]">
+            <div className="bg-red-400/5 border border-red-400/30 rounded-xl px-4 py-3 text-sm text-t-danger max-w-[85%]">
               {error}
               <div className="text-xs text-muted-foreground mt-1">{t.errorRetryHint}</div>
             </div>
@@ -1180,16 +1174,16 @@ export default function MarketChat() {
       </div>
 
       {/* Input / Demo Limit Banner */}
-      <div className="flex-shrink-0 p-4 md:p-6 border-t border-border">
+      <div className="flex-shrink-0 px-4 lg:px-8 pt-4 pb-4 lg:pb-6">
         {isChatLimitReached ? (
-          <div className="p-4 rounded-xl bg-gradient-to-r from-violet-950/60 via-purple-900/40 to-indigo-950/60 border border-violet-500/30 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
+          <div className="p-4 rounded-xl bg-t-info-soft border border-t-border-focus/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-center sm:text-left">
             <div>
-              <p className="text-sm font-semibold text-white">
+              <p className="text-sm font-semibold text-foreground">
                 {locale === 'en'
                   ? `Message Limit Reached (${userMessagesCount} / ${maxMessages} messages)`
                   : `Límite alcanzado (${userMessagesCount} / ${maxMessages} mensajes)`}
               </p>
-              <p className="text-xs text-zinc-300">
+              <p className="text-xs text-t-text-secondary">
                 {locale === 'en'
                   ? 'Upgrade your plan to get more AI market queries for this profile.'
                   : 'Has alcanzado el límite de mensajes para este perfil. Actualiza tu plan en trucky-ai.com para continuar.'}
@@ -1199,7 +1193,7 @@ export default function MarketChat() {
               href="https://www.trucky-ai.com"
               target="_blank"
               rel="noopener noreferrer"
-              className="px-4 py-2 rounded-xl bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-semibold text-xs whitespace-nowrap shadow-md transition-all flex items-center gap-1.5"
+              className="px-4 py-2 rounded-xl bg-t-action-primary hover:bg-t-action-primary-hover text-white font-semibold text-xs whitespace-nowrap shadow-md transition-all flex items-center gap-1.5"
             >
               <span>{locale === 'en' ? 'Upgrade Plan →' : 'Actualizar Plan →'}</span>
             </a>
@@ -1207,21 +1201,21 @@ export default function MarketChat() {
         ) : (
           <div>
             {maxMessages !== Infinity && (
-              <div className="flex items-center justify-between mb-2 text-[11px] text-zinc-400">
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-300 border border-violet-500/20 font-medium">
+              <div className="flex items-center justify-between mb-2 text-[11px] text-muted-foreground">
+                <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-t-bg-surface-raised text-t-text-accent font-medium">
                   {limits?.name || 'Plan'} · {userMessagesCount} de {maxMessages} mensajes en este perfil
                 </span>
                 <a
                   href="https://www.trucky-ai.com"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-violet-300 underline transition-colors"
+                  className="hover:text-t-text-accent underline transition-colors"
                 >
                   {locale === 'en' ? 'Unlimited access' : 'Acceso ilimitado'}
                 </a>
               </div>
             )}
-            <div className="flex gap-2 items-end">
+            <div className="flex gap-3 items-end">
               <div className="flex-1 relative">
                 <textarea
                   ref={inputRef}
@@ -1231,16 +1225,16 @@ export default function MarketChat() {
                   placeholder={translatingHistory ? (locale === 'en' ? 'Translating history...' : 'Traduciendo historial...') : t.inputPlaceholder}
                   disabled={loading || translatingHistory || isChatLimitReached}
                   rows={1}
-                  className="w-full resize-none bg-muted border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 focus:border-primary/50 transition-colors disabled:opacity-60"
-                  style={{ minHeight: '44px', maxHeight: '120px' }}
+                  className="block w-full resize-none bg-t-bg-input border border-t-border-strong rounded-[27px] px-6 py-[14px] text-sm text-t-text-primary placeholder:text-t-text-muted focus:outline-none focus:border-t-border-focus focus:shadow-focus transition-colors disabled:opacity-60"
+                  style={{ minHeight: '54px', maxHeight: '140px' }}
                 />
               </div>
               <button
                 onClick={() => sendMessage()}
                 disabled={!input.trim() || loading || translatingHistory || isChatLimitReached}
-                className="w-11 h-11 rounded-xl bg-primary hover:bg-primary/90 disabled:opacity-40 flex items-center justify-center flex-shrink-0 transition-all"
+                className="w-11 h-11 mb-[5px] rounded-full bg-primary disabled:bg-t-action-disabled text-t-text-on-accent disabled:text-t-text-disabled flex items-center justify-center flex-shrink-0 transition-colors"
               >
-                <Send className="w-4 h-4 text-primary-foreground" />
+                <Send className="w-5 h-5" />
               </button>
             </div>
           </div>
