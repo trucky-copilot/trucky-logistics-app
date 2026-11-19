@@ -334,10 +334,11 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
               <label className="text-xs text-muted-foreground block">{t.loadForm.notes}</label>
               {/* Notas largas (resumen del documento y del hilo): se pueden ampliar */}
               <button type="button" onClick={() => setNotasAmplias(v => !v)}
-                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                aria-expanded={notasAmplias}>
-                {notasAmplias ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-                {notasAmplias ? (isEs ? 'Contraer' : 'Collapse') : (isEs ? 'Expandir' : 'Expand')}
+                className="p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-expanded={notasAmplias}
+                title={notasAmplias ? (isEs ? 'Contraer notas' : 'Collapse notes') : (isEs ? 'Expandir notas' : 'Expand notes')}
+                aria-label={notasAmplias ? (isEs ? 'Contraer notas' : 'Collapse notes') : (isEs ? 'Expandir notas' : 'Expand notes')}>
+                {notasAmplias ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
               </button>
             </div>
             <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={notasAmplias ? 10 : 2}

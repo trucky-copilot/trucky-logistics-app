@@ -17,7 +17,10 @@ test('F5: lo que extrajo el verificador tiene prioridad', () => {
   const r = buildThreadSummaryForLoad({ rawDocumentText: DOC, extracted: { pickup_hora: '7:30 AM', delivery_hora: '2:00 PM', tipo_equipo: 'Reefer', tamano_contenedor: "40'", penalidades: 'Late fee $200' } });
   assert.equal(r.hora_recogida, '7:30 AM');
   assert.equal(r.hora_entrega, '2:00 PM');
-  assert.equal(r.equipo, "Reefer · 40'");
+  // la línea "Equipment:" completa del documento gana (conserva Overweight, tri-axle)
+  assert.equal(r.equipo, "40' Reefer container (Overweight, tri-axle)");
+  // sin esa línea en el documento, se usa lo de la IA
+  assert.equal(buildThreadSummaryForLoad({ rawDocumentText: 'Load #: X1 Miles: 20', extracted: { tipo_equipo: 'Reefer', tamano_contenedor: "40'" } }).equipo, "Reefer · 40'");
   assert.equal(r.penalidades, 'Late fee $200');
 });
 

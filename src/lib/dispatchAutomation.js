@@ -387,9 +387,12 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
   const horaRecogida = horaDe(extracted?.pickup_hora, extracted?.pickup_fecha) || heur.hora_recogida || '';
   const horaEntrega = horaDe(extracted?.delivery_hora, extracted?.delivery_fecha) || heur.hora_entrega || '';
   const limpio = (v) => (v && !/^(null|undefined|n\/a|not specified|no especificado)$/i.test(String(v).trim()) ? String(v).trim() : '');
-  const equipo = [limpio(extracted?.tipo_equipo), limpio(extracted?.tamano_contenedor)].filter(Boolean)
+  // QA: si el documento trae la línea "Equipment: …" completa se usa tal cual (conserva
+  // tamaño, sobrepeso, tri-axle…); la IA separa tipo y tamaño y perdía esos detalles.
+  const equipoIA = [limpio(extracted?.tipo_equipo), limpio(extracted?.tamano_contenedor)].filter(Boolean)
     .filter((v, i, arr) => arr.findIndex(x => x.toLowerCase().includes(v.toLowerCase()) || v.toLowerCase().includes(x.toLowerCase())) === i)
-    .join(' · ') || heur.equipo || '';
+    .join(' · ');
+  const equipo = limpio(heur.equipo) || equipoIA || '';
   const penalidades = limpio(extracted?.penalidades) || heur.penalidades || '';
   const citas = limpio(extracted?.appointment_window) || heur.citas || '';
 
