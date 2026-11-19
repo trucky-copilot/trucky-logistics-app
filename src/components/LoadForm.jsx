@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, TrendingUp, TrendingDown } from 'lucide-react';
+import { X, TrendingUp, TrendingDown, Maximize2, Minimize2 } from 'lucide-react';
 import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import DriverSelect, { canAssign } from '@/components/DriverSelect';
@@ -46,6 +46,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
   const [form, setForm] = useState(initialState);
   const [errors, setErrors] = useState({});
   const [docAck, setDocAck] = useState(false);
+  const [notasAmplias, setNotasAmplias] = useState(false);
   const selectedDriver = driverOptions.find(o => String(o.id) === String(form.conductor_id)) || null;
 
   useEffect(() => {
@@ -329,9 +330,18 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
           </div>
 
           <div>
-            <label className="text-xs text-muted-foreground mb-1 block">{t.loadForm.notes}</label>
-            <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={2}
-              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none" />
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-muted-foreground block">{t.loadForm.notes}</label>
+              {/* Notas largas (resumen del documento y del hilo): se pueden ampliar */}
+              <button type="button" onClick={() => setNotasAmplias(v => !v)}
+                className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                aria-expanded={notasAmplias}>
+                {notasAmplias ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+                {notasAmplias ? (isEs ? 'Contraer' : 'Collapse') : (isEs ? 'Expandir' : 'Expand')}
+              </button>
+            </div>
+            <textarea value={form.notas} onChange={e => set('notas', e.target.value)} rows={notasAmplias ? 10 : 2}
+              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 resize-y" />
           </div>
 
           <div className="flex gap-2 pt-2">
