@@ -58,7 +58,7 @@ Deno.serve(async (req: Request) => {
       });
     }
 
-    const { messages, targetLang } = await req.json();
+    const { messages, targetLang, sourceLang } = await req.json();
 
     if (!messages || !Array.isArray(messages) || typeof targetLang !== 'string' || !targetLang) {
       throw new Error("Missing 'messages' array or 'targetLang'");
@@ -117,6 +117,9 @@ Deno.serve(async (req: Request) => {
       body: JSON.stringify({
         q: textsToTranslate,
         target: targetLang,
+        // F3: con el idioma de origen fijo, Google traduce también frases mezcladas
+        // ("Penalidad: \"Late delivery penalty\"") que antes dejaba sin traducir.
+        ...(typeof sourceLang === 'string' && /^[a-z]{2}$/.test(sourceLang) ? { source: sourceLang } : {}),
         format: 'text' // Para mantener saltos de línea correctamente sin romper HTML, o usar 'html' si tienen formato. 'text' es más seguro para Markdown.
       }),
       signal: AbortSignal.timeout(20000),

@@ -4,6 +4,7 @@ import { useProfile } from '@/lib/ProfileContext';
 import { useLanguage } from '@/lib/LanguageContext';
 import DriverSelect, { canAssign } from '@/components/DriverSelect';
 import { assignmentFields } from '@/lib/driverAssignment';
+import { base44 } from '@/api/base44Client';
 
 // M2 (QA): texto plano. Se quita cualquier etiqueta HTML (<img onerror=…>, <script>…)
 // antes de guardar. React ya escapa al mostrar, pero no se debe almacenar marcado.
@@ -38,6 +39,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
     fecha_carga: '', fecha_entrega: '', truck_placa: '', conductor_nombre: '',
     conductor_id: null, truck_id: null,
     estado: 'pendiente', notas: '', numero_referencia: '',
+    hora_recogida: '', hora_entrega: '', equipo: '', penalidades: '', citas: '',
     ...load
   };
   
@@ -51,6 +53,20 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
     setUnsavedChanges('LoadForm', isUnsaved);
     return () => setUnsavedChanges('LoadForm', false);
   }, [form, load, setUnsavedChanges]);
+
+  // QA (menor): en una carga nueva, el diésel del día sale del ticker de mercado (antes 5,40 fijo).
+  useEffect(() => {
+    if (load?.id || Number(load?.diesel_precio_dia) > 0) return;
+    let active = true;
+    base44.entities.GlobalMarketTicker.filter()
+      .then((rows) => {
+        const r = (rows || []).find((x) => x.id === 'global') || (rows || [])[0];
+        const d = Number.parseFloat(r?.diesel);
+        if (active && d > 0) setForm((f) => (f.diesel_precio_dia === 5.40 ? { ...f, diesel_precio_dia: Number(d.toFixed(2)) } : f));
+      })
+      .catch(() => {});
+    return () => { active = false; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = (key, val) => {
     setForm(prev => ({ ...prev, [key]: val }));
@@ -96,6 +112,11 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
       broker_nombre: plainText(form.broker_nombre, 80),
       numero_referencia: plainText(form.numero_referencia, 60),
       notas: plainText(form.notas, 1000),
+      hora_recogida: plainText(form.hora_recogida, 20),
+      hora_entrega: plainText(form.hora_entrega, 20),
+      equipo: plainText(form.equipo, 120),
+      penalidades: plainText(form.penalidades, 300),
+      citas: plainText(form.citas, 200),
       millas: millasNum,
       tarifa_ofrecida: Number(form.tarifa_ofrecida) || 0,
       tarifa_negociada: Number(form.tarifa_negociada) || 0,
@@ -273,6 +294,37 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
               <input value={form.truck_placa || ''} readOnly
                 className="w-full bg-t-bg-input border border-border rounded-xl px-3 py-2 text-sm text-muted-foreground cursor-not-allowed"
                 placeholder={isEs ? 'Se completa al elegir conductor' : 'Filled when a driver is chosen'} />
+            </div>
+          </div>
+
+          {/* F5 (QA): horas de recogida/entrega, cita, equipo y penalidades del documento */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">{isEs ? 'Hora de recogida' : 'Pickup time'}</label>
+              <input value={form.hora_recogida || ''} onChange={e => set('hora_recogida', e.target.value)} placeholder="08:00"
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">{isEs ? 'Hora de entrega' : 'Delivery time'}</label>
+              <input value={form.hora_entrega || ''} onChange={e => set('hora_entrega', e.target.value)} placeholder="15:00"
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            </div>
+            <div className="col-span-2 sm:col-span-1">
+              <label className="text-xs text-muted-foreground mb-1 block">{isEs ? 'Cita' : 'Appointment'}</label>
+              <input value={form.citas || ''} onChange={e => set('citas', e.target.value)}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">{isEs ? 'Equipo' : 'Equipment'}</label>
+              <input value={form.equipo || ''} onChange={e => set('equipo', e.target.value)} placeholder={isEs ? "Ej. 40' Reefer, sobrepeso" : "E.g. 40' Reefer, overweight"}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">{isEs ? 'Penalidades' : 'Penalties'}</label>
+              <input value={form.penalidades || ''} onChange={e => set('penalidades', e.target.value)}
+                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50" />
             </div>
           </div>
 

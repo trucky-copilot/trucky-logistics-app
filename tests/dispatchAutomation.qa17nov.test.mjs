@@ -1,0 +1,54 @@
+// QA 17-nov (F3, F4, F5): automatización Emails → Verificador → Carga.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { applyRiskGuards, buildThreadSummaryForLoad, classifyLoadDocument, summarizeThreadForChecker } from '../src/lib/dispatchAutomation.js';
+
+const DOC = "RATE CONFIRMATION QA TEST DOCUMENT Broker: QA Test Brokerage LLC Load #: QA-LD-1001 Carrier: GrauLogistics Pickup: POMTOC Terminal, Miami, FL 33132 Pickup date/time: 11/25/2026 08:00 Delivery: Bartow Cold Storage, Bartow, FL 33830 Delivery date/time: 11/25/2026 15:00 Equipment: 40' Reefer container (Overweight, tri-axle) Miles: 215 Total rate (All-In USD): $1,600.00 Payment terms: Net 30 Penalties: Late delivery penalty: $150";
+
+test('F5: la carga lleva horas, equipo y penalidades del documento', () => {
+  const r = buildThreadSummaryForLoad({ rawDocumentText: DOC, extracted: { origen: 'POMTOC Terminal, Miami, FL', destino: 'Bartow Cold Storage, Bartow, FL', pickup_fecha: '11/25/2026', delivery_fecha: '11/25/2026' } });
+  assert.equal(r.hora_recogida, '08:00');
+  assert.equal(r.hora_entrega, '15:00');
+  assert.match(r.equipo, /40' Reefer container \(Overweight, tri-axle\)/);
+  assert.equal(r.penalidades, 'Late delivery penalty: $150');
+});
+
+test('F5: lo que extrajo el verificador tiene prioridad', () => {
+  const r = buildThreadSummaryForLoad({ rawDocumentText: DOC, extracted: { pickup_hora: '7:30 AM', delivery_hora: '2:00 PM', tipo_equipo: 'Reefer', tamano_contenedor: "40'", penalidades: 'Late fee $200' } });
+  assert.equal(r.hora_recogida, '7:30 AM');
+  assert.equal(r.hora_entrega, '2:00 PM');
+  assert.equal(r.equipo, "Reefer · 40'");
+  assert.equal(r.penalidades, 'Late fee $200');
+});
+
+test('F4: las notas llevan el resumen (direcciones, fechas, horas, equipo), no solo "Load #"', () => {
+  const r = buildThreadSummaryForLoad({ rawDocumentText: DOC, extracted: { origen: 'POMTOC Terminal, Miami, FL', destino: 'Bartow Cold Storage, Bartow, FL', pickup_fecha: '11/25/2026', delivery_fecha: '11/25/2026' } });
+  assert.match(r.notas, /^Load #QA-LD-1001 · Pickup: POMTOC Terminal, Miami, FL \(2026-11-25 08:00\) · Delivery: Bartow Cold Storage, Bartow, FL \(2026-11-25 15:00\)/);
+  assert.match(r.notas, /Equipo: 40' Reefer/);
+  assert.match(r.notas, /Penalidad: Late delivery penalty: \$150/);
+});
+
+test('F4: una "Rate Inquiry" es solicitud de tarifa (no crea carga)', () => {
+  assert.equal(classifyLoadDocument('EMAIL THREAD Can you handle it? How much would you charge?', 'Rate Inquiry'), 'rate_request');
+  assert.equal(classifyLoadDocument('Rate Inquiry: Miami POMTOC to Bartow', ''), 'rate_request');
+  assert.equal(classifyLoadDocument(DOC, 'Rate Confirmation'), 'confirmation');
+});
+
+test('F4: el hilo se resume y sin texto citado, con encabezados en inglés', () => {
+  const s = summarizeThreadForChecker([
+    { remitente_nombre: 'Broker', remitente_email: 'ops@broker.com', fecha: '2026-11-17', cuerpo: 'Hi,\nPlease quote Miami to Bartow.\n\nOn Mon, Nov 16 Juan wrote:\n> old text' },
+    { remitente_nombre: 'Juan', remitente_email: 'juan@x.com', fecha: '2026-11-18', cuerpo: 'x '.repeat(600) },
+  ]);
+  assert.match(s, /^From: Broker <ops@broker\.com>\nDate: 2026-11-17\nHi, Please quote Miami to Bartow\.\n---/);
+  assert.doesNotMatch(s, /old text|De:|Fecha:|Asunto:/);
+  assert.ok(s.length < 1000);
+});
+
+test('F3: la penalidad no se repite si el servidor ya la puso', () => {
+  const analysis = { categorias: [{ categoriaKey: 'clause', semaforo: 'amarillo', hallazgos: ['❌ Penalidad: Late delivery penalty $150', '⚠ Detention no especificada'] }], alertas_criticas: ['❌ Penalidad: Late delivery penalty $150'] };
+  const r = applyRiskGuards(analysis, 'Late delivery penalty $150.');
+  const pen = r.categorias[0].hallazgos.filter(h => h.startsWith('❌ Penalidad'));
+  assert.equal(pen.length, 1);
+  assert.equal(r.alertas_criticas.filter(h => h.startsWith('❌ Penalidad')).length, 1);
+  assert.equal(r.categorias[0].semaforo, 'rojo');
+});

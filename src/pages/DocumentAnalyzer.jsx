@@ -128,9 +128,20 @@ export default function DocumentAnalyzer() {
       texts.push(p);
     });
 
+    // F3 (QA): las alertas principales también se traducen (antes quedaban en español).
+    const alertasIndices = [];
+    (sourceAnalysis.alertas_criticas || []).forEach((al) => {
+      const prefix = String(al).match(/^[❌⚠✓ℹ!]\s*/)?.[0] || '';
+      alertasIndices.push({ prefix, idx: texts.length });
+      texts.push(String(al).replace(/^[❌⚠✓ℹ!]\s*/, '').trim());
+    });
+
+    // sourceLang 'es': el análisis siempre sale en español; sin esto Google no traducía
+    // frases mezcladas como «Penalidad: "Late delivery penalty"».
     const res = await base44.functions.invoke('translateChat', {
       messages: texts.map(t => ({ content: t })),
-      targetLang
+      targetLang,
+      sourceLang: 'es',
     });
 
     if (!res.data?.messages) {
@@ -152,7 +163,8 @@ export default function DocumentAnalyzer() {
           hallazgos: meta.hallazgos.map(h => `${h.prefix}${translated[h.textIdx]}`)
         };
       }),
-      puntos_negociar: puntosIndices.map(idx => translated[idx])
+      puntos_negociar: puntosIndices.map(idx => translated[idx]),
+      alertas_criticas: alertasIndices.map(a => `${a.prefix}${translated[a.idx]}`),
     };
   };
 
@@ -462,6 +474,11 @@ export default function DocumentAnalyzer() {
 
   // Enviar los datos ya verificados + el hilo resumido (direcciones, fechas, citas) a Mis Cargas (/cargas)
   const handleProceedToCreateLoad = () => {
+    // F4 (QA): nunca crear carga desde algo que no sea una rate confirmation.
+    const textoTipo = emailAutomationCtx?.hasPdf
+      ? String(documentText || '').split('=== HILO DE CORREO ASOCIADO ===')[0]
+      : String(documentText || '');
+    if (classifyLoadDocument(textoTipo, analysis?.datos_extraidos?.tipo_documento) !== 'confirmation') return;
     const extracted = analysis?.datos_extraidos || {};
     const prefilledLoad = buildThreadSummaryForLoad({
       threadMessages: emailAutomationCtx?.threadMessages || [],
@@ -614,6 +631,23 @@ Equipment: 20ft Dry...`}
               ? String(documentText || '').split('=== HILO DE CORREO ASOCIADO ===')[0]
               : String(documentText || '');
             const kind = classifyLoadDocument(textForType, analysis?.datos_extraidos?.tipo_documento);
+            // F4 (QA): solo una rate confirmation crea carga. Una solicitud de tarifa
+            // o un documento que no se pudo identificar no muestran el botón.
+            if (kind === 'unknown') {
+              return (
+                <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-t-warning flex gap-2.5">
+                  <AlertTriangle className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="font-semibold">{isEsLocal ? 'No parece una rate confirmation' : 'This does not look like a rate confirmation'}</p>
+                    <p className="text-xs text-t-warning/80 mt-1">
+                      {isEsLocal
+                        ? 'Solo se crean cargas desde una rate confirmation. Si lo es, pide al broker el documento firmado y pásalo por el verificador.'
+                        : 'Loads are only created from a rate confirmation. If it is one, ask the broker for the signed document and run it through the checker.'}
+                    </p>
+                  </div>
+                </div>
+              );
+            }
             if (kind === 'rate_request') {
               return (
                 <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-t-warning flex gap-2.5">
@@ -632,9 +666,7 @@ Equipment: 20ft Dry...`}
             return (
               <div className="rounded-2xl border border-primary/30 bg-primary/5 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <p className="text-xs text-muted-foreground">
-                  {kind === 'confirmation'
-                    ? (isEsLocal ? 'Rate confirmation detectada. Revisa los datos antes de guardar la carga.' : 'Rate confirmation detected. Review the data before saving the load.')
-                    : (isEsLocal ? 'No se pudo confirmar el tipo de documento. Revisa bien los datos antes de guardar.' : 'Could not confirm the document type. Review the data carefully before saving.')}
+                  {isEsLocal ? 'Rate confirmation detectada. Revisa los datos antes de guardar la carga.' : 'Rate confirmation detected. Review the data before saving the load.'}
                 </p>
                 <button
                   type="button"

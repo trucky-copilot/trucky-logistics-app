@@ -17,6 +17,7 @@ import { useToast } from '@/components/ui/use-toast';
 import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
 import {
   AUTOMATION_EMAIL_TO_CHECKER_KEY,
+  summarizeThreadForChecker,
   AUTOMATION_FLEET_TO_EMAIL_DRAFT_KEY,
   buildThreadSummaryForLoad,
 } from '@/lib/dispatchAutomation';
@@ -1209,23 +1210,21 @@ export default function Emails() {
         }
       }
 
-      // 3. Combinar el texto del documento con el hilo completo de conversación
-      const threadCombinedText = msgs
-        .map(
-          m =>
-            `De: ${m.remitente_nombre || ''} <${m.remitente_email || ''}>\nFecha: ${m.fecha || ''}\nAsunto: ${m.asunto || ''}\n${m.cuerpo || m.snippet || ''}`
-        )
-        .join('\n\n---\n\n');
-
-      const finalDocumentText = extractedDocText
-        ? `${extractedDocText}\n\n=== HILO DE CORREO ASOCIADO ===\nAsunto: ${thread.asunto || ''}\n${threadCombinedText}`
-        : `EMAIL THREAD\nBroker: ${latestMsg.remitente_nombre || latestMsg.remitente_email || 'Broker'}\nSubject: ${thread.asunto || ''}\n\n${threadCombinedText}`;
-
-      // Identificar correo del broker (remitente externo)
+      // Identificar correo del broker (último remitente externo, nunca el propio usuario)
       const myEmail = (googleConnectedEmail || user?.email || '').toLowerCase().trim();
       const externalMsg =
         [...msgs].reverse().find(m => m.remitente_email && m.remitente_email.toLowerCase().trim() !== myEmail) ||
-        latestMsg;
+        null; // si todos los mensajes son del propio usuario, el broker queda sin identificar
+
+      // 3. F4 (QA): resumen del hilo (remitente, fecha y lo esencial de cada mensaje,
+      //    sin el texto citado de respuestas anteriores), no el hilo completo.
+      //    Encabezados en inglés: el verificador y los documentos están en inglés.
+      const threadCombinedText = summarizeThreadForChecker(msgs);
+      const brokerLabel = externalMsg?.remitente_nombre || externalMsg?.remitente_email || 'Not identified';
+
+      const finalDocumentText = extractedDocText
+        ? `${extractedDocText}\n\n=== HILO DE CORREO ASOCIADO ===\nSubject: ${thread.asunto || ''}\n${threadCombinedText}`
+        : `EMAIL THREAD (summary)\nBroker: ${brokerLabel}\nSubject: ${thread.asunto || ''}\n\n${threadCombinedText}`;
 
       // 4. Pasar PRIMERO por el Verificador. Antes la carga se creaba aquí mismo,
       //    sin confirmación y con valores inventados. Ahora el Verificador analiza

@@ -64,6 +64,22 @@
       "type": "string",
       "format": "date"
     },
+    "hora_recogida": {
+      "type": "string",
+      "description": "Hora de recogida del documento (ej. 08:00) — F5 QA"
+    },
+    "hora_entrega": {
+      "type": "string",
+      "description": "Hora de entrega del documento (ej. 15:00) — F5 QA"
+    },
+    "equipo": {
+      "type": "string",
+      "description": "Equipo requerido (ej. 40' Reefer, overweight, tri-axle) — F5 QA"
+    },
+    "penalidades": {
+      "type": "string",
+      "description": "Penalidades de la rate confirmation (ej. Late delivery penalty $150) — F5 QA"
+    },
     "citas": {
       "type": "string",
       "description": "Horarios o citas de recogida y entrega (appointment window)"

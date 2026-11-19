@@ -245,6 +245,18 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
   const timeMatches = primaryText.match(/\b(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM|am|pm))\b/g) || [];
   const citasResumen = timeMatches.length > 0 ? timeMatches.slice(0, 2).join(' - ') : '';
 
+  // 5b. F5 (QA): hora de recogida y de entrega (24 h o AM/PM) junto a "Pickup"/"Delivery".
+  const horaJunto = (re) => {
+    for (const m of primaryText.matchAll(re)) if (m[1]) return m[1].replace(/\s+/g, ' ').trim();
+    return '';
+  };
+  const hora_recogida = horaJunto(/(?:pick\s*-?\s*up|p\/u)[^\d\n]{0,30}?(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*(?:@|at)?\s*)?(\d{1,2}:\d{2}\s*(?:am|pm)?)/gi);
+  const hora_entrega = horaJunto(/(?:delivery|deliver|drop\s*-?\s*off|entrega)[^\d\n]{0,30}?(?:\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\s*(?:@|at)?\s*)?(\d{1,2}:\d{2}\s*(?:am|pm)?)/gi);
+  const equipoMatch = primaryText.match(/(?:equipment|equipo|container\s*type)\s*[:\-]\s*(.+?)(?=\s{2,}|\s+(?:miles|total|rate|notes|commodity|weight|payment)\b|[\n\r]|$)/i);
+  const equipo = equipoMatch ? equipoMatch[1].trim().slice(0, 80) : '';
+  const penMatch = primaryText.match(/(?:penalt(?:y|ies)|penalidad(?:es)?)\s*[:\-]?\s*(.+?)(?=\s{2,}|[\n\r]|$)/i);
+  const penalidades = penMatch ? penMatch[1].split(/\s(?=(?:notes|miles|total\s*rate[^:]{0,15}|payment\s*terms|equipment|delivery(?:\s*date\/time)?|pickup(?:\s*date\/time)?|broker(?:\s*mc)?|carrier)\s*:)/i)[0].trim().slice(0, 160) : '';
+
   // 6. REFERENCIA / LOAD #
   const refMatch =
     primaryText.match(/(?:Load\s*#|Load\s*Number|W\/O|PO\s*Numbers?|Ref(?:erence)?\s*#)\s*[:\-]?\s*([A-Z0-9\-]{3,25})/i);
@@ -288,7 +300,38 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
     numero_referencia,
     broker_nombre: broker_nombre || '',
     notas,
+    hora_recogida,
+    hora_entrega,
+    equipo,
+    penalidades,
   };
+}
+
+/**
+ * F4 (QA 17-nov): resumen del hilo para el Verificador. Por mensaje: remitente,
+ * fecha y las primeras líneas útiles, sin el texto citado de respuestas
+ * anteriores ("> ...", "On ... wrote:", "De: ... Enviado:"). Encabezados en inglés.
+ */
+export function summarizeThreadForChecker(msgs = [], { perMessage = 420, total = 1800 } = {}) {
+  const cortarCita = (body = '') => {
+    const lines = String(body || '').replace(/\r/g, '').split('\n');
+    const out = [];
+    for (const l of lines) {
+      const t = l.trim();
+      if (/^>/.test(t)) continue;
+      if (/^(on\s.+wrote:|el\s.+escribi[oó]:|-{2,}\s*original message|from:\s.+|de:\s.+|sent:\s|enviado:\s)/i.test(t)) break;
+      if (t) out.push(t);
+    }
+    return out.join(' ').replace(/\s+/g, ' ').trim();
+  };
+  const parts = msgs.map((m) => {
+    const body = cortarCita(m.cuerpo || m.snippet || '');
+    const corto = body.length > perMessage ? body.slice(0, perMessage).replace(/\s\S*$/, '') + '…' : body;
+    return `From: ${m.remitente_nombre || ''} <${m.remitente_email || ''}>\nDate: ${m.fecha || ''}\n${corto}`;
+  });
+  let text = parts.join('\n---\n');
+  if (text.length > total) text = text.slice(0, total).replace(/\s\S*$/, '') + '…';
+  return text;
 }
 
 /**
@@ -321,6 +364,32 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
     heur.numero_referencia ||
     '';
 
+  // F5 (QA): horas, equipo y penalidades también quedan en la carga.
+  const horaDe = (h, fecha) => {
+    const v = String(h || '').trim() || (String(fecha || '').match(/\b\d{1,2}:\d{2}\s*(?:am|pm)?\b/i)?.[0] || '');
+    return /^(null|undefined|n\/a|not specified|no especificado)$/i.test(v) ? '' : v;
+  };
+  const horaRecogida = horaDe(extracted?.pickup_hora, extracted?.pickup_fecha) || heur.hora_recogida || '';
+  const horaEntrega = horaDe(extracted?.delivery_hora, extracted?.delivery_fecha) || heur.hora_entrega || '';
+  const limpio = (v) => (v && !/^(null|undefined|n\/a|not specified|no especificado)$/i.test(String(v).trim()) ? String(v).trim() : '');
+  const equipo = [limpio(extracted?.tipo_equipo), limpio(extracted?.tamano_contenedor)].filter(Boolean)
+    .filter((v, i, arr) => arr.findIndex(x => x.toLowerCase().includes(v.toLowerCase()) || v.toLowerCase().includes(x.toLowerCase())) === i)
+    .join(' · ') || heur.equipo || '';
+  const penalidades = limpio(extracted?.penalidades) || heur.penalidades || '';
+  const citas = limpio(extracted?.appointment_window) || heur.citas || '';
+
+  // F4 (QA): las notas llevan el resumen operativo (direcciones, fechas, citas), no solo "Load #".
+  const cuando = (f, h) => [f, h].filter(Boolean).join(' ');
+  const notas = [
+    refNum && `Load #${refNum}`,
+    origen && `Pickup: ${origen}${cuando(pickupFecha, horaRecogida) ? ` (${cuando(pickupFecha, horaRecogida)})` : ''}`,
+    destino && `Delivery: ${destino}${cuando(deliveryFecha, horaEntrega) ? ` (${cuando(deliveryFecha, horaEntrega)})` : ''}`,
+    citas && `Cita: ${citas}`,
+    equipo && `Equipo: ${equipo}`,
+    penalidades && `Penalidad: ${penalidades}`,
+    heur.notas && heur.notas.replace(/^Load #[^·]*·?\s*/, ''),
+  ].filter(Boolean).join(' · ').slice(0, 900);
+
   return {
     origen,
     destino,
@@ -329,10 +398,14 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
     tarifa_ofrecida: tarifaTotal,
     fecha_carga: pickupFecha,
     fecha_entrega: deliveryFecha,
-    citas: heur.citas || '',
+    citas,
     numero_referencia: refNum,
     broker_nombre: brokerNombre,
-    notas: heur.notas || '',
+    notas,
+    hora_recogida: horaRecogida,
+    hora_entrega: horaEntrega,
+    equipo,
+    penalidades,
   };
 }
 
@@ -346,9 +419,9 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
 export function classifyLoadDocument(text = '', verifierType = '') {
   const t = String(text || '').toLowerCase();
   const v = String(verifierType || '').toLowerCase();
-  if (/rate.?request|quote|cotiza|solicitud/.test(v)) return 'rate_request';
+  if (/rate.?request|rate.?inquir|inquiry|quote|cotiza|solicitud|consulta/.test(v)) return 'rate_request';
   const confirmation = /rate\s*confirmation|rate\s*con\b|load\s*confirmation|carrier\s*confirmation|load\s*tender|confirmaci[oó]n\s*de\s*(tarifa|carga)|agreed\s*amount|carrier\s*pay|delivery\s*order/.test(t);
-  const request = /rate\s*request|\brfq\b|need\s*(trucking\s*)?rates?|best\s*rates?|please\s*(advise|quote|share)|can\s*you\s*(handle|do|quote)|how\s*much|cotizaci[oó]n|solicitud\s*de\s*tarifa|please\s*confirm\s*this\s*rate/.test(t);
+  const request = /rate\s*request|rate\s*inquir|\brfq\b|need\s*(trucking\s*)?rates?|best\s*rates?|please\s*(advise|quote|share)|can\s*you\s*(handle|do|quote)|how\s*much|cotizaci[oó]n|solicitud\s*de\s*tarifa|please\s*confirm\s*this\s*rate/.test(t);
   if (confirmation && !request) return 'confirmation';
   if (/confirmation|delivery_order|rate_con/.test(v) && !request) return 'confirmation';
   if (request) return 'rate_request';
@@ -438,7 +511,9 @@ export function applyRiskGuards(analysis, text = '') {
     if (i >= 0) {
       const c = a.categorias[i];
       const hallazgos = (c.hallazgos || []).filter(h => !/^✓\s*(TONU|MC|Sin cláusulas)/i.test(h));
-      if (!hallazgos.some(h => h === r.text)) hallazgos.unshift(r.text);
+      // F3 (QA): el servidor ya pudo poner "❌ Penalidad: X"; no repetirla con otra forma ("X." entre comillas).
+      const etiqueta = r.text.split(':')[0];
+      if (!hallazgos.some(h => h === r.text || h.startsWith(etiqueta + ':'))) hallazgos.unshift(r.text);
       a.categorias[i] = { ...c, semaforo: 'rojo', hallazgos };
     } else {
       a.categorias.push({
@@ -450,7 +525,8 @@ export function applyRiskGuards(analysis, text = '') {
       });
     }
   }
-  const alertas = new Set([...(a.alertas_criticas || []), ...risks.map(r => r.text)]);
+  const yaTiene = (txt) => (a.alertas_criticas || []).some(x => x === txt || x.startsWith(txt.split(':')[0] + ':'));
+  const alertas = new Set([...(a.alertas_criticas || []), ...risks.map(r => r.text).filter(txt => !yaTiene(txt))]);
   a.alertas_criticas = [...alertas];
   a.veredicto = 'No aceptar hasta corregir';
   a.semaforo_general = 'rojo';

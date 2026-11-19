@@ -1,5 +1,6 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 import { authorizePlanFeature } from '../../shared/entitlements.ts';
+import { limpiarPlaceholders, ventanaHoras, esEmpresaPropia, soloDigitos } from './rules.ts';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // DETECCIÓN SIN IA — Regex sobre el texto crudo
@@ -498,7 +499,7 @@ function validarBroker(datos, brokers, brokerProfiles) {
   };
 }
 
-function validarCarrier(datos, carrierProfile, userInfo = null, allCarrierProfiles = [], orgName = null) {
+function validarCarrier(datos, carrierProfile, userInfo = null, allCarrierProfiles = [], orgName = null, perfilMc = null) {
   const hallazgos = [];
   let semaforo = 'verde';
   let identity_match = 'not_found';
@@ -560,9 +561,25 @@ function validarCarrier(datos, carrierProfile, userInfo = null, allCarrierProfil
       return true;
     };
 
+    // F1 (QA 17-nov): el carrier del documento es la propia empresa (nombre de la
+    // organización o de uno de sus perfiles de carrier) → no es suplantación.
+    const propio = isMeaningful(datos.carrier_nombre)
+      && esEmpresaPropia(datos.carrier_nombre, [orgName, ...allCarrierProfiles.flatMap(c => [c.company_name, c.trade_name])]);
+    const perfilPropio = propio ? allCarrierProfiles.find(c => esEmpresaPropia(datos.carrier_nombre, [c.company_name, c.trade_name])) : null;
+    const mcPerfil = soloDigitos(perfilPropio?.mc_number || perfilMc);
+    const mcDoc = soloDigitos(datos.carrier_mc);
+
     if (!isMeaningful(datos.carrier_nombre) && !isMeaningful(datos.carrier_mc)) {
       hallazgos.push('⚠ Identidad del carrier no especificada en el documento');
       if (semaforo === 'verde') semaforo = 'amarillo';
+    } else if (propio && mcPerfil && mcDoc && mcPerfil !== mcDoc) {
+      hallazgos.push(`❌ El carrier "${datos.carrier_nombre}" coincide con tu empresa pero el MC no: documento=${mcDoc} vs perfil=${mcPerfil}`);
+      semaforo = 'rojo';
+      identity_match = 'mismatch';
+    } else if (propio) {
+      hallazgos.push(`✓ Carrier verificado: coincide con tu empresa (${datos.carrier_nombre})`);
+      if (mcPerfil && mcDoc) hallazgos.push(`✓ MC coincide: ${datos.carrier_mc}`);
+      identity_match = 'matched';
     } else {
       const nombreEmpresa = orgName
         || allCarrierProfiles[0]?.company_name
@@ -622,17 +639,18 @@ function validarFechasOperacion(datos) {
   }
 
   if (datos.pickup_fecha && datos.delivery_fecha) {
-    const pickup = new Date(datos.pickup_fecha);
-    const delivery = new Date(datos.delivery_fecha);
-    const horas = (delivery - pickup) / 3600000;
-    if (!isNaN(horas)) {
-      if (delivery < pickup) {
-        hallazgos.push('❌ Fecha de entrega es anterior al pickup — error en el documento');
-        semaforo = 'rojo';
-      } else if (horas < 4 && datos.millas && datos.millas > 100) {
-        hallazgos.push(`❌ Ventana de ${horas.toFixed(0)}h para ${datos.millas} millas — inviable`);
-        semaforo = 'rojo';
-      }
+    // F2 (QA 17-nov): la ventana se calcula con fecha Y hora. Antes se restaban solo
+    // las fechas y un viaje 08:00 → 15:00 del mismo día daba "0h — inviable".
+    // Sin las dos horas solo se compara el día (no se juzga la ventana).
+    const horas = ventanaHoras(datos);
+    const diaP = new Date(datos.pickup_fecha), diaE = new Date(datos.delivery_fecha);
+    const entregaAntes = horas !== null ? horas < 0 : (!isNaN(+diaP) && !isNaN(+diaE) && diaE.toDateString() !== diaP.toDateString() && diaE < diaP);
+    if (entregaAntes) {
+      hallazgos.push('❌ Fecha de entrega es anterior al pickup — error en el documento');
+      semaforo = 'rojo';
+    } else if (horas !== null && horas < 4 && datos.millas && datos.millas > 100) {
+      hallazgos.push(`❌ Ventana de ${horas.toFixed(1).replace(/\.0$/, '')}h para ${datos.millas} millas — inviable`);
+      semaforo = 'rojo';
     }
   }
 
@@ -901,7 +919,7 @@ function calcularVeredicto(categorias, userRole) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // Versión del motor de reglas — incrementar manualmente cuando cambien las reglas de validación
-const RULES_VERSION = '2.0.14';
+const RULES_VERSION = '2.0.15'; // 2.0.15: F1 empresa propia, F2 ventana con hora, placeholders
 
 async function hashText(text) {
   const encoder = new TextEncoder();
@@ -1135,11 +1153,12 @@ Deno.serve(async (req) => {
     
     // Si alguna petición falla por desconexión temporal de la IA y devuelve string en vez de JSON,
     // garantizamos que sea un objeto para no romper el merge.
-    const datos = {
+    // "Not specified"/"N/A" de la IA cuentan como vacíos (si no, salían en verde).
+    const datos = limpiarPlaceholders({
       ...(typeof financials === 'object' && financials !== null ? financials : {}),
       ...(typeof logistics === 'object' && logistics !== null ? logistics : {}),
       ...(typeof identities === 'object' && identities !== null ? identities : {})
-    };
+    });
 
     // ── PASO 6: Validar con reglas puras — sin IA adicional ───────────────────
     // El orden y peso de categorías cambia según el rol del usuario
@@ -1148,7 +1167,7 @@ Deno.serve(async (req) => {
       // Carrier: prioridad en rentabilidad, compatibilidad operativa y cláusulas
       categorias = [
         validarRate(datos, costConfig),                                               // ← más crítico: ¿es rentable?
-        validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName),        // ← ¿está correcto mi nombre/MC?
+        validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName, userProfile?.mc_number),        // ← ¿está correcto mi nombre/MC?
         validarEquipo(datos, trucks, carrierProfile),                                 // ← ¿tengo el equipo?
         validarCommodity(datos, carrierProfile),                                      // ← ¿puedo mover esta carga?
         validarClausulas(datos, documentText),                                                      // ← ¿qué riesgos contractuales hay?
@@ -1159,7 +1178,7 @@ Deno.serve(async (req) => {
       // Dispatcher: prioridad en completitud, broker correcto, carrier asignado y readiness
       categorias = [
         validarBroker(datos, brokers, brokerProfiles),                                // ← ¿broker verificado?
-        validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName),        // ← ¿carrier correcto asignado?
+        validarCarrier(datos, carrierProfile, user, carrierProfiles, orgName, userProfile?.mc_number),        // ← ¿carrier correcto asignado?
         validarFechasOperacion(datos),                                                // ← ¿está completo para operar?
         validarEquipo(datos, trucks, carrierProfile),                                 // ← ¿compatible con el carrier?
         validarCommodity(datos, carrierProfile),                                      // ← ¿commodity OK para el carrier?
