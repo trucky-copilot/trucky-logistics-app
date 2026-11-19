@@ -4,10 +4,29 @@ import { assertMembershipProvenance } from './provenance.ts';
 import { gateSyncRequest } from './gate.ts';
 import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoRegistry.ts";
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
-import Stripe from 'npm:stripe@23.0.0';
+import { clearCheckoutPending } from '../../shared/checkoutPending.ts';
 import { planFromPrice } from '../../shared/planFromPrice.ts';
+// Consulta Stripe directo (sin la librería npm:stripe, que fallaba dentro de Base44
+// y dejaba la activación en LIVE_RECONCILIATION_REQUIRED aunque el pago fuera válido).
+async function retrieveSubscription(key: string, id: string) {
+  if (!/^sub_[A-Za-z0-9]+$/.test(id)) throw Error('INVALID_SUBSCRIPTION');
+  const url = new URL(`https://api.stripe.com/v1/subscriptions/${id}`);
+  url.searchParams.append('expand[]', 'items.data.price');
+  const r = await fetch(url, { redirect: 'manual', headers: { Authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(12000) })
+    .catch(() => { throw Error('STRIPE_UNREACHABLE'); });
+  if (!r.ok || r.status >= 300) {
+    console.warn('[syncBillingSubscription]', JSON.stringify({ code: 'STRIPE_RETRIEVE_FAILED', status: r.status }));
+    throw Error('STRIPE_RETRIEVE_FAILED');
+  }
+  return await r.json();
+}
+
 export default async function syncBillingSubscription(req: Request, _ctx: unknown) {
-  const reply = (code: string, status = 200) => new Response(JSON.stringify({ code }), { status, headers: { 'Content-Type': 'application/json' } });
+  // Cada respuesta deja su código en los registros de Base44 (nunca secretos ni datos de pago).
+  const reply = (code: string, status = 200) => {
+    if (code !== 'SUBSCRIPTION_RECONCILED') console.warn('[syncBillingSubscription]', JSON.stringify({ code, status }));
+    return new Response(JSON.stringify({ code }), { status, headers: { 'Content-Type': 'application/json' } });
+  };
   // Autenticación S2S, modo e indicadores: ver gate.ts (probado en tests/billing/live-sync-gate.test.ts).
   const gate = await gateSyncRequest(req, {
     secret: Deno.env.get('TRUCKY_SERVER_SECRET'),
@@ -28,9 +47,12 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
         update:(id,fields)=>db.Organization.updateMany({id},{$set:fields}),
         retrieve:async id=>{const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');
           if(!key||!/^(sk|rk)_live_.+/.test(key))throw Error('LIVE_KEY_REQUIRED');
-          return await new Stripe(key,{timeout:12000,maxNetworkRetries:0}).subscriptions.retrieve(id);
+          return await retrieveSubscription(key,id);
         },
       });
+      console.warn('[syncBillingSubscription]',JSON.stringify({code:result.body.code,status:result.status,mode:'live'}));
+      // Activada: se quita el aviso "Estamos activando tu cuenta…" de la app.
+      if(result.body.code==='SUBSCRIPTION_RECONCILED'){try{await clearCheckoutPending(demoRedis,body.organization_id);}catch{/* expira solo */}}
       return new Response(JSON.stringify(result.body),{status:result.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
     }
     const allowed = new Set((Deno.env.get('STRIPE_TEST_ORGANIZATION_IDS') || '').split(',').map(x => x.trim()).filter(Boolean));
@@ -39,7 +61,7 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
     const key = Deno.env.get('STRIPE_SECRET_KEY');
     if (!key?.startsWith('sk_test_')) return reply('TEST_CONFIGURATION_REQUIRED', 503);
     // Never trust status/customer/trial dates received from the caller.
-    const sub = await new Stripe(key).subscriptions.retrieve(body.subscription_id);
+    const sub = await retrieveSubscription(key, body.subscription_id);
     if (sub.livemode || sub.metadata.org_id !== body.organization_id) return reply('SUBSCRIPTION_MISMATCH', 409);
     if (!['trialing', 'active', 'past_due', 'canceled', 'unpaid', 'incomplete'].includes(sub.status)) return reply('STATUS_REQUIRES_MIGRATION', 409);
     const db = createClientFromRequest(req).asServiceRole.entities;
@@ -64,5 +86,8 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
       trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
     });
     return reply('SUBSCRIPTION_RECONCILED');
-  } catch { return reply('RECONCILIATION_REQUIRED', 503); }
+  } catch (error) {
+    console.warn('[syncBillingSubscription]', JSON.stringify({ code: 'RECONCILIATION_REQUIRED', reason: error instanceof Error ? error.message : 'unknown' }));
+    return reply('RECONCILIATION_REQUIRED', 503);
+  }
 }

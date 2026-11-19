@@ -8,7 +8,8 @@ export function createLivePlanRefresh(fetchPlan,onState){
    try{
     const result=await fetchPlan();
     if(!result||typeof result.managed!=='boolean')throw Error('INVALID_PLAN_RESPONSE');
-    if(!disposed){onState({result,loading:false,unavailable:false});if(result.managed===false)stopped=true;}
+    // Con pago en curso se sigue consultando hasta que la cuenta quede activa.
+    if(!disposed){onState({result,loading:false,unavailable:false});if(result.managed===false&&result.checkoutPending!==true)stopped=true;}
    }catch{
     // Do not replace an already rendered subtree or claim that the trial expired.
     if(!disposed)onState({loading:false,unavailable:true,initial});
