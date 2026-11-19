@@ -67,3 +67,14 @@ test('QA: glosario de traducción (fee → rate, charges → loads)', async () =
   assert.equal(glosarioEn('Known broker: QA Test Brokerage LLC — 0 charges'), 'Known broker: QA Test Brokerage LLC — 0 loads');
   assert.equal(glosarioEn('Fee deductions detected'), 'Fee deductions detected');
 });
+
+test('F4: las notas incluyen lo conversado en el hilo (sin texto citado)', () => {
+  const threadMessages = [
+    { remitente_nombre: 'luis bermudez', fecha: '2026-11-19T20:07:00', cuerpo: 'Hi,\nPlease find attached the rate confirmation for load QA-LD-1001.' },
+    { remitente_nombre: 'luis bermudez', fecha: '2026-11-19T20:08:38', cuerpo: 'Received, we will confirm the driver today.\n\nEl jue, 19 nov 2026 a las 15:07, luis (<l@x.com>)\nescribió:\n> Hi,' },
+    { remitente_nombre: 'luis bermudez', fecha: '2026-11-19T20:10:08', cuerpo: 'Confirmed. Pickup 08:00, please arrive 30 min early.\n\nOn Thu wrote:\n> Received' },
+  ];
+  const r = buildThreadSummaryForLoad({ rawDocumentText: DOC, extracted: {}, threadMessages });
+  assert.match(r.notas, /Hilo: luis \(19\/11 20:08\): Received, we will confirm the driver today\. \| luis \(19\/11 20:10\): Confirmed\. Pickup 08:00, please arrive 30 min early\.$/);
+  assert.doesNotMatch(r.notas, /attached|escribió|> /);
+});

@@ -328,6 +328,28 @@ export function summarizeThreadForChecker(msgs = [], { perMessage = 420, total =
 }
 
 /**
+ * F4 (QA): lo conversado en el hilo para las notas de la carga: remitente, fecha y
+ * lo nuevo de cada mensaje (sin texto citado). El 1.º se omite si solo acompaña al PDF.
+ */
+export function resumenHiloParaNotas(threadMessages = [], { porMensaje = 160 } = {}) {
+  const fechaCorta = (f) => {
+    const d = new Date(f);
+    if (!f || isNaN(d)) return '';
+    const p = (n) => String(n).padStart(2, '0');
+    return `${p(d.getDate())}/${p(d.getMonth() + 1)} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  };
+  const respuestas = (threadMessages || [])
+    .map((m) => ({
+      quien: String(m.remitente_nombre || m.remitente_email || '').trim().split(/\s+/)[0],
+      cuando: fechaCorta(m.fecha),
+      texto: splitQuoted(m.cuerpo || m.snippet || '').nuevo.replace(/\s+/g, ' ').trim(),
+    }))
+    .filter((m, i) => m.texto && !(i === 0 && /\b(attached|attachment|adjunt)/i.test(m.texto)))
+    .map((m) => `${m.quien}${m.cuando ? ` (${m.cuando})` : ''}: ${m.texto.length > porMensaje ? m.texto.slice(0, porMensaje).replace(/\s\S*$/, '') + '…' : m.texto}`);
+  return respuestas.length ? `Hilo: ${respuestas.join(' | ')}` : '';
+}
+
+/**
  * Construye los campos limpios de la carga a partir de los datos verificados del documento PDF
  * (priorizando los datos extraídos del PDF sobre cualquier valor por defecto).
  */
@@ -381,7 +403,8 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
     equipo && `Equipo: ${equipo}`,
     penalidades && `Penalidad: ${penalidades}`,
     heur.notas && heur.notas.replace(/^Load #[^·]*·?\s*/, ''),
-  ].filter(Boolean).join(' · ').slice(0, 900);
+    resumenHiloParaNotas(threadMessages),
+  ].filter(Boolean).join(' · ').slice(0, 1000);
 
   return {
     origen,

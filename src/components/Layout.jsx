@@ -90,7 +90,7 @@ export default function Layout() {
   };
 
   const correo = user?.email || '';
-  const inicial = (correo.trim()[0] || 't').toLowerCase();
+  const inicial = (correo.trim()[0] || 't').toUpperCase();
 
   const isActive = (path) => {
     if (path === '/') return location.pathname === '/';
@@ -198,7 +198,7 @@ export default function Layout() {
               aria-label={t.nav.openProfile}
               className="w-full flex items-center gap-3 rounded-2xl p-2 text-left transition-colors hover:bg-t-action-secondary focus:outline-none focus-visible:shadow-focus"
             >
-              <div className="w-[30px] h-[44px] rounded-xl bg-t-action-primary flex items-center justify-center flex-shrink-0">
+              <div className="w-10 h-10 rounded-full bg-t-action-primary flex items-center justify-center flex-shrink-0">
                 <span className="text-sm font-bold text-white">{inicial}</span>
               </div>
               <div className="flex-1 min-w-0">
