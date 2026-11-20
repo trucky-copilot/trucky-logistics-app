@@ -11,6 +11,8 @@ import PersonalSection from './sections/PersonalSection';
 import CompanySection from './sections/CompanySection';
 import PlanSection from './sections/PlanSection';
 import TemplatesSection from './sections/TemplatesSection';
+import PrivacySection from './sections/PrivacySection';
+import HelpSection from './sections/HelpSection';
 import { SETTINGS_SECTIONS, SETTINGS_GROUPS, findSection, sectionLabel } from './settingsSections';
 
 const tx = (locale, es, en) => (locale === 'en' ? en : es);
@@ -118,7 +120,9 @@ export default function Settings() {
       : current.id === 'plantillas' ? <TemplatesSection locale={locale} />
       : current.id === 'idioma' ? <LanguageSection locale={locale} setLocale={setLocale} />
       : current.id === 'tema' ? <ThemeSection locale={locale} />
-      : current.id === 'costos' ? <CostsSection locale={locale} /> : null)
+      : current.id === 'costos' ? <CostsSection locale={locale} />
+      : current.id === 'privacidad' ? <PrivacySection locale={locale} />
+      : current.id === 'ayuda' ? <HelpSection locale={locale} /> : null)
     : <Placeholder section={current} locale={locale} />;
 
   const NavItem = ({ s }) => {

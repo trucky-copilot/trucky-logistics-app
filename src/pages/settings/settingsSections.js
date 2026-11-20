@@ -28,8 +28,8 @@ export const SETTINGS_SECTIONS = [
     reason: { es: 'En evaluación por limitaciones de la plataforma.', en: 'Under review due to platform limitations.' } },
   { id: 'seguridad', group: 'seguridad', desc: { es: 'Verificación en dos pasos.', en: 'Two-step verification.' }, icon: KeyRound, status: 'disabled', es: 'Seguridad', en: 'Security',
     reason: { es: 'Verificación en dos pasos: en evaluación por limitaciones de la plataforma.', en: 'Two-step verification: under review due to platform limitations.' } },
-  { id: 'privacidad', group: 'seguridad', desc: { es: 'Términos, privacidad y tus datos.', en: 'Terms, privacy and your data.' }, icon: ShieldCheck, status: 'building', es: 'Privacidad y datos', en: 'Privacy & data' },
-  { id: 'ayuda', group: 'soporte', desc: { es: 'Canal de contacto y guía de ayuda.', en: 'Contact channel and help guide.' }, icon: LifeBuoy, status: 'building', es: 'Ayuda y soporte', en: 'Help & support' },
+  { id: 'privacidad', group: 'seguridad', desc: { es: 'Términos, privacidad y tus datos.', en: 'Terms, privacy and your data.' }, icon: ShieldCheck, status: 'ready', es: 'Privacidad y datos', en: 'Privacy & data' },
+  { id: 'ayuda', group: 'soporte', desc: { es: 'Contacto con soporte y preguntas frecuentes.', en: 'Contact support and frequently asked questions.' }, icon: LifeBuoy, status: 'ready', es: 'Ayuda y soporte', en: 'Help & support' },
 ];
 
 export const SETTINGS_GROUPS = [

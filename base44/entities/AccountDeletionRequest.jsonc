@@ -1,0 +1,21 @@
+{
+  "name": "AccountDeletionRequest",
+  "type": "object",
+  "properties": {
+    "usuario": { "type": "string", "description": "F3-15 · Fase 6: correo del usuario que pide eliminar su cuenta." },
+    "organization_id": { "type": "string" },
+    "organization_name": { "type": "string" },
+    "rol": { "type": "string", "description": "Rol del usuario en la empresa (owner, admin, member…)." },
+    "motivo": { "type": "string", "description": "Motivo opcional que escribió el usuario." },
+    "estado": { "type": "string", "enum": ["pendiente", "en_proceso", "completada", "cancelada"], "default": "pendiente" },
+    "solicitado_at": { "type": "string", "format": "date-time" },
+    "email_enviado": { "type": "boolean", "description": "Si se pudo avisar por correo a soporte." }
+  },
+  "required": ["usuario", "estado", "solicitado_at"],
+  "rls": {
+    "create": { "user_condition": { "role": "admin" } },
+    "read": { "$or": [ { "data.usuario": "{{user.email}}" }, { "user_condition": { "role": "admin" } } ] },
+    "update": { "user_condition": { "role": "admin" } },
+    "delete": { "user_condition": { "role": "admin" } }
+  }
+}
