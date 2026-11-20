@@ -328,17 +328,17 @@ function MarketAdvisorCardContent({ data, costConfig }) {
   return (
     <div className="w-full max-w-4xl mx-auto font-sans flex flex-col gap-4 mt-2">
       {/* HEADER */}
-      <div className={`bg-t-bg-surface-raised rounded-xl p-5 border border-border/10 ${calculo.tarifaOfrecida ? 'text-center flex flex-col items-center' : ''}`}>
+      <div className={`bg-[#2A2B3D] rounded-xl p-5 border border-border/10 ${calculo.tarifaOfrecida ? 'text-center flex flex-col items-center' : ''}`}>
         <div className={`flex items-center gap-3 mb-2 ${calculo.tarifaOfrecida ? 'justify-center' : ''}`}>
           <div className="w-8 h-8 rounded-full bg-purple-500/20 flex items-center justify-center">
             <span className="text-xl">🤖</span>
           </div>
-          <h2 className="text-foreground font-semibold text-lg">
+          <h2 className="text-white font-semibold text-lg">
             {isEs ? `Aquí está el análisis para ${originStr} → ${destStr}.` : `Here's the analysis for ${originStr} → ${destStr}.`}
           </h2>
         </div>
 
-        <p className={`text-sm text-t-text-secondary leading-relaxed ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
+        <p className={`text-sm text-gray-300 leading-relaxed ${calculo.tarifaOfrecida ? 'text-center' : 'ml-11'}`}>
           {calculo.tarifaOfrecida ? (
             hasAccessorials ? (
               isEs
@@ -389,29 +389,29 @@ function MarketAdvisorCardContent({ data, costConfig }) {
 
             if (showRed) {
               return (
-                <div className="rounded-xl border border-red-900/50 bg-t-danger-soft p-5 flex flex-col justify-between items-center text-center h-full">
+                <div className="rounded-xl border border-red-900/50 bg-[#1A1115] p-5 flex flex-col justify-between items-center text-center h-full">
                   <div className="flex flex-col items-center w-full">
                     <div className="flex items-center gap-3 justify-center mb-2">
                       <div className="w-8 h-8 rounded-full bg-red-500 flex-shrink-0"></div>
                       <div className="flex flex-col items-center">
-                        <span className="text-foreground font-bold text-lg leading-tight">{isEs ? "ROJO" : "RED"}</span>
-                        <span className="text-t-danger text-sm">{isEs ? "Rechazar" : "Decline"}</span>
+                        <span className="text-white font-bold text-lg leading-tight">{isEs ? "ROJO" : "RED"}</span>
+                        <span className="text-red-400 text-sm">{isEs ? "Rechazar" : "Decline"}</span>
                       </div>
                     </div>
                     <div className="flex flex-col items-center mt-3">
-                      <span className="text-xs font-semibold text-t-danger uppercase tracking-wide mb-1">
+                      <span className="text-xs font-semibold text-red-400 uppercase tracking-wide mb-1">
                         {isEs ? "Tarifa de la ruta" : "Route rate"}
                       </span>
-                      <span className="text-foreground font-semibold text-xl">
+                      <span className="text-white font-semibold text-xl">
                         ${formatMoney(calculo.tarifaOfrecida)} &lt; ${formatMoney(effectiveFloor)}
                       </span>
                     </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-border w-full text-center">
-                    <span className="text-t-danger font-bold text-xs uppercase tracking-wider block mb-1">
+                  <div className="mt-4 pt-3 border-t border-white/10 w-full text-center">
+                    <span className="text-red-400 font-bold text-xs uppercase tracking-wider block mb-1">
                       {isEs ? "Recomendación Trucky" : "Trucky Recommendation"}
                     </span>
-                    <p className="text-t-text-secondary text-sm leading-relaxed">
+                    <p className="text-gray-200 text-sm leading-relaxed">
                       {isEs 
                         ? "Ese valor está por debajo de tu valor RPM y costo, te sugiero rechazar o pedir una tarifa significativamente mayor." 
                         : "That rate is below your RPM cost, I suggest declining or asking for a significantly higher rate."}
@@ -423,29 +423,29 @@ function MarketAdvisorCardContent({ data, costConfig }) {
 
             if (showYellow) {
               return (
-                <div className="rounded-xl border border-yellow-700/50 bg-t-warning-soft p-5 flex flex-col justify-between items-center text-center h-full">
+                <div className="rounded-xl border border-yellow-700/50 bg-[#1A1A11] p-5 flex flex-col justify-between items-center text-center h-full">
                   <div className="flex flex-col items-center w-full">
                     <div className="flex items-center gap-3 justify-center mb-2">
                       <div className="w-8 h-8 rounded-full bg-yellow-400 flex-shrink-0"></div>
                       <div className="flex flex-col items-center">
-                        <span className="text-foreground font-bold text-lg leading-tight">{isEs ? "AMARILLO" : "YELLOW"}</span>
-                        <span className="text-t-warning text-sm">{isEs ? "Negocia" : "Negotiate"}</span>
+                        <span className="text-white font-bold text-lg leading-tight">{isEs ? "AMARILLO" : "YELLOW"}</span>
+                        <span className="text-yellow-400 text-sm">{isEs ? "Negocia" : "Negotiate"}</span>
                       </div>
                     </div>
                     <div className="flex flex-col items-center mt-3">
-                      <span className="text-xs font-semibold text-t-warning uppercase tracking-wide mb-1">
+                      <span className="text-xs font-semibold text-yellow-400 uppercase tracking-wide mb-1">
                         {isEs ? "Tarifa de la ruta" : "Route rate"}
                       </span>
-                      <span className="text-foreground font-semibold text-xl">
+                      <span className="text-white font-semibold text-xl">
                         ${formatMoney(calculo.tarifaOfrecida)} &lt; ${formatMoney(tTarget)}
                       </span>
                     </div>
                   </div>
-                  <div className="mt-4 pt-3 border-t border-border w-full text-center">
-                    <span className="text-t-warning font-bold text-xs uppercase tracking-wider block mb-1">
+                  <div className="mt-4 pt-3 border-t border-white/10 w-full text-center">
+                    <span className="text-yellow-400 font-bold text-xs uppercase tracking-wider block mb-1">
                       {isEs ? "Recomendación Trucky" : "Trucky Recommendation"}
                     </span>
-                    <p className="text-t-text-secondary text-sm leading-relaxed">
+                    <p className="text-gray-200 text-sm leading-relaxed">
                       {isEs 
                         ? "Ese valor está por debajo del objetivo pero dentro del rango negociable, te sugiero negociar para alcanzar el objetivo." 
                         : "That rate is below target but within negotiable range, I suggest negotiating to reach the target."}
@@ -456,29 +456,29 @@ function MarketAdvisorCardContent({ data, costConfig }) {
             }
 
             return (
-              <div className="rounded-xl border border-green-800/50 bg-t-success-soft p-5 flex flex-col justify-between items-center text-center h-full">
+              <div className="rounded-xl border border-green-800/50 bg-[#0F1A13] p-5 flex flex-col justify-between items-center text-center h-full">
                 <div className="flex flex-col items-center w-full">
                   <div className="flex items-center gap-3 justify-center mb-2">
                     <div className="w-8 h-8 rounded-full bg-green-500 flex-shrink-0"></div>
                     <div className="flex flex-col items-center">
-                      <span className="text-foreground font-bold text-lg leading-tight">{isEs ? "VERDE" : "GREEN"}</span>
-                      <span className="text-t-success text-sm">{isEs ? "Buena para aceptar" : "Good to Accept"}</span>
+                      <span className="text-white font-bold text-lg leading-tight">{isEs ? "VERDE" : "GREEN"}</span>
+                      <span className="text-green-400 text-sm">{isEs ? "Buena para aceptar" : "Good to Accept"}</span>
                     </div>
                   </div>
                   <div className="flex flex-col items-center mt-3">
-                    <span className="text-xs font-semibold text-t-success uppercase tracking-wide mb-1">
+                    <span className="text-xs font-semibold text-green-400 uppercase tracking-wide mb-1">
                       {isEs ? "Tarifa de la ruta" : "Route rate"}
                     </span>
-                    <span className="text-foreground font-semibold text-xl">
+                    <span className="text-white font-semibold text-xl">
                       ${formatMoney(calculo.tarifaOfrecida)} &ge; ${formatMoney(tTarget)}
                     </span>
                   </div>
                 </div>
-                <div className="mt-4 pt-3 border-t border-border w-full text-center">
-                  <span className="text-t-success font-bold text-xs uppercase tracking-wider block mb-1">
+                <div className="mt-4 pt-3 border-t border-white/10 w-full text-center">
+                  <span className="text-green-400 font-bold text-xs uppercase tracking-wider block mb-1">
                     {isEs ? "Recomendación Trucky" : "Trucky Recommendation"}
                   </span>
-                  <p className="text-t-text-secondary text-sm leading-relaxed">
+                  <p className="text-gray-200 text-sm leading-relaxed">
                     {isEs 
                       ? "Ese valor está por encima del valor RPM, te sugiero aceptar." 
                       : "That rate is above the target RPM value, I suggest accepting."}
@@ -489,15 +489,15 @@ function MarketAdvisorCardContent({ data, costConfig }) {
           })()}
 
           {/* CAJA 2: DETALLES DE LA RUTA AL LADO */}
-          <div className="bg-t-bg-surface-raised border border-border/20 rounded-xl p-5 flex flex-col justify-between h-full">
+          <div className="bg-[#1C1D2A] border border-border/20 rounded-xl p-5 flex flex-col justify-between h-full">
             <div>
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <MapPin className="w-4 h-4 text-t-info" />
+                  <MapPin className="w-4 h-4 text-blue-400" />
                 </div>
-                <h3 className="text-foreground font-semibold text-base">{isEs ? "Detalles de la Ruta" : "Route Details"}</h3>
+                <h3 className="text-white font-semibold text-base">{isEs ? "Detalles de la Ruta" : "Route Details"}</h3>
               </div>
-              <div className="space-y-2.5 text-sm text-t-text-secondary ml-11">
+              <div className="space-y-2.5 text-sm text-gray-300 ml-11">
                 <p>{isEs ? "Desde" : "From"}: {originStr}</p>
                 <p>{isEs ? "Hacia" : "To"}: {destStr}</p>
                 <p>
@@ -507,7 +507,7 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                         : `Distance: ${millasCargadas} loaded + ${millasDeadhead} deadhead = ${millasIda} miles`)
                     : `${isEs ? "Distancia (cargado)" : "Distance (loaded)"}: ${millasIda} ${isEs ? "millas (aprox.)" : "miles (approx.)"}`}
                 </p>
-                <p className="text-foreground font-medium">
+                <p className="text-white font-medium">
                   {isEs ? "Tarifa propuesta" : "Offered rate"}: ${formatMoney(calculo.tarifaOfrecida)} {ofrecidaRpm ? `($${ofrecidaRpm} RPM)` : ''}
                 </p>
                 <p>
@@ -549,27 +549,27 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                 <>
                   {/* RED BOX */}
                   {showRed && (
-                    <div className="rounded-xl border border-red-900/50 bg-t-danger-soft p-5 flex flex-col gap-4">
+                    <div className="rounded-xl border border-red-900/50 bg-[#1A1115] p-5 flex flex-col gap-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-red-500 flex-shrink-0"></div>
                         <div className="flex flex-col">
-                          <span className="text-foreground font-bold text-lg leading-tight">{isEs ? "ROJO" : "RED"}</span>
-                          <span className="text-t-danger text-sm">{isEs ? "Rechazar" : "Decline"}</span>
+                          <span className="text-white font-bold text-lg leading-tight">{isEs ? "ROJO" : "RED"}</span>
+                          <span className="text-red-400 text-sm">{isEs ? "Rechazar" : "Decline"}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
                         {!isOver200 ? (
-                          <span className="text-foreground font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} &lt; ${formatMoney(marketTargetTotal)}</span>
+                          <span className="text-white font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} &lt; ${formatMoney(marketTargetTotal)}</span>
                         ) : (
                           <div className="flex flex-col">
                             <div className="flex items-center gap-2">
-                              <span className="text-foreground font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} &lt; ${userCpm} CPM</span>
+                              <span className="text-white font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} &lt; ${userCpm} CPM</span>
                             </div>
-                            <span className="text-t-danger font-semibold mt-1">Total &lt; ${formatMoney(totalCpmFloor)}</span>
+                            <span className="text-red-400 font-semibold mt-1">Total &lt; ${formatMoney(totalCpmFloor)}</span>
                           </div>
                         )}
                       </div>
-                      <ul className="text-sm text-t-text-secondary space-y-3 mt-2">
+                      <ul className="text-sm text-gray-300 space-y-3 mt-2">
                         <li className="flex items-start gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-red-500 mt-1.5 flex-shrink-0"></div>
                           <span>{isEs ? "La tarifa por milla está por debajo de tu costo." : "Rate per mile is below your cost."}</span>
@@ -588,30 +588,30 @@ function MarketAdvisorCardContent({ data, costConfig }) {
 
                   {/* YELLOW BOX */}
                   {showYellow && (
-                    <div className="rounded-xl border border-yellow-700/50 bg-t-warning-soft p-5 flex flex-col gap-4">
+                    <div className="rounded-xl border border-yellow-700/50 bg-[#1A1A11] p-5 flex flex-col gap-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-yellow-400 flex-shrink-0"></div>
                         <div className="flex flex-col">
-                          <span className="text-foreground font-bold text-lg leading-tight">{isEs ? "AMARILLO" : "YELLOW"}</span>
-                          <span className="text-t-warning text-sm">{isEs ? "Negocia" : "Negotiate"}</span>
+                          <span className="text-white font-bold text-lg leading-tight">{isEs ? "AMARILLO" : "YELLOW"}</span>
+                          <span className="text-yellow-400 text-sm">{isEs ? "Negocia" : "Negotiate"}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
                         {!isOver200 ? (
-                          <span className="text-foreground font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} ~ ${formatMoney(marketTargetTotal)}</span>
+                          <span className="text-white font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} ~ ${formatMoney(marketTargetTotal)}</span>
                         ) : (
                           <div className="flex flex-col">
-                            <span className="text-foreground font-semibold text-lg">${yellowMinRpm} - ${yellowMaxRpm} RPM</span>
-                            <span className="text-t-warning font-semibold mt-1">Total: ${formatMoney(yellowMinTotal)} - ${formatMoney(yellowMaxTotal)}</span>
+                            <span className="text-white font-semibold text-lg">${yellowMinRpm} - ${yellowMaxRpm} RPM</span>
+                            <span className="text-yellow-400 font-semibold mt-1">Total: ${formatMoney(yellowMinTotal)} - ${formatMoney(yellowMaxTotal)}</span>
                           </div>
                         )}
                       </div>
                       {isOver200 && (
-                        <div className="text-foreground text-md">
+                        <div className="text-white text-md">
                           ≈ {isEs ? "tu break-even" : "your break-even"}
                         </div>
                       )}
-                      <ul className="text-sm text-t-text-secondary space-y-3 mt-2">
+                      <ul className="text-sm text-gray-300 space-y-3 mt-2">
                         <li className="flex items-start gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-yellow-400 mt-1.5 flex-shrink-0"></div>
                           <span>{isEs ? "Esta tarifa ronda tu punto de equilibrio (break-even)." : "This rate is around your break-even point."}</span>
@@ -626,28 +626,28 @@ function MarketAdvisorCardContent({ data, costConfig }) {
 
                   {/* GREEN BOX */}
                   {showGreen && (
-                    <div className="rounded-xl border border-green-800/50 bg-t-success-soft p-5 flex flex-col gap-4">
+                    <div className="rounded-xl border border-green-800/50 bg-[#0F1A13] p-5 flex flex-col gap-4">
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-green-500 flex-shrink-0"></div>
                         <div className="flex flex-col">
-                          <span className="text-foreground font-bold text-lg leading-tight">{isEs ? "VERDE" : "GREEN"}</span>
-                          <span className="text-t-success text-sm">{isEs ? "Buena para aceptar" : "Good to Accept"}</span>
+                          <span className="text-white font-bold text-lg leading-tight">{isEs ? "VERDE" : "GREEN"}</span>
+                          <span className="text-green-400 text-sm">{isEs ? "Buena para aceptar" : "Good to Accept"}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-2">
                         {!isOver200 ? (
-                          <span className="text-foreground font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} &ge; ${formatMoney(marketTargetTotal)}</span>
+                          <span className="text-white font-semibold text-lg">{isEs ? "Tarifa" : "Rate"} &ge; ${formatMoney(marketTargetTotal)}</span>
                         ) : (
                           <div className="flex flex-col">
-                            <span className="text-foreground font-semibold text-lg">${greenRpm}+ RPM</span>
-                            <span className="text-t-success font-semibold mt-1">Total: ${formatMoney(greenTotal)}+</span>
+                            <span className="text-white font-semibold text-lg">${greenRpm}+ RPM</span>
+                            <span className="text-green-400 font-semibold mt-1">Total: ${formatMoney(greenTotal)}+</span>
                           </div>
                         )}
                       </div>
                       {isOver200 && (
-                        <div className="text-foreground text-md">≥ {greenSubtitle}</div>
+                        <div className="text-white text-md">≥ {greenSubtitle}</div>
                       )}
-                      <ul className="text-sm text-t-text-secondary space-y-3 mt-2">
+                      <ul className="text-sm text-gray-300 space-y-3 mt-2">
                         <li className="flex items-start gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 flex-shrink-0"></div>
                           <span>{isEs ? "Tarifa rentable." : "Profitable rate."}</span>
@@ -670,14 +670,14 @@ function MarketAdvisorCardContent({ data, costConfig }) {
 
           {/* DETALLES DE LA RUTA (NORMAL) */}
           <div className="w-full">
-            <div className="bg-t-bg-surface-raised border border-border/20 rounded-xl p-5 flex flex-col">
+            <div className="bg-[#1C1D2A] border border-border/20 rounded-xl p-5 flex flex-col">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center">
-                  <MapPin className="w-4 h-4 text-t-info" />
+                  <MapPin className="w-4 h-4 text-blue-400" />
                 </div>
-                <h3 className="text-foreground font-semibold text-base">{isEs ? "Detalles de la Ruta" : "Route Details"}</h3>
+                <h3 className="text-white font-semibold text-base">{isEs ? "Detalles de la Ruta" : "Route Details"}</h3>
               </div>
-              <div className="space-y-2 text-sm text-t-text-secondary ml-11">
+              <div className="space-y-2 text-sm text-gray-300 ml-11">
                 <p>{isEs ? "Desde" : "From"}: {originStr}</p>
                 <p>{isEs ? "Hacia" : "To"}: {destStr}</p>
                 <p>
@@ -716,14 +716,14 @@ function MarketAdvisorCardContent({ data, costConfig }) {
           </div>
 
           {/* RECOMMENDATION (TRUCKY AI NORMAL) */}
-          <div className="border border-green-500/50 bg-t-success-soft rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="border border-green-500/50 bg-[#0F1A13] rounded-xl p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex items-start gap-4">
               <div className="w-10 h-10 rounded-full bg-green-500 flex items-center justify-center flex-shrink-0 mt-1">
-                <CheckCircle2 className="w-6 h-6 text-t-text-inverse" />
+                <CheckCircle2 className="w-6 h-6 text-[#0F1A13]" />
               </div>
               <div className="flex flex-col gap-1">
-                <h3 className="text-foreground font-semibold text-base">{isEs ? "Recomendación de TruckyAI" : "TruckyAI Recommendation"}</h3>
-                <p className="text-sm text-t-text-secondary">
+                <h3 className="text-white font-semibold text-base">{isEs ? "Recomendación de TruckyAI" : "TruckyAI Recommendation"}</h3>
+                <p className="text-sm text-gray-300">
                   {isEs 
                     ? (!isOver200
                         ? `Apunta por lo menos a $${formatMoney(marketTargetTotal)} o más para que esa carga valga la pena.` 
@@ -736,7 +736,7 @@ function MarketAdvisorCardContent({ data, costConfig }) {
                             ? `Aim for at least $${greenRpm} RPM or higher to make this load worthwhile.`
                             : `Aim for at least $${greenRpm} RPM ($${formatMoney(greenTotal)}) or higher to make this load worthwhile.`))}
                 </p>
-                <p className="text-sm text-t-text-secondary">
+                <p className="text-sm text-gray-300">
                   {isEs 
                     ? (!isOver200
                         ? `Si la oferta está cercana a $${formatMoney(marketTargetTotal)}, negocia.` 

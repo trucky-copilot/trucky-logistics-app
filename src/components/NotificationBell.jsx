@@ -102,12 +102,13 @@ export default function NotificationBell() {
   return (
     <Link
       to="/notificaciones"
-      className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+      className="relative w-10 h-10 rounded-full bg-t-action-primary hover:bg-t-action-primary-hover text-white flex items-center justify-center transition-colors flex-shrink-0"
       title="Notificaciones"
     >
+      {/* Figma · Page Header: botón de ícono circular en action/primary */}
       <Bell className="w-5 h-5" />
       {unreadCount > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 bg-primary text-primary-foreground text-[9px] font-bold rounded-full flex items-center justify-center">
+        <span className="absolute -top-1 -right-1 min-w-5 h-5 px-1 bg-t-danger text-white text-[10px] font-bold rounded-full flex items-center justify-center ring-2 ring-[rgb(var(--t-bg-canvas))]">
           {unreadCount > 99 ? '99+' : unreadCount}
         </span>
       )}

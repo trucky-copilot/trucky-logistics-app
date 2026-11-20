@@ -203,9 +203,9 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
             <button
               type="button"
               onClick={handleOpenSend}
-              className="text-xs text-t-text-accent bg-primary/10 hover:bg-primary/20 border border-primary/30 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors font-semibold"
+              className="h-9 px-4 rounded-full bg-t-action-primary hover:bg-t-action-primary-hover text-white text-sm font-medium flex items-center gap-2 transition-colors"
             >
-              <Mail className="w-3.5 h-3.5" />
+              <Mail className="w-4 h-4" />
               <span>{locale === 'en' ? 'Send via Gmail' : 'Enviar por Gmail'}</span>
             </button>
           )}
@@ -213,9 +213,9 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
           <button 
             type="button"
             onClick={handleCopy}
-            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1.5 transition-colors font-medium px-2 py-1 rounded-lg hover:bg-muted"
+            className="h-9 px-4 rounded-full bg-t-action-secondary hover:bg-t-action-secondary-hover text-t-text-primary text-sm font-medium flex items-center gap-2 transition-colors"
           >
-            {copied ? <Check className="w-3.5 h-3.5 text-t-success" /> : <Copy className="w-3.5 h-3.5" />}
+            {copied ? <Check className="w-4 h-4 text-t-success" /> : <Copy className="w-4 h-4" />}
             {copied ? (locale === 'en' ? 'Copied!' : 'Copiado!') : (locale === 'en' ? 'Copy' : 'Copiar')}
           </button>
         </div>
@@ -1093,7 +1093,7 @@ export default function MarketChat() {
               </div>
             )}
             <div className={`min-w-0 px-5 py-3 text-sm ${msg.role === 'user'
-                ? 'max-w-[85%] md:max-w-[70%] bg-t-chat-bubble-user text-t-chat-on-bubble-user rounded-[20px] rounded-br-[6px]'
+                ? 'max-w-[85%] md:max-w-[70%] bg-t-action-primary text-white rounded-[20px] rounded-br-[6px]'
                 : 'max-w-[90%] bg-t-bg-surface-raised text-t-text-primary rounded-[20px] rounded-tl-[6px]'
               }`}>
               {msg.role === 'assistant' ? (

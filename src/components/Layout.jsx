@@ -108,7 +108,9 @@ export default function Layout() {
   `;
 
   return (
-    <div className="flex h-screen bg-t-bg-deep overflow-hidden font-inter lg:p-3 lg:gap-3">
+    <div className="flex h-screen h-[100dvh] bg-t-bg-deep overflow-hidden font-inter lg:p-3 lg:gap-3">
+      {/* 100dvh: en el celular "h-screen" (100vh) es más alto que lo visible y la página se
+          desplazaba, escondiendo la barra de arriba con el botón del menú. */}
       {/* Mobile overlay */}
       {sidebarOpen && (
         <div

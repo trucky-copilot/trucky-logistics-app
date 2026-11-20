@@ -1613,7 +1613,7 @@ export default function Emails() {
     );
   }
   return (
-    <div className="flex flex-col lg:h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 space-y-4">
+    <div className="flex flex-col lg:h-[calc(100vh-4rem)] max-w-[1600px] mx-auto p-4 md:p-6 pb-28 lg:pb-6 space-y-4">
       {/* ─── Encabezado Principal ──────────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2 border-b border-border/60">
         <div>
@@ -1648,11 +1648,12 @@ export default function Emails() {
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+        {/* En el celular, Actualizar / Sincronizar / Redactar van en una barra fija abajo, como en una app. */}
+        <div className="fixed lg:static inset-x-0 bottom-0 z-30 lg:z-auto grid grid-cols-3 lg:flex lg:items-center gap-2 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:p-0 bg-t-bg-sidebar/95 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none border-t border-border lg:border-0">
           <button
             onClick={handleRefreshInbox}
             disabled={refreshing || loading}
-            className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
+            className="flex flex-col lg:flex-row items-center justify-center gap-1 lg:gap-2 h-14 lg:h-auto px-2 lg:px-3.5 lg:py-1.5 rounded-2xl lg:rounded-xl text-[11px] lg:text-xs font-semibold bg-card border border-border text-foreground hover:bg-muted/80 transition-colors whitespace-nowrap disabled:opacity-50"
             title={isEs ? 'Actualizar para ver correos recientes de hoy' : 'Refresh to view today’s recent emails'}
           >
             <RotateCw className={`w-3.5 h-3.5 text-t-text-accent ${refreshing ? 'animate-spin' : ''}`} />
@@ -1662,7 +1663,7 @@ export default function Emails() {
           <button
             onClick={handleSyncGmail}
             disabled={syncing || isDemoUser}
-            className={`flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-card border border-border text-foreground transition-colors whitespace-nowrap ${
+            className={`flex flex-col lg:flex-row items-center justify-center gap-1 lg:gap-2 h-14 lg:h-auto px-2 lg:px-3.5 lg:py-1.5 rounded-2xl lg:rounded-xl text-[11px] lg:text-xs font-semibold bg-card border border-border text-foreground transition-colors whitespace-nowrap ${
               isDemoUser ? 'opacity-40 cursor-not-allowed hover:bg-card' : 'hover:bg-muted/80 disabled:opacity-50'
             }`}
             title={
@@ -1691,7 +1692,7 @@ export default function Emails() {
               });
               setComposeOpen(true);
             }}
-            className="flex items-center justify-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all whitespace-nowrap"
+            className="flex flex-col lg:flex-row items-center justify-center gap-1 lg:gap-2 h-14 lg:h-auto px-2 lg:px-3.5 lg:py-1.5 rounded-2xl lg:rounded-full text-[11px] lg:text-xs font-semibold bg-primary hover:bg-t-action-primary-hover text-primary-foreground transition-all whitespace-nowrap"
           >
             <Plus className="w-4 h-4" />
             <span>{isEs ? 'Redactar' : 'Compose'}</span>
@@ -2040,7 +2041,7 @@ export default function Emails() {
                       }`}
                     >
                       {/* Encabezado de cada mensaje individual en el hilo */}
-                      <div className="flex items-center justify-between gap-3 pb-3 mb-3 border-b border-border/40 text-xs">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 pb-3 mb-3 border-b border-border/40 text-xs">
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className={`w-8 h-8 rounded-xl border flex items-center justify-center font-bold text-xs flex-shrink-0 ${
                             isSentByMe
@@ -2058,7 +2059,7 @@ export default function Emails() {
                                 &lt;{msg.remitente_email}&gt;
                               </span>
                               {isSentByMe && (
-                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-t-text-accent border-primary/30">
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-md border bg-primary/10 text-t-text-accent border-primary/30 whitespace-nowrap">
                                   {isEs ? 'Enviado desde Trucky / Gmail' : 'Sent via Trucky / Gmail'}
                                 </span>
                               )}
@@ -2069,7 +2070,7 @@ export default function Emails() {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="flex items-center justify-between sm:justify-end gap-2 flex-shrink-0 pl-10 sm:pl-0">
                           <span className="text-[11px] text-muted-foreground">
                             {new Date(msg.fecha).toLocaleString(dateLocale)}
                           </span>
