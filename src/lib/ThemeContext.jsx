@@ -20,6 +20,7 @@ function applyTheme(theme) {
   root.classList.toggle('light', isLight);
   root.classList.toggle('dark', !isLight);
   root.style.colorScheme = isLight ? 'light' : 'dark';
+  root.setAttribute('data-theme', isLight ? 'light' : 'dark');
 
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', isLight ? '#F6F5FA' : '#0E0A19');
