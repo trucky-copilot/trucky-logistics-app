@@ -20,7 +20,7 @@ export default function KpiCard({
   icon: Icon,
 }) {
   const chip = trend > 0
-    ? 'bg-t-success-soft text-t-success'
+    ? 'bg-t-accent-lime/15 text-t-accent-lime' // acento lima de la identidad Trucky
     : trend < 0
       ? 'bg-t-danger-soft text-t-danger'
       : 'bg-t-action-secondary text-t-text-secondary';

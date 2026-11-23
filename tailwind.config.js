@@ -12,8 +12,10 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        inter: ['Inter', 'sans-serif'],
-        mono: ['JetBrains Mono', 'monospace'],
+        inter: ['var(--t-font-sans)'],
+        sans: ['var(--t-font-sans)'],
+        display: ['var(--t-font-display)'],
+        mono: ['var(--t-font-mono)'],
       },
       boxShadow: {
         card: 'var(--t-shadow-card)',

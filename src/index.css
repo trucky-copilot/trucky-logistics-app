@@ -2,8 +2,6 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
-
 @layer base {
   /* ── Trucky Design System (Figma) · tokens --t-* en RGB (para opacidad)
      Oscuro por defecto; html.light activa el modo claro (Configuración → Tema). */
@@ -167,6 +165,10 @@
   }
 
   :root {
+    /* Fuentes (se cargan en index.html): cambiar aquí cambia toda la app */
+    --t-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+    --t-font-sans: "Inter", system-ui, sans-serif;
+    --t-font-mono: "JetBrains Mono", ui-monospace, monospace;
     --t-shadow-card: 0 4px 16px -4px var(--t-shadow-color);
     --t-shadow-popover: 0 12px 32px -8px var(--t-shadow-color);
     --t-shadow-glow: 0 0 32px 0 var(--t-glow);
@@ -227,6 +229,8 @@
   }
 
   /* Tipografía del Figma (App/H1, Body L, Overline) */
+  /* Títulos en Space Grotesk; los textos siguen en Inter */
+  h1, h2, h3, h4, .font-display { font-family: var(--t-font-display); }
   .t-h1 {
     font-size: 28px; line-height: 1.15; font-weight: 700; letter-spacing: -0.015em;
     color: rgb(var(--t-text-primary));

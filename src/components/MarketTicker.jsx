@@ -63,8 +63,8 @@ export default function MarketTicker() {
       onTouchEnd={() => setPaused(false)}
       title={paused ? 'Cinta en pausa' : 'Cinta de mercado en vivo'}
     >
-      <div className="flex items-center gap-2 pl-4 lg:pl-8 pr-6 flex-shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-t-accent-cyan">
-        <span className="trucky-blink w-2 h-2 rounded-full bg-t-accent-cyan inline-block" />
+      <div className="flex items-center gap-2 pl-4 lg:pl-8 pr-6 flex-shrink-0 text-[11px] font-semibold uppercase tracking-[0.08em] text-t-accent-lime">
+        <span className="trucky-blink w-2 h-2 rounded-full bg-t-accent-lime inline-block" />
         {locale === 'en' ? 'Live market' : 'Mercado en vivo'}
       </div>
       <div className="relative flex-1 min-w-0 h-full overflow-hidden">

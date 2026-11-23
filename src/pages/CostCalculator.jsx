@@ -544,7 +544,7 @@ export default function CostCalculator() {
           <div className="bg-t-bg-surface border border-t-border-focus rounded-2xl p-4 space-y-1 col-span-2 sm:col-span-1">
             <p className="text-xs text-t-text-accent">{t.calculator.target}</p>
             <p className="text-2xl font-bold font-mono text-t-text-accent">${Number(config.tarifa_objetivo).toFixed(2)}</p>
-            <p className="text-xs text-muted-foreground">+${targetProfit.toFixed(2)}/mi {t.calculator.profit}</p>
+            <p className="text-xs font-semibold text-t-accent-lime">+${targetProfit.toFixed(2)}/mi {t.calculator.profit}</p>
           </div>
         </div>
 
