@@ -130,7 +130,9 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
       cleanContent = cleanContent.replace(/^(?:Subject|Asunto):\s*.*\n*/im, '').trim();
     }
     const stored = getStoredGoogleAuth(activeProfileId);
-    setSender(stored.token ? (stored.email || '') || 'Gmail' : '');
+    // Misma regla que la Bandeja de Correos: la cuenta guardada cuenta como conectada
+    // aunque el permiso de Google haya vencido (se renueva solo al enviar).
+    setSender(stored.email || (stored.token ? 'Gmail' : ''));
     setSendError('');
 
     // Los correos siempre van en inglés (decisión 13-nov), también el asunto por defecto.
@@ -154,7 +156,8 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
         profile_id: activeProfileId,
         remitente_nombre: currentUser?.full_name || 'Trucky User',
         categoria: 'brokers',
-        autoConnect: false,
+        // Si el permiso venció, Google lo renueva con la misma cuenta (QA 23-nov).
+        autoConnect: true,
       });
 
       if (res?.data?.error) {
@@ -264,7 +267,7 @@ const CodeBlock = ({ node, orgId, activeProfileId, locale, toast, ...props }) =>
                   required
                   value={to}
                   onChange={(e) => setTo(e.target.value)}
-                  placeholder="broker@freight.com"
+                  placeholder={locale === 'en' ? 'Broker email (required)' : 'Correo del broker (obligatorio)'}
                   className="w-full mt-1 bg-background border border-border rounded-xl px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
