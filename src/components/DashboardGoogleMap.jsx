@@ -263,7 +263,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
     <motion.div
       whileHover={reduceMotion ? undefined : { y: -2 }}
       transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-      className="glass-panel rounded-2xl p-5 relative overflow-hidden w-full min-w-0"
+      className="t-surface rounded-2xl p-5 relative overflow-hidden w-full min-w-0"
     >
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 min-w-0">
@@ -317,7 +317,7 @@ export default function DashboardGoogleMap({ loads = [], trucks = [], locale = '
         )}
 
         {selectedRouteInfo && (
-          <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm glass-panel rounded-xl p-3 border border-t-border-strong text-xs text-foreground shadow-xl z-[400]">
+          <div className="absolute bottom-3 left-3 right-3 sm:right-auto sm:max-w-sm t-surface rounded-xl p-3 border border-t-border-strong text-xs text-foreground shadow-xl z-[400]">
             <div className="flex items-center justify-between gap-2 mb-1">
               <span className="font-bold text-t-text-accent flex items-center gap-1">
                 <Navigation className="w-3.5 h-3.5" />

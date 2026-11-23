@@ -16,7 +16,7 @@ export default function DemoLimitModal({
   const entityLabel = entityName ? ` ${entityName}` : ' elementos';
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--t-overlay)] backdrop-blur-sm animate-in fade-in duration-150">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[var(--t-overlay)] animate-in fade-in duration-150">
       <div className="relative w-full max-w-md p-6 overflow-hidden border rounded-3xl bg-card border-border shadow-2xl text-center space-y-4">
         {/* Glow decoration */}
         <div className="absolute -top-12 -left-12 w-32 h-32 bg-primary/20 rounded-full blur-3xl pointer-events-none" />

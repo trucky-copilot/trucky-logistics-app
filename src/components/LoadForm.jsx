@@ -126,7 +126,7 @@ export default function LoadForm({ load, onSave, onClose, driverOptions = [] }) 
   };
 
   return (
-    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] z-50 flex items-center justify-center p-4">
       <div className="bg-card border border-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-base font-semibold text-foreground">

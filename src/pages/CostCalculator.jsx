@@ -579,7 +579,7 @@ export default function CostCalculator() {
 
       {/* Modal de confirmación estilizado con diseño de Trucky */}
       {showSavedModal && (
-        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-t-bg-surface border border-border rounded-3xl w-full max-w-sm p-6 text-center space-y-4 shadow-popover">
             <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-t-success mx-auto flex items-center justify-center">
               <CheckCircle2 className="w-6 h-6" />

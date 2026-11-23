@@ -6,7 +6,7 @@ export default function DemoExpiredScreen({ reason }) {
   const { logout, user } = useAuth();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/95 backdrop-blur-md p-4 font-inter">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background p-4 font-inter">
       <div className="max-w-md w-full bg-card border border-border rounded-2xl p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden">
         {/* Glow decoration */}
         <div className="absolute -top-12 -left-12 w-32 h-32 bg-primary/20 rounded-full blur-3xl pointer-events-none" />

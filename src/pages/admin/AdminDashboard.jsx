@@ -299,7 +299,7 @@ export default function AdminDashboard() {
 
       {/* Modal estilizado con diseño de la aplicación */}
       {modal.isOpen && (
-        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
             <div className={`w-12 h-12 rounded-full mx-auto flex items-center justify-center ${
               modal.type === 'error' ? 'bg-red-500/10 text-t-danger' : 'bg-emerald-500/10 text-t-success'

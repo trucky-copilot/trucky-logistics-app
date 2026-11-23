@@ -1675,7 +1675,7 @@ export default function Emails() {
         </div>
 
         {/* En el celular, Actualizar / Sincronizar / Redactar van en una barra fija abajo, como en una app. */}
-        <div className="fixed lg:static inset-x-0 bottom-0 z-30 lg:z-auto grid grid-cols-3 lg:flex lg:items-center gap-2 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:p-0 bg-t-bg-sidebar/95 lg:bg-transparent backdrop-blur-md lg:backdrop-blur-none border-t border-border lg:border-0">
+        <div className="fixed lg:static inset-x-0 bottom-0 z-30 lg:z-auto grid grid-cols-3 lg:flex lg:items-center gap-2 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:p-0 bg-t-bg-sidebar lg:bg-transparent border-t border-border lg:border-0">
           <button
             onClick={handleRefreshInbox}
             disabled={refreshing || loading}
@@ -2305,7 +2305,7 @@ export default function Emails() {
 
       {/* ─── Modal de Redacción / Respuesta en Hilo ────────────────────────────── */}
       {composeOpen && (
-        <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-[var(--t-overlay)] z-50 flex items-center justify-center p-4">
           <div className="bg-card border border-border rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
             <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/30">
               <div className="flex items-center gap-2">
@@ -2446,7 +2446,7 @@ export default function Emails() {
       {/* ─── Modal Visor de Documentos Adjuntos (PDF / Imágenes / Archivos) ────── */}
       {previewAttachment && (
         <div
-          className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-3 md:p-6"
+          className="fixed inset-0 bg-[var(--t-overlay)] z-50 flex items-center justify-center p-3 md:p-6"
           onClick={() => setPreviewAttachment(null)}
         >
           <div

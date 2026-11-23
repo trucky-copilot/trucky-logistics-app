@@ -203,7 +203,7 @@ export default function Dashboard() {
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {[0, 1, 2, 3].map(i => (
-          <div key={i} className="glass-card p-5 rounded-2xl space-y-3">
+          <div key={i} className="t-surface-card p-5 rounded-2xl space-y-3">
             <div className="flex items-start justify-between">
               <Skeleton className="h-3 w-24 bg-foreground/10" />
               <Skeleton className="w-9 h-9 rounded-xl bg-foreground/10" />
@@ -228,7 +228,7 @@ export default function Dashboard() {
     <div className="grid lg:grid-cols-3 gap-4">
       {/* Fleet Status */}
       <motion.div
-        className="glass-panel rounded-2xl p-5"
+        className="t-surface rounded-2xl p-5"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -264,7 +264,7 @@ export default function Dashboard() {
 
       {/* Document Alerts and Notifications */}
       <motion.div
-        className={`glass-panel rounded-2xl p-5 relative overflow-hidden ${
+        className={`t-surface rounded-2xl p-5 relative overflow-hidden ${
           hasCriticalAlerts
             ? 'border-red-400/35 shadow-red-950/30'
             : hasWarningAlerts
@@ -309,10 +309,10 @@ export default function Dashboard() {
                 <Link
                   key={alert.id}
                   to={alert.link || '/notificaciones'}
-                  className={`flex items-start gap-3 p-3 rounded-xl border-l-4 border backdrop-blur-md transition-all hover:translate-x-0.5 ${
+                  className={`flex items-start gap-3 p-3 rounded-xl border-l-4 border transition-all hover:translate-x-0.5 ${
                     isRed
-                      ? 'border-l-red-400 bg-red-500/10 border-border hover:bg-red-500/15'
-                      : 'border-l-amber-400 bg-amber-500/10 border-border hover:bg-amber-500/15'
+                      ? 'border-l-t-danger bg-t-danger-soft border-border hover:border-t-border-strong'
+                      : 'border-l-t-warning bg-t-warning-soft border-border hover:border-t-border-strong'
                   }`}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
@@ -342,7 +342,7 @@ export default function Dashboard() {
 
       {/* Broker Scoreboard */}
       <motion.div
-        className="glass-panel rounded-2xl p-5"
+        className="t-surface rounded-2xl p-5"
       >
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -388,7 +388,7 @@ export default function Dashboard() {
 
   const renderRecentLoadsPanel = () => (
     <motion.div
-      className="glass-panel rounded-2xl p-5"
+      className="t-surface rounded-2xl p-5"
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">

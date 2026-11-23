@@ -21,25 +21,25 @@
     box-shadow: var(--t-shadow-card);
   }
 
-  /* Superficies (antes "glass"): ahora planas con tokens, sirven en ambos modos */
-  .glass-panel {
+  /* Superficies del sistema (reemplazan los estilos "glass"): planas con tokens, sirven en ambos modos */
+  .t-surface {
     background: rgb(var(--t-bg-surface));
     border: 1px solid rgb(var(--t-border-default));
     box-shadow: var(--t-shadow-card);
   }
 
-  .glass-card {
+  .t-surface-card {
     background: rgb(var(--t-bg-surface));
     border: 1px solid rgb(var(--t-border-default));
     box-shadow: var(--t-shadow-card);
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
 
-  .glass-card:hover {
+  .t-surface-card:hover {
     border-color: rgb(var(--t-border-strong));
   }
 
-  .glass-pill-bar {
+  .t-surface-bar {
     background: rgb(var(--t-bg-surface));
     border: 1px solid rgb(var(--t-border-default));
     box-shadow: var(--t-shadow-popover);

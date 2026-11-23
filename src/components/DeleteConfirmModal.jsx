@@ -2,7 +2,7 @@ import { Trash2, Loader2 } from 'lucide-react';
 
 /**
  * Modal de confirmación para eliminar elementos (Camión, Conductor, Broker, Carga).
- * Sigue los estilos del diseño dark/glassmorphic de Trucky.
+ * Sigue los estilos del diseño del sistema de diseño de Trucky (superficies planas).
  */
 export default function DeleteConfirmModal({
   isOpen,
@@ -17,7 +17,7 @@ export default function DeleteConfirmModal({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-[var(--t-overlay)] backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
+    <div className="fixed inset-0 bg-[var(--t-overlay)] z-50 flex items-center justify-center p-4 animate-in fade-in duration-150">
       <div className="bg-card border border-border rounded-2xl w-full max-w-sm p-6 text-center space-y-4 shadow-2xl">
         <div className="w-12 h-12 rounded-full bg-red-500/10 text-t-danger mx-auto flex items-center justify-center">
           <Trash2 className="w-6 h-6" />

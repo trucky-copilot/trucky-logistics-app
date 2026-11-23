@@ -693,7 +693,7 @@ Equipment: 20ft Dry...`}
               </div>
 
               <div className="absolute inset-0 flex items-center justify-center p-4 z-20">
-                <div className="w-full max-w-lg p-6 md:p-8 rounded-3xl bg-t-bg-surface/95 border border-violet-500/40 shadow-2xl backdrop-blur-xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
+                <div className="w-full max-w-lg p-6 md:p-8 rounded-3xl bg-t-bg-surface border border-violet-500/40 shadow-2xl text-center space-y-5 animate-in fade-in zoom-in-95 duration-200">
                   <div className="w-14 h-14 mx-auto rounded-2xl bg-t-bg-input border border-t-border-focus flex items-center justify-center text-t-text-accent">
                     <Lock className="w-7 h-7" />
                   </div>
