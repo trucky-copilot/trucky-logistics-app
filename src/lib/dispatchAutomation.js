@@ -257,7 +257,10 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
   const equipoMatch = primaryText.match(/(?:equipment|equipo|container\s*type)\s*[:\-]\s*(.+?)(?=\s{2,}|\s+(?:miles|total|rate|notes|commodity|weight|payment)\b|[\n\r]|$)/i);
   const equipo = equipoMatch ? equipoMatch[1].trim().slice(0, 80) : '';
   const penMatch = primaryText.match(/(?:penalt(?:y|ies)|penalidad(?:es)?)\s*[:\-]?\s*(.+?)(?=\s{2,}|[\n\r]|$)/i);
-  const penalidades = penMatch ? penMatch[1].split(/\s(?=(?:notes|miles|total\s*rate[^:]{0,15}|payment\s*terms|equipment|delivery(?:\s*date\/time)?|pickup(?:\s*date\/time)?|broker(?:\s*mc)?|carrier)\s*:)/i)[0].trim().slice(0, 160) : '';
+  let penalidades = penMatch ? penMatch[1].split(/\s(?=(?:notes|miles|total\s*rate[^:]{0,15}|payment\s*terms|equipment|delivery(?:\s*date\/time)?|pickup(?:\s*date\/time)?|broker(?:\s*mc)?|carrier)\s*:)/i)[0].trim().slice(0, 160) : '';
+  // QA 23-nov: cortar en el monto ("Late delivery penalty $150"), sin la frase siguiente del PDF.
+  const penConMonto = penalidades.match(/^.*?\$\s*[\d,]+(?:\.\d{2})?(?:\s*(?:usd|per\s+(?:hour|hr|day)|\/\s*(?:hour|hr|day|h))\b)?/i);
+  if (penConMonto) penalidades = penConMonto[0].trim();
 
   // 6. REFERENCIA / LOAD #
   const refMatch =
@@ -279,13 +282,20 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
 
   // 8. NOTAS LIMPIAS (solo notas operativas breves del documento si existen, sin pegar el hilo ni bloques largos)
   let notas = '';
-  const shippingNoteMatch = primaryText.match(/Shipping\s*Note\s*[:\-]\s*([^\n\r]+)/i);
-  const commodityMatch = primaryText.match(/Commodity\s*[:\-]\s*([^\n\r]+)/i);
+  // QA 23-nov: el PDF llega en una sola línea → cada campo se corta donde empieza el siguiente
+  // (antes "Commodity" se llevaba el resto del documento y la nota quedaba cortada).
+  const HASTA_CAMPO = '(.+?)(?=\\s{2,}|\\s+(?:total\\s*rate|rate|payment\\s*terms|detention|tonu|penalt\\w*|notes|miles|weight|equipment|commodity|shipping\\s*note|pickup|delivery|broker|carrier|signature)\\b[^:\\n]{0,20}:|[\\n\\r]|$)';
+  const campo = (label) => (primaryText.match(new RegExp('\\b' + label + '\\s*[:\\-]\\s*' + HASTA_CAMPO, 'i'))?.[1] || '').trim().slice(0, 120);
+  const nota_envio = campo('Shipping\\s*Note');
+  const carga = campo('Commodity');
+  const pago = campo('Payment\\s*terms');
+  const detention = campo('Detention');
+  const tonu = campo('TONU');
   const noteParts = [];
   if (numero_referencia) noteParts.push(`Load #${numero_referencia}`);
   if (citasResumen) noteParts.push(`Cita: ${citasResumen}`);
-  if (commodityMatch) noteParts.push(`Carga: ${commodityMatch[1].trim()}`);
-  if (shippingNoteMatch) noteParts.push(shippingNoteMatch[1].trim());
+  if (carga) noteParts.push(`Carga: ${carga}`);
+  if (nota_envio) noteParts.push(nota_envio);
   notas = noteParts.join(' · ').slice(0, 220);
 
   // Lo que no está en el documento queda VACÍO para que el dispatcher lo complete.
@@ -306,6 +316,11 @@ export function extractLogisticsFieldsFromText(fullText = '', fallbackSubject = 
     hora_entrega,
     equipo,
     penalidades,
+    carga,
+    pago,
+    detention,
+    tonu,
+    nota_envio,
   };
 }
 
@@ -404,8 +419,14 @@ export function buildThreadSummaryForLoad({ threadMessages = [], extracted = {},
     destino && `Delivery: ${destino}${cuando(deliveryFecha, horaEntrega) ? ` (${cuando(deliveryFecha, horaEntrega)})` : ''}`,
     citas && `Cita: ${citas}`,
     equipo && `Equipo: ${equipo}`,
+    // QA 23-nov: resumen ordenado, un dato por etiqueta (antes un bloque cortado a 220 caracteres).
+    heur.carga && `Carga: ${heur.carga}`,
+    tarifaTotal > 0 && `Tarifa: $${Number(tarifaTotal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
+    heur.pago && `Pago: ${heur.pago}`,
+    heur.detention && `Detention: ${heur.detention}`,
+    heur.tonu && `TONU: ${heur.tonu}`,
     penalidades && `Penalidad: ${penalidades}`,
-    heur.notas && heur.notas.replace(/^Load #[^·]*·?\s*/, ''),
+    heur.nota_envio,
     resumenHiloParaNotas(threadMessages),
   ].filter(Boolean).join(' · ').slice(0, 1000);
 

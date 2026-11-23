@@ -87,3 +87,9 @@ test('QA 23-nov: la penalidad se cita sola aunque el PDF llegue en una sola lín
   const [r] = findRiskClauses(pdf);
   assert.equal(r.text, '❌ Penalidad: "Late delivery penalty $150"');
 });
+
+test('QA 23-nov: notas de la carga con resumen ordenado (carga, tarifa, pago, TONU, penalidad) sin cortes', () => {
+  const pdf = "RATE CONFIRMATION Broker: QA Sunshine Brokerage LLC Load #: QA-LD-7001 Equipment: 40' Reefer container Commodity: Frozen seafood - refrigerated (reefer) -10F Total rate (all-in): $1,350.00 Payment terms: Net 30 - Quick pay 2% Detention: $75/hr after 2 free hours TONU: $150 Penalties: Late delivery penalty $150 Carrier agrees to transport the shipment under the terms above.";
+  const r = buildThreadSummaryForLoad({ rawDocumentText: pdf, extracted: { tarifa_total: 1350 }, threadMessages: [] });
+  assert.match(r.notas, /Carga: Frozen seafood - refrigerated \(reefer\) -10F · Tarifa: \$1,350\.00 · Pago: Net 30 - Quick pay 2% · Detention: \$75\/hr after 2 free hours · TONU: \$150 · Penalidad: Late delivery penalty \$150$/);
+});
