@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
-import { Plus, Package, Trash2, Pencil, UserCheck } from 'lucide-react';
+import { Plus, Package, Trash2, Pencil, UserCheck, Download, Archive } from 'lucide-react';
 import StatusBadge from '@/components/StatusBadge';
 import LoadForm from '@/components/LoadForm';
 import DeleteConfirmModal from '@/components/DeleteConfirmModal';
@@ -16,6 +16,8 @@ import { ToastAction } from '@/components/ui/toast';
 import { onlyActiveProfile, buildDriverOptions, storeDispatchDraft } from '@/lib/driverAssignment';
 import { AUTOMATION_CHECKER_TO_LOAD_KEY } from '@/lib/dispatchAutomation';
 import { effectiveRate, effectiveRpm, estimateProfit } from '@/lib/loadRate';
+import { weekRange, monthRange, inRange, availableMonths, isMonthClosed, periodTotals } from '@/lib/loadPeriods';
+import { downloadMonthlyLoadsPdf } from '@/lib/loadsMonthlyPdf';
 
 export default function Loads() {
   const orgId = useOrganizationId();
@@ -30,6 +32,9 @@ export default function Loads() {
   const [deleteLoad, setDeleteLoad] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [filter, setFilter] = useState('all');
+  // Corte semanal: la pestaña abre en la semana actual. 'week:0' | 'week:-1' | 'month:2026-10'
+  const [period, setPeriod] = useState('week:0');
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [drivers, setDrivers] = useState([]);
   const [myAssignedLoads, setMyAssignedLoads] = useState([]);
   const [prefillLoad, setPrefillLoad] = useState(null);
@@ -114,7 +119,8 @@ export default function Loads() {
   const loadData = async () => {
     setLoading(true);
     const [data, rawDrivers, rawTrucks] = await Promise.all([
-      listByOrg(base44.entities.Load, orgId, '-created_date', 100),
+      // Antes solo las 100 últimas: el historial por mes necesita las anteriores (no se borra nada).
+      listByOrg(base44.entities.Load, orgId, '-created_date', 2000),
       listByOrg(base44.entities.Driver, orgId),
       listByOrg(base44.entities.Truck, orgId),
     ]);
@@ -156,7 +162,33 @@ export default function Loads() {
 
   // Mis cargas + las que me asignaron por correo, en la MISMA tabla.
   const allLoads = [...loads, ...myAssignedLoads.map(l => ({ ...l, _assigned: true }))];
-  const filtered = filter === 'all' ? allLoads : allLoads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
+  // Periodo elegido (semana actual, semana anterior o un mes del historial).
+  const months = availableMonths(allLoads);
+  const [periodType, periodValue] = period.split(':');
+  const range = periodType === 'month'
+    ? monthRange(...periodValue.split('-').map((v, i) => Number(v) - i))
+    : weekRange(new Date(), Number(periodValue));
+  const periodLoads = allLoads.filter(l => inRange(l, range));
+  const filtered = filter === 'all' ? periodLoads : periodLoads.filter(l => l.tipo_cliente === filter || l.estado === filter || l.resultado === filter);
+  const totals = periodTotals(filtered);
+  const monthLabel = (y, m) => new Date(y, m, 1).toLocaleDateString(isEs ? 'es-CO' : 'en-US', { month: 'long', year: 'numeric' });
+  const fmtDay = (d) => d.toLocaleDateString(isEs ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short' });
+  const lastDay = new Date(range.end); lastDay.setDate(lastDay.getDate() - 1);
+  const rangeLabel = `${fmtDay(range.start)} – ${fmtDay(lastDay)}`;
+  const selMonth = periodType === 'month' ? periodValue.split('-').map(Number) : null; // [año, mes 1-12]
+  const monthClosed = selMonth ? isMonthClosed(selMonth[0], selMonth[1] - 1) : false;
+
+  const handleDownloadPdf = async () => {
+    if (!selMonth) return;
+    setDownloadingPdf(true);
+    try {
+      await downloadMonthlyLoadsPdf(periodLoads, { year: selMonth[0], month: selMonth[1] - 1, isEs });
+    } catch (err) {
+      toast({ title: isEs ? 'No se pudo generar el PDF' : 'Could not create the PDF', description: err?.message || '', variant: 'destructive' });
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const handleSave = async (data) => {
     try {
@@ -224,9 +256,6 @@ export default function Loads() {
     setShowForm(true);
   };
 
-  const totalRevenue = filtered.reduce((s, l) => s + effectiveRate(l), 0);
-  const totalMiles = filtered.reduce((s, l) => s + (l.millas || 0), 0);
-  const avgRate = totalMiles > 0 ? totalRevenue / totalMiles : 0;
 
   return (
     <div className="t-page space-y-6">
@@ -259,12 +288,49 @@ export default function Loads() {
         maxLimit={limits?.LOADS || 5}
       />
 
-      {/* Summary strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      {/* Corte semanal y archivo mensual: la vista cambia, los registros no se mueven ni se borran */}
+      <div className="flex items-center gap-2 flex-wrap">
+        <select
+          value={period}
+          onChange={(e) => setPeriod(e.target.value)}
+          aria-label={isEs ? 'Periodo' : 'Period'}
+          className="h-9 rounded-full bg-card border border-border px-3 text-xs font-semibold text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+        >
+          <option value="week:0">{isEs ? 'Esta semana' : 'This week'}</option>
+          <option value="week:-1">{isEs ? 'Semana anterior' : 'Last week'}</option>
+          <optgroup label={isEs ? 'Historial por mes' : 'Monthly history'}>
+            {months.map(({ year, month }) => (
+              <option key={`${year}-${month}`} value={`month:${year}-${month + 1}`}>
+                {monthLabel(year, month)}{isMonthClosed(year, month) ? (isEs ? ' · archivado' : ' · archived') : ''}
+              </option>
+            ))}
+          </optgroup>
+        </select>
+        <span className="text-xs text-muted-foreground">{rangeLabel}</span>
+        {monthClosed && (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-muted text-[11px] font-medium text-muted-foreground border border-border">
+            <Archive className="w-3 h-3" />{isEs ? 'Mes cerrado' : 'Closed month'}
+          </span>
+        )}
+        {selMonth && (
+          <button
+            onClick={handleDownloadPdf}
+            disabled={downloadingPdf}
+            className="ml-auto inline-flex items-center gap-1.5 h-9 px-3 rounded-full bg-t-action-secondary hover:bg-t-action-secondary-hover text-xs font-semibold text-foreground disabled:opacity-60"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {downloadingPdf ? (isEs ? 'Generando…' : 'Generating…') : (isEs ? 'Descargar PDF del mes' : 'Download monthly PDF')}
+          </button>
+        )}
+      </div>
+
+      {/* Summary strip (del periodo elegido) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: t.loadsPage.revenue, value: `$${totalRevenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
-          { label: t.loadsPage.shown, value: filtered.length },
-          { label: t.loadsPage.avgRate, value: totalMiles > 0 ? `$${avgRate.toFixed(2)}` : '--' },
+          { label: t.loadsPage.revenue, value: `$${totals.revenue.toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
+          { label: t.loadsPage.shown, value: totals.count },
+          { label: t.loadsPage.avgRate, value: totals.miles > 0 ? `$${totals.rpm.toFixed(2)}` : '--' },
+          { label: isEs ? 'Ganancia estimada' : 'Estimated profit', value: `${totals.profit < 0 ? '-' : ''}$${Math.abs(totals.profit).toLocaleString('en-US', { maximumFractionDigits: 0 })}` },
         ].map((item, i) => (
           <div key={i} className="bg-card border border-border rounded-xl p-3">
             <p className="text-xs text-muted-foreground">{item.label}</p>
@@ -307,7 +373,11 @@ export default function Loads() {
       ) : filtered.length === 0 ? (
         <div className="text-center py-12 text-muted-foreground">
           <Package className="w-8 h-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm">{t.loadsPage.noMatches}</p>
+          <p className="text-sm">{periodLoads.length === 0
+            ? (periodType === 'week' && periodValue === '0'
+              ? (isEs ? 'Semana nueva: aún no hay cargas. Las de semanas anteriores están en el selector.' : 'New week: no loads yet. Earlier weeks are in the selector.')
+              : (isEs ? 'Sin cargas en este periodo.' : 'No loads in this period.'))
+            : t.loadsPage.noMatches}</p>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
