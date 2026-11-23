@@ -92,40 +92,67 @@ export default function Dashboard() {
     // Antes, con orgId = null, listByOrg devolvía [] al instante, loading pasaba
     // a false y se pintaban $0 / "My organization" como si fueran datos reales.
     if (organizationLoading || !activeProfileId) return;
+    let cancelled = false;
+    let retryTimer = null;
+    // Límite de Base44 (429): esperar los segundos que indica "Retry after Xs".
+    const esperaLimite = (err) => {
+      const m = String(err?.message || err || '');
+      if (!/rate limit|429/i.test(m)) return 0;
+      return ((Number(m.match(/retry after\s*(\d+)/i)?.[1]) || 10) + 1) * 1000;
+    };
+
+    const cargar = async (intento = 0) => {
+      // Si una consulta falla, se muestra lo demás (antes toda la pantalla quedaba en error).
+      const results = await Promise.allSettled([
+        listByOrg(base44.entities.Truck, orgId),
+        listByOrg(base44.entities.Load, orgId, '-created_date', 50),
+        listByOrg(base44.entities.Broker, orgId),
+        listByOrg(base44.entities.Driver, orgId),
+        listByOrg(base44.entities.Notification, orgId, '-created_date', 10),
+        currentUser?.email ? base44.entities.CostConfig.filter({ usuario: currentUser.email }) : Promise.resolve([]),
+      ]);
+      if (cancelled) return;
+      const [rawTrucks, rawLoads, rawBrokers, rawDrivers, rawNotifs, configs] =
+        results.map(r => (r.status === 'fulfilled' ? (r.value || []) : null));
+      const fallos = results.filter(r => r.status === 'rejected').map(r => r.reason);
+
+      // null = esa consulta falló: se conserva lo que ya había en pantalla
+      if (rawTrucks) setTrucks(filterByProfile(rawTrucks, 'trucks'));
+      if (rawLoads) setLoads(filterByProfile(rawLoads, 'loads'));
+      if (rawBrokers) setBrokers(filterByProfile(rawBrokers, 'brokers'));
+      if (rawDrivers) setDrivers(filterByProfile(rawDrivers, 'drivers'));
+      if (rawNotifs) {
+        const notifIds = getProfileIds('notifs') || [];
+        setNotifications(rawNotifs.filter(n => {
+          if (n.profile_id) return n.profile_id === activeProfileId;
+          if (activeProfileId === '1' && notifIds.length === 0) return true;
+          return notifIds.includes(n.id);
+        }));
+      }
+      if (configs) setCostConfig(configs.length > 0 ? configs[0] : null);
+
+      if (fallos.length === 0) { setError(null); setLoading(false); return; }
+      console.error('Dashboard: error al cargar datos', fallos);
+      const espera = Math.max(0, ...fallos.map(esperaLimite));
+      if (espera > 0 && intento < 3) {
+        // Límite de consultas: reintentar solo (máximo 3 veces).
+        retryTimer = setTimeout(() => { if (!cancelled) cargar(intento + 1); }, espera);
+        if (fallos.length === results.length) return; // sigue cargando hasta el reintento
+      } else if (fallos.length === results.length) {
+        setError(t.dashboard.error);
+      }
+      setLoading(false);
+    };
+
     setLoading(true);
     setError(null);
-    Promise.all([
-      listByOrg(base44.entities.Truck, orgId),
-      listByOrg(base44.entities.Load, orgId, '-created_date', 50),
-      listByOrg(base44.entities.Broker, orgId),
-      listByOrg(base44.entities.Driver, orgId),
-      listByOrg(base44.entities.Notification, orgId, '-created_date', 10),
-      currentUser?.email ? base44.entities.CostConfig.filter({ usuario: currentUser.email }) : Promise.resolve([]),
-    ]).then(([rawTrucks, rawLoads, rawBrokers, rawDrivers, rawNotifs, configs]) => {
-      setTrucks(filterByProfile(rawTrucks, 'trucks'));
-      setLoads(filterByProfile(rawLoads, 'loads'));
-      setBrokers(filterByProfile(rawBrokers, 'brokers'));
-      setDrivers(filterByProfile(rawDrivers, 'drivers'));
-
-      const notifIds = getProfileIds('notifs') || [];
-      const filteredNotifs = rawNotifs.filter(n => {
-        if (n.profile_id) return n.profile_id === activeProfileId;
-        if (activeProfileId === '1' && notifIds.length === 0) return true;
-        return notifIds.includes(n.id);
-      });
-      setNotifications(filteredNotifs);
-
-      if (configs && configs.length > 0) {
-        setCostConfig(configs[0]);
-      } else {
-        setCostConfig(null);
-      }
-    }).catch((err) => {
+    cargar().catch((err) => {
+      if (cancelled) return;
       console.error('Dashboard: error al cargar datos', err);
       setError(t.dashboard.error);
-    }).finally(() => {
       setLoading(false);
     });
+    return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
   }, [orgId, activeProfileId, organizationLoading, currentUser?.email]);
 
   // ── Cálculos intactos de KPIs ────────────────────────────────────────────────

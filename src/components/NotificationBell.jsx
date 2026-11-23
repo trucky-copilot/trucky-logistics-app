@@ -91,10 +91,16 @@ export default function NotificationBell() {
 
   useEffect(() => {
     loadUnread();
-    const interval = setInterval(loadUnread, 30000);
+    // Límite de Base44 (140 consultas/min por usuario, sumando pestañas): antes se
+    // pedían 5 listas cada 30 s aunque la pestaña estuviera oculta. Ahora cada 2 min
+    // y solo con la pestaña visible; al volver a la pestaña se actualiza enseguida.
+    const tick = () => { if (document.visibilityState === 'visible') loadUnread(); };
+    const interval = setInterval(tick, 120000);
+    document.addEventListener('visibilitychange', tick);
     window.addEventListener('notifications-updated', loadUnread);
     return () => {
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', tick);
       window.removeEventListener('notifications-updated', loadUnread);
     };
   }, [loadUnread]);

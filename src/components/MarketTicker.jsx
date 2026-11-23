@@ -22,13 +22,25 @@ function useMarketTickerData() {
   const [raw, setRaw] = useState(null);
 
   useEffect(() => {
-    base44.entities.GlobalMarketTicker.filter().then(records => {
-      const res = records.find(r => r.id === 'global') || records[0];
-      if (res) setRaw(res);
-    }).catch(err => console.error('[MarketTicker] fetch error:', err));
+    // Caché de 10 min: no volver a consultar el ticker en cada recarga (límite de Base44).
+    const CACHE_KEY = 'trucky_ticker';
+    const save = (data) => { try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data })); } catch (_) {} };
+    let cached = null;
+    try { cached = JSON.parse(sessionStorage.getItem(CACHE_KEY) || 'null'); } catch (_) {}
+    if (cached?.data && Date.now() - cached.at < 600000) {
+      setRaw(cached.data);
+    } else {
+      base44.entities.GlobalMarketTicker.filter().then(records => {
+        const res = records.find(r => r.id === 'global') || records[0];
+        if (res) { setRaw(res); save(res); }
+      }).catch(err => {
+        console.error('[MarketTicker] fetch error:', err);
+        if (cached?.data) setRaw(cached.data); // mejor el último valor que nada
+      });
+    }
 
     const onUpdated = (e) => {
-      if (e.detail) setRaw(e.detail);
+      if (e.detail) { setRaw(e.detail); save(e.detail); }
     };
     window.addEventListener('tickerUpdated', onUpdated);
     return () => window.removeEventListener('tickerUpdated', onUpdated);
