@@ -1,7 +1,7 @@
 // QA 17-nov (F3, F4, F5): automatización Emails → Verificador → Carga.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyRiskGuards, buildThreadSummaryForLoad, classifyLoadDocument, summarizeThreadForChecker } from '../src/lib/dispatchAutomation.js';
+import { applyRiskGuards, findRiskClauses, buildThreadSummaryForLoad, classifyLoadDocument, summarizeThreadForChecker } from '../src/lib/dispatchAutomation.js';
 
 const DOC = "RATE CONFIRMATION QA TEST DOCUMENT Broker: QA Test Brokerage LLC Load #: QA-LD-1001 Carrier: GrauLogistics Pickup: POMTOC Terminal, Miami, FL 33132 Pickup date/time: 11/25/2026 08:00 Delivery: Bartow Cold Storage, Bartow, FL 33830 Delivery date/time: 11/25/2026 15:00 Equipment: 40' Reefer container (Overweight, tri-axle) Miles: 215 Total rate (All-In USD): $1,600.00 Payment terms: Net 30 Penalties: Late delivery penalty: $150";
 
@@ -80,4 +80,10 @@ test('F4: las notas incluyen lo conversado en el hilo (sin texto citado)', () =>
   const r = buildThreadSummaryForLoad({ rawDocumentText: DOC, extracted: {}, threadMessages });
   assert.match(r.notas, /Hilo: luis \(19\/11 20:08\): Received, we will confirm the driver today\. \| luis \(19\/11 20:10\): Confirmed\. Pickup 08:00, please arrive 30 min early\.$/);
   assert.doesNotMatch(r.notas, /attached|escribió|> /);
+});
+
+test('QA 23-nov: la penalidad se cita sola aunque el PDF llegue en una sola línea', () => {
+  const pdf = "RATE CONFIRMATION QA TEST DOCUMENT - internal Trucky testing - not a real load Broker: QA Sunshine Brokerage LLC Broker MC: MC 900006 Load #: QA-LD-6006 Equipment: 40' Reefer container Rate: $1,350 Notes: Late delivery penalty $150. Detention $75/hr after 2 free hours";
+  const [r] = findRiskClauses(pdf);
+  assert.equal(r.text, '❌ Penalidad: "Late delivery penalty $150"');
 });

@@ -830,7 +830,15 @@ export default function Emails() {
       // Un correo que te envías a ti mismo llega como "enviado" y "recibido" con el
       // mismo gmail_message_id: se muestra una sola vez.
       const gmailId = email.gmail_message_id ? String(email.gmail_message_id) : null;
-      if (gmailId && g.messages.some(m => String(m.gmail_message_id || '') === gmailId)) continue;
+      // QA 23-nov: si una copia trae el adjunto y la otra no, se conserva el adjunto
+      // (antes la automatización perdía el PDF y solo mandaba el resumen del correo).
+      const dup = gmailId ? g.messages.find(m => String(m.gmail_message_id || '') === gmailId) : null;
+      if (dup) {
+        if (!(Array.isArray(dup.adjuntos) && dup.adjuntos.length) && Array.isArray(email.adjuntos) && email.adjuntos.length) {
+          dup.adjuntos = email.adjuntos;
+        }
+        continue;
+      }
       g.messages.push(email);
     }
 
@@ -1192,10 +1200,17 @@ export default function Emails() {
           if (!m.gmail_message_id) continue;
           try {
             const { token } = await ensureValidGoogleToken();
-            const detailRes = await fetch(
-              `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.gmail_message_id}?format=full`,
-              { headers: { Authorization: `Bearer ${token}` } }
-            );
+            const detailUrl = `https://gmail.googleapis.com/gmail/v1/users/me/messages/${m.gmail_message_id}?format=full`;
+            let detailRes = await fetch(detailUrl, { headers: { Authorization: `Bearer ${token}` } });
+            // QA 23-nov: permiso de Google vencido → renovarlo y reintentar (antes se ignoraba).
+            if (detailRes.status === 401) {
+              const fresh = await requestGoogleToken('', googleConnectedEmail || '');
+              if (fresh?.token) {
+                setOauthToken(fresh.token);
+                saveStoredGoogleAuth(fresh.token, fresh.email || googleConnectedEmail, activeProfileId);
+                detailRes = await fetch(detailUrl, { headers: { Authorization: `Bearer ${fresh.token}` } });
+              }
+            }
             if (detailRes.ok) {
               const detail = await detailRes.json();
               const extracted = extractAttachmentsFromGmailPayload(detail?.payload, m.gmail_message_id);
@@ -1239,6 +1254,17 @@ export default function Emails() {
         } catch (pdfErr) {
           console.warn('[Automatización] No se pudo extraer texto del PDF, usando cuerpo del hilo:', pdfErr);
         }
+      }
+
+      // QA 23-nov: había PDF pero no se pudo leer → avisar (no seguir en silencio con el resumen).
+      if (targetAttachment && !extractedDocText) {
+        toast({
+          title: isEs ? 'No se pudo leer el PDF adjunto' : 'Could not read the attached PDF',
+          description: isEs
+            ? `Se enviará solo el texto del correo. Vuelve a intentar o sube "${attachmentName}" en el Verificador.`
+            : `Only the email text will be sent. Try again or upload "${attachmentName}" in the Document Checker.`,
+          variant: 'destructive',
+        });
       }
 
       // Identificar correo del broker (último remitente externo, nunca el propio usuario)

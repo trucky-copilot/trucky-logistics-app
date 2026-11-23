@@ -506,10 +506,19 @@ export function findRiskClauses(text = '') {
   if (pen) {
     // la línea completa donde aparece ("Late delivery penalty: $250 per hour of delay.")
     let line = (t.split(/\n|(?<=\.)\s+/).find(l => PENALTY_RE.test(l)) || pen[0]).trim();
+    // QA 23-nov: el PDF llega en una sola línea; se cita solo la frase de la penalidad
+    // (hasta 3 palabras que la describen + el monto), nunca desde el comienzo del documento.
+    const KW = '(?:penalt|penalidad|multa|late\\s*fee|liquidated|charge\\s*-?\\s*back)';
+    const PREV = '(?:\\b(?:late|early|missed|delivery|pickup|appointment|detention|cancellation|service|no-?show)\\s+){0,3}';
     // QA: cortar en el monto ("…penalty: $150"); el PDF llega en una sola línea y antes
     // se colaba la frase siguiente ("Carrier agrees to transport…").
-    const conMonto = line.match(/^.*?(?:penalt|penalidad|multa|late\s*fee|liquidated|charge\s*-?\s*back)[^$\d]*?\$\s*[\d,]+(?:\.\d{2})?(?:\s*(?:usd|per\s+(?:hour|hr|day|hora|d[ií]a)|\/\s*(?:hour|hr|day|h)))?/i);
+    const conMonto = line.match(new RegExp(PREV + KW + '[^$\\d]{0,60}?\\$\\s*[\\d,]+(?:\\.\\d{2})?(?:\\s*(?:usd|per\\s+(?:hour|hr|day|hora|d[ií]a)|\\/\\s*(?:hour|hr|day|h)))?', 'i'));
     if (conMonto) line = conMonto[0];
+    else {
+      const k = line.search(new RegExp(PREV + KW, 'i'));
+      if (k > 0) line = line.slice(k);
+      line = line.split(/\s{2,}|\b[A-Z][\w #]{1,20}:\s/)[0] || line;
+    }
     line = line.replace(/^(?:penalt(?:y|ies)|penalidad(?:es)?)\s*:\s*(?=.*(?:penalt|penalidad))/i, '').trim().slice(0, 160);
     risks.push({ key: 'clause', text: `❌ Penalidad: "${line}"` });
   }

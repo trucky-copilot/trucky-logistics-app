@@ -272,9 +272,12 @@ function validarCommodity(datos, carrierProfile) {
       { keyword: 'overweight', campo: 'overweight_allowed', label: 'Sobrepeso' },
       { keyword: 'oversize', campo: 'overweight_allowed', label: 'Sobredimensionado' },
     ];
+    // QA 23-nov: "reefer" y "refrigerated" son la misma capacidad → una sola alerta.
+    const vistos = new Set();
     especiales.forEach(({ keyword, campo, label }) => {
       const requiere = commLower.includes(keyword) || (datos.commodity_especial || '').toLowerCase().includes(keyword);
-      if (requiere) {
+      if (requiere && !vistos.has(campo)) {
+        vistos.add(campo);
         if (carrierProfile && !carrierProfile[campo]) {
           hallazgos.push(`❌ Commodity requiere ${label} — carrier NO tiene esta capacidad habilitada`);
           semaforo = 'rojo';
@@ -594,6 +597,7 @@ function validarCarrier(datos, carrierProfile, userInfo = null, allCarrierProfil
 
   if (!datos.carrier_mc || datos.carrier_mc === 'null' || datos.carrier_mc.toLowerCase() === 'n/a') {
     hallazgos.push('⚠ MC del carrier no especificado en documento');
+    if (semaforo === 'verde') semaforo = 'amarillo'; // QA 23-nov: no mostrar "OK" con esta advertencia
   }
 
   return {
@@ -656,6 +660,9 @@ function validarFechasOperacion(datos) {
 
   if (datos.appointment_window) {
     hallazgos.push(`✓ Appointment window: ${datos.appointment_window}`);
+  } else if (datos.pickup_hora && datos.delivery_hora) {
+    // QA 23-nov: el documento trae las horas de recogida y entrega → hay ventana.
+    hallazgos.push(`✓ Horarios: pickup ${datos.pickup_hora} · delivery ${datos.delivery_hora}`);
   } else {
     hallazgos.push('⚠ Appointment window no especificada — posibles esperas sin compensación');
     if (semaforo === 'verde') semaforo = 'amarillo';
