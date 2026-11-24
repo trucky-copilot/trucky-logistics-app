@@ -6,6 +6,7 @@
  * Regla de negocio estricta: "Las notificaciones deben mostrar de todos los módulos que estén
  * en rojo o amarillo en brokers, en flotas, en conductores, en cargas; las verdes no".
  */
+import { readPrefs, applyAlertPrefs } from './userPreferences.js';
 
 /**
  * Textos de notificaciones que genera la propia app (no el usuario).
@@ -32,7 +33,9 @@ export function getOperationalAlerts({
   brokers = [],
   loads = [],
   notifications = [],
-  locale = 'es'
+  locale = 'es',
+  // F3-15 fase 7: preferencias de Configuración → Notificaciones (módulos y días de anticipación).
+  prefs = readPrefs().notificaciones,
 }) {
   const isEn = locale === 'en';
   const alerts = [];
@@ -173,6 +176,7 @@ export function getOperationalAlerts({
           icon: 'FileWarning',
           link: '/conductores',
           urgent: false,
+          diasParaVencer: diff,
         });
       }
     }
@@ -476,7 +480,7 @@ export function getOperationalAlerts({
   // ==========================================
   // ORDENAMIENTO: Primero Rojas (críticas), luego Amarillas
   // ==========================================
-  return alerts.sort((a, b) => {
+  return applyAlertPrefs(alerts, prefs).sort((a, b) => {
     if (a.nivel === 'rojo' && b.nivel !== 'rojo') return -1;
     if (a.nivel !== 'rojo' && b.nivel === 'rojo') return 1;
     return 0;

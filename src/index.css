@@ -179,6 +179,20 @@
   }
 }
 
+/* Lo mismo cuando se activa en Configuración → Accesibilidad → Reducir movimiento. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+html.reduce-motion .animate-trucky-ticker,
+html.reduce-motion .trucky-blink {
+  animation: none !important;
+}
+
 /* ── Modo claro: compatibilidad con colores fijos del código ─────────────
    Mientras cada módulo se migra a los tokens (fases 2–5), en modo claro los
    blancos/grises pensados para fondo oscuro pasan a los tokens del Figma.

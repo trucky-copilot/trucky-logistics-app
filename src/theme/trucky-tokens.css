@@ -171,3 +171,26 @@ html.light, html[data-theme="light"] {
   --t-shadow-glow: 0 0 32px 0 var(--t-glow);
   --t-ring-focus: 0 0 0 3px var(--t-focus);
 }
+
+/* Accesibilidad · Alto contraste (Configuración → Accesibilidad): textos secundarios
+   y bordes más marcados, en los dos modos. */
+html.high-contrast {
+  --t-text-secondary: 240 239 250;
+  --t-text-muted: 214 212 235;
+  --t-border-default: 129 126 169;
+  --t-border-strong: 190 188 220;
+  --t-border-subtle: 90 87 142;
+  --muted-foreground: 245 40% 88%;
+  --border: 244 22% 58%;
+  --input: 244 22% 58%;
+}
+html.light.high-contrast, html.high-contrast[data-theme="light"] {
+  --t-text-secondary: 30 26 60;
+  --t-text-muted: 48 44 92;
+  --t-border-default: 110 108 155;
+  --t-border-strong: 59 53 88;
+  --t-border-subtle: 169 168 199;
+  --muted-foreground: 245 35% 26%;
+  --border: 244 18% 52%;
+  --input: 244 18% 52%;
+}
