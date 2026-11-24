@@ -15,6 +15,17 @@ function localEmailPlugin() {
 // https://vite.dev/config/
 export default defineConfig({
   logLevel: 'error', // Suppress warnings, only show errors
+  // Una sola copia de React: si el optimizador de dependencias descubre un
+  // entry nuevo a mitad de sesión (p. ej. react/jsx-dev-runtime), se recarga
+  // con otra copia de React y los hooks fallan con "Cannot read properties of
+  // null (reading 'useState')". Con dedupe + include todo entra en la misma
+  // optimización desde el arranque.
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+  },
   plugins: [
     localEmailPlugin(),
     base44({
@@ -28,4 +39,4 @@ export default defineConfig({
     }),
     react(),
   ]
-});
+});
