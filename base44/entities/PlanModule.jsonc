@@ -12,11 +12,25 @@
     },
     "enabled": {
       "type": "boolean",
-      "description": "true = el plan incluye el módulo"
+      "description": "true = el plan incluye el m\u00f3dulo"
     },
     "actualizado_por": {
       "type": "string",
-      "description": "Correo de quien hizo el último cambio"
+      "description": "Correo de quien hizo el \u00faltimo cambio",
+      "rls": {
+        "read": {
+          "$or": [
+            {
+              "created_by_id": "{{user.id}}"
+            },
+            {
+              "user_condition": {
+                "role": "admin"
+              }
+            }
+          ]
+        }
+      }
     }
   },
   "required": [
