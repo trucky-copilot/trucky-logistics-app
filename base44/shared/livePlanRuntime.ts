@@ -1,3 +1,4 @@
+import {academyPlanCredit} from './academyPlanCredit.ts';
 import {paidPlanCredit} from './paidPlanCredit.ts';
 import {createLivePlanCache} from './livePlanCache.ts';
 const cachedPlan=createLivePlanCache();
@@ -18,10 +19,19 @@ export async function livePlanForUser(base44:any,user:any,options:{fresh?:boolea
    if(!r.ok||r.status>=300)throw Error('LIVE_SUBSCRIPTION_UNAVAILABLE');
    const sub=await r.json();
    const invoicesUrl=new URL('https://api.stripe.com/v1/invoices');invoicesUrl.searchParams.set('subscription',id);invoicesUrl.searchParams.set('status','paid');invoicesUrl.searchParams.set('limit','100');
+   // Expand only invoice discounts, so the free-month exception verifies the actual coupon.
+   if(sub.metadata?.academy_offer==='ACADEMY')invoicesUrl.searchParams.append('expand[]','data.discounts');
    const invoicesResponse=await fetch(invoicesUrl,{redirect:'manual',headers:{Authorization:`Bearer ${key}`},signal:AbortSignal.timeout(12000)}).catch(()=>{throw Error('LIVE_SUBSCRIPTION_UNAVAILABLE');});
    if(!invoicesResponse.ok||invoicesResponse.status>=300)throw Error('LIVE_SUBSCRIPTION_UNAVAILABLE');
    const invoices=await invoicesResponse.json();
-   const credit=paidPlanCredit(sub,invoices.data||[],{owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')});
+   const prices={owner_op:Deno.env.get('STRIPE_LIVE_PRICE_OWNER_OP'),fleet:Deno.env.get('STRIPE_LIVE_PRICE_FLEET')};
+   let credit;
+   try{credit=paidPlanCredit(sub,invoices.data||[],prices);}
+   catch(error){
+    // Ambiguous/failed paid credits never become free access. Ordinary zero invoices stay denied.
+    if(!(error instanceof Error)||error.message!=='PAID_PLAN_CREDIT_REQUIRED')throw error;
+    credit=await academyPlanCredit(sub,invoices.data||[],prices,redis);
+   }
    return {...sub,verifiedPaidCredit:credit};
   },
  });
