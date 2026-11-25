@@ -1346,11 +1346,14 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           } else {
             content = `📍 **Tarifa de Referencia (${locName})**\nPara el equipo **${equipName}**, la tarifa promedio actual es de **$${outcome.rpm.toFixed(2)} por milla**.`;
           }
-          // QA 25-nov: decir claramente que el estado no tiene dato de ese equipo.
+          // QA 25-nov: si el estado no tiene dato de ese equipo, solo se dice eso.
+          // No se muestra el promedio nacional si el usuario no lo pidió.
           if (outcome.sinDatoEstado) {
-            content = (locale === 'en'
-              ? `ℹ️ **${outcome.sinDatoEstado}** has no ${equipName} rate in the latest market report. The national average is shown instead.\n\n`
-              : `ℹ️ **${outcome.sinDatoEstado}** no tiene tarifa de ${equipName} en el último reporte de mercado. Se muestra el promedio nacional.\n\n`) + content;
+            rpmPermitido = null;
+            const estadoNombre = outcome.sinDatoEstadoNombre || outcome.sinDatoEstado;
+            content = locale === 'en'
+              ? `ℹ️ **${estadoNombre}** has no **${equipName}** rate in the latest market report.`
+              : `ℹ️ **${estadoNombre}** no tiene tarifa de **${equipName}** en el último reporte de mercado.`;
           }
         } else if (outcome.kind === 'ask_miles') {
           content = buildMissingDataMarkdown(locale);

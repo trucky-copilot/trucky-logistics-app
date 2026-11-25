@@ -1480,7 +1480,7 @@ export type GenericQuoteOutcome =
   | { kind: 'ask_miles' }
   | { kind: 'fuera_de_rango' }
   | { kind: 'quote'; calculo: CalculatedQuote }
-  | { kind: 'national_rpm_only'; rpm: number; equipmentLabel: string; estadoBusqueda: string; sinDatoEstado?: string };
+  | { kind: 'national_rpm_only'; rpm: number; equipmentLabel: string; estadoBusqueda: string; sinDatoEstado?: string; sinDatoEstadoNombre?: string };
 
 export function resolveGenericQuote(params: {
   origenRaw?: unknown;
@@ -1622,7 +1622,8 @@ export function resolveGenericQuote(params: {
   // Intercepción: Si el usuario NO dio millas (o el LLM extrajo 0 por error), devolvemos la tarifa de referencia del estado o nacional (RPM base).
   // Ya no pedimos las millas obligatoriamente para cotizaciones genéricas si no se pudieron calcular.
   if (millasIda == null || millasIda === 0) {
-    return { kind: 'national_rpm_only', rpm: rpmBase, equipmentLabel: equipment.label, estadoBusqueda, ...(sinDatoEstado ? { sinDatoEstado } : {}) };
+    return { kind: 'national_rpm_only', rpm: rpmBase, equipmentLabel: equipment.label, estadoBusqueda,
+      ...(sinDatoEstado ? { sinDatoEstado, sinDatoEstadoNombre: STATE_NAMES[sinDatoEstado] || sinDatoEstado } : {}) };
   }
   if (!dentroDelRangoDeSanidad(millasIda)) return { kind: 'fuera_de_rango' };
 

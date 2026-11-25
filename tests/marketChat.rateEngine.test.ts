@@ -1752,6 +1752,7 @@ Deno.test('QA 25-nov: estado sin dato de Reefer (Hawái) no se presenta como tar
   if (sinMillas.kind !== 'national_rpm_only') throw new Error('unreachable');
   assertEquals(sinMillas.estadoBusqueda, 'US');
   assertEquals(sinMillas.sinDatoEstado, 'HI');
+  assertEquals(sinMillas.sinDatoEstadoNombre, 'Hawaii');
   assertEquals(sinMillas.rpm, 3.71); // promedio nacional del último reporte, no el del código
   // Con dato del estado, se usa el del estado.
   const dryVan = EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van')!;
