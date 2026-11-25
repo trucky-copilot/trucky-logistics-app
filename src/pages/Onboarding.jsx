@@ -128,12 +128,15 @@ export default function Onboarding({ onComplete }) {
     const costData = {
       usuario:       user.email,
       organization_id: org.id,
+      profile_id:    '1',
       diesel_precio: parseFloat(diesel),
       mpg:           parseFloat(mpg),
       pago_conductor_porcentaje: parseFloat(conductor),
-      // No guardamos costo_por_milla ni gastos fijos predeterminados aquí.
-      // Así el usuario queda "sin configurar" hasta que entre explícitamente 
-      // a la calculadora, disparendo el interceptor del chat si intenta usarlo antes.
+      // QA 25-nov: el registro inicial deja la calculadora configurada (antes el chat
+      // pedía configurarla aunque el usuario ya la había llenado aquí). Se guardan los
+      // mismos costos fijos estimados con los que se mostró el break-even en este paso.
+      ...FIXED_COST_DEFAULTS,
+      ...(costos.valido ? { costo_por_milla: costos.costoPorMilla, tarifa_break_even: costos.tarifaBreakEven } : {}),
     };
     if (existingCosts.length > 0) {
       await base44.entities.CostConfig.update(existingCosts[0].id, costData);

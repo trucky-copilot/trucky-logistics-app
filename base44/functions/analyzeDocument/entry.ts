@@ -1,4 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { completarCostosIniciales } from '../../shared/initialCostConfig.ts';
 import { authorizePlanFeature } from '../../shared/entitlements.ts';
 import { limpiarPlaceholders, ventanaHoras, esEmpresaPropia, soloDigitos } from './rules.ts';
 
@@ -1038,6 +1039,8 @@ Deno.serve(async (req) => {
     }
     
     // Validar que realmente tenga costos configurados
+    // Registro inicial (diésel, MPG y % conductor) cuenta como calculadora configurada.
+    costConfig = completarCostosIniciales(costConfig);
     if (costConfig && costConfig.costo_por_milla == null && costConfig.tarifa_break_even == null) {
       costConfig = null;
     }

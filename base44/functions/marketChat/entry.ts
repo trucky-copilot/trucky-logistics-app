@@ -1,4 +1,5 @@
 import {reserveChatWithRefresh} from '../../shared/liveChatQuota.ts';
+import { completarCostosIniciales } from '../../shared/initialCostConfig.ts';
 import {runMeteredChat,type ChatReservation} from '../../shared/chatQuotaLifecycle.ts';
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.48';
 import { authorizePlanFeature } from '../../shared/entitlements.ts';
@@ -680,7 +681,7 @@ async function handleMarketChat(req: Request, perf: PerfTracker, capture:(r:Chat
     if(access.credit)capture({access,requestId:body.request_id});
     // Fase 3: Paralelizar lecturas iniciales independientes para reducir la latencia total
     // F6-01 Fase C: tarifas desde la base (caché 60 s; si falla, se quedan las actuales).
-    const [costConfigRecord, organizationName, rawStateData, userProfileRecords] = await Promise.all([
+    let [costConfigRecord, organizationName, rawStateData, userProfileRecords] = await Promise.all([
       user ? perf.time('db.costConfig', () => fetchCostConfigRecord(base44, user.email, activeProfileId)) : Promise.resolve(null),
       perf.time('db.organizationName', () => getOrganizationName(base44, user.email)),
       getCachedStateMarketData(base44, perf),
@@ -698,6 +699,9 @@ async function handleMarketChat(req: Request, perf: PerfTracker, capture:(r:Chat
     }
     // ----------------------------------------------------------------------
 
+    // Usuario que solo hizo el registro inicial (diésel, MPG y % conductor): su
+    // calculadora ya está configurada; se completa el costo por milla con la misma fórmula.
+    if (costConfigRecord) costConfigRecord = completarCostosIniciales(costConfigRecord);
     const costConfig = getCostConfig(costConfigRecord, clientCostConfig);
 
     let stateMarketData: any[] = [];
