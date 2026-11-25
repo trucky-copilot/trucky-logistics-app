@@ -7,6 +7,7 @@ export async function academyPlanCredit(sub:any,invoices:any[],prices:{owner_op?
  const raw=await redis(['GET',`trucky:billing:academy:v1:account:${m.academy_account}`]);
  if(typeof raw!=='string')return fail();
  const receipt=JSON.parse(raw);
+ if(receipt.customerId&&receipt.customerId!==(typeof sub.customer==='string'?sub.customer:sub.customer?.id))return fail();
  if(receipt.orgId!==m.org_id||receipt.attemptId!==m.reservation_id||receipt.subscriptionId!==sub.id||receipt.priceId!==prices.owner_op||typeof receipt.couponId!=='string')return fail();
  const refId=(v:any)=>typeof v==='string'?v:v?.id;
  const customer=refId(sub.customer);
@@ -16,7 +17,7 @@ export async function academyPlanCredit(sub:any,invoices:any[],prices:{owner_op?
   if(i.lines?.has_more||i.lines?.data?.length!==1||i.discounts?.length!==1||i.total_discount_amounts?.length!==1)continue;
   const line=i.lines.data[0],discount=i.discounts[0],coupon=discount?.source?.coupon??discount?.coupon;
   const details=i.total_discount_amounts[0];
-  if(typeof discount!=='object'||discount.deleted||refId(coupon)!==receipt.couponId||discount.promotion_code||details.amount!==2900||refId(details.discount)!==discount.id)continue;
+  if(typeof discount!=='object'||discount.deleted||refId(coupon)!==receipt.couponId||(receipt.promotionCodeId?refId(discount.promotion_code)!==receipt.promotionCodeId:!!discount.promotion_code)||details.amount!==2900||refId(details.discount)!==discount.id)continue;
   if(line.amount!==2900||line.quantity!==1||(line.pricing?.price_details?.price??line.price?.id)!==prices.owner_op)continue;
   const {start,end}=line.period||{},paidAt=i.status_transitions?.paid_at;
   // One initial MONTHLY invoice period, never extended by visits or retries.
