@@ -15,6 +15,7 @@ import PrivacySection from './sections/PrivacySection';
 import HelpSection from './sections/HelpSection';
 import AccessibilitySection from './sections/AccessibilitySection';
 import NotificationsSection from './sections/NotificationsSection';
+import InviteSection from './sections/InviteSection';
 import { SETTINGS_SECTIONS, SETTINGS_GROUPS, findSection, sectionLabel } from './settingsSections';
 
 const tx = (locale, es, en) => (locale === 'en' ? en : es);
@@ -126,7 +127,8 @@ export default function Settings() {
       : current.id === 'privacidad' ? <PrivacySection locale={locale} />
       : current.id === 'ayuda' ? <HelpSection locale={locale} />
       : current.id === 'accesibilidad' ? <AccessibilitySection locale={locale} />
-      : current.id === 'notificaciones' ? <NotificationsSection locale={locale} /> : null)
+      : current.id === 'notificaciones' ? <NotificationsSection locale={locale} />
+      : current.id === 'invita' ? <InviteSection locale={locale} /> : null)
     : <Placeholder section={current} locale={locale} />;
 
   const NavItem = ({ s }) => {
