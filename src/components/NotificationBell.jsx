@@ -91,17 +91,31 @@ export default function NotificationBell() {
 
   useEffect(() => {
     loadUnread();
-    // Límite de Base44 (140 consultas/min por usuario, sumando pestañas): antes se
-    // pedían 5 listas cada 30 s aunque la pestaña estuviera oculta. Ahora cada 2 min
-    // y solo con la pestaña visible; al volver a la pestaña se actualiza enseguida.
-    const tick = () => { if (document.visibilityState === 'visible') loadUnread(); };
-    const interval = setInterval(tick, 120000);
+    // Lo más rápido posible sin pasar el límite de Base44 (140 consultas/min por
+    // usuario sumando pestañas): cada 30 s solo en la pestaña visible (las ocultas no
+    // consultan), al volver a la pestaña o a la ventana, y al instante en las demás
+    // pestañas cuando una de ellas guarda un cambio.
+    let ultimo = 0;
+    const tick = () => {
+      // focus y visibilitychange llegan juntos: una sola consulta cada 3 s como máximo
+      if (document.visibilityState !== 'visible' || Date.now() - ultimo < 3000) return;
+      ultimo = Date.now();
+      loadUnread();
+    };
+    const interval = setInterval(tick, 30000);
+    const avisarOtras = () => { try { localStorage.setItem('trucky-notifs-ping', String(Date.now())); } catch (_) {} };
+    const onLocal = () => { loadUnread(); avisarOtras(); };
+    const onStorage = (e) => { if (e.key === 'trucky-notifs-ping') tick(); };
     document.addEventListener('visibilitychange', tick);
-    window.addEventListener('notifications-updated', loadUnread);
+    window.addEventListener('focus', tick);
+    window.addEventListener('storage', onStorage);
+    window.addEventListener('notifications-updated', onLocal);
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', tick);
-      window.removeEventListener('notifications-updated', loadUnread);
+      window.removeEventListener('focus', tick);
+      window.removeEventListener('storage', onStorage);
+      window.removeEventListener('notifications-updated', onLocal);
     };
   }, [loadUnread]);
 

@@ -1342,6 +1342,12 @@ ${cappedMessages.map(m => m.role + ': ' + m.content).join('\n')}
           } else {
             content = `📍 **Tarifa de Referencia (${locName})**\nPara el equipo **${equipName}**, la tarifa promedio actual es de **$${outcome.rpm.toFixed(2)} por milla**.`;
           }
+          // QA 25-nov: decir claramente que el estado no tiene dato de ese equipo.
+          if (outcome.sinDatoEstado) {
+            content = (locale === 'en'
+              ? `ℹ️ **${outcome.sinDatoEstado}** has no ${equipName} rate in the latest market report. The national average is shown instead.\n\n`
+              : `ℹ️ **${outcome.sinDatoEstado}** no tiene tarifa de ${equipName} en el último reporte de mercado. Se muestra el promedio nacional.\n\n`) + content;
+          }
         } else if (outcome.kind === 'ask_miles') {
           content = buildMissingDataMarkdown(locale);
         } else if (outcome.kind === 'fuera_de_rango') {

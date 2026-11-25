@@ -1740,3 +1740,22 @@ Deno.test('F6-06: ciudad en la tabla → precio y millas de la tabla, sin reempl
   assertEquals(conGoogle.calculo.objetivo, sinGoogle.calculo.objetivo);
   assertEquals(conGoogle.calculo.millasIda === 27, false);
 });
+
+Deno.test('QA 25-nov: estado sin dato de Reefer (Hawái) no se presenta como tarifa del estado', () => {
+  const reefer = EQUIPMENT_BENCHMARKS.find(e => e.id === 'reefer')!;
+  const stateMarketData = [
+    { state_code: 'HI', dry_van: 3.5, reefer: null },
+    { state_code: 'US', dry_van: 3.07, reefer: 3.71 },
+  ];
+  const sinMillas = resolveGenericQuote({ equipment: reefer, destinoRaw: 'Honolulu, HI', origenRaw: 'Honolulu, HI', millasIdaDeclaradas: null, pagoCamionRpm: null, tarifaOfrecida: null, stateMarketData });
+  assertEquals(sinMillas.kind, 'national_rpm_only');
+  if (sinMillas.kind !== 'national_rpm_only') throw new Error('unreachable');
+  assertEquals(sinMillas.estadoBusqueda, 'US');
+  assertEquals(sinMillas.sinDatoEstado, 'HI');
+  assertEquals(sinMillas.rpm, 3.71); // promedio nacional del último reporte, no el del código
+  // Con dato del estado, se usa el del estado.
+  const dryVan = EQUIPMENT_BENCHMARKS.find(e => e.id === 'dry_van')!;
+  const conDato = resolveGenericQuote({ equipment: dryVan, destinoRaw: 'Honolulu, HI', origenRaw: 'Honolulu, HI', millasIdaDeclaradas: null, pagoCamionRpm: null, tarifaOfrecida: null, stateMarketData });
+  if (conDato.kind !== 'national_rpm_only') throw new Error('unreachable');
+  assertEquals([conDato.rpm, conDato.estadoBusqueda, conDato.sinDatoEstado], [3.5, 'HI', undefined]);
+});

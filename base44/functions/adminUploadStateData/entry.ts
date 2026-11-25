@@ -61,6 +61,8 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
         IMPORTANTE: Si el documento menciona promedios "Nacionales" (National Average), extráelos asignándoles el state_code "US".
         Clasifícalas en dry_van, reefer, flatbed y container (si se menciona contenedor o drayage).
         Si algún dato falta, devuélvelo como nulo, pero no omitas el estado si tienes datos de al menos un equipo.
+        NUNCA inventes valores ni copies el promedio nacional (US) ni el de otro estado a un estado que no lo trae:
+        si la celda está vacía, con guion o "N/A", ese equipo va nulo para ese estado.
         
         TEXTO A ANALIZAR:
         ${truncatedText}
@@ -79,11 +81,13 @@ export default async function adminUploadStateData(req: Request, ctx: any) {
             
             const existing = await base44.entities.StateMarketData.filter({ state_code: code });
             if (existing.length > 0) {
+              // QA 25-nov: el reporte nuevo REEMPLAZA al anterior. Lo que no trae queda
+              // vacío (antes se conservaba el valor viejo como si fuera del reporte nuevo).
               await base44.entities.StateMarketData.update(existing[0].id, {
-                dry_van: s.dry_van ?? existing[0].dry_van,
-                reefer: s.reefer ?? existing[0].reefer,
-                flatbed: s.flatbed ?? existing[0].flatbed,
-                container: s.container ?? existing[0].container
+                dry_van: s.dry_van ?? null,
+                reefer: s.reefer ?? null,
+                flatbed: s.flatbed ?? null,
+                container: s.container ?? null
               });
             } else {
               await base44.entities.StateMarketData.create({

@@ -1480,7 +1480,7 @@ export type GenericQuoteOutcome =
   | { kind: 'ask_miles' }
   | { kind: 'fuera_de_rango' }
   | { kind: 'quote'; calculo: CalculatedQuote }
-  | { kind: 'national_rpm_only'; rpm: number; equipmentLabel: string; estadoBusqueda: string };
+  | { kind: 'national_rpm_only'; rpm: number; equipmentLabel: string; estadoBusqueda: string; sinDatoEstado?: string };
 
 export function resolveGenericQuote(params: {
   origenRaw?: unknown;
@@ -1606,10 +1606,23 @@ export function resolveGenericQuote(params: {
     hasSpecificStateMatch = true;
   }
 
+  // QA 25-nov: si el estado no tiene dato de ESTE equipo, no se presenta el promedio
+  // nacional como si fuera del estado (Hawái Reefer salía "$3.66 (HI)"). Se usa el
+  // promedio nacional del último reporte (fila US) o el de referencia, con su nombre real.
+  let sinDatoEstado: string | undefined;
+  if (!hasSpecificStateMatch && estadoBusqueda && estadoBusqueda !== 'US') {
+    sinDatoEstado = estadoBusqueda;
+    const nacional = stateMarketData.find((s: any) => s.state_code === 'US');
+    const rpmNacional = Number(nacional?.[equipment.id]);
+    rpmBase = Number.isFinite(rpmNacional) && rpmNacional > 0 ? rpmNacional : equipment.rpm_target;
+    notaEstado = ` (Promedio Nacional US — sin dato de ${sinDatoEstado})`;
+    estadoBusqueda = 'US';
+  }
+
   // Intercepción: Si el usuario NO dio millas (o el LLM extrajo 0 por error), devolvemos la tarifa de referencia del estado o nacional (RPM base).
   // Ya no pedimos las millas obligatoriamente para cotizaciones genéricas si no se pudieron calcular.
   if (millasIda == null || millasIda === 0) {
-    return { kind: 'national_rpm_only', rpm: rpmBase, equipmentLabel: equipment.label, estadoBusqueda };
+    return { kind: 'national_rpm_only', rpm: rpmBase, equipmentLabel: equipment.label, estadoBusqueda, ...(sinDatoEstado ? { sinDatoEstado } : {}) };
   }
   if (!dentroDelRangoDeSanidad(millasIda)) return { kind: 'fuera_de_rango' };
 
