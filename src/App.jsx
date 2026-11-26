@@ -80,7 +80,7 @@ function AppLoading() {
 }
 // ─── Core app (reads AppStateContext & DemoContext) ──────────────────────────
 function AppContent() {
-  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
+  const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin, loggingOut } = useAuth();
   const { appState, resolveState, setupDetails } = useAppState();
   const { isTrialExpired, loadingTrial, trialData } = useDemo();
   const live=useLivePlan();
@@ -95,6 +95,10 @@ function AppContent() {
 
   // ── SIN SESIÓN (TRUCKY-46) ─────────────────────────────────────────────────
   if (appState === 'unauthenticated') return <Welcome />;
+
+  // Cerrando sesión: el usuario ya se borró pero la página aún no recarga. Antes, en
+  // ese instante, se evaluaba el demo sin usuario y salía "Demo bloqueado".
+  if (loggingOut) return <AppLoading />;
 
   // ── CONTROL DE DEMO TRIAL ──────────────────────────────────────────────────
   if (isTrialExpired && !(live.managed && live.allowed)) {

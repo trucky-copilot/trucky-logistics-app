@@ -114,7 +114,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // true desde que se pulsa "Cerrar sesión" hasta que la página recarga.
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const logout = (shouldRedirect = true) => {
+    setLoggingOut(true);
     setUser(null);
     setIsAuthenticated(false);
     
@@ -152,6 +156,7 @@ export const AuthProvider = ({ children }) => {
       appPublicSettings,
       authChecked,
       logout,
+      loggingOut,
       navigateToLogin,
       checkUserAuth,
       checkAppState
