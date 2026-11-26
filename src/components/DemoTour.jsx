@@ -51,7 +51,7 @@ const STEPS = [
 
 const isMobile = () => typeof window !== 'undefined' && window.innerWidth < 1024;
 
-export default function DemoTour({ user, locale, isDemoUser, visiblePaths = [], setSidebarOpen }) {
+export default function DemoTour({ user, locale, isDemoUser, visiblePaths = [], setSidebarOpen, onLocaleChange }) {
   const navigate = useNavigate();
   const location = useLocation();
   const en = locale === 'en';
@@ -122,7 +122,20 @@ export default function DemoTour({ user, locale, isDemoUser, visiblePaths = [], 
           <div className="relative overflow-hidden rounded-t-3xl bg-t-action-primary px-6 sm:px-8 pt-7 pb-6 text-white">
             <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-white/10" aria-hidden="true" />
             <div className="absolute right-10 -bottom-20 w-40 h-40 rounded-full bg-t-accent-lime/20" aria-hidden="true" />
-            <button type="button" onClick={cerrar} aria-label={en ? 'Close' : 'Cerrar'} className="absolute top-4 right-4 p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10"><X className="w-4 h-4" /></button>
+            <div className="absolute top-4 right-4 flex items-center gap-2">
+              {/* Idioma de la app: cambia la bienvenida, el recorrido y toda la aplicación */}
+              {onLocaleChange && (
+                <div role="radiogroup" aria-label={en ? 'Language' : 'Idioma'} className="flex items-center rounded-full bg-white/15 p-0.5">
+                  {['es', 'en'].map((l) => (
+                    <button key={l} type="button" role="radio" aria-checked={locale === l} onClick={() => onLocaleChange(l)}
+                      className={`h-7 px-3 rounded-full text-xs font-semibold transition-colors ${locale === l ? 'bg-white text-t-accent-brand' : 'text-white/85 hover:text-white'}`}>
+                      {l.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              )}
+              <button type="button" onClick={cerrar} aria-label={en ? 'Close' : 'Cerrar'} className="p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10"><X className="w-4 h-4" /></button>
+            </div>
             <div role="img" aria-label="Trucky" className="relative h-7 w-[112px] bg-white"
               style={{ WebkitMaskImage: 'url(/trucky-wordmark.png)', maskImage: 'url(/trucky-wordmark.png)', WebkitMaskSize: 'contain', maskSize: 'contain', WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat', WebkitMaskPosition: 'left center', maskPosition: 'left center' }} />
             <h2 id="tour-title" className="relative mt-5 text-2xl sm:text-[28px] font-bold leading-tight">

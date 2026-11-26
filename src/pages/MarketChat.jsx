@@ -489,14 +489,17 @@ export default function MarketChat() {
       setSessionId(newId);
       sessionIdRef.current = newId;
     };
-    if (activeProfileId) {
-      init();
-      // Si el usuario tiene el panel de historial abierto y cambia de perfil, refrescar las consultas del nuevo perfil
-      if (showHistory) {
-        openHistory();
-      }
-    }
-  }, [activeProfileId, showHistory]);
+    if (activeProfileId) init();
+    // QA 26-nov: antes este efecto también dependía de "showHistory". Al elegir una
+    // consulta del historial, el panel se cerraba, se volvía a cargar la sesión
+    // anterior del perfil y la consulta elegida se reemplazaba ("Traduciendo
+    // historial…" y luego volvía la conversación de antes).
+  }, [activeProfileId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Si el panel de historial está abierto y cambia el perfil, refrescar sus consultas.
+  useEffect(() => {
+    if (activeProfileId && showHistory) openHistory();
+  }, [activeProfileId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -985,6 +988,15 @@ export default function MarketChat() {
     pendingTranslateRef.current = true;
     setMessages(item.messages || []);
     setShowHistory(false);
+    // La consulta elegida pasa a ser la actual del perfil (también al volver al chat).
+    try {
+      const email = currentUser?.email || userProfile?.usuario || userProfile?.email;
+      if (email && activeProfileId) {
+        const lsKey = `chat_session_profile_${email}_${activeProfileId}`;
+        localStorage.setItem(lsKey, item.id);
+        localStorage.setItem(`${lsKey}_messages`, JSON.stringify(item.messages || []));
+      }
+    } catch (_e) { /* sin almacenamiento */ }
   };
 
   const openHistory = async () => {

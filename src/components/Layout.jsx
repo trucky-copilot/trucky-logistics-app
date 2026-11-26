@@ -278,6 +278,7 @@ export default function Layout() {
         isDemoUser={isDemoUser && !planLoading}
         visiblePaths={visibleNavItems.map((i) => i.path)}
         setSidebarOpen={setSidebarOpen}
+        onLocaleChange={(val) => { setLocale(val); persistLocale(val); }}
       />
     </div>
   );
