@@ -52,6 +52,7 @@ export default function Dashboard() {
   const [costConfig, setCostConfig] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [reintento, setReintento] = useState(0); // botón "Reintentar"
   const [activeSection, setActiveSection] = useState('overview');
 
   const isEs = locale !== 'en';
@@ -103,6 +104,8 @@ export default function Dashboard() {
 
     const cargar = async (intento = 0) => {
       // Si una consulta falla, se muestra lo demás (antes toda la pantalla quedaba en error).
+      // Cada consulta con tiempo límite: una que no responde ya no deja el Dashboard cargando para siempre.
+      const conLimite = (p) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error('TIMEOUT')), 15000))]);
       const results = await Promise.allSettled([
         listByOrg(base44.entities.Truck, orgId),
         listByOrg(base44.entities.Load, orgId, '-created_date', 50),
@@ -110,7 +113,7 @@ export default function Dashboard() {
         listByOrg(base44.entities.Driver, orgId),
         listByOrg(base44.entities.Notification, orgId, '-created_date', 10),
         currentUser?.email ? base44.entities.CostConfig.filter({ usuario: currentUser.email }) : Promise.resolve([]),
-      ]);
+      ].map(conLimite));
       if (cancelled) return;
       const [rawTrucks, rawLoads, rawBrokers, rawDrivers, rawNotifs, configs] =
         results.map(r => (r.status === 'fulfilled' ? (r.value || []) : null));
@@ -153,7 +156,7 @@ export default function Dashboard() {
       setLoading(false);
     });
     return () => { cancelled = true; if (retryTimer) clearTimeout(retryTimer); };
-  }, [orgId, activeProfileId, organizationLoading, currentUser?.email]);
+  }, [orgId, activeProfileId, organizationLoading, currentUser?.email, reintento]);
 
   // ── Cálculos intactos de KPIs ────────────────────────────────────────────────
   const thisWeek = loads.filter(l => {
@@ -248,6 +251,10 @@ export default function Dashboard() {
     <div className="flex flex-col items-center justify-center h-full gap-3 p-6 text-center">
       <AlertTriangle className="w-8 h-8 text-t-danger" />
       <p className="text-sm text-foreground font-medium">{error}</p>
+      <button type="button" onClick={() => setReintento((n) => n + 1)}
+        className="h-9 px-4 rounded-full bg-t-action-primary hover:bg-t-action-primary-hover text-sm font-semibold text-white">
+        {locale === 'en' ? 'Try again' : 'Reintentar'}
+      </button>
     </div>
   );
 

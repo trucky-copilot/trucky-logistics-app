@@ -16,7 +16,7 @@ export function LivePlanProvider({children}){
  useEffect(()=>{
   setState({result:null,loading:!!user?.id,unavailable:false});
   if(!user?.id)return;
-  const refresh=createLivePlanRefresh(async()=>(await base44.functions.invoke('getMyPlan',{})).data,update=>setState(previous=>({...previous,...update})));
+  const refresh=createLivePlanRefresh(async()=>(await base44.functions.invoke('getMyPlan',{})).data,update=>{if(update.unavailable===false){try{sessionStorage.removeItem('trucky-plan-retry');}catch{}}setState(previous=>({...previous,...update}));});
   void refresh.refresh();
   const focus=()=>void refresh.refresh();window.addEventListener('focus',focus);
   let ticks=0;

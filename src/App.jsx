@@ -14,6 +14,7 @@ import Layout from '@/components/Layout';
 import { DemoProvider, useDemo } from '@/lib/DemoContext';
 import DemoExpiredScreen from '@/components/DemoExpiredScreen';
 import ActivatingAccountScreen from '@/components/ActivatingAccountScreen';
+import PlanCheckRetryScreen from '@/components/PlanCheckRetryScreen';
 // Fase 1 de facturación: solo la confirmación de vinculación de identidad.
 // LiveBillingGate queda fuera hasta habilitar el control de acceso.
 import BillingLinkConfirmation from '@/components/BillingLinkConfirmation';
@@ -100,6 +101,8 @@ function AppContent() {
     // Pago hecho pero la cuenta aún no se activa: aviso, nunca "no tienes Demo activa".
     if (live.checkoutPending) return <ActivatingAccountScreen />;
     if (live.loading) return <AppLoading />;
+    // No se pudo consultar el plan: se reintenta en vez de afirmar que el demo venció.
+    if (live.unavailable) return <PlanCheckRetryScreen />;
     const reason = !trialData?.hasTrial ? 'no_trial' : 'expired';
     return <DemoExpiredScreen reason={reason} />;
   }

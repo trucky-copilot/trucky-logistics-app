@@ -4,10 +4,23 @@
 // Configuración → Ayuda y soporte → "Ver recorrido de nuevo".
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { X, Sparkles } from 'lucide-react';
+import { X, ArrowRight, Clock, Calculator, FileSearch, Users, Truck, Package, Building2, MessageSquare, LayoutDashboard, Mail } from 'lucide-react';
 
 export const TOUR_START_KEY = 'trucky-tour-start';
 const seenKey = (email) => `trucky-tour-demo-v1:${String(email || '').toLowerCase()}`;
+
+const ICONS = { '/calculadora': Calculator, '/documentos': FileSearch, '/conductores': Users, '/flota': Truck, '/cargas': Package, '/brokers': Building2, '/chat': MessageSquare, '/': LayoutDashboard, '/emails': Mail };
+// Resumen de una línea para la bienvenida.
+const RESUMEN = {
+  '/calculadora': ['Tus costos y tu RPM objetivo', 'Your costs and target RPM'],
+  '/documentos': ['Revisa rate confirmations', 'Check rate confirmations'],
+  '/conductores': ['Documentos y vencimientos', 'Documents and expirations'],
+  '/flota': ['Camiones y su estado', 'Trucks and their status'],
+  '/cargas': ['Ganancia por carga y por semana', 'Profit per load and week'],
+  '/brokers': ['Calificación y días de pago', 'Rating and payment days'],
+  '/chat': ['Tarifas y ofertas al instante', 'Instant rates and offers'],
+  '/': ['El resumen de tu operación', 'Your operation at a glance'],
+};
 
 const STEPS = [
   { path: '/calculadora',
@@ -104,21 +117,62 @@ export default function DemoTour({ user, locale, isDemoUser, visiblePaths = [], 
   if (fase === 'welcome') {
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" style={{ background: 'var(--t-overlay)' }} role="dialog" aria-modal="true" aria-labelledby="tour-title">
-        <div className="relative w-full max-w-md rounded-2xl border border-border bg-t-bg-surface p-6 shadow-popover space-y-4">
-          <button type="button" onClick={cerrar} aria-label={en ? 'Close' : 'Cerrar'} className="absolute top-3 right-3 p-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-muted"><X className="w-4 h-4" /></button>
-          <div className="w-12 h-12 rounded-2xl bg-t-action-primary/15 flex items-center justify-center"><Sparkles className="w-6 h-6 text-t-text-accent" /></div>
-          <div>
-            <h2 id="tour-title" className="text-xl font-bold text-foreground">{en ? `Hi${nombre ? `, ${nombre}` : ''}!` : `¡Hola${nombre ? `, ${nombre}` : ''}!`}</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              {en ? `Let us show you how Trucky works in ${steps.length} quick steps: from your costs to the dashboard.` : `Te mostramos cómo funciona Trucky en ${steps.length} pasos rápidos: desde tus costos hasta el dashboard.`}
+        <div className="relative w-full max-w-2xl max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-3xl border border-border bg-t-bg-surface shadow-popover">
+          {/* Encabezado de marca */}
+          <div className="relative overflow-hidden rounded-t-3xl bg-t-action-primary px-6 sm:px-8 pt-7 pb-6 text-white">
+            <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-white/10" aria-hidden="true" />
+            <div className="absolute right-10 -bottom-20 w-40 h-40 rounded-full bg-t-accent-lime/20" aria-hidden="true" />
+            <button type="button" onClick={cerrar} aria-label={en ? 'Close' : 'Cerrar'} className="absolute top-4 right-4 p-1.5 rounded-full text-white/80 hover:text-white hover:bg-white/10"><X className="w-4 h-4" /></button>
+            <div role="img" aria-label="Trucky" className="relative h-7 w-[112px] bg-white"
+              style={{ WebkitMaskImage: 'url(/trucky-wordmark.png)', maskImage: 'url(/trucky-wordmark.png)', WebkitMaskSize: 'contain', maskSize: 'contain', WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat', WebkitMaskPosition: 'left center', maskPosition: 'left center' }} />
+            <h2 id="tour-title" className="relative mt-5 text-2xl sm:text-[28px] font-bold leading-tight">
+              {en ? `Welcome to Trucky${nombre ? `, ${nombre}` : ''}` : `Bienvenido a Trucky${nombre ? `, ${nombre}` : ''}`}
+            </h2>
+            <p className="relative mt-2 text-sm sm:text-base text-white/85 max-w-lg">
+              {en
+                ? 'Your dispatch co-pilot. In a short guided tour we will show you how each module helps you quote, verify and run your loads with confidence.'
+                : 'Tu copiloto de dispatch. En un recorrido guiado te mostramos cómo cada módulo te ayuda a cotizar, verificar y operar tus cargas con confianza.'}
             </p>
           </div>
-          <ol className="text-sm text-foreground list-decimal pl-5 space-y-0.5">
-            {steps.map((s) => <li key={s.path}>{(en ? s.en : s.es)[0]}</li>)}
-          </ol>
-          <div className="flex items-center justify-end gap-2 pt-1">
-            <button type="button" onClick={cerrar} className="h-10 px-4 rounded-full text-sm text-foreground hover:bg-muted">{en ? 'Not now' : 'Ahora no'}</button>
-            <button type="button" onClick={() => setFase(0)} className="h-10 px-4 rounded-full bg-t-action-primary hover:bg-t-action-primary-hover text-sm font-semibold text-white">{en ? 'Start tour' : 'Comenzar recorrido'}</button>
+
+          {/* Qué vas a ver */}
+          <div className="px-6 sm:px-8 py-6 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="text-sm font-semibold text-foreground">{en ? 'What you will see' : 'Lo que vas a conocer'}</h3>
+              <span className="inline-flex items-center gap-1.5 text-xs text-muted-foreground"><Clock className="w-3.5 h-3.5" />{en ? `${steps.length} steps · about 2 min` : `${steps.length} pasos · unos 2 min`}</span>
+            </div>
+            <ol className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {steps.map((s, i) => {
+                const Icon = ICONS[s.path] || LayoutDashboard;
+                const [nombrePaso] = en ? s.en : s.es;
+                const resumen = RESUMEN[s.path]?.[en ? 1 : 0] || '';
+                return (
+                  <li key={s.path} className="flex items-center gap-3 rounded-xl border border-border bg-t-bg-canvas/60 px-3 py-2.5">
+                    <span className="relative flex-shrink-0 w-9 h-9 rounded-xl bg-t-action-primary/15 flex items-center justify-center">
+                      <Icon className="w-4 h-4 text-t-text-accent" />
+                      <span className="absolute -top-1.5 -left-1.5 w-4 h-4 rounded-full bg-t-action-primary text-[10px] font-bold text-white flex items-center justify-center">{i + 1}</span>
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-medium text-foreground truncate">{nombrePaso}</span>
+                      <span className="block text-xs text-muted-foreground truncate">{resumen}</span>
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+
+          {/* Acciones */}
+          <div className="flex flex-col-reverse sm:flex-row sm:items-center gap-3 border-t border-border px-6 sm:px-8 py-4">
+            <p className="flex-1 text-xs text-muted-foreground">
+              {en ? 'You can replay it anytime from Settings → Help & support.' : 'Puedes verlo de nuevo cuando quieras en Configuración → Ayuda y soporte.'}
+            </p>
+            <div className="flex items-center justify-end gap-2">
+              <button type="button" onClick={cerrar} className="h-10 px-4 rounded-full text-sm text-foreground hover:bg-muted">{en ? 'Not now' : 'Ahora no'}</button>
+              <button type="button" onClick={() => setFase(0)} className="inline-flex items-center gap-2 h-10 px-5 rounded-full bg-t-action-primary hover:bg-t-action-primary-hover text-sm font-semibold text-white shadow-glow">
+                {en ? 'Start tour' : 'Comenzar recorrido'} <ArrowRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>
