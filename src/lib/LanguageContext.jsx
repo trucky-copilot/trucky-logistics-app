@@ -281,16 +281,23 @@ const translations = {
 export function LanguageProvider({ children }) {
   const { userProfile } = useAppState();
 
+  // Idioma predeterminado: inglés. Solo es español si el usuario lo eligió
+  // (selector ES/EN, guardado en este navegador o en su cuenta).
   const [locale, setLocaleState] = useState(() => {
-    return localStorage.getItem('trucky_locale') || (userProfile?.idioma_chat === 'en' ? 'en' : 'es');
+    let guardado = null;
+    try { guardado = localStorage.getItem('trucky_locale'); } catch { /* sin almacenamiento */ }
+    if (guardado === 'es' || guardado === 'en') return guardado;
+    return userProfile?.idioma_chat === 'es' ? 'es' : 'en';
   });
 
   useEffect(() => {
     if (userProfile?.idioma_chat) {
-      setLocaleState(userProfile.idioma_chat === 'en' ? 'en' : 'es');
-      localStorage.setItem('trucky_locale', userProfile.idioma_chat === 'en' ? 'en' : 'es');
+      setLocaleState(userProfile.idioma_chat === 'es' ? 'es' : 'en');
+      localStorage.setItem('trucky_locale', userProfile.idioma_chat === 'es' ? 'es' : 'en');
     }
   }, [userProfile?.idioma_chat]);
+
+  useEffect(() => { document.documentElement.lang = locale; }, [locale]);
 
   const setLocale = async (nextLocale) => {
     if (!nextLocale) return;
@@ -324,7 +331,7 @@ export function LanguageProvider({ children }) {
   const value = {
     locale,
     setLocale,
-    t: translations[locale] || translations.es,
+    t: translations[locale] || translations.en,
   };
 
   return (

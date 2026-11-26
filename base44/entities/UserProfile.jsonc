@@ -40,7 +40,7 @@
         "es",
         "en"
       ],
-      "default": "es",
+      "default": "en",
       "description": "Idioma de las respuestas del Chat de Mercado. Aditivo: no forma parte del flujo de onboarding."
     },
     "nombre_completo": {

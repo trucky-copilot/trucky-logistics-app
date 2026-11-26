@@ -1,10 +1,13 @@
 import { useReducer } from 'react';
+import { useLanguage } from '@/lib/LanguageContext';
 import { Truck, Shield, BarChart3, FileSearch, Loader2, ArrowLeft, MailCheck } from 'lucide-react';
 import { TruckyWordmark } from '@/components/TruckyLogo';
 import { base44 } from '@/api/base44Client';
 import {
   AUTH_STEP,
   AUTH_MODE,
+  AUTH_ERROR,
+  MIN_PASSWORD_LENGTH,
   AUTH_OP,
   INITIAL_AUTH_STATE,
   OTP_LENGTH,
@@ -30,11 +33,38 @@ import {
 // ─────────────────────────────────────────────────────────────────────────────
 
 const FEATURES = [
-  { icon: FileSearch, label: 'Verifica Rate Confirmations', desc: 'Análisis automático de documentos con IA' },
-  { icon: BarChart3,  label: 'Calcula rentabilidad',        desc: 'Tarifa por milla, break-even y objetivos' },
-  { icon: Truck,      label: 'Gestiona tu flota',            desc: 'Conductores, camiones y cargas en un solo lugar' },
-  { icon: Shield,     label: 'Datos 100% privados',          desc: 'Cada empresa opera en su propio espacio' },
+  { icon: FileSearch, es: ['Verifica Rate Confirmations', 'Análisis automático de documentos con IA'], en: ['Verify Rate Confirmations', 'Automatic AI document analysis'] },
+  { icon: BarChart3,  es: ['Calcula rentabilidad', 'Tarifa por milla, break-even y objetivos'], en: ['Calculate profitability', 'Rate per mile, break-even and targets'] },
+  { icon: Truck,      es: ['Gestiona tu flota', 'Conductores, camiones y cargas en un solo lugar'], en: ['Manage your fleet', 'Drivers, trucks and loads in one place'] },
+  { icon: Shield,     es: ['Datos 100% privados', 'Cada empresa opera en su propio espacio'], en: ['100% private data', 'Each company works in its own space'] },
 ];
+
+// Mensajes de error en inglés (los de español viven en authFlow, que tiene pruebas).
+const AUTH_MESSAGES_EN = {
+  [AUTH_ERROR.NETWORK]: 'We could not reach the server. Check your connection and try again.',
+  [AUTH_ERROR.SERVER]: 'The service is not responding right now. Try again in a few minutes.',
+  [AUTH_ERROR.BAD_CREDENTIALS]: 'The email or password is incorrect.',
+  [AUTH_ERROR.NO_ACCOUNT]: 'There is no account with that email. Create an account to continue.',
+  [AUTH_ERROR.EMAIL_EXISTS]: 'An account with that email already exists. Sign in with your password.',
+  [AUTH_ERROR.EMAIL_NOT_VERIFIED]: 'Your account is not verified yet. Enter the code we sent to your email.',
+  [AUTH_ERROR.OTP_EXPIRED]: 'The code expired. Request a new one to continue.',
+  [AUTH_ERROR.OTP_INVALID]: 'The code is not correct. Check it and try again.',
+  [AUTH_ERROR.WEAK_PASSWORD]: `The password must have at least ${MIN_PASSWORD_LENGTH} characters.`,
+  [AUTH_ERROR.RATE_LIMITED]: 'Too many attempts. Wait a minute and try again.',
+  [AUTH_ERROR.UNKNOWN]: 'We could not complete the operation. Try again.',
+  [AUTH_ERROR.INVALID_EMAIL]: 'Enter a valid email address.',
+  [AUTH_ERROR.MISSING_PASSWORD]: 'Enter your password.',
+  [AUTH_ERROR.INVALID_OTP_SHAPE]: `The code has ${OTP_LENGTH} digits. Check the email we sent you.`,
+};
+
+/** Aviso en inglés según el paso (los avisos en español vienen de authFlow). */
+function noticeEn(notice, email) {
+  if (!notice) return notice;
+  if (/^Te enviamos un código de/.test(notice)) return `We sent a ${OTP_LENGTH}-digit code to ${email}. Enter it to activate your account.`;
+  if (/^Te enviamos un código nuevo/.test(notice)) return `We sent a new code to ${email}.`;
+  if (/^Te enviamos las instrucciones/.test(notice)) return `We sent instructions to reset your password to ${email}. Check your email.`;
+  return notice;
+}
 
 const INPUT_CLASS =
   'mt-1 w-full bg-muted border border-border rounded-xl px-4 py-2.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-60';
@@ -62,6 +92,12 @@ export default function Welcome() {
   const { step, mode, email, password, otp, busy, error, notice } = state;
 
   const isRegister = mode === AUTH_MODE.REGISTER;
+  // Inglés por defecto; el usuario puede cambiar a español aquí mismo.
+  const { locale, setLocale } = useLanguage();
+  const en = locale !== 'es';
+  const tx = (es, enText) => (en ? enText : es);
+  const errorText = error ? (en ? (AUTH_MESSAGES_EN[error.code] || error.message) : error.message) : null;
+  const noticeText = en ? noticeEn(notice, normalizeEmail(email)) : notice;
   const setField = (field) => (e) => dispatch({ type: 'set_field', field, value: e.target.value });
 
   /**
@@ -174,6 +210,15 @@ export default function Welcome() {
     // no siempre entra en un viewport de teléfono, y sin esto los campos de
     // abajo quedan fuera de alcance.
     <div className="fixed inset-0 bg-background overflow-y-auto">
+      {/* Idioma (sin sesión: se guarda en este navegador) */}
+      <div className="absolute top-4 right-4 flex items-center rounded-full bg-card border border-border p-0.5" role="radiogroup" aria-label={tx('Idioma', 'Language')}>
+        {['en', 'es'].map((l) => (
+          <button key={l} type="button" role="radio" aria-checked={locale === l} onClick={() => setLocale(l)}
+            className={`h-7 px-3 rounded-full text-xs font-semibold transition-colors ${locale === l ? 'bg-t-action-primary text-white' : 'text-muted-foreground hover:text-foreground'}`}>
+            {l.toUpperCase()}
+          </button>
+        ))}
+      </div>
       <div className="min-h-full flex flex-col items-center justify-center p-6">
         {/* Logo */}
         <div className="flex items-center justify-center mb-8">
@@ -183,23 +228,23 @@ export default function Welcome() {
         {/* Headline */}
         <div className="text-center mb-8 max-w-sm">
           <h1 className="text-2xl font-bold text-foreground mb-2">
-            Operaciones de transporte,{' '}
-            <span className="text-t-text-accent">sin complicaciones</span>
+            {tx('Operaciones de transporte,', 'Freight operations,')}{' '}
+            <span className="text-t-text-accent">{tx('sin complicaciones', 'made simple')}</span>
           </h1>
           <p className="t-subtitle mt-1">
-            Plataforma para carriers y dispatchers intermodales. Crea tu cuenta gratuita y comienza hoy.
+            {tx('Plataforma para carriers y dispatchers intermodales. Crea tu cuenta gratuita y comienza hoy.', 'The platform for intermodal carriers and dispatchers. Create your free account and start today.')}
           </p>
         </div>
 
         {/* Features */}
         <div className="grid grid-cols-2 gap-3 mb-8 w-full max-w-sm">
-          {FEATURES.map(({ icon: Icon, label, desc }) => (
+          {FEATURES.map(({ icon: Icon, ...f }) => { const [label, desc] = en ? f.en : f.es; return (
             <div key={label} className="bg-card border border-border rounded-xl p-3 flex flex-col gap-1.5">
               <Icon className="w-4 h-4 text-t-text-accent" />
               <div className="text-xs font-semibold text-foreground">{label}</div>
               <div className="text-[11px] text-muted-foreground leading-snug">{desc}</div>
             </div>
-          ))}
+          ); })}
         </div>
 
         {/* Acceso */}
@@ -207,7 +252,7 @@ export default function Welcome() {
           {/* Aviso y error: siempre en el mismo lugar, uno por vez. */}
           {notice && (
             <p className="text-[11px] text-t-text-accent/90 bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 leading-snug">
-              {notice}
+              {noticeText}
             </p>
           )}
           {error && (
@@ -215,7 +260,7 @@ export default function Welcome() {
               role="alert"
               className="text-[11px] text-t-danger bg-red-500/10 border border-red-500/30 rounded-xl px-3 py-2 leading-snug"
             >
-              {error.message}
+              {errorText}
             </p>
           )}
 
@@ -223,7 +268,7 @@ export default function Welcome() {
           {step === AUTH_STEP.DONE && (
             <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
               <Loader2 className="w-4 h-4 animate-spin" />
-              Entrando a Trucky...
+              {tx('Entrando a Trucky...', 'Signing in to Trucky...')}
             </div>
           )}
 
@@ -233,8 +278,7 @@ export default function Welcome() {
               <div className="bg-card border border-border rounded-xl p-4 flex flex-col items-center gap-2 text-center">
                 <MailCheck className="w-6 h-6 text-t-text-accent" />
                 <p className="text-xs text-muted-foreground leading-snug">
-                  Si el correo está registrado, en unos minutos recibirás las instrucciones para
-                  crear una contraseña nueva.
+                  {tx('Si el correo está registrado, en unos minutos recibirás las instrucciones para crear una contraseña nueva.', 'If the email is registered, you will receive instructions to create a new password in a few minutes.')}
                 </p>
               </div>
               <button
@@ -242,7 +286,7 @@ export default function Welcome() {
                 onClick={() => dispatch({ type: 'back_to_credentials' })}
                 className={PRIMARY_BUTTON_CLASS}
               >
-                Volver a iniciar sesión
+                {tx('Volver a iniciar sesión', 'Back to sign in')}
               </button>
             </>
           )}
@@ -252,7 +296,7 @@ export default function Welcome() {
             <form onSubmit={handleSubmit} className="space-y-3">
               <div>
                 <label htmlFor="otp" className="text-xs font-medium text-foreground">
-                  Código de verificación
+                  {tx('Código de verificación', 'Verification code')}
                 </label>
                 <input
                   id="otp"
@@ -276,11 +320,11 @@ export default function Welcome() {
               </div>
               <button type="submit" disabled={busy} className={PRIMARY_BUTTON_CLASS}>
                 {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-                {busy ? 'Verificando...' : 'Verificar y entrar'}
+                {busy ? tx('Verificando...', 'Verifying...') : tx('Verificar y entrar', 'Verify and sign in')}
               </button>
               <div className="flex items-center justify-between">
                 <button type="button" onClick={handleResendOtp} disabled={busy} className={LINK_CLASS}>
-                  Enviar un código nuevo
+                  {tx('Enviar un código nuevo', 'Send a new code')}
                 </button>
                 <button
                   type="button"
@@ -289,7 +333,7 @@ export default function Welcome() {
                   className={`${LINK_CLASS} flex items-center gap-1`}
                 >
                   <ArrowLeft className="w-3 h-3" />
-                  Usar otro correo
+                  {tx('Usar otro correo', 'Use another email')}
                 </button>
               </div>
             </form>
@@ -301,7 +345,7 @@ export default function Welcome() {
               <form onSubmit={handleSubmit} className="space-y-3">
                 <div>
                   <label htmlFor="email" className="text-xs font-medium text-foreground">
-                    Correo electrónico
+                    {tx('Correo electrónico', 'Email')}
                   </label>
                   <input
                     id="email"
@@ -309,7 +353,7 @@ export default function Welcome() {
                     type="email"
                     value={email}
                     onChange={setField('email')}
-                    placeholder="tu@empresa.com"
+                    placeholder={tx('tu@empresa.com', 'you@company.com')}
                     autoComplete="email"
                     disabled={busy}
                     className={INPUT_CLASS}
@@ -317,7 +361,7 @@ export default function Welcome() {
                 </div>
                 <div>
                   <label htmlFor="password" className="text-xs font-medium text-foreground">
-                    Contraseña
+                    {tx('Contraseña', 'Password')}
                   </label>
                   <input
                     id="password"
@@ -325,7 +369,7 @@ export default function Welcome() {
                     type="password"
                     value={password}
                     onChange={setField('password')}
-                    placeholder={isRegister ? 'Al menos 8 caracteres' : '••••••••'}
+                    placeholder={isRegister ? tx('Al menos 8 caracteres', 'At least 8 characters') : '••••••••'}
                     autoComplete={isRegister ? 'new-password' : 'current-password'}
                     disabled={busy}
                     className={INPUT_CLASS}
@@ -334,8 +378,8 @@ export default function Welcome() {
                 <button type="submit" disabled={busy} className={PRIMARY_BUTTON_CLASS}>
                   {busy && <Loader2 className="w-4 h-4 animate-spin" />}
                   {busy
-                    ? isRegister ? 'Creando cuenta...' : 'Entrando...'
-                    : isRegister ? 'Crear cuenta' : 'Iniciar sesión'}
+                    ? isRegister ? tx('Creando cuenta...', 'Creating account...') : tx('Entrando...', 'Signing in...')
+                    : isRegister ? tx('Crear cuenta', 'Create account') : tx('Iniciar sesión', 'Sign in')}
                 </button>
               </form>
 
@@ -348,11 +392,11 @@ export default function Welcome() {
                   disabled={busy}
                   className={LINK_CLASS}
                 >
-                  {isRegister ? 'Ya tengo cuenta' : 'Crear una cuenta'}
+                  {isRegister ? tx('Ya tengo cuenta', 'I already have an account') : tx('Crear una cuenta', 'Create an account')}
                 </button>
                 {!isRegister && (
                   <button type="button" onClick={handleForgotPassword} disabled={busy} className={LINK_CLASS}>
-                    Olvidé mi contraseña
+                    {tx('Olvidé mi contraseña', 'Forgot my password')}
                   </button>
                 )}
               </div>
@@ -360,7 +404,7 @@ export default function Welcome() {
               {/* Separador */}
               <div className="flex items-center gap-3 pt-1">
                 <div className="h-px flex-1 bg-border" />
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">o</span>
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">{tx('o', 'or')}</span>
                 <div className="h-px flex-1 bg-border" />
               </div>
 
@@ -371,14 +415,14 @@ export default function Welcome() {
                 className="w-full py-3 rounded-xl bg-card border border-border hover:border-primary/50 hover:bg-primary/5 text-sm font-semibold text-foreground transition-all flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 <GoogleMark />
-                Continuar con Google
+                {tx('Continuar con Google', 'Continue with Google')}
               </button>
             </>
           )}
 
           <p className="text-center text-[11px] text-muted-foreground">
-            Al registrarte, se crea tu propio espacio de trabajo privado.<br />
-            Tus datos nunca se mezclan con los de otras empresas.
+            {tx('Al registrarte, se crea tu propio espacio de trabajo privado.', 'When you sign up, your own private workspace is created.')}<br />
+            {tx('Tus datos nunca se mezclan con los de otras empresas.', 'Your data never mixes with other companies.')}
           </p>
         </div>
       </div>
