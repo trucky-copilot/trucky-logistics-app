@@ -20,6 +20,7 @@ import NotificationBell from './NotificationBell';
 import OperationalReadinessBanner from './OperationalReadinessBanner';
 import MarketTicker from './MarketTicker';
 import ProfileSelector from './ProfileSelector';
+import DemoTour from './DemoTour';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { base44 } from '@/api/base44Client';
 import { useEffectivePlan as useDemo } from '@/lib/LivePlanProvider';
@@ -43,7 +44,7 @@ export default function Layout() {
   const { user, logout } = useAuth();
   const { t, locale, setLocale } = useLanguage();
   const navigate = useNavigate();
-  const { isDemoUser, limits } = useDemo();
+  const { isDemoUser, limits, loading: planLoading } = useDemo();
 
   // Solo los administradores de src/lib/adminAccess.js ven el panel; las
   // cuentas de pruebas (luisbermudezacero@gmail.com, ianruizmora@gmail.com)
@@ -161,7 +162,7 @@ export default function Layout() {
           {visibleNavItems.map(({ path, label, icon: Icon }) => {
             const active = isActive(path);
             return (
-              <Link key={path} to={path} onClick={() => setSidebarOpen(false)} className={navCls(active)}>
+              <Link key={path} to={path} data-tour={path} onClick={() => setSidebarOpen(false)} className={navCls(active)}>
                 <Icon className={`flex-shrink-0 ${active ? 'w-6 h-6' : 'w-5 h-5'}`} />
                 <span className="flex-1 truncate">{t.nav[label]}</span>
               </Link>
@@ -269,6 +270,15 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+
+      {/* Recorrido guiado del usuario Demo (calculadora → … → dashboard) */}
+      <DemoTour
+        user={user}
+        locale={locale}
+        isDemoUser={isDemoUser && !planLoading}
+        visiblePaths={visibleNavItems.map((i) => i.path)}
+        setSidebarOpen={setSidebarOpen}
+      />
     </div>
   );
 }

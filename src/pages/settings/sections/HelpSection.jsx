@@ -1,6 +1,8 @@
 // F3-15 · Fase 6 — Ayuda y soporte: canal de contacto y preguntas frecuentes.
 import React, { useState } from 'react';
-import { Mail, Copy, Check, ChevronDown } from 'lucide-react';
+import { Mail, Copy, Check, ChevronDown, PlayCircle } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { TOUR_START_KEY } from '@/components/DemoTour';
 import { useAuth } from '@/lib/AuthContext';
 import { SUPPORT_EMAIL, supportMailto } from '@/lib/support';
 
@@ -23,6 +25,12 @@ export default function HelpSection({ locale }) {
   const { user } = useAuth();
   const [copiado, setCopiado] = useState(false);
   const [abierta, setAbierta] = useState(null);
+  const navigate = useNavigate();
+  // Sale de Configuración y arranca el recorrido en la app.
+  const verRecorrido = () => {
+    try { sessionStorage.setItem(TOUR_START_KEY, '1'); } catch { /* sin almacenamiento */ }
+    navigate('/');
+  };
 
   const copiar = async () => {
     try { await navigator.clipboard.writeText(SUPPORT_EMAIL); setCopiado(true); setTimeout(() => setCopiado(false), 2000); } catch { /* sin portapapeles */ }
@@ -45,6 +53,17 @@ export default function HelpSection({ locale }) {
             <Mail className="w-4 h-4" /> {tx(locale, 'Escribir a soporte', 'Email support')}
           </a>
         </div>
+      </section>
+
+      <section className="rounded-xl border border-border bg-card/60 p-5 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1">
+          <h3 className="text-sm font-semibold text-foreground">{tx(locale, 'Recorrido por Trucky', 'Trucky tour')}</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">{tx(locale, 'Te mostramos paso a paso cada módulo, desde la calculadora hasta el dashboard.', 'We show you each module step by step, from the calculator to the dashboard.')}</p>
+        </div>
+        <button type="button" onClick={verRecorrido}
+          className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-4 py-2 text-sm text-foreground hover:bg-muted">
+          <PlayCircle className="w-4 h-4" /> {tx(locale, 'Ver recorrido de nuevo', 'Replay the tour')}
+        </button>
       </section>
 
       <section className="rounded-xl border border-border bg-card/60 p-5 space-y-3">
