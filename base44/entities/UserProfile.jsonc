@@ -61,11 +61,11 @@
     },
     "codigo_invitacion": {
       "type": "string",
-      "description": "PM-03: código personal de invitación (enlace ?invita=)."
+      "description": "PM-03: código personal de invitación (enlace trucky-ai.com/?invita=)."
     },
     "invitado_por": {
       "type": "string",
-      "description": "PM-03: código de invitación de quien lo invitó. Solo registro; no da plan ni descuento."
+      "description": "PM-03 (versión anterior, sin uso): el referido ahora queda en Organization.referido_por."
     }
   },
   "required": [

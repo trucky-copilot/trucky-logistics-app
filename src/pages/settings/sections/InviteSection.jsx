@@ -1,8 +1,8 @@
 // F3-15 · Invita y gana — PM-03: bono de la Academia (primer mes del plan de $29 gratis).
 // El código se usa en la página de pago de trucky-ai.com, que lo valida en Stripe y
 // permite usarlo una sola vez por cuenta. Aquí solo se muestra, se copia y se comparte.
-// PM-03 · Código de referido: cada usuario tiene su enlace de invitación personal;
-// quien se registra con él queda vinculado (UserProfile.invitado_por).
+// PM-03 · Código de referido: cada usuario tiene su enlace de invitación personal a la
+// web de pago; la empresa que paga con él queda marcada como referida (Organization.referido_por).
 import React, { useEffect, useState } from 'react';
 import { Gift, Copy, Check, ExternalLink, Share2, CheckCircle2, Link2 } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
@@ -44,8 +44,8 @@ export default function InviteSection({ locale }) {
   const conPlan = plan.planType === 'plan_29' || plan.planType === 'plan_99' || plan.planType === 'admin';
 
   const mensaje = tx(locale,
-    `Te recomiendo Trucky, el copiloto para dispatchers. Con el código ${ACADEMY_CODE} de la Academia tienes el primer mes del plan de $29 gratis. Crea tu cuenta aquí: ${enlace}`,
-    `I recommend Trucky, the copilot for dispatchers. With the Academy code ${ACADEMY_CODE} you get the first month of the $29 plan free. Create your account here: ${enlace}`);
+    `Te recomiendo Trucky, el copiloto para dispatchers. Con el código ${ACADEMY_CODE} de la Academia tienes el primer mes del plan de $29 gratis. Activa tu plan aquí: ${enlace}`,
+    `I recommend Trucky, the copilot for dispatchers. With the Academy code ${ACADEMY_CODE} you get the first month of the $29 plan free. Activate your plan here: ${enlace}`);
 
   const copiar = async (texto, cual) => {
     try { await navigator.clipboard.writeText(texto); setCopiado(cual); setTimeout(() => setCopiado(null), 2000); } catch { /* sin portapapeles */ }
@@ -99,7 +99,7 @@ export default function InviteSection({ locale }) {
           <Share2 className="w-5 h-5 text-t-text-accent mt-0.5" />
           <div>
             <h3 className="text-sm font-semibold text-foreground">{tx(locale, 'Invita a otros dispatchers', 'Invite other dispatchers')}</h3>
-            <p className="text-xs text-muted-foreground mt-0.5">{tx(locale, 'Envíales tu enlace de invitación. Al registrarse con él quedan vinculados a tu cuenta y usan el código al pagar.', 'Send them your invitation link. When they sign up with it they are linked to your account and use the code at checkout.')}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">{tx(locale, 'Envíales tu enlace de invitación. Al pagar su plan desde ese enlace quedan registrados como referidos tuyos; con el código ACADEMY el primer mes del plan de $29 es gratis.', 'Send them your invitation link. When they pay their plan from that link they are recorded as your referrals; with code ACADEMY the first month of the $29 plan is free.')}</p>
           </div>
         </div>
         {codigo && (

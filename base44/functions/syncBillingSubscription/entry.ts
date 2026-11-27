@@ -6,6 +6,7 @@ import { isDemoOrganization, demoRedis, registerDemoOrganization } from "./demoR
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.54';
 import { clearCheckoutPending } from '../../shared/checkoutPending.ts';
 import { planFromPrice } from '../../shared/planFromPrice.ts';
+import { markReferral } from '../../shared/referral.ts';
 // Consulta Stripe directo (sin la librería npm:stripe, que fallaba dentro de Base44
 // y dejaba la activación en LIVE_RECONCILIATION_REQUIRED aunque el pago fuera válido).
 async function retrieveSubscription(key: string, id: string) {
@@ -38,6 +39,7 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
   try {
     if (gate.kind === 'live') {
       const db=createClientFromRequest(req).asServiceRole.entities;
+      let liveSub:any=null; // PM-03: la suscripción que leyó la sincronización (para el referido)
       const scope=await verifiedScope(demoRedis,q=>db.OrganizationMember.filter(q),assertMembershipProvenance,body.organization_id);
       const result=await reconcileLiveSubscription(body,{
         enabled:true,orgIds:scope.orgIds,memberIds:scope.memberIds,
@@ -47,12 +49,14 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
         update:(id,fields)=>db.Organization.updateMany({id},{$set:fields}),
         retrieve:async id=>{const key=Deno.env.get('STRIPE_LIVE_SECRET_KEY');
           if(!key||!/^(sk|rk)_live_.+/.test(key))throw Error('LIVE_KEY_REQUIRED');
-          return await retrieveSubscription(key,id);
+          liveSub=await retrieveSubscription(key,id);
+          return liveSub;
         },
       });
       console.warn('[syncBillingSubscription]',JSON.stringify({code:result.body.code,status:result.status,mode:'live'}));
       // Activada: se quita el aviso "Estamos activando tu cuenta…" de la app.
       if(result.body.code==='SUBSCRIPTION_RECONCILED'){try{await clearCheckoutPending(demoRedis,body.organization_id);}catch{/* expira solo */}}
+      if(result.body.code==='SUBSCRIPTION_RECONCILED')await marcarReferido(db,body.organization_id,liveSub);
       return new Response(JSON.stringify(result.body),{status:result.status,headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
     }
     const allowed = new Set((Deno.env.get('STRIPE_TEST_ORGANIZATION_IDS') || '').split(',').map(x => x.trim()).filter(Boolean));
@@ -85,9 +89,23 @@ export default async function syncBillingSubscription(req: Request, _ctx: unknow
       stripe_price_id: priceId,
       trial_ends_at: sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null,
     });
+    await marcarReferido(db, org.id, sub);
     return reply('SUBSCRIPTION_RECONCILED');
   } catch (error) {
     console.warn('[syncBillingSubscription]', JSON.stringify({ code: 'RECONCILIATION_REQUIRED', reason: error instanceof Error ? error.message : 'unknown' }));
     return reply('RECONCILIATION_REQUIRED', 503);
   }
+}
+
+// PM-03: marca la empresa como referida. Escritura aparte y sin efecto en el resultado.
+async function marcarReferido(db:any,orgId:string,sub:any){
+  try{
+    const code=await markReferral(sub,orgId,{
+      organization:async id=>(await db.Organization.filter({id}))?.[0],
+      referrers:code=>db.UserProfile.filter({codigo_invitacion:code}),
+      members:id=>db.OrganizationMember.filter({organization_id:id,active:true}),
+      update:(id,fields)=>db.Organization.update(id,fields),
+    });
+    if(code!=='NO_REFERRAL')console.warn('[syncBillingSubscription]',JSON.stringify({referral:code}));
+  }catch{console.warn('[syncBillingSubscription]',JSON.stringify({referral:'REFERRAL_FAILED'}));}
 }

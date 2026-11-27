@@ -142,6 +142,15 @@
     "stripe_live_sync_operation_id": {
       "type": "string",
       "description": "Identificador único de la última operación de sincronización live que escribió estos campos (misma actualización). Solo servidor; lo usa la recuperación del bloqueo."
+    },
+    "referido_por": {
+      "type": "string",
+      "description": "PM-03: código de invitación de quien refirió esta empresa (viene del pago en trucky-ai.com). Solo registro."
+    },
+    "referido_en": {
+      "type": "string",
+      "format": "date-time",
+      "description": "PM-03: cuándo se marcó como referida."
     }
   },
   "required": [
