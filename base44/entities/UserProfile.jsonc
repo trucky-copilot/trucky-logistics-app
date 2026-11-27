@@ -58,6 +58,14 @@
     "dot_number": {
       "type": "string",
       "description": "F3-15: número DOT (solo dígitos)."
+    },
+    "codigo_invitacion": {
+      "type": "string",
+      "description": "PM-03: código personal de invitación (enlace ?invita=)."
+    },
+    "invitado_por": {
+      "type": "string",
+      "description": "PM-03: código de invitación de quien lo invitó. Solo registro; no da plan ni descuento."
     }
   },
   "required": [

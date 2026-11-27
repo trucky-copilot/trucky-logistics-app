@@ -1,6 +1,8 @@
-import { useReducer } from 'react';
+import { useReducer, useState } from 'react';
 import { useLanguage } from '@/lib/LanguageContext';
-import { Truck, Shield, BarChart3, FileSearch, Loader2, ArrowLeft, MailCheck } from 'lucide-react';
+import { Truck, Shield, BarChart3, FileSearch, Loader2, ArrowLeft, MailCheck, Gift } from 'lucide-react';
+import { leerInvitacion } from '@/lib/invite';
+import { ACADEMY_CODE } from '@/lib/support';
 import { TruckyWordmark } from '@/components/TruckyLogo';
 import { base44 } from '@/api/base44Client';
 import {
@@ -88,7 +90,10 @@ function GoogleMark() {
 }
 
 export default function Welcome() {
-  const [state, dispatch] = useReducer(authReducer, INITIAL_AUTH_STATE);
+  // PM-03: si llega con un enlace de invitación, abre en "Crear cuenta".
+  const [invitacion] = useState(() => leerInvitacion());
+  const [state, dispatch] = useReducer(authReducer, INITIAL_AUTH_STATE,
+    (s) => (invitacion ? { ...s, mode: AUTH_MODE.REGISTER } : s));
   const { step, mode, email, password, otp, busy, error, notice } = state;
 
   const isRegister = mode === AUTH_MODE.REGISTER;
@@ -249,6 +254,15 @@ export default function Welcome() {
 
         {/* Acceso */}
         <div className="w-full max-w-sm space-y-3">
+          {invitacion && (
+            <p className="flex items-start gap-2 text-[12px] text-foreground bg-card border border-t-accent-lime/60 rounded-xl px-3 py-2 leading-snug">
+              <Gift className="w-4 h-4 text-t-accent-lime shrink-0 mt-0.5" />
+              <span>
+                {tx(`Te invitaron a Trucky. Crea tu cuenta y usa el código ${ACADEMY_CODE} al pagar: primer mes del plan de $29 gratis.`,
+                  `You were invited to Trucky. Create your account and use code ${ACADEMY_CODE} at checkout: first month of the $29 plan free.`)}
+              </span>
+            </p>
+          )}
           {/* Aviso y error: siempre en el mismo lugar, uno por vez. */}
           {notice && (
             <p className="text-[11px] text-t-text-accent/90 bg-primary/10 border border-primary/30 rounded-xl px-3 py-2 leading-snug">

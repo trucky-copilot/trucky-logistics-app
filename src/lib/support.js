@@ -15,5 +15,5 @@ export function supportMailto({ locale, email = '', asunto = '' } = {}) {
 
 // PM-03 · Bono de la Academia: primer mes del plan de $29 gratis, una vez por cuenta.
 // El código se valida en la página de pago (trucky-ai.com) y en Stripe; aquí solo se muestra.
-export const ACADEMY_CODE = 'ACDEMY';
+export const ACADEMY_CODE = 'ACADEMY';
 export const ACADEMY_URL = 'https://www.trucky-ai.com';

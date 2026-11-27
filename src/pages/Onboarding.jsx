@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useLanguage } from '@/lib/LanguageContext';
 import { TruckyWordmark } from '@/components/TruckyLogo';
 import { base44 } from '@/api/base44Client';
+import { leerInvitacion, borrarInvitacion, datosInvitado } from '@/lib/invite';
 import { deriveCosts, FIXED_COST_DEFAULTS } from '@/lib/freight/costMath';
 import { Truck, Users, ChevronRight, ChevronLeft, CheckCircle2 } from 'lucide-react';
 
@@ -90,12 +91,14 @@ export default function Onboarding({ onComplete }) {
     // crearse el perfil no cambie solo al valor predeterminado de la base de datos.
     let idioma = 'en';
     try { idioma = localStorage.getItem('trucky_locale') === 'es' ? 'es' : 'en'; } catch { /* sin almacenamiento */ }
-    const profileData = { usuario: user.email, rol, onboarding_completado: true, ...(existingProfiles[0]?.idioma_chat ? {} : { idioma_chat: idioma }) };
+    const profileData = { usuario: user.email, rol, onboarding_completado: true, ...(existingProfiles[0]?.idioma_chat ? {} : { idioma_chat: idioma }), ...datosInvitado(leerInvitacion(), existingProfiles[0]) };
     if (existingProfiles.length > 0) {
       await base44.entities.UserProfile.update(existingProfiles[0].id, profileData);
     } else {
       await base44.entities.UserProfile.create(profileData);
     }
+    // PM-03: la invitación ya quedó guardada en el perfil.
+    borrarInvitacion();
 
     // 4. CarrierProfile
     if (rol === 'carrier') {
