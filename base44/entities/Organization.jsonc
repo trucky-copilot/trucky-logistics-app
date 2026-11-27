@@ -145,7 +145,11 @@
     },
     "referido_por": {
       "type": "string",
-      "description": "PM-03: código de invitación de quien refirió esta empresa (viene del pago en trucky-ai.com). Solo registro."
+      "description": "PM-03: correo de la cuenta que refirió esta empresa (dueña del código de invitación usado al pagar en trucky-ai.com). Solo registro."
+    },
+    "referido_codigo": {
+      "type": "string",
+      "description": "PM-03: código de invitación usado al pagar (UserProfile.codigo_invitacion de quien refirió)."
     },
     "referido_en": {
       "type": "string",

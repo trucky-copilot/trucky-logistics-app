@@ -18,12 +18,13 @@ export async function markReferral(sub:any,orgId:string,d:ReferralDeps):Promise<
  if(sub?.metadata?.org_id!==orgId)return'ORG_MISMATCH';
  const org=await d.organization(orgId);
  if(!org||org.id!==orgId)return'ORG_NOT_FOUND';
- if(org.referido_por)return'ALREADY_MARKED';
+ if(org.referido_por||org.referido_codigo)return'ALREADY_MARKED';
  const refs=(await d.referrers(code)).filter(r=>r?.codigo_invitacion===code);
  if(refs.length!==1)return'REFERRER_NOT_FOUND';
  const referrer=String(refs[0].usuario||'').toLowerCase();
  const own=(await d.members(orgId)).some(m=>String(m?.user_email||'').toLowerCase()===referrer);
  if(!referrer||own)return'SELF_REFERRAL';
- await d.update(orgId,{referido_por:code,referido_en:new Date((d.now??Date.now)()).toISOString()});
+ // referido_por = correo de quien invitó (UserProfile.usuario); el código queda aparte.
+ await d.update(orgId,{referido_por:referrer,referido_codigo:code,referido_en:new Date((d.now??Date.now)()).toISOString()});
  return'MARKED';
 }

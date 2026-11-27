@@ -31,7 +31,7 @@ const sub = (m) => ({ metadata: { org_id: 'org_b', referral_code: 'K7Q2M9XA', ..
 test('pago con código de invitación marca la empresa como referida', async () => {
   const { d, writes } = deps();
   assert.equal(await markReferral(sub(), 'org_b', d), 'MARKED');
-  assert.deepEqual(writes, [['org_b', { referido_por: 'K7Q2M9XA', referido_en: '1970-01-01T00:00:00.000Z' }]]);
+  assert.deepEqual(writes, [['org_b', { referido_por: 'a@x.com', referido_codigo: 'K7Q2M9XA', referido_en: '1970-01-01T00:00:00.000Z' }]]);
 });
 
 test('no marca: sin código, código inválido, otra empresa, ya marcada, código inexistente o propio', async () => {
@@ -40,6 +40,7 @@ test('no marca: sin código, código inválido, otra empresa, ya marcada, códig
     [sub({ referral_code: 'ACADEMY' }), {}, 'NO_REFERRAL'],
     [sub({ org_id: 'org_x' }), {}, 'ORG_MISMATCH'],
     [sub(), { org: { id: 'org_b', referido_por: 'ZZZZZZZZ' } }, 'ALREADY_MARKED'],
+    [sub(), { org: { id: 'org_b', referido_codigo: 'ZZZZZZZZ' } }, 'ALREADY_MARKED'],
     [sub(), { refs: [] }, 'REFERRER_NOT_FOUND'],
     [sub(), { members: [{ user_email: 'A@x.com' }] }, 'SELF_REFERRAL'],
   ];
